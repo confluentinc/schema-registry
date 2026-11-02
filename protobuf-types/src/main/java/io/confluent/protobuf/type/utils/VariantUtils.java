@@ -57,9 +57,10 @@ public class VariantUtils {
   }
 
   public static Variant fromKafkaVariant(io.confluent.kafka.schemaregistry.type.Variant variant) {
+    // Copied from duplicates: copyFrom advances a buffer, which the Variant hands out as is.
     return Variant.newBuilder()
-        .setMetadata(ByteString.copyFrom(variant.getMetadataBuffer()))
-        .setValue(ByteString.copyFrom(variant.getValueBuffer()))
+        .setMetadata(ByteString.copyFrom(variant.getMetadataBuffer().duplicate()))
+        .setValue(ByteString.copyFrom(variant.getValueBuffer().duplicate()))
         .build();
   }
 

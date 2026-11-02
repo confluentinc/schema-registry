@@ -16,6 +16,14 @@
 
 package io.confluent.kafka.schemaregistry.type.logical.constraint;
 
+import dev.cel.compiler.CelCompiler;
+import dev.cel.compiler.CelCompilerFactory;
+import dev.cel.extensions.CelExtensions;
+import dev.cel.runtime.CelEvaluationException;
+import dev.cel.runtime.CelRuntime;
+import dev.cel.runtime.CelRuntimeFactory;
+import io.confluent.kafka.schemaregistry.rules.cel.CelUtils;
+import io.confluent.kafka.schemaregistry.rules.cel.builtin.CelDecimal;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalTypeToDdlConverter;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalTypesParserFactory;
@@ -23,13 +31,25 @@ import io.confluent.kafka.schemaregistry.type.logical.LogicalTypesSchemaVisitor;
 import io.confluent.kafka.schemaregistry.type.logical.Rule;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
+import io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesParser;
+import org.antlr.v4.runtime.Token;
+import org.antlr.v4.runtime.atn.PredictionMode;
 import org.junit.jupiter.api.Test;
 
+import java.math.BigDecimal;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -49,6 +69,9 @@ class CheckConstraintTest {
     return visitor;
   }
 
+  // The null test of translateCheck's nullable x.
+  private static final String X_NULL = "(!has(this.x) || dyn(this.x) == null)";
+
   /**
    * Parse a single CHECK expression as a table-level constraint over a
    * comprehensive test struct, and return its CEL translation. The test
@@ -57,26 +80,59 @@ class CheckConstraintTest {
    * each time.
    */
   private String translateCheck(String checkExpr) {
-    String script = "STRUCT T ("
-        + "x INT, value STRING, name STRING, id STRING, email STRING,"
-        + "phone STRING, digits STRING, u STRING, h STRING, addr STRING,"
-        + "needle STRING, haystack STRING, filename STRING,"
-        + "lo INT, hi INT, age INT,"
-        + "ratio DOUBLE,"
-        + "amount DECIMAL(10, 2), price DECIMAL(12, 4), discount DECIMAL(10, 2),"
-        + "blob BYTES,"
-        + "ts TIMESTAMP_LTZ, created_at TIMESTAMP_LTZ,"
-        + "first_name STRING, last_name STRING, type STRING,"
-        + "size STRING, qty INT, status STRING, active BOOLEAN,"
-        + "a INT, b INT, c INT,"
-        + "tags STRING ARRAY, ages INT ARRAY,"
-        + "dprices DECIMAL(10, 2) ARRAY, dprices_ms DECIMAL(10, 2) MULTISET,"
-        + "matrix INT ARRAY ARRAY,"
-        + "addresses STRING ARRAY, emails STRING ARRAY,"
-        + "addr_struct STRUCT(zip INT) NOT NULL,"
-        + "data VARIANT,"
-        + "CHECK (" + checkExpr + ")"
-        + ");";
+    return translateCheckOf(NULLABLE_COLUMNS, checkExpr);
+  }
+
+  // translateCheck's columns NOT NULL, for how an operator translates: a CHECK over nullable
+  // ones also passes on a NULL.
+  private String translateCheckNotNull(String checkExpr) {
+    return translateCheckOf(NOT_NULL_COLUMNS, checkExpr);
+  }
+
+  private static final String NULLABLE_COLUMNS = ""
+      + "x INT, value STRING, name STRING, id STRING, email STRING,"
+      + "phone STRING, digits STRING, u STRING, h STRING, addr STRING,"
+      + "needle STRING, haystack STRING, filename STRING,"
+      + "lo INT, hi INT, age INT,"
+      + "ratio DOUBLE,"
+      + "amount DECIMAL(10, 2), price DECIMAL(12, 4), discount DECIMAL(10, 2),"
+      + "blob BYTES,"
+      + "ts TIMESTAMP_LTZ, created_at TIMESTAMP_LTZ,"
+      + "first_name STRING, last_name STRING, type STRING,"
+      + "size STRING, qty INT, status STRING, active BOOLEAN,"
+      + "a INT, b INT, c INT,"
+      + "tags STRING ARRAY, ages INT ARRAY,"
+      + "dprices DECIMAL(10, 2) ARRAY, dprices_ms DECIMAL(10, 2) MULTISET,"
+      + "matrix INT ARRAY ARRAY,"
+      + "addresses STRING ARRAY, emails STRING ARRAY,"
+      + "addr_struct STRUCT(zip INT) NOT NULL,"
+      + "data VARIANT,";
+
+  private static final String NOT_NULL_COLUMNS = ""
+      + "x INT NOT NULL, value STRING NOT NULL, name STRING NOT NULL, id STRING NOT NULL,"
+      + "email STRING NOT NULL, phone STRING NOT NULL, digits STRING NOT NULL,"
+      + "u STRING NOT NULL, h STRING NOT NULL, addr STRING NOT NULL,"
+      + "needle STRING NOT NULL, haystack STRING NOT NULL, filename STRING NOT NULL,"
+      + "lo INT NOT NULL, hi INT NOT NULL, age INT NOT NULL,"
+      + "ratio DOUBLE NOT NULL,"
+      + "amount DECIMAL(10, 2) NOT NULL, price DECIMAL(12, 4) NOT NULL,"
+      + "discount DECIMAL(10, 2) NOT NULL,"
+      + "blob BYTES NOT NULL,"
+      + "ts TIMESTAMP_LTZ NOT NULL, created_at TIMESTAMP_LTZ NOT NULL,"
+      + "first_name STRING NOT NULL, last_name STRING NOT NULL, type STRING NOT NULL,"
+      + "size STRING NOT NULL, qty INT NOT NULL, status STRING NOT NULL,"
+      + "active BOOLEAN NOT NULL,"
+      + "a INT NOT NULL, b INT NOT NULL, c INT NOT NULL,"
+      + "tags STRING NOT NULL ARRAY NOT NULL, ages INT NOT NULL ARRAY NOT NULL,"
+      + "dprices DECIMAL(10, 2) NOT NULL ARRAY NOT NULL,"
+      + "dprices_ms DECIMAL(10, 2) NOT NULL MULTISET NOT NULL,"
+      + "matrix INT NOT NULL ARRAY NOT NULL ARRAY NOT NULL,"
+      + "addresses STRING NOT NULL ARRAY NOT NULL, emails STRING NOT NULL ARRAY NOT NULL,"
+      + "addr_struct STRUCT(zip INT NOT NULL) NOT NULL,"
+      + "data VARIANT NOT NULL,";
+
+  private String translateCheckOf(String columns, String checkExpr) {
+    String script = "STRUCT T (" + columns + "CHECK (" + checkExpr + "));";
     Schema schema = parseScript(script).getRootSchema();
     String cel = schema.getRules().get(0).getExpr();
     // Gate every emitted CEL through the strict cel-java checker. `this`
@@ -113,37 +169,37 @@ class CheckConstraintTest {
 
   @Test
   void equality() {
-    assertEquals("this.x == 5", translateCheck("x = 5"));
+    assertEquals("this.x == 5", translateCheckNotNull("x = 5"));
   }
 
   @Test
   void notEqualAngleBrackets() {
-    assertEquals("this.x != 5", translateCheck("x <> 5"));
+    assertEquals("this.x != 5", translateCheckNotNull("x <> 5"));
   }
 
   @Test
   void notEqualBang() {
-    assertEquals("this.x != 5", translateCheck("x != 5"));
+    assertEquals("this.x != 5", translateCheckNotNull("x != 5"));
   }
 
   @Test
   void lessThan() {
-    assertEquals("this.x < 5", translateCheck("x < 5"));
+    assertEquals("this.x < 5", translateCheckNotNull("x < 5"));
   }
 
   @Test
   void lessOrEqual() {
-    assertEquals("this.x <= 5", translateCheck("x <= 5"));
+    assertEquals("this.x <= 5", translateCheckNotNull("x <= 5"));
   }
 
   @Test
   void greaterThan() {
-    assertEquals("this.x > 5", translateCheck("x > 5"));
+    assertEquals("this.x > 5", translateCheckNotNull("x > 5"));
   }
 
   @Test
   void greaterOrEqual() {
-    assertEquals("this.x >= 5", translateCheck("x >= 5"));
+    assertEquals("this.x >= 5", translateCheckNotNull("x >= 5"));
   }
 
   // ---------------------------------------------------------------------
@@ -152,12 +208,12 @@ class CheckConstraintTest {
 
   @Test
   void logicalAnd() {
-    assertEquals("this.x > 0 && this.x < 100", translateCheck("x > 0 AND x < 100"));
+    assertEquals("this.x > 0 && this.x < 100", translateCheckNotNull("x > 0 AND x < 100"));
   }
 
   @Test
   void logicalOr() {
-    assertEquals("this.x < 0 || this.x > 100", translateCheck("x < 0 OR x > 100"));
+    assertEquals("this.x < 0 || this.x > 100", translateCheckNotNull("x < 0 OR x > 100"));
   }
 
   @Test
@@ -166,17 +222,17 @@ class CheckConstraintTest {
     // `NOT (x > 0)`. CEL `!` binds tighter than `>`, so we must emit
     // parens: `!(x > 0)`. Bare `!x > 0` would parse as `(!x) > 0` and
     // fail at runtime with a type error.
-    assertEquals("!(this.x > 0)", translateCheck("NOT x > 0"));
+    assertEquals("!(this.x > 0)", translateCheckNotNull("NOT x > 0"));
   }
 
   @Test
   void logicalNotWrapsBooleanColumn() {
-    assertEquals("!this.active", translateCheck("NOT active"));
+    assertEquals("!this.active", translateCheckNotNull("NOT active"));
   }
 
   @Test
   void doubleNotNests() {
-    assertEquals("!(!(this.x > 0))", translateCheck("NOT NOT x > 0"));
+    assertEquals("!(!(this.x > 0))", translateCheckNotNull("NOT NOT x > 0"));
   }
 
   @Test
@@ -191,7 +247,7 @@ class CheckConstraintTest {
   void andOrPrecedence() {
     // AND binds tighter than OR
     assertEquals("this.x > 0 && this.x < 100 || this.x = -1",
-        translateCheck("x > 0 AND x < 100 OR x = -1").replace("==", "="));
+        translateCheckNotNull("x > 0 AND x < 100 OR x = -1").replace("==", "="));
   }
 
   // ---------------------------------------------------------------------
@@ -200,27 +256,27 @@ class CheckConstraintTest {
 
   @Test
   void addition() {
-    assertEquals("this.x + 1 > 0", translateCheck("x + 1 > 0"));
+    assertEquals("this.x + 1 > 0", translateCheckNotNull("x + 1 > 0"));
   }
 
   @Test
   void subtraction() {
-    assertEquals("this.x - 1 < 100", translateCheck("x - 1 < 100"));
+    assertEquals("this.x - 1 < 100", translateCheckNotNull("x - 1 < 100"));
   }
 
   @Test
   void subtractionWithoutSpaces() {
     // Regression: lexer used to greedy-eat `-` into INT_LITERAL, breaking
     // parses like `x-1` where there were no surrounding spaces.
-    assertEquals("this.x - 1 < 100", translateCheck("x-1 < 100"));
-    assertEquals("this.x - 1 < 100", translateCheck("x -1 < 100"));
-    assertEquals("this.x - 1 < 100", translateCheck("x- 1 < 100"));
-    assertEquals("1 - 2 < this.x", translateCheck("1-2 < x"));
+    assertEquals("this.x - 1 < 100", translateCheckNotNull("x-1 < 100"));
+    assertEquals("this.x - 1 < 100", translateCheckNotNull("x -1 < 100"));
+    assertEquals("this.x - 1 < 100", translateCheckNotNull("x- 1 < 100"));
+    assertEquals("1 - 2 < this.x", translateCheckNotNull("1-2 < x"));
   }
 
   @Test
   void multiplyDivideModulo() {
-    assertEquals("this.x * 2 / 3 % 4 == 0", translateCheck("x * 2 / 3 % 4 = 0"));
+    assertEquals("this.x * 2 / 3 % 4 == 0", translateCheckNotNull("x * 2 / 3 % 4 = 0"));
   }
 
   @Test
@@ -237,7 +293,7 @@ class CheckConstraintTest {
     // amount is a DECIMAL column; `amount % 100 = 0` → decimals.mod.
     assertEquals(
         "decimals.eq(decimals.mod(this.amount, decimal(\"100\")), decimal(\"0\"))",
-        translateCheck("amount % 100 = 0"));
+        translateCheckNotNull("amount % 100 = 0"));
   }
 
   @Test
@@ -253,18 +309,18 @@ class CheckConstraintTest {
 
   @Test
   void moduloAcceptsIntOperands() {
-    assertEquals("this.x % 2 == 0", translateCheck("x % 2 = 0"));
+    assertEquals("this.x % 2 == 0", translateCheckNotNull("x % 2 = 0"));
   }
 
   @Test
   void unaryMinus() {
-    assertEquals("-this.x > 0", translateCheck("-x > 0"));
+    assertEquals("-this.x > 0", translateCheckNotNull("-x > 0"));
   }
 
   @Test
   void stringConcat() {
     assertEquals("this.name + 'suffix' == 'asuffix'",
-        translateCheck("name || 'suffix' = 'asuffix'"));
+        translateCheckNotNull("name || 'suffix' = 'asuffix'"));
   }
 
   @Test
@@ -326,7 +382,8 @@ class CheckConstraintTest {
         + "CHECK (binData || x'00' = x'01')"
         + ");";
     Schema schema = parseScript(script).getRootSchema();
-    assertEquals("this.binData + b\"\\x00\" == b\"\\x01\"",
+    assertEquals("!((!has(this.binData) || dyn(this.binData) == null) ? false : !(this.binData +"
+            + " b\"\\x00\" == b\"\\x01\"))",
         schema.getRules().get(0).getExpr());
   }
 
@@ -339,7 +396,8 @@ class CheckConstraintTest {
         + "CHECK (binData = x'deadbeef')"
         + ");";
     Schema schema = parseScript(script).getRootSchema();
-    assertEquals("this.binData == b\"\\xDE\\xAD\\xBE\\xEF\"",
+    assertEquals("!((!has(this.binData) || dyn(this.binData) == null) ? false : !(this.binData =="
+            + " b\"\\xDE\\xAD\\xBE\\xEF\"))",
         schema.getRules().get(0).getExpr());
   }
 
@@ -436,12 +494,12 @@ class CheckConstraintTest {
 
   @Test
   void intLiteral() {
-    assertEquals("this.x == 42", translateCheck("x = 42"));
+    assertEquals("this.x == 42", translateCheckNotNull("x = 42"));
   }
 
   @Test
   void decimalPointLiteral() {
-    assertEquals("this.ratio == 3.14", translateCheck("ratio = 3.14"));
+    assertEquals("this.ratio == 3.14", translateCheckNotNull("ratio = 3.14"));
   }
 
   @Test
@@ -449,14 +507,14 @@ class CheckConstraintTest {
     // Grammar accepts `1.` (trailing dot) but CEL requires digits on
     // both sides. Translator normalizes to `1.0` so the emitted CEL
     // compiles cleanly.
-    assertEquals("this.ratio == 1.0", translateCheck("ratio = 1."));
+    assertEquals("this.ratio == 1.0", translateCheckNotNull("ratio = 1."));
   }
 
   @Test
   void decimalPointLiteralLeadingDotNormalized() {
     // Same for `.5` → `0.5`. (SQL accepts both forms; CEL requires both
     // sides.)
-    assertEquals("this.ratio == 0.5", translateCheck("ratio = .5"));
+    assertEquals("this.ratio == 0.5", translateCheckNotNull("ratio = .5"));
   }
 
   @Test
@@ -472,7 +530,7 @@ class CheckConstraintTest {
         + ");";
     Schema schema = parseScript(script).getRootSchema();
     Rule r = schema.getRules().get(0);
-    assertEquals("this.x > 0", r.getExpr());
+    assertEquals("!((!has(this.x) || dyn(this.x) == null) ? false : !(this.x > 0))", r.getExpr());
   }
 
   @Test
@@ -485,28 +543,29 @@ class CheckConstraintTest {
         + ");";
     Schema schema = parseScript(script).getRootSchema();
     Rule r = schema.getRules().get(0);
-    assertEquals("this.type == 'A'", r.getExpr());
+    assertEquals("!((!has(this.type) || dyn(this.type) == null) ? false : !(this.type == 'A'))",
+        r.getExpr());
   }
 
   @Test
   void stringLiteral() {
-    assertEquals("this.name == 'hello'", translateCheck("name = 'hello'"));
+    assertEquals("this.name == 'hello'", translateCheckNotNull("name = 'hello'"));
   }
 
   @Test
   void stringLiteralWithEscape() {
     // SQL '' (doubled quote) escape → CEL \' escape
-    assertEquals("this.name == 'O\\'Hare'", translateCheck("name = 'O''Hare'"));
+    assertEquals("this.name == 'O\\'Hare'", translateCheckNotNull("name = 'O''Hare'"));
   }
 
   @Test
   void boolLiteralTrue() {
-    assertEquals("this.active == true", translateCheck("active = TRUE"));
+    assertEquals("this.active == true", translateCheckNotNull("active = TRUE"));
   }
 
   @Test
   void boolLiteralFalse() {
-    assertEquals("this.active == false", translateCheck("active = FALSE"));
+    assertEquals("this.active == false", translateCheckNotNull("active = FALSE"));
   }
 
   @Test
@@ -549,7 +608,7 @@ class CheckConstraintTest {
         + ");";
     Schema schema = parseScript(script).getRootSchema();
     Rule r = schema.getRules().get(0);
-    assertEquals("this.x > 0", r.getExpr());
+    assertEquals("!((!has(this.x) || dyn(this.x) == null) ? false : !(this.x > 0))", r.getExpr());
   }
 
   @Test
@@ -561,7 +620,8 @@ class CheckConstraintTest {
         + ");";
     Schema schema = parseScript(script).getRootSchema();
     Rule r = schema.getRules().get(0);
-    assertEquals("this.addr.zip > 0", r.getExpr());
+    assertEquals("!((!has(this.addr.zip) || dyn(this.addr.zip) == null) ? false : !(this.addr.zip"
+            + " > 0))", r.getExpr());
   }
 
   @Test
@@ -573,7 +633,9 @@ class CheckConstraintTest {
         + ");";
     Schema schema = parseScript(script).getRootSchema();
     Rule r = schema.getRules().get(0);
-    assertEquals("this.tags[(1) - 1] == 'first'", r.getExpr());
+    assertEquals("!(((!has(this.tags) || dyn(this.tags) == null) || size(this.tags) < 1 ||"
+            + " dyn(this.tags[(1) - 1]) == null) ? false : !(this.tags[(1) - 1] == 'first'))",
+        r.getExpr());
   }
 
   @Test
@@ -587,19 +649,17 @@ class CheckConstraintTest {
         + ");";
     Schema schema = parseScript(script).getRootSchema();
     Rule r = schema.getRules().get(0);
-    assertEquals("this.props['name'] == 'alice'", r.getExpr());
+    assertEquals("!(((!has(this.props) || dyn(this.props) == null) || !(('name') in this.props)"
+            + " || dyn(this.props['name']) == null) ? false : !(this.props['name'] == 'alice'))",
+        r.getExpr());
   }
 
   @Test
-  void mapIndexingWithIntKeyPassesThrough() {
-    // Same for int-keyed maps — the key is a key, not a 1-based position.
-    String script = "STRUCT T ("
-        + "scores MAP<INT, INT>,"
-        + "CHECK (scores[42] > 0)"
-        + ");";
-    Schema schema = parseScript(script).getRootSchema();
-    Rule r = schema.getRules().get(0);
-    assertEquals("this.scores[42] > 0", r.getExpr());
+  void mapIndexingWithIntKeyIsRefused() {
+    // An int-keyed map is held as entries, which a subscript would index as a list.
+    ValidationException e = assertThrows(ValidationException.class,
+        () -> parseScript("STRUCT T (scores MAP<INT, INT>, CHECK (scores[42] > 0));"));
+    assertTrue(e.getMessage().contains("INT keys is not supported"), e.getMessage());
   }
 
   @Test
@@ -614,12 +674,14 @@ class CheckConstraintTest {
         + ");";
     Schema schema = parseScript(script).getRootSchema();
     Rule r = schema.getRules().get(0);
-    assertEquals("(this.tags)[(1) - 1] == 'first'", r.getExpr());
+    assertEquals("!(((!has(this.tags) || dyn(this.tags) == null) || size(dyn((this.tags))) < 1 ||"
+            + " dyn((this.tags)[(1) - 1]) == null) ? false : !((this.tags)[(1) - 1] == 'first'))",
+        r.getExpr());
   }
 
   @Test
   void parenthesizedExpression() {
-    assertEquals("(this.x + 1) * 2 > 10", translateCheck("(x + 1) * 2 > 10"));
+    assertEquals("(this.x + 1) * 2 > 10", translateCheckNotNull("(x + 1) * 2 > 10"));
   }
 
   // ---------------------------------------------------------------------
@@ -630,7 +692,8 @@ class CheckConstraintTest {
   void searchedCase() {
     // Searched-form WHEN condition is now defensively wrapped in parens
     // (so a low-precedence operator inside it can't mis-bind in CEL).
-    assertEquals("((this.x > 0) ? 'pos' : 'neg') == 'pos'",
+    // A condition that may be NULL is false then, as SQL takes a branch only when TRUE.
+    assertEquals("((" + X_NULL + " ? false : (this.x > 0)) ? 'pos' : 'neg') == 'pos'",
         translateCheck("CASE WHEN x > 0 THEN 'pos' ELSE 'neg' END = 'pos'"));
   }
 
@@ -638,9 +701,8 @@ class CheckConstraintTest {
   void searchedCaseMultipleWhens() {
     String result = translateCheck(
         "CASE WHEN x > 100 THEN 'big' WHEN x > 0 THEN 'small' ELSE 'zero' END = 'big'");
-    assertEquals(
-        "((this.x > 100) ? 'big' : ((this.x > 0) ? 'small' : 'zero')) == 'big'",
-        result);
+    assertEquals("((" + X_NULL + " ? false : (this.x > 100)) ? 'big' : ((" + X_NULL
+        + " ? false : (this.x > 0)) ? 'small' : 'zero')) == 'big'", result);
   }
 
   @Test
@@ -649,10 +711,9 @@ class CheckConstraintTest {
         "CASE x WHEN 1 THEN 'one' WHEN 2 THEN 'two' ELSE 'other' END = 'one'");
     // Simple CASE: subject and each WHEN value are individually wrapped in
     // parens around the implicit `==`, so a low-precedence operator inside
-    // either side can't mis-bind in CEL.
-    assertEquals(
-        "(this.x == 1 ? 'one' : (this.x == 2 ? 'two' : 'other')) == 'one'",
-        result);
+    // either side can't mis-bind in CEL. A NULL subject matches no WHEN value.
+    assertEquals("((" + X_NULL + " ? false : this.x == 1) ? 'one' : ((" + X_NULL
+        + " ? false : this.x == 2) ? 'two' : 'other')) == 'one'", result);
   }
 
   @Test
@@ -686,7 +747,11 @@ class CheckConstraintTest {
     // STRING vs CHAR → same category ("string"); should NOT be rejected.
     String result = translateCheck(
         "CASE WHEN x > 0 THEN name ELSE 'default' END = 'foo'");
-    assertEquals("((this.x > 0) ? this.name : 'default') == 'foo'", result);
+    assertEquals("!(dyn((((!has(this.x) || dyn(this.x) == null) ? false : (this.x > 0)) ?"
+            + " ((!has(this.name) || dyn(this.name) == null) ? dyn(null) : this.name) :"
+            + " 'default')) == null ? false : !((((!has(this.x) || dyn(this.x) == null) ? false :"
+            + " (this.x > 0)) ? ((!has(this.name) || dyn(this.name) == null) ? dyn(null) :"
+            + " this.name) : 'default') == 'foo'))", result);
   }
 
   @Test
@@ -694,7 +759,10 @@ class CheckConstraintTest {
     // INT and DOUBLE both fall in the "numeric" category — accepted.
     String result = translateCheck(
         "CASE WHEN x > 0 THEN x ELSE 0 END > 0");
-    assertEquals("((this.x > 0) ? this.x : 0) > 0", result);
+    assertEquals("!(dyn((((!has(this.x) || dyn(this.x) == null) ? false : (this.x > 0)) ?"
+            + " ((!has(this.x) || dyn(this.x) == null) ? dyn(null) : this.x) : 0)) == null ?"
+            + " false : !((((!has(this.x) || dyn(this.x) == null) ? false : (this.x > 0)) ?"
+            + " ((!has(this.x) || dyn(this.x) == null) ? dyn(null) : this.x) : 0) > 0))", result);
   }
 
   @Test
@@ -712,9 +780,8 @@ class CheckConstraintTest {
   void simpleCaseSubjectAndWhenValuesMatchAccepted() {
     String result = translateCheck(
         "CASE x WHEN 1 THEN 'one' WHEN 2 THEN 'two' ELSE 'other' END = 'one'");
-    assertEquals(
-        "(this.x == 1 ? 'one' : (this.x == 2 ? 'two' : 'other')) == 'one'",
-        result);
+    assertEquals("((" + X_NULL + " ? false : this.x == 1) ? 'one' : ((" + X_NULL
+        + " ? false : this.x == 2) ? 'two' : 'other')) == 'one'", result);
   }
 
   @Test
@@ -725,9 +792,8 @@ class CheckConstraintTest {
     String result = translateCheck(
         "(CASE WHEN x > 0 THEN (CASE WHEN x > 100 THEN 'big' ELSE 'small' END)"
             + " ELSE 'neg' END) = 'small'");
-    assertEquals(
-        "(((this.x > 0) ? (((this.x > 100) ? 'big' : 'small')) : 'neg')) == 'small'",
-        result);
+    assertEquals("(((" + X_NULL + " ? false : (this.x > 0)) ? (((" + X_NULL
+        + " ? false : (this.x > 100)) ? 'big' : 'small')) : 'neg')) == 'small'", result);
   }
 
   @Test
@@ -750,7 +816,8 @@ class CheckConstraintTest {
         + "CHECK (EVERY(ages, n, n > 0))"
         + ");";
     Schema schema = parseScript(script).getRootSchema();
-    assertEquals("this.ages.all(n, n > 0)", schema.getRules().get(0).getExpr());
+    assertEquals("!((!has(this.ages) || dyn(this.ages) == null) ? false : this.ages.exists(n,"
+            + " (dyn(n) == null ? false : !(n > 0))))", schema.getRules().get(0).getExpr());
   }
 
   @Test
@@ -780,7 +847,8 @@ class CheckConstraintTest {
     Rule r = schema.getRules().get(0);
     // Outer `name` (the collection) → this.name; iter-var `name` (binding)
     // and the body ref → bare.
-    assertEquals("this.name.all(name, size(name) > 0)", r.getExpr());
+    assertEquals("!((!has(this.name) || dyn(this.name) == null) ? false : this.name.exists(name,"
+            + " (dyn(name) == null ? false : !(size(name) > 0))))", r.getExpr());
   }
 
   @Test
@@ -796,7 +864,9 @@ class CheckConstraintTest {
         + ");";
     Schema schema = parseScript(script).getRootSchema();
     Rule r = schema.getRules().get(0);
-    assertEquals("this.meta.all(meta, meta['k'] == 'v')", r.getExpr());
+    assertEquals("!((!has(this.meta) || dyn(this.meta) == null) ? false : this.meta.exists(meta,"
+            + " ((dyn(meta) == null || !(('k') in meta) || dyn(meta['k']) == null) ? false :"
+            + " !(meta['k'] == 'v'))))", r.getExpr());
   }
 
   @Test
@@ -829,7 +899,7 @@ class CheckConstraintTest {
     // concat (a || b). CEL `.matches()` binds tighter than `+`, so a
     // bare emission would be `a + b.matches(...)` parsed as
     // `a + (b.matches(...))` — wrong. Receiver must be parenthesized.
-    String result = translateCheck("first_name || last_name LIKE 'foo%'");
+    String result = translateCheckNotNull("first_name || last_name LIKE 'foo%'");
     assertEquals("(this.first_name + this.last_name).matches('^foo.*$')",
         result);
   }
@@ -837,7 +907,7 @@ class CheckConstraintTest {
   @Test
   void instanceMethodOnConcatReceiverParenthesized() {
     // Same precedence hazard for IS_EMAIL/STARTS_WITH/etc. on a concat.
-    String result = translateCheck(
+    String result = translateCheckNotNull(
         "STARTS_WITH(first_name || last_name, 'usr_')");
     assertEquals(
         "(this.first_name + this.last_name).startsWith('usr_')",
@@ -924,7 +994,8 @@ class CheckConstraintTest {
     Rule r = tableRules.get(0);
     assertEquals("bounds", r.getName());
     assertEquals("lo must be < hi", r.getDoc());
-    assertEquals("this.lo < this.hi", r.getExpr());
+    assertEquals("!(((!has(this.lo) || dyn(this.lo) == null) || (!has(this.hi) || dyn(this.hi) =="
+            + " null)) ? false : !(this.lo < this.hi))", r.getExpr());
   }
 
   @Test
@@ -938,7 +1009,8 @@ class CheckConstraintTest {
     assertEquals(1, schema.getField("lo").getRules().size());
     assertEquals(1, schema.getField("hi").getRules().size());
     assertEquals(1, schema.getRules().size());
-    assertEquals("this.lo <= this.hi", schema.getRules().get(0).getExpr());
+    assertEquals("!(((!has(this.lo) || dyn(this.lo) == null) || (!has(this.hi) || dyn(this.hi) =="
+            + " null)) ? false : !(this.lo <= this.hi))", schema.getRules().get(0).getExpr());
   }
 
   // ---------------------------------------------------------------------
@@ -1004,7 +1076,8 @@ class CheckConstraintTest {
 
   @Test
   void isNullCombinedWithLogical() {
-    assertEquals("(has(this.x) && dyn(this.x) != null) && this.x > 0",
+    assertEquals("!((!((has(this.x) && dyn(this.x) != null))) || ((!has(this.x) || dyn(this.x) =="
+            + " null) ? false : !(this.x > 0)))",
         translateCheck("x IS NOT NULL AND x > 0"));
   }
 
@@ -1025,24 +1098,24 @@ class CheckConstraintTest {
 
   @Test
   void inLiteralList() {
-    assertEquals("this.x in [1, 2, 3]", translateCheck("x IN (1, 2, 3)"));
+    assertEquals("this.x in [1, 2, 3]", translateCheckNotNull("x IN (1, 2, 3)"));
   }
 
   @Test
   void inSingleElementList() {
     // Disambiguation: paren-wrapped single element parses as ParenList (per design)
-    assertEquals("this.x in [42]", translateCheck("x IN (42)"));
+    assertEquals("this.x in [42]", translateCheckNotNull("x IN (42)"));
   }
 
   @Test
   void inStringList() {
     assertEquals("this.status in ['ACTIVE', 'PENDING', 'CANCELLED']",
-        translateCheck("status IN ('ACTIVE', 'PENDING', 'CANCELLED')"));
+        translateCheckNotNull("status IN ('ACTIVE', 'PENDING', 'CANCELLED')"));
   }
 
   @Test
   void notInLiteralList() {
-    assertEquals("!(this.x in [1, 2, 3])", translateCheck("x NOT IN (1, 2, 3)"));
+    assertEquals("!(this.x in [1, 2, 3])", translateCheckNotNull("x NOT IN (1, 2, 3)"));
   }
 
   // ---------------------------------------------------------------------
@@ -1054,22 +1127,28 @@ class CheckConstraintTest {
     // x IN <field-name> — parses as InTargetExpr (no parens)
     String script = "STRUCT T ("
         + "value STRING,"
-        + "tags STRING ARRAY,"
+        + "tags STRING NOT NULL ARRAY,"
         + "CHECK (value IN tags)"
         + ");";
     Schema schema = parseScript(script).getRootSchema();
-    assertEquals("this.value in this.tags", schema.getRules().get(0).getExpr());
+    assertEquals("!(((!has(this.tags) || dyn(this.tags) == null) || ((!has(this.value) ||"
+            + " dyn(this.value) == null) && size(this.tags) > 0)) ? false : !((size(this.tags) =="
+            + " 0 ? false : this.value in this.tags)))",
+        schema.getRules().get(0).getExpr());
   }
 
   @Test
   void notInListField() {
     String script = "STRUCT T ("
         + "value STRING,"
-        + "tags STRING ARRAY,"
+        + "tags STRING NOT NULL ARRAY,"
         + "CHECK (value NOT IN tags)"
         + ");";
     Schema schema = parseScript(script).getRootSchema();
-    assertEquals("!(this.value in this.tags)", schema.getRules().get(0).getExpr());
+    assertEquals("!(((!has(this.tags) || dyn(this.tags) == null) || ((!has(this.value) ||"
+            + " dyn(this.value) == null) && size(this.tags) > 0)) ? false : !(!(size(this.tags)"
+            + " == 0 ? false : this.value in this.tags)))",
+        schema.getRules().get(0).getExpr());
   }
 
   // ---------------------------------------------------------------------
@@ -1079,13 +1158,13 @@ class CheckConstraintTest {
   @Test
   void between() {
     assertEquals("0 <= this.x && this.x <= 100",
-        translateCheck("x BETWEEN 0 AND 100"));
+        translateCheckNotNull("x BETWEEN 0 AND 100"));
   }
 
   @Test
   void notBetween() {
     assertEquals("!(0 <= this.x && this.x <= 100)",
-        translateCheck("x NOT BETWEEN 0 AND 100"));
+        translateCheckNotNull("x NOT BETWEEN 0 AND 100"));
   }
 
   @Test
@@ -1093,7 +1172,7 @@ class CheckConstraintTest {
     assertEquals(
         "(this.lo <= this.hi ? (this.lo <= this.x && this.x <= this.hi) "
             + ": (this.hi <= this.x && this.x <= this.lo))",
-        translateCheck("x BETWEEN SYMMETRIC lo AND hi"));
+        translateCheckNotNull("x BETWEEN SYMMETRIC lo AND hi"));
   }
 
   @Test
@@ -1101,13 +1180,13 @@ class CheckConstraintTest {
     assertEquals(
         "!((this.lo <= this.hi ? (this.lo <= this.x && this.x <= this.hi) "
             + ": (this.hi <= this.x && this.x <= this.lo)))",
-        translateCheck("x NOT BETWEEN SYMMETRIC lo AND hi"));
+        translateCheckNotNull("x NOT BETWEEN SYMMETRIC lo AND hi"));
   }
 
   @Test
   void betweenWithExpressionBounds() {
     assertEquals("0 <= (this.x + 1) && (this.x + 1) <= 100",
-        translateCheck("x + 1 BETWEEN 0 AND 100"));
+        translateCheckNotNull("x + 1 BETWEEN 0 AND 100"));
   }
 
   @Test
@@ -1125,7 +1204,7 @@ class CheckConstraintTest {
   void betweenSameCategoryBoundsAccepted() {
     // INT subject and INT bounds — fine.
     assertEquals("this.lo <= this.x && this.x <= this.hi",
-        translateCheck("x BETWEEN lo AND hi"));
+        translateCheckNotNull("x BETWEEN lo AND hi"));
   }
 
   // (`betweenBoundsAreParenthesizedAgainstPrecedence` removed — its scenario
@@ -1139,13 +1218,16 @@ class CheckConstraintTest {
 
   @Test
   void inWithLogical() {
-    assertEquals("this.status in ['A', 'B'] && (has(this.active) && dyn(this.active) != null)",
+    assertEquals("!(((!has(this.status) || dyn(this.status) == null) ? false : !(this.status in"
+            + " ['A', 'B'])) || (!((has(this.active) && dyn(this.active) != null))))",
         translateCheck("status IN ('A', 'B') AND active IS NOT NULL"));
   }
 
   @Test
   void betweenWithLogical() {
-    assertEquals("0 <= this.age && this.age <= 150 || (!has(this.age) || dyn(this.age) == null)",
+    assertEquals("!((((!has(this.age) || dyn(this.age) == null) ? false : !(0 <= this.age)) ||"
+            + " ((!has(this.age) || dyn(this.age) == null) ? false : !(this.age <= 150))) &&"
+            + " (!((!has(this.age) || dyn(this.age) == null))))",
         translateCheck("age BETWEEN 0 AND 150 OR age IS NULL"));
   }
 
@@ -1154,8 +1236,10 @@ class CheckConstraintTest {
     String result = translateCheck(
         "status IN ('ACTIVE', 'PENDING') AND age BETWEEN 18 AND 65 AND email IS NOT NULL");
     assertEquals(
-        "this.status in ['ACTIVE', 'PENDING'] && 18 <= this.age && this.age <= 65 "
-            + "&& (has(this.email) && dyn(this.email) != null)",
+        "!(((!has(this.status) || dyn(this.status) == null) ? false : !(this.status in ['ACTIVE',"
+            + " 'PENDING'])) || (((!has(this.age) || dyn(this.age) == null) ? false : !(18 <="
+            + " this.age)) || ((!has(this.age) || dyn(this.age) == null) ? false : !(this.age <="
+            + " 65))) || (!((has(this.email) && dyn(this.email) != null))))",
         result);
   }
 
@@ -1166,56 +1250,58 @@ class CheckConstraintTest {
   @Test
   void likeExactMatch() {
     // Plain pattern with no wildcards — anchored
-    assertEquals("this.name.matches('^foo$')", translateCheck("name LIKE 'foo'"));
+    assertEquals("this.name.matches('^foo$')", translateCheckNotNull("name LIKE 'foo'"));
   }
 
   @Test
   void likePrefix() {
-    assertEquals("this.name.matches('^foo.*$')", translateCheck("name LIKE 'foo%'"));
+    assertEquals("this.name.matches('^foo.*$')", translateCheckNotNull("name LIKE 'foo%'"));
   }
 
   @Test
   void likeSuffix() {
-    assertEquals("this.name.matches('^.*foo$')", translateCheck("name LIKE '%foo'"));
+    assertEquals("this.name.matches('^.*foo$')", translateCheckNotNull("name LIKE '%foo'"));
   }
 
   @Test
   void likeInfix() {
-    assertEquals("this.name.matches('^.*foo.*$')", translateCheck("name LIKE '%foo%'"));
+    assertEquals("this.name.matches('^.*foo.*$')", translateCheckNotNull("name LIKE '%foo%'"));
   }
 
   @Test
   void likeUnderscore() {
     // _ matches any single character
-    assertEquals("this.name.matches('^h.llo$')", translateCheck("name LIKE 'h_llo'"));
+    assertEquals("this.name.matches('^h.llo$')", translateCheckNotNull("name LIKE 'h_llo'"));
   }
 
   @Test
   void likeMixed() {
-    assertEquals("this.name.matches('^a.b.*c$')", translateCheck("name LIKE 'a_b%c'"));
+    assertEquals("this.name.matches('^a.b.*c$')", translateCheckNotNull("name LIKE 'a_b%c'"));
   }
 
   @Test
   void likeEscapesRegexSpecials() {
     // Pattern contains a literal '.' which is a regex special — must be escaped
-    assertEquals("this.name.matches('^foo\\\\.bar$')", translateCheck("name LIKE 'foo.bar'"));
+    assertEquals("this.name.matches('^foo\\\\.bar$')",
+        translateCheckNotNull("name LIKE 'foo.bar'"));
   }
 
   @Test
   void likeEscapesParens() {
-    assertEquals("this.name.matches('^\\\\(foo\\\\)$')", translateCheck("name LIKE '(foo)'"));
+    assertEquals("this.name.matches('^\\\\(foo\\\\)$')",
+        translateCheckNotNull("name LIKE '(foo)'"));
   }
 
   @Test
   void likeEmail() {
     // Common pattern: rough email shape
-    assertEquals("this.name.matches('^.*@.*\\\\..*$')", translateCheck("name LIKE '%@%.%'"));
+    assertEquals("this.name.matches('^.*@.*\\\\..*$')", translateCheckNotNull("name LIKE '%@%.%'"));
   }
 
   @Test
   void notLike() {
     assertEquals("!(this.name.matches('^.*forbidden.*$'))",
-        translateCheck("name NOT LIKE '%forbidden%'"));
+        translateCheckNotNull("name NOT LIKE '%forbidden%'"));
   }
 
   @Test
@@ -1223,20 +1309,21 @@ class CheckConstraintTest {
     // Default escape char is '\'. Pattern '\%foo' (SQL: '\%foo') means literal % then foo.
     // SQL parses '\%foo' as the 5-char string \%foo; LIKE→regex with default escape '\\'
     // sees the \ as escape for the next char (%), so % becomes literal.
-    assertEquals("this.name.matches('^%foo$')", translateCheck("name LIKE '\\%foo'"));
+    assertEquals("this.name.matches('^%foo$')", translateCheckNotNull("name LIKE '\\%foo'"));
   }
 
   @Test
   void likeWithCustomEscape() {
     // ESCAPE '!' means '!' is the escape char; '!%' is literal %, % alone is wildcard
-    assertEquals("this.name.matches('^50%.*$')", translateCheck("name LIKE '50!%%' ESCAPE '!'"));
+    assertEquals("this.name.matches('^50%.*$')",
+        translateCheckNotNull("name LIKE '50!%%' ESCAPE '!'"));
   }
 
   @Test
   void likeQuotedSingleQuoteInPattern() {
     // SQL escapes single quote as ''; pattern is literal "O'Hare"
     assertEquals("this.name.matches('^O\\'Hare$')",
-        translateCheck("name LIKE 'O''Hare'"));
+        translateCheckNotNull("name LIKE 'O''Hare'"));
   }
 
   @Test
@@ -1244,24 +1331,25 @@ class CheckConstraintTest {
     // SQL STRING_LITERAL accepts a raw LF inside single quotes; the emitted
     // CEL string literal must escape it (CEL's lexer rejects raw LF in '...').
     assertEquals("this.name.matches('^a\\nb$')",
-        translateCheck("name LIKE 'a\nb'"));
+        translateCheckNotNull("name LIKE 'a\nb'"));
   }
 
   @Test
   void likeWithLiteralCarriageReturn() {
     assertEquals("this.name.matches('^a\\rb$')",
-        translateCheck("name LIKE 'a\rb'"));
+        translateCheckNotNull("name LIKE 'a\rb'"));
   }
 
   @Test
   void likeWithLiteralTab() {
     assertEquals("this.name.matches('^a\\tb$')",
-        translateCheck("name LIKE 'a\tb'"));
+        translateCheckNotNull("name LIKE 'a\tb'"));
   }
 
   @Test
   void likeWithLogicalCombination() {
-    assertEquals("this.name.matches('^.*foo.*$') && (has(this.id) && dyn(this.id) != null)",
+    assertEquals("!(((!has(this.name) || dyn(this.name) == null) ? false :"
+            + " !(this.name.matches('^.*foo.*$'))) || (!((has(this.id) && dyn(this.id) != null))))",
         translateCheck("name LIKE '%foo%' AND id IS NOT NULL"));
   }
 
@@ -1280,89 +1368,177 @@ class CheckConstraintTest {
 
   @Test
   void length() {
-    assertEquals("size(this.name) > 0", translateCheck("LENGTH(name) > 0"));
+    assertEquals("size(this.name) > 0", translateCheckNotNull("LENGTH(name) > 0"));
   }
 
   @Test
   void lengthCaseInsensitive() {
-    assertEquals("size(this.name) > 0", translateCheck("length(name) > 0"));
-    assertEquals("size(this.name) > 0", translateCheck("Length(name) > 0"));
+    assertEquals("size(this.name) > 0", translateCheckNotNull("length(name) > 0"));
+    assertEquals("size(this.name) > 0", translateCheckNotNull("Length(name) > 0"));
   }
 
   @Test
   void upperLower() {
-    assertEquals("this.name.upperAscii() == 'FOO'", translateCheck("UPPER(name) = 'FOO'"));
-    assertEquals("this.name.lowerAscii() == 'foo'", translateCheck("LOWER(name) = 'foo'"));
+    assertEquals("this.name.upperAscii() == 'FOO'", translateCheckNotNull("UPPER(name) = 'FOO'"));
+    assertEquals("this.name.lowerAscii() == 'foo'", translateCheckNotNull("LOWER(name) = 'foo'"));
   }
 
   @Test
   void startsWith() {
-    assertEquals("this.id.startsWith('usr_')", translateCheck("STARTS_WITH(id, 'usr_')"));
+    assertEquals("this.id.startsWith('usr_')", translateCheckNotNull("STARTS_WITH(id, 'usr_')"));
   }
 
   @Test
   void endsWith() {
     assertEquals("this.filename.endsWith('.json')",
-        translateCheck("ENDS_WITH(filename, '.json')"));
+        translateCheckNotNull("ENDS_WITH(filename, '.json')"));
   }
 
   @Test
   void contains() {
     assertEquals("this.name.contains('forbidden')",
-        translateCheck("CONTAINS(name, 'forbidden')"));
+        translateCheckNotNull("CONTAINS(name, 'forbidden')"));
   }
 
   @Test
   void replace() {
     assertEquals("this.phone.replace('-', '') == this.digits",
-        translateCheck("REPLACE(phone, '-', '') = digits"));
+        translateCheckNotNull("REPLACE(phone, '-', '') = digits"));
   }
 
   @Test
   void matches() {
     assertEquals("this.value.matches('^[0-9]+$')",
-        translateCheck("MATCHES(value, '^[0-9]+$')"));
+        translateCheckNotNull("MATCHES(value, '^[0-9]+$')"));
   }
 
   @Test
   void coalesceTwoArgs() {
+    // A last argument that may be NULL gives NULL rather than being read: JSON
+    // leaves a NULL field out.
     assertEquals(
-        "((has(this.a) && dyn(this.a) != null) ? this.a : this.b) > 0",
+        "!(((!has(this.a) || dyn(this.a) == null) && (!has(this.b) || dyn(this.b) == null)) ?"
+            + " false : !(((has(this.a) && dyn(this.a) != null) ? this.a : ((!has(this.b) ||"
+            + " dyn(this.b) == null) ? dyn(null) : this.b)) > 0))",
         translateCheck("COALESCE(a, b) > 0"));
   }
 
   @Test
   void coalesceThreeArgs() {
     assertEquals(
-        "((has(this.a) && dyn(this.a) != null) ? this.a : "
-            + "((has(this.b) && dyn(this.b) != null) ? this.b : this.c)) > 0",
+        "!(((!has(this.a) || dyn(this.a) == null) && (!has(this.b) || dyn(this.b) == null) &&"
+            + " (!has(this.c) || dyn(this.c) == null)) ? false : !(((has(this.a) && dyn(this.a)"
+            + " != null) ? this.a : ((has(this.b) && dyn(this.b) != null) ? this.b :"
+            + " ((!has(this.c) || dyn(this.c) == null) ? dyn(null) : this.c))) > 0))",
         translateCheck("COALESCE(a, b, c) > 0"));
   }
 
   @Test
+  void aNestedCheckIsEmittedOnceAtEachLevel() {
+    // A NULL test or a common type emits a subexpression again, which multiplied the work at
+    // each level of nesting; one over CEL's limit is refused before it grows further.
+    String columns = "t BOOLEAN NOT NULL, d DECIMAL(10, 2), i INT, x DOUBLE, "
+        + "an INT ARRAY NOT NULL, nt BOOLEAN";
+    assertTimeoutPreemptively(Duration.ofSeconds(30), () -> {
+      // Alternating AND and OR over a NULL emit each operand once.
+      translateCheckOver(columns, nest("nt", "((%s) AND nt) OR nt"));
+      translateCheckOver(columns, nest("d", "CASE WHEN t THEN %s ELSE d END") + " = d");
+      translateCheckOver(columns, nest("i", "CASE WHEN t THEN %s ELSE x END") + " = x");
+      translateCheckOver(columns, nest("d", "COALESCE(%s, d)") + " = d");
+      translateCheckOver(columns, nest("d", "COALESCE(d, %s)") + " = d");
+      translateCheckOver(columns, nest("i", "GREATEST(%s, x)") + " = x");
+      // The IS NULL lint's NULL analysis emits too.
+      translateCheckOver(columns, "ABS(" + nest("d", "CASE WHEN t THEN %s ELSE d END")
+          + ") IS NULL");
+      // So do the NULL tests of AND and OR, a CASE, and a quantifier's body.
+      translateCheckOver(columns, nest("t", "((%s) AND t) IS NULL"));
+      translateCheckOver(columns, nest("i", "CASE WHEN %s > 0 THEN 1 ELSE 2 END") + " = 1");
+      // And a quantifier's NULL test, of each one compared in another's body.
+      String quantifiers = nest("t", "EVERY(an, e, %s = TRUE)", 30);
+      translateCheckOver(columns, "CASE WHEN " + quantifiers + " THEN 1 ELSE 2 END = 1");
+      translateCheckOver(columns, "(" + quantifiers + " OR i > 0) IS NOT NULL");
+      translateCheckOver(columns, "CASE WHEN " + nest("t", "ANY(an, e, %s IN (TRUE))", 30)
+          + " THEN 1 ELSE 2 END = 1");
+
+      for (String tooLarge : List.of(nest("d", "NULLIF(%s, d)") + " = d",
+          nest("d", "NULLIF(d, %s)") + " = d", nest("t", "((%s) AND i > 0) IS NULL"),
+          nest("i", "CASE WHEN EVERY(an, e, (%s) = e) THEN i ELSE 2 END", 20) + " = 1",
+          nest("i", "CASE WHEN %s + an[1] > 0 THEN i ELSE 2 END") + " = 1",
+          nest("d", "COALESCE(CASE WHEN t THEN %s ELSE i END, x)") + " = x",
+          nest("1 / i > 0", "((%s) AND nt) OR i > 0"))) {
+        ValidationException e = assertThrows(ValidationException.class,
+            () -> translateCheckOver(columns, tooLarge));
+        assertTrue(e.getMessage().contains("CHECK constraint is too large"), e.getMessage());
+      }
+    });
+  }
+
+  // leaf nested 30 deep in a call or CASE, %s marking where.
+  private static String nest(String leaf, String wrap) {
+    return nest(leaf, wrap, 30);
+  }
+
+  private static String nest(String leaf, String wrap, int depth) {
+    String nested = leaf;
+    for (int i = 0; i < depth; i++) {
+      nested = String.format(wrap, nested);
+    }
+    return nested;
+  }
+
+  @Test
+  void aCheckTooLargeForCelSaysSo() {
+    // A nested GREATEST of strings repeats its arguments at each level: nine deep fits, ten do
+    // not.
+    String columns = "s0 STRING, s1 STRING, s2 STRING, s3 STRING, s4 STRING, s5 STRING, "
+        + "s6 STRING, s7 STRING, s8 STRING, s9 STRING, s10 STRING";
+    String nested = "s10";
+    for (int i = 0; i < 10; i++) {
+      if (i == 9) {
+        translateCheckOver(columns, nested + " > 'a'");
+      }
+      nested = "GREATEST(s" + i + ", " + nested + ")";
+    }
+    String ten = nested;
+    ValidationException e = assertThrows(ValidationException.class,
+        () -> translateCheckOver(columns, ten + " > 'a'"));
+    assertTrue(e.getMessage().contains("CHECK constraint is too large"), e.getMessage());
+  }
+
+  @Test
+  void aNestedLastCoalesceIsWrittenOnce() {
+    // Its NULL is already null, so it is not tested again, which would double it at each level;
+    // read as a CASE's value, it's emitted as the flat one is.
+    assertEquals(translateCheck("CASE WHEN active THEN COALESCE(a, b, c) ELSE 0 END > 0"),
+        translateCheck("CASE WHEN active THEN COALESCE(a, COALESCE(b, c)) ELSE 0 END > 0"));
+  }
+
+  @Test
   void nullif() {
-    assertEquals("(this.a == this.b ? dyn(null) : dyn(this.a)) == 0",
+    assertEquals("!(dyn(((!has(this.a) || dyn(this.a) == null) ? dyn(null) : ((!has(this.b) ||"
+            + " dyn(this.b) == null) ? this.a : (this.a == this.b ? dyn(null) : this.a)))) =="
+            + " null ? false : !(((!has(this.a) || dyn(this.a) == null) ? dyn(null) :"
+            + " ((!has(this.b) || dyn(this.b) == null) ? this.a : (this.a == this.b ? dyn(null) :"
+            + " this.a))) == 0))",
         translateCheck("NULLIF(a, b) = 0"));
   }
 
   @Test
   void greatestTwoArgs() {
-    // PG semantics: NULLs are skipped; result is NULL only when ALL args are
-    // NULL. Translator emits a NULL-skipping nested ternary so a single
-    // NULL operand doesn't cause CEL to error on the relational compare.
+    // NULL when either argument is, as in Flink.
     assertEquals(
-        "((!has(this.a) || dyn(this.a) == null) ? this.b : "
-            + "((!has(this.b) || dyn(this.b) == null) ? this.a : "
-            + "math.greatest(this.a, this.b))) > 10",
+        "!(((!has(this.a) || dyn(this.a) == null) || (!has(this.b) || dyn(this.b) == null)) ?"
+            + " false : !((((!has(this.a) || dyn(this.a) == null) || (!has(this.b) || dyn(this.b)"
+            + " == null)) ? dyn(null) : math.greatest(this.a, this.b)) > 10))",
         translateCheck("GREATEST(a, b) > 10"));
   }
 
   @Test
   void leastTwoArgs() {
     assertEquals(
-        "((!has(this.a) || dyn(this.a) == null) ? this.b : "
-            + "((!has(this.b) || dyn(this.b) == null) ? this.a : "
-            + "math.least(this.a, this.b))) > 0",
+        "!(((!has(this.a) || dyn(this.a) == null) || (!has(this.b) || dyn(this.b) == null)) ?"
+            + " false : !((((!has(this.a) || dyn(this.a) == null) || (!has(this.b) || dyn(this.b)"
+            + " == null)) ? dyn(null) : math.least(this.a, this.b)) > 0))",
         translateCheck("LEAST(a, b) > 0"));
   }
 
@@ -1409,43 +1585,43 @@ class CheckConstraintTest {
 
   @Test
   void isEmail() {
-    assertEquals("this.email.isEmail()", translateCheck("IS_EMAIL(email)"));
+    assertEquals("this.email.isEmail()", translateCheckNotNull("IS_EMAIL(email)"));
   }
 
   @Test
   void isHostname() {
-    assertEquals("this.h.isHostname()", translateCheck("IS_HOSTNAME(h)"));
+    assertEquals("this.h.isHostname()", translateCheckNotNull("IS_HOSTNAME(h)"));
   }
 
   @Test
   void isIpv4() {
-    assertEquals("this.addr.isIpv4()", translateCheck("IS_IPV4(addr)"));
+    assertEquals("this.addr.isIpv4()", translateCheckNotNull("IS_IPV4(addr)"));
   }
 
   @Test
   void isIpv6() {
-    assertEquals("this.addr.isIpv6()", translateCheck("IS_IPV6(addr)"));
+    assertEquals("this.addr.isIpv6()", translateCheckNotNull("IS_IPV6(addr)"));
   }
 
   @Test
   void isUri() {
-    assertEquals("this.u.isUri()", translateCheck("IS_URI(u)"));
+    assertEquals("this.u.isUri()", translateCheckNotNull("IS_URI(u)"));
   }
 
   @Test
   void isUriRef() {
-    assertEquals("this.u.isUriRef()", translateCheck("IS_URI_REF(u)"));
+    assertEquals("this.u.isUriRef()", translateCheckNotNull("IS_URI_REF(u)"));
   }
 
   @Test
   void isUuid() {
-    assertEquals("this.id.isUuid()", translateCheck("IS_UUID(id)"));
+    assertEquals("this.id.isUuid()", translateCheckNotNull("IS_UUID(id)"));
   }
 
   @Test
   void validatorsCombined() {
     assertEquals("this.addr.isIpv4() || this.addr.isIpv6()",
-        translateCheck("IS_IPV4(addr) OR IS_IPV6(addr)"));
+        translateCheckNotNull("IS_IPV4(addr) OR IS_IPV6(addr)"));
   }
 
   // ---------------------------------------------------------------------
@@ -1454,23 +1630,23 @@ class CheckConstraintTest {
 
   @Test
   void castInt() {
-    assertEquals("int(this.x) > 0", translateCheck("CAST(x AS INT) > 0"));
+    assertEquals("int(this.x) > 0", translateCheckNotNull("CAST(x AS INT) > 0"));
   }
 
   @Test
   void castDouble() {
-    assertEquals("double(this.x) > 0.5", translateCheck("CAST(x AS DOUBLE) > 0.5"));
+    assertEquals("double(this.x) > 0.5", translateCheckNotNull("CAST(x AS DOUBLE) > 0.5"));
   }
 
   @Test
   void castString() {
-    assertEquals("string(this.x) == '42'", translateCheck("CAST(x AS STRING) = '42'"));
+    assertEquals("string(this.x) == '42'", translateCheckNotNull("CAST(x AS STRING) = '42'"));
   }
 
   @Test
   void castBoolFromString() {
     // CEL bool() accepts string and bool — STRING column is valid.
-    assertEquals("bool(this.name)", translateCheck("CAST(name AS BOOLEAN)"));
+    assertEquals("bool(this.name)", translateCheckNotNull("CAST(name AS BOOLEAN)"));
   }
 
   @Test
@@ -1488,7 +1664,7 @@ class CheckConstraintTest {
 
   @Test
   void castBoolFromBooleanIsIdentity() {
-    assertEquals("bool(this.active)", translateCheck("CAST(active AS BOOLEAN)"));
+    assertEquals("bool(this.active)", translateCheckNotNull("CAST(active AS BOOLEAN)"));
   }
 
   @Test
@@ -1496,7 +1672,7 @@ class CheckConstraintTest {
     // CEL bytes() accepts string and bytes — STRING column is valid.
     // Wrap in a comparison so the boolean-root check is happy.
     assertEquals("bytes(this.name) == b\"\\x00\"",
-        translateCheck("CAST(name AS BYTES) = x'00'"));
+        translateCheckNotNull("CAST(name AS BYTES) = x'00'"));
   }
 
   @Test
@@ -1514,7 +1690,8 @@ class CheckConstraintTest {
   @Test
   void castVarcharIgnoresParam() {
     // VARCHAR(64) → string(); the (64) parameter is parsed but ignored
-    assertEquals("string(this.x) == 'foo'", translateCheck("CAST(x AS VARCHAR(64)) = 'foo'"));
+    assertEquals("string(this.x) == 'foo'",
+        translateCheckNotNull("CAST(x AS VARCHAR(64)) = 'foo'"));
   }
 
   @Test
@@ -1524,7 +1701,7 @@ class CheckConstraintTest {
     // the double literal coerced to decimal("1.5").
     assertEquals(
         "decimals.gt(decimals.round(decimal(this.x), 2), decimal(\"1.5\"))",
-        translateCheck("CAST(x AS DECIMAL(10, 2)) > 1.5"));
+        translateCheckNotNull("CAST(x AS DECIMAL(10, 2)) > 1.5"));
   }
 
   // ---------------------------------------------------------------------
@@ -1536,88 +1713,89 @@ class CheckConstraintTest {
 
   @Test
   void decimalCompareIntLiteralCoerced() {
-    assertEquals("decimals.gt(this.amount, decimal(\"0\"))", translateCheck("amount > 0"));
+    assertEquals("decimals.gt(this.amount, decimal(\"0\"))", translateCheckNotNull("amount > 0"));
   }
 
   @Test
   void decimalCompareDecimalLiteral() {
-    assertEquals("decimals.ge(this.amount, decimal(\"9.99\"))", translateCheck("amount >= 9.99"));
+    assertEquals("decimals.ge(this.amount, decimal(\"9.99\"))",
+        translateCheckNotNull("amount >= 9.99"));
   }
 
   @Test
   void decimalEquality() {
-    assertEquals("decimals.eq(this.amount, this.price)", translateCheck("amount = price"));
+    assertEquals("decimals.eq(this.amount, this.price)", translateCheckNotNull("amount = price"));
   }
 
   @Test
   void decimalNotEqual() {
-    assertEquals("!decimals.eq(this.amount, this.price)", translateCheck("amount <> price"));
+    assertEquals("!decimals.eq(this.amount, this.price)", translateCheckNotNull("amount <> price"));
   }
 
   @Test
   void decimalAdd() {
     assertEquals("decimals.gt(decimals.add(this.amount, this.discount), this.price)",
-        translateCheck("amount + discount > price"));
+        translateCheckNotNull("amount + discount > price"));
   }
 
   @Test
   void decimalMulLiteralCoerced() {
     assertEquals("decimals.lt(decimals.mul(this.price, decimal(\"2\")), this.amount)",
-        translateCheck("price * 2 < amount"));
+        translateCheckNotNull("price * 2 < amount"));
   }
 
   @Test
   void decimalUnaryNeg() {
     assertEquals("decimals.lt(decimals.neg(this.amount), decimal(\"0\"))",
-        translateCheck("-amount < 0"));
+        translateCheckNotNull("-amount < 0"));
   }
 
   @Test
   void decimalAbs() {
     assertEquals("decimals.lt(decimals.abs(this.amount), decimal(\"100\"))",
-        translateCheck("ABS(amount) < 100"));
+        translateCheckNotNull("ABS(amount) < 100"));
   }
 
   @Test
   void decimalSignReturnsInt() {
     // decimals.sign returns int, so the surrounding compare stays native.
-    assertEquals("decimals.sign(this.amount) == -1", translateCheck("SIGN(amount) = -1"));
+    assertEquals("decimals.sign(this.amount) == -1", translateCheckNotNull("SIGN(amount) = -1"));
   }
 
   @Test
   void decimalFloor() {
     assertEquals("decimals.ge(decimals.floor(this.amount), decimal(\"0\"))",
-        translateCheck("FLOOR(amount) >= 0"));
+        translateCheckNotNull("FLOOR(amount) >= 0"));
   }
 
   @Test
   void decimalCeiling() {
     assertEquals("decimals.le(decimals.ceil(this.amount), decimal(\"100\"))",
-        translateCheck("CEILING(amount) <= 100"));
+        translateCheckNotNull("CEILING(amount) <= 100"));
   }
 
   @Test
   void decimalRoundWithScale() {
     assertEquals("decimals.eq(decimals.round(this.amount, 1), this.amount)",
-        translateCheck("ROUND(amount, 1) = amount"));
+        translateCheckNotNull("ROUND(amount, 1) = amount"));
   }
 
   @Test
   void decimalTruncate() {
     assertEquals("decimals.le(decimals.trunc(this.price), this.price)",
-        translateCheck("TRUNCATE(price) <= price"));
+        translateCheckNotNull("TRUNCATE(price) <= price"));
   }
 
   @Test
   void decimalSqrt() {
     assertEquals("decimals.lt(decimals.sqrt(this.amount), decimal(\"10\"))",
-        translateCheck("SQRT(amount) < 10"));
+        translateCheckNotNull("SQRT(amount) < 10"));
   }
 
   @Test
   void decimalCastToString() {
     assertEquals("string(this.amount) == '1.50'",
-        translateCheck("CAST(amount AS STRING) = '1.50'"));
+        translateCheckNotNull("CAST(amount AS STRING) = '1.50'"));
   }
 
   @Test
@@ -1625,14 +1803,14 @@ class CheckConstraintTest {
     // CAST(decimalExpr AS DOUBLE) → double(<decimal value>) (the (Decimal) ->
     // double overload), symmetric with the STRING cast.
     assertEquals("double(this.amount) > 1.5",
-        translateCheck("CAST(amount AS DOUBLE) > 1.5"));
+        translateCheckNotNull("CAST(amount AS DOUBLE) > 1.5"));
   }
 
   @Test
   void decimalBetween() {
     assertEquals(
         "decimals.le(decimal(\"0\"), this.amount) && decimals.le(this.amount, decimal(\"100\"))",
-        translateCheck("amount BETWEEN 0 AND 100"));
+        translateCheckNotNull("amount BETWEEN 0 AND 100"));
   }
 
   @Test
@@ -1640,7 +1818,7 @@ class CheckConstraintTest {
     assertEquals(
         "(decimals.eq(this.amount, decimal(\"1.0\")) "
             + "|| decimals.eq(this.amount, decimal(\"2.5\")))",
-        translateCheck("amount IN (1.0, 2.5)"));
+        translateCheckNotNull("amount IN (1.0, 2.5)"));
   }
 
   @Test
@@ -1650,19 +1828,19 @@ class CheckConstraintTest {
     assertEquals(
         "decimals.gt(decimals.mul(decimals.add(this.amount, this.price), decimal(\"2\")), "
             + "this.discount)",
-        translateCheck("(amount + price) * 2 > discount"));
+        translateCheckNotNull("(amount + price) * 2 > discount"));
   }
 
   // Non-decimal numerics route to the CEL math.* extension (same SQL).
 
   @Test
   void mathAbsOnInt() {
-    assertEquals("math.abs(this.x) < 5", translateCheck("ABS(x) < 5"));
+    assertEquals("math.abs(this.x) < 5", translateCheckNotNull("ABS(x) < 5"));
   }
 
   @Test
   void mathSqrtOnDouble() {
-    assertEquals("math.sqrt(this.ratio) < 2.0", translateCheck("SQRT(ratio) < 2.0"));
+    assertEquals("math.sqrt(this.ratio) < 2.0", translateCheckNotNull("SQRT(ratio) < 2.0"));
   }
 
   @Test
@@ -1691,7 +1869,7 @@ class CheckConstraintTest {
   void decimalGreatestProducesDecimalCompare() {
     // GREATEST/CASE/NULLIF emit gnarly ternaries; assert the decimal dispatch
     // markers rather than the exact string (still strict-checked end-to-end).
-    String cel = translateCheck("GREATEST(amount, price) > 0");
+    String cel = translateCheckNotNull("GREATEST(amount, price) > 0");
     org.junit.jupiter.api.Assertions.assertTrue(
         cel.contains("decimals.greatest(this.amount, this.price)")
             && cel.startsWith("decimals.gt("),
@@ -1703,7 +1881,7 @@ class CheckConstraintTest {
     // amount is DECIMAL; `amount % 2` → decimals.mod (remainder, sign of dividend).
     assertEquals(
         "decimals.eq(decimals.mod(this.amount, decimal(\"2\")), decimal(\"0\"))",
-        translateCheck("amount % 2 = 0"));
+        translateCheckNotNull("amount % 2 = 0"));
   }
 
   @Test
@@ -1731,38 +1909,39 @@ class CheckConstraintTest {
   void extractYear() {
     // The receiver is normalized via timestamp(...) (ts is TIMESTAMP_LTZ).
     assertEquals("timestamp(this.ts).getFullYear() == 2026",
-        translateCheck("EXTRACT(YEAR FROM ts) = 2026"));
+        translateCheckNotNull("EXTRACT(YEAR FROM ts) = 2026"));
   }
 
   @Test
   void extractMonth() {
     // CEL getMonth() is 0-based; SQL MONTH is 1-based. Translator adds 1.
     assertEquals("(timestamp(this.ts).getMonth() + 1) < 12",
-        translateCheck("EXTRACT(MONTH FROM ts) < 12"));
+        translateCheckNotNull("EXTRACT(MONTH FROM ts) < 12"));
   }
 
   @Test
   void extractMonthIsOneBased() {
     // Lock in SQL semantics: January is month 1, not 0.
     assertEquals("(timestamp(this.ts).getMonth() + 1) == 1",
-        translateCheck("EXTRACT(MONTH FROM ts) = 1"));
+        translateCheckNotNull("EXTRACT(MONTH FROM ts) = 1"));
   }
 
   @Test
   void extractDay() {
     assertEquals("timestamp(this.ts).getDate() <= 31",
-        translateCheck("EXTRACT(DAY FROM ts) <= 31"));
+        translateCheckNotNull("EXTRACT(DAY FROM ts) <= 31"));
   }
 
   @Test
   void extractEpoch() {
-    assertEquals("int(timestamp(this.ts)) > 0", translateCheck("EXTRACT(EPOCH FROM ts) > 0"));
+    assertEquals("int(timestamp(this.ts)) > 0",
+        translateCheckNotNull("EXTRACT(EPOCH FROM ts) > 0"));
   }
 
   @Test
   void extractCaseInsensitiveField() {
     assertEquals("timestamp(this.ts).getFullYear() == 2026",
-        translateCheck("EXTRACT(year FROM ts) = 2026"));
+        translateCheckNotNull("EXTRACT(year FROM ts) = 2026"));
   }
 
   @Test
@@ -1781,19 +1960,19 @@ class CheckConstraintTest {
   @Test
   void substringFromFor() {
     assertEquals("this.name.substring((1) - 1, (1) - 1 + (3)) == 'foo'",
-        translateCheck("SUBSTRING(name FROM 1 FOR 3) = 'foo'"));
+        translateCheckNotNull("SUBSTRING(name FROM 1 FOR 3) = 'foo'"));
   }
 
   @Test
   void substringFromOnly() {
     assertEquals("this.name.substring((2) - 1) == 'oo'",
-        translateCheck("SUBSTRING(name FROM 2) = 'oo'"));
+        translateCheckNotNull("SUBSTRING(name FROM 2) = 'oo'"));
   }
 
   @Test
   void substringCommaForm() {
     assertEquals("this.name.substring((1) - 1, (1) - 1 + (3)) == 'foo'",
-        translateCheck("SUBSTRING(name, 1, 3) = 'foo'"));
+        translateCheckNotNull("SUBSTRING(name, 1, 3) = 'foo'"));
   }
 
   @Test
@@ -1822,7 +2001,7 @@ class CheckConstraintTest {
     // Column-ref start can't be checked statically — accept and let CEL
     // raise at runtime if the value is invalid.
     assertEquals("this.name.substring((this.lo) - 1, (this.lo) - 1 + (3)) == 'foo'",
-        translateCheck("SUBSTRING(name FROM lo FOR 3) = 'foo'"));
+        translateCheckNotNull("SUBSTRING(name FROM lo FOR 3) = 'foo'"));
   }
 
   // ---------------------------------------------------------------------
@@ -1834,13 +2013,13 @@ class CheckConstraintTest {
     // POSITION's whole emit is wrapped so a tighter outer operator
     // (e.g. `POSITION(...) * 2`) can't mis-bind the trailing `+ 1`.
     assertEquals("(this.haystack.indexOf(this.needle) + 1) > 0",
-        translateCheck("POSITION(needle IN haystack) > 0"));
+        translateCheckNotNull("POSITION(needle IN haystack) > 0"));
   }
 
   @Test
   void positionWithLiterals() {
     assertEquals("(this.name.indexOf('@') + 1) > 0",
-        translateCheck("POSITION('@' IN name) > 0"));
+        translateCheckNotNull("POSITION('@' IN name) > 0"));
   }
 
   @Test
@@ -1849,7 +2028,92 @@ class CheckConstraintTest {
     // `indexOf + 1 * 2` and CEL would parse as `indexOf + 2` (multiplicative
     // binds tighter), losing the `* 2` factor on the indexOf part.
     assertEquals("(this.name.indexOf('@') + 1) * 2 == 4",
-        translateCheck("POSITION('@' IN name) * 2 = 4"));
+        translateCheckNotNull("POSITION('@' IN name) * 2 = 4"));
+  }
+
+  @Test
+  void positionParsesAnywhereAsBareCheckExpr() {
+    // Parsed on its own (as KTable does), a check_expr needle let ANTLR take
+    // `'@' IN name` as the needle and then fail at the closing parenthesis.
+    for (String sql : List.of("2 = POSITION('@' IN name)",
+        "qty BETWEEN 1 AND POSITION('@' IN name)", "POSITION('@' IN name) = 2")) {
+      for (PredictionMode mode : List.of(PredictionMode.SLL, PredictionMode.LL)) {
+        LogicalTypesParser parser = LogicalTypesParserFactory.newParser(sql);
+        parser.getInterpreter().setPredictionMode(mode);
+        parser.check_expr();
+        assertEquals(Token.EOF, parser.getCurrentToken().getType(), sql + " in " + mode);
+      }
+    }
+  }
+
+  @Test
+  void positionNeedleWithAnOperatorNeedsParentheses() {
+    org.junit.jupiter.api.Assertions.assertThrows(
+        ValidationException.class,
+        () -> translateCheckNotNull("POSITION('a' || 'b' IN name) > 0"));
+    assertEquals("(this.name.indexOf(('a' + 'b')) + 1) > 0",
+        translateCheckNotNull("POSITION(('a' || 'b') IN name) > 0"));
+  }
+
+  @Test
+  void positionFrom() {
+    assertEquals("!(((!has(this.name) || dyn(this.name) == null) || (!has(this.qty) ||"
+            + " dyn(this.qty) == null)) ? false : !((((!has(this.name) || dyn(this.name) == null)"
+            + " || (!has(this.qty) || dyn(this.qty) == null)) ? dyn(null) : ('@' == '' ? 1 :"
+            + " (this.qty > size(this.name) ? 0 : this.name.indexOf('@', this.qty <= 1 ? 0 :"
+            + " this.qty - 1) + 1))) > 0))",
+        translateCheck("POSITION('@' IN name FROM qty) > 0"));
+  }
+
+  @Test
+  void positionFromOfANullIsNull() throws Exception {
+    // An empty needle or a start past the end gives its answer without the other operands, so
+    // a NULL one is tested first: read as a CASE's value, it's NULL, and the CHECK passes.
+    String columns = "s STRING, ns STRING, ni INT";
+    Map<String, Object> present = new HashMap<>();
+    present.put("s", "abc");
+    present.put("ns", null);
+    present.put("ni", null);
+    for (Map<String, Object> self : List.of(present, Map.<String, Object>of("s", "abc"))) {
+      Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
+      for (String sql : List.of("CASE WHEN s = 'abc' THEN POSITION('' IN ns FROM 1) ELSE 0 END = 7",
+          "CASE WHEN s = 'abc' THEN POSITION('' IN s FROM ni) ELSE 0 END = 7",
+          "CASE WHEN s = 'abc' THEN POSITION(ns IN s FROM 9) ELSE 0 END = 7",
+          "POSITION('' IN s FROM 1) = 1")) {
+        String cel = translateCheckOver(columns, sql);
+        assertEquals(true, CelUtils.buildProgram(
+            CelUtils.ScriptType.JSON, cel, null, CelUtils.toVarDecls(CelUtils.toDeclTypes(vars)))
+            .eval(vars), sql + " on " + self.keySet() + " -> " + cel);
+      }
+    }
+  }
+
+  @Test
+  void positionFromMatchesFlink() throws Exception {
+    // Each answer is Flink's SqlFunctionUtils.position for the same arguments.
+    for (String sql : List.of("POSITION('b' IN 'abcb' FROM 3) = 4",
+        "POSITION('b' IN 'abcb' FROM 0) = 2", "POSITION('b' IN 'abcb' FROM -5) = 2",
+        "POSITION('b' IN 'abcb' FROM 4) = 4", "POSITION('b' IN 'abcb' FROM 5) = 0",
+        "POSITION('b' IN 'abcb' FROM 9) = 0", "POSITION('' IN 'abc' FROM 9) = 1",
+        "POSITION('b' IN '' FROM 1) = 0", "POSITION('b' IN 'aébéb' FROM 4) = 5",
+        "POSITION('b' IN 'abcb' FROM -9223372036854775807 - 1) = 2")) {
+      String cel = translateCheck(sql);
+      assertEquals(true, evalConstant(cel), sql + " -> " + cel);
+    }
+  }
+
+  private static Object evalConstant(String cel) throws Exception {
+    CelCompiler compiler = CelCompilerFactory.standardCelCompilerBuilder()
+        .addLibraries(CelExtensions.strings()).build();
+    CelRuntime runtime = CelRuntimeFactory.standardCelRuntimeBuilder()
+        .addLibraries(CelExtensions.strings()).build();
+    return runtime.createProgram(compiler.compile(cel).getAst()).eval();
+  }
+
+  @Test
+  void dashDashStartsALineComment() {
+    assertEquals("this.x > 1", translateCheckNotNull("x > 1 -- not 1 - -1\n"));
+    assertEquals("this.x - -1 > 0", translateCheckNotNull("x - -1 > 0"));
   }
 
   // ---------------------------------------------------------------------
@@ -1859,7 +2123,7 @@ class CheckConstraintTest {
   @Test
   void trimDefault() {
     // TRIM(s) — strip whitespace
-    assertEquals("this.name.trim() == 'foo'", translateCheck("TRIM(name) = 'foo'"));
+    assertEquals("this.name.trim() == 'foo'", translateCheckNotNull("TRIM(name) = 'foo'"));
   }
 
   @Test
@@ -1937,7 +2201,7 @@ class CheckConstraintTest {
     // created_at (TIMESTAMP_LTZ) is normalized; CURRENT_TIMESTAMP (now) is
     // already a CEL timestamp and stays unwrapped.
     assertEquals("timestamp(this.created_at) <= now",
-        translateCheck("created_at <= CURRENT_TIMESTAMP"));
+        translateCheckNotNull("created_at <= CURRENT_TIMESTAMP"));
   }
 
   @Test
@@ -1951,7 +2215,7 @@ class CheckConstraintTest {
   void timestampColumnVsColumn() {
     // Both operands are TIMESTAMP_LTZ → both normalized; operator stays native.
     assertEquals("timestamp(this.ts) < timestamp(this.created_at)",
-        translateCheck("ts < created_at"));
+        translateCheckNotNull("ts < created_at"));
   }
 
   @Test
@@ -1959,13 +2223,13 @@ class CheckConstraintTest {
     assertEquals(
         "timestamp(this.created_at) <= timestamp(this.ts) "
             + "&& timestamp(this.ts) <= now",
-        translateCheck("ts BETWEEN created_at AND CURRENT_TIMESTAMP"));
+        translateCheckNotNull("ts BETWEEN created_at AND CURRENT_TIMESTAMP"));
   }
 
   @Test
   void extractHour() {
     assertEquals("timestamp(this.ts).getHours() >= 0",
-        translateCheck("EXTRACT(HOUR FROM ts) >= 0"));
+        translateCheckNotNull("EXTRACT(HOUR FROM ts) >= 0"));
   }
 
   // ---------------------------------------------------------------------
@@ -1978,14 +2242,14 @@ class CheckConstraintTest {
   void timestampLiteralComparison() {
     assertEquals(
         "timestamp(this.ts) >= timestamp(\"2020-01-01T00:00:00Z\")",
-        translateCheck("ts >= TIMESTAMP '2020-01-01 00:00:00'"));
+        translateCheckNotNull("ts >= TIMESTAMP '2020-01-01 00:00:00'"));
   }
 
   @Test
   void timestampLiteralWithOffsetPassesThrough() {
     assertEquals(
         "timestamp(this.ts) < timestamp(\"2020-01-01T00:00:00+02:00\")",
-        translateCheck("ts < TIMESTAMP '2020-01-01T00:00:00+02:00'"));
+        translateCheckNotNull("ts < TIMESTAMP '2020-01-01T00:00:00+02:00'"));
   }
 
   @Test
@@ -1993,14 +2257,14 @@ class CheckConstraintTest {
     // The dominant idiom: "within the last 7 days".
     assertEquals(
         "timestamp(this.created_at) > now - duration(\"604800s\")",
-        translateCheck("created_at > CURRENT_TIMESTAMP - INTERVAL '7' DAY"));
+        translateCheckNotNull("created_at > CURRENT_TIMESTAMP - INTERVAL '7' DAY"));
   }
 
   @Test
   void intervalPlusTimestampCommutative() {
     assertEquals(
         "duration(\"86400s\") + timestamp(this.created_at) > timestamp(this.ts)",
-        translateCheck("INTERVAL '1' DAY + created_at > ts"));
+        translateCheckNotNull("INTERVAL '1' DAY + created_at > ts"));
   }
 
   @Test
@@ -2008,7 +2272,7 @@ class CheckConstraintTest {
     // Full arithmetic: interval applied to a column (not just CURRENT_TIMESTAMP).
     assertEquals(
         "timestamp(this.created_at) - duration(\"86400s\") < timestamp(this.ts)",
-        translateCheck("created_at - INTERVAL '1' DAY < ts"));
+        translateCheckNotNull("created_at - INTERVAL '1' DAY < ts"));
   }
 
   @Test
@@ -2016,15 +2280,15 @@ class CheckConstraintTest {
     // T - T → duration; compared against an INTERVAL (elapsed-time check).
     assertEquals(
         "timestamp(this.ts) - timestamp(this.created_at) > duration(\"3600s\")",
-        translateCheck("ts - created_at > INTERVAL '1' HOUR"));
+        translateCheckNotNull("ts - created_at > INTERVAL '1' HOUR"));
   }
 
   @Test
   void intervalUnitsConvertToSeconds() {
     assertEquals("timestamp(this.ts) > now - duration(\"90s\")",
-        translateCheck("ts > CURRENT_TIMESTAMP - INTERVAL '90' SECOND"));
+        translateCheckNotNull("ts > CURRENT_TIMESTAMP - INTERVAL '90' SECOND"));
     assertEquals("timestamp(this.ts) > now - duration(\"120s\")",
-        translateCheck("ts > CURRENT_TIMESTAMP - INTERVAL '2' MINUTE"));
+        translateCheckNotNull("ts > CURRENT_TIMESTAMP - INTERVAL '2' MINUTE"));
   }
 
   @Test
@@ -2080,7 +2344,7 @@ class CheckConstraintTest {
     assertEquals(
         "timestamp(\"2020-01-01T00:00:00Z\") <= timestamp(this.ts) "
             + "&& timestamp(this.ts) <= now",
-        translateCheck("ts BETWEEN TIMESTAMP '2020-01-01 00:00:00' AND CURRENT_TIMESTAMP"));
+        translateCheckNotNull("ts BETWEEN TIMESTAMP '2020-01-01 00:00:00' AND CURRENT_TIMESTAMP"));
   }
 
   // Phase B: temporal operands in IN / CASE / COALESCE / NULLIF / GREATEST / LEAST.
@@ -2090,7 +2354,8 @@ class CheckConstraintTest {
     assertEquals(
         "timestamp(this.ts) in [timestamp(\"2020-01-01T00:00:00Z\"), "
             + "timestamp(\"2021-01-01T00:00:00Z\")]",
-        translateCheck("ts IN (TIMESTAMP '2020-01-01 00:00:00', TIMESTAMP '2021-01-01 00:00:00')"));
+        translateCheckNotNull("ts IN (TIMESTAMP '2020-01-01 00:00:00', "
+            + "TIMESTAMP '2021-01-01 00:00:00')"));
   }
 
   @Test
@@ -2117,7 +2382,7 @@ class CheckConstraintTest {
     String cel = translateCheck(
         "CASE ts WHEN TIMESTAMP '2020-01-01 00:00:00' THEN 1 ELSE 0 END = 1");
     org.junit.jupiter.api.Assertions.assertTrue(
-        cel.contains("timestamp(this.ts) == timestamp(\"2020-01-01T00:00:00Z\")"),
+        cel.contains("(timestamp(this.ts)) == (timestamp(\"2020-01-01T00:00:00Z\"))"),
         "expected timestamp simple-CASE; got: " + cel);
   }
 
@@ -2132,7 +2397,8 @@ class CheckConstraintTest {
         + "CHECK (EVERY(tags, t, LENGTH(t) > 0))"
         + ");";
     Schema schema = parseScript(script).getRootSchema();
-    assertEquals("this.tags.all(t, size(t) > 0)", schema.getRules().get(0).getExpr());
+    assertEquals("!((!has(this.tags) || dyn(this.tags) == null) ? false : this.tags.exists(t,"
+            + " (dyn(t) == null ? false : !(size(t) > 0))))", schema.getRules().get(0).getExpr());
   }
 
   @Test
@@ -2142,13 +2408,14 @@ class CheckConstraintTest {
         + "CHECK (ANY(tags, t, t = 'admin'))"
         + ");";
     Schema schema = parseScript(script).getRootSchema();
-    assertEquals("this.tags.exists(t, t == 'admin')", schema.getRules().get(0).getExpr());
+    assertEquals("!((!has(this.tags) || dyn(this.tags) == null) ? false : this.tags.all(t,"
+            + " (dyn(t) == null ? false : !(t == 'admin'))))", schema.getRules().get(0).getExpr());
   }
 
   @Test
   void oneExistsOne() {
     String script = "STRUCT T ("
-        + "addresses STRING ARRAY,"
+        + "addresses STRING NOT NULL ARRAY NOT NULL,"
         + "CHECK (ONE(addresses, a, STARTS_WITH(a, 'primary:')))"
         + ");";
     Schema schema = parseScript(script).getRootSchema();
@@ -2163,7 +2430,8 @@ class CheckConstraintTest {
         + "CHECK (every(tags, t, LENGTH(t) > 0))"
         + ");";
     Schema schema = parseScript(script).getRootSchema();
-    assertEquals("this.tags.all(t, size(t) > 0)", schema.getRules().get(0).getExpr());
+    assertEquals("!((!has(this.tags) || dyn(this.tags) == null) ? false : this.tags.exists(t,"
+            + " (dyn(t) == null ? false : !(size(t) > 0))))", schema.getRules().get(0).getExpr());
   }
 
   @Test
@@ -2174,7 +2442,9 @@ class CheckConstraintTest {
         + "CHECK (EVERY(matrix, r, EVERY(r, cell, cell > 0)))"
         + ");";
     Schema schema = parseScript(script).getRootSchema();
-    assertEquals("this.matrix.all(r, r.all(cell, cell > 0))",
+    assertEquals("!((!has(this.matrix) || dyn(this.matrix) == null) ? false :"
+            + " this.matrix.exists(r, (dyn(r) == null ? false : r.exists(cell, (dyn(cell) == null"
+            + " ? false : !(cell > 0))))))",
         schema.getRules().get(0).getExpr());
   }
 
@@ -2185,7 +2455,8 @@ class CheckConstraintTest {
         + "CHECK (ANY(ages, a, a BETWEEN 18 AND 65))"
         + ");";
     Schema schema = parseScript(script).getRootSchema();
-    assertEquals("this.ages.exists(a, 18 <= a && a <= 65)",
+    assertEquals("!((!has(this.ages) || dyn(this.ages) == null) ? false : this.ages.all(a,"
+            + " ((dyn(a) == null ? false : !(18 <= a)) || (dyn(a) == null ? false : !(a <= 65)))))",
         schema.getRules().get(0).getExpr());
   }
 
@@ -2196,8 +2467,30 @@ class CheckConstraintTest {
         + "CHECK (EVERY(emails, e, IS_EMAIL(e)))"
         + ");";
     Schema schema = parseScript(script).getRootSchema();
-    assertEquals("this.emails.all(e, e.isEmail())",
+    assertEquals("!((!has(this.emails) || dyn(this.emails) == null) ? false :"
+            + " this.emails.exists(e, (dyn(e) == null ? false : !(e.isEmail()))))",
         schema.getRules().get(0).getExpr());
+  }
+
+  @Test
+  void aMapQuantifierBindsEachKey() throws Exception {
+    // CEL's all/exists/exists_one over a map bind its keys; a value is reached by m[k].
+    String columns = "m MAP<STRING, INT NOT NULL> NOT NULL, s STRING";
+    assertEquals("!this.m.exists(k, (dyn(k) == null ? false : !(k != 'zz')))",
+        translateCheckOver(columns, "EVERY(m, k, k <> 'zz')"));
+    Map<String, Object> self = new HashMap<>();
+    self.put("m", Map.of("a", 1, "b", 2));
+    self.put("s", "b");
+    Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
+    for (String sql : List.of("EVERY(m, k, k <> 'zz')", "ANY(m, k, k = s)",
+        "ONE(m, k, k = 'a')", "EVERY(m, k, m[k] > 0)", "ONE(m, k, LENGTH(k) = 1 AND m[k] = 2)")) {
+      String cel = translateCheckOver(columns, sql);
+      assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+          CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars), sql + " -> " + cel);
+    }
+    // A key compared as its value is refused.
+    assertThrows(ValidationException.class,
+        () -> translateCheckOver(columns, "EVERY(m, k, k > 0)"));
   }
 
   @Test
@@ -2274,7 +2567,7 @@ class CheckConstraintTest {
         + "addr STRUCT(zip INT) NOT NULL CHECK (addr.zip > 0)"
         + ");";
     Schema schema = parseScript(script).getRootSchema();
-    assertEquals("this.zip > 0",
+    assertEquals("!((!has(this.zip) || dyn(this.zip) == null) ? false : !(this.zip > 0))",
         schema.getField("addr").getRules().get(0).getExpr());
   }
 
@@ -2315,7 +2608,8 @@ class CheckConstraintTest {
         + "CHECK (a < b)"
         + ");";
     Schema schema = parseScript(script).getRootSchema();
-    assertEquals("this.a < this.b", schema.getRules().get(0).getExpr());
+    assertEquals("!(((!has(this.a) || dyn(this.a) == null) || (!has(this.b) || dyn(this.b) =="
+            + " null)) ? false : !(this.a < this.b))", schema.getRules().get(0).getExpr());
   }
 
   @Test
@@ -2340,7 +2634,8 @@ class CheckConstraintTest {
   void acceptsBooleanColumnRef() {
     String script = "STRUCT T (active BOOLEAN, CHECK (active));";
     Schema schema = parseScript(script).getRootSchema();
-    assertEquals("this.active", schema.getRules().get(0).getExpr());
+    assertEquals("!((!has(this.active) || dyn(this.active) == null) ? false : !(this.active))",
+        schema.getRules().get(0).getExpr());
   }
 
   @Test
@@ -2664,7 +2959,7 @@ class CheckConstraintTest {
   void doubleArithmeticResultCoerced() {
     // ratio (double) + 1 (int) → DOUBLE; compared to 0.0 (decimal literal)
     // → common DOUBLE. The int operand emits as `1.0`.
-    assertEquals("this.ratio + 1.0 > 0.0", translateCheck("ratio + 1 > 0.0"));
+    assertEquals("this.ratio + 1.0 > 0.0", translateCheckNotNull("ratio + 1 > 0.0"));
   }
 
   @Test
@@ -2673,7 +2968,7 @@ class CheckConstraintTest {
     // DECIMAL. Both int operands are wrapped with decimal().
     assertEquals(
         "decimals.gt(decimals.add(decimal(this.x), decimal(\"1.5\")), decimal(\"0\"))",
-        translateCheck("x + 1.5 > 0"));
+        translateCheckNotNull("x + 1.5 > 0"));
   }
 
   @Test
@@ -2741,7 +3036,7 @@ class CheckConstraintTest {
   void intVsDoubleComparisonCoerced() {
     // int vs double now coerces to the common type (double) — the int side
     // is cast with double() (Flink-faithful; no longer rejected).
-    assertEquals("double(this.x) < this.ratio", translateCheck("x < ratio"));
+    assertEquals("double(this.x) < this.ratio", translateCheckNotNull("x < ratio"));
   }
 
   // ---- numeric coercion: common-type comparison ----
@@ -2749,27 +3044,27 @@ class CheckConstraintTest {
   @Test
   void doubleVsIntComparisonCoerced() {
     // DOUBLE vs INT → common DOUBLE; the int literal emits as 5.0.
-    assertEquals("this.ratio == 5.0", translateCheck("ratio = 5"));
+    assertEquals("this.ratio == 5.0", translateCheckNotNull("ratio = 5"));
   }
 
   @Test
   void intVsDecimalLiteralComparisonIsDecimal() {
     // INT vs DECIMAL literal (no exponent) → common DECIMAL.
     assertEquals("decimals.gt(decimal(this.qty), decimal(\"1.5\"))",
-        translateCheck("qty > 1.5"));
+        translateCheckNotNull("qty > 1.5"));
   }
 
   @Test
   void intVsDecimalLiteralEqualityIsDecimal() {
     // 12.34 is a DECIMAL literal → INT coerces up to DECIMAL.
     assertEquals("decimals.eq(decimal(this.x), decimal(\"12.34\"))",
-        translateCheck("x = 12.34"));
+        translateCheckNotNull("x = 12.34"));
   }
 
   @Test
   void decimalColVsDecimalLiteralIsDecimal() {
     assertEquals("decimals.eq(this.amount, decimal(\"12.34\"))",
-        translateCheck("amount = 12.34"));
+        translateCheckNotNull("amount = 12.34"));
   }
 
   @Test
@@ -2777,21 +3072,1141 @@ class CheckConstraintTest {
     // DECIMAL vs DOUBLE → common DOUBLE (Flink-faithful) via the
     // double(Decimal) overload — not an exact-decimal compare.
     assertEquals("double(this.amount) == this.ratio",
-        translateCheck("amount = ratio"));
+        translateCheckNotNull("amount = ratio"));
   }
 
   @Test
   void decimalColVsExponentLiteralIsDouble() {
     // An exponent literal (1.5e2) is approximate → DOUBLE; DECIMAL coerces up.
     assertEquals("double(this.amount) == 1.5e2",
-        translateCheck("amount = 1.5e2"));
+        translateCheckNotNull("amount = 1.5e2"));
   }
 
   @Test
   void intArithmeticWithExponentLiteralIsDouble() {
     // x (int) + 1.5e0 (double) → DOUBLE; > 10 (int) → DOUBLE.
     assertEquals("double(this.x) + 1.5e0 > 10.0",
-        translateCheck("x + 1.5e0 > 10"));
+        translateCheckNotNull("x + 1.5e0 > 10"));
+  }
+
+  @Test
+  void nullTestsCoverOnlyTheNullableSteps() {
+    // A NOT NULL step is present whenever its parent is, and Protobuf's has() is false for a
+    // zero, so only the deepest nullable step of a path is tested.
+    String columns = "a INT NOT NULL, n INT, r STRUCT(x INT NOT NULL, y INT)";
+    assertEquals("(true ? this.a : 7) == 0", translateCheckOver(columns, "COALESCE(a, 7) = 0"));
+    assertEquals("((has(this.n) && dyn(this.n) != null) ? this.n : 7) == 0",
+        translateCheckOver(columns, "COALESCE(n, 7) = 0"));
+    assertEquals("((has(this.r) && dyn(this.r) != null) ? this.r.x : 7) == 0",
+        translateCheckOver(columns, "COALESCE(r.x, 7) = 0"));
+    assertEquals("!((!has(this.n) || dyn(this.n) == null) ? false : !(((!has(this.n) ||"
+            + " dyn(this.n) == null) ? dyn(null) : math.greatest(this.a, this.n)) == 0))",
+        translateCheckOver(columns, "GREATEST(a, n) = 0"));
+    assertEquals("(!has(this.r) || dyn(this.r) == null)",
+        translateCheckOver(columns, "r.x IS NULL"));
+    assertEquals("((has(this.r) && dyn(this.r) != null) && (has(this.r.y) "
+        + "&& dyn(this.r.y) != null))", translateCheckOver(columns, "r.y IS NOT NULL"));
+    // A parenthesized selection, and a macro variable's fields, the same way.
+    assertEquals("((has(this.r) && dyn(this.r) != null) ? (this.r).x : 7) == 0",
+        translateCheckOver(columns, "COALESCE((r).x, 7) = 0"));
+    String arrays = "items STRUCT(x INT NOT NULL) NOT NULL ARRAY NOT NULL, "
+        + "maybe STRUCT(x INT NOT NULL) ARRAY NOT NULL";
+    assertEquals("this.items.all(e, (true ? e.x : 7) == 0)",
+        translateCheckOver(arrays, "EVERY(items, e, COALESCE(e.x, 7) = 0)"));
+    assertEquals("this.maybe.all(e, (dyn(e) != null ? e.x : 7) == 0)",
+        translateCheckOver(arrays, "EVERY(maybe, e, COALESCE(e.x, 7) = 0)"));
+  }
+
+  @Test
+  void aNullStructDecidesANullTestOfItsFields() throws Exception {
+    // Avro and JSON give a null struct as null, which no field can be selected from, so each
+    // nullable step is tested, outermost first.
+    String columns = "r STRUCT(f0 INT, q STRUCT(g INT))";
+    assertEquals("((!has(this.r) || dyn(this.r) == null) || (!has(this.r.f0) "
+        + "|| dyn(this.r.f0) == null))", translateCheckOver(columns, "r.f0 IS NULL"));
+    Map<String, Object> self = new HashMap<>();
+    self.put("r", null);
+    Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
+    for (String sql : List.of("r.f0 IS NULL", "NOT (r.q.g IS NOT NULL)", "COALESCE(r.f0, 7) = 7",
+        "GREATEST(r.q.g, 1) IS NULL", "CASE WHEN r.f0 IS NULL THEN 1 ELSE 2 END = 1")) {
+      String cel = translateCheckOver(columns, sql);
+      assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+          CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars), sql + " -> " + cel);
+    }
+  }
+
+  @Test
+  void greatestOfANullWithACastIsNull() throws Exception {
+    // With an argument NULL the result is NULL, not a cast of NULL, so an outer GREATEST or
+    // LEAST is NULL too and COALESCE skips it.
+    String columns = "a INT, x DOUBLE, d DECIMAL(10, 2), t TIMESTAMP_LTZ(3), u TIMESTAMP_LTZ(3)";
+    Map<String, Object> self = new HashMap<>();
+    self.put("a", 5);
+    self.put("x", null);
+    self.put("d", null);
+    self.put("t", null);
+    self.put("u", null);
+    Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
+    for (String sql : List.of("GREATEST(a, GREATEST(x, d)) IS NULL",
+        "LEAST(a, LEAST(d, x)) IS NULL", "COALESCE(GREATEST(x, a), 7) = 7",
+        "COALESCE(LEAST(d, x), 7) = 7",
+        "COALESCE(GREATEST(x, d), 7) = 7", "COALESCE(LEAST(t, u), TIMESTAMP '2020-01-01 00:00:00') "
+            + "= TIMESTAMP '2020-01-01 00:00:00'")) {
+      String cel = translateCheckOver(columns, sql);
+      assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+          CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars), sql + " -> " + cel);
+    }
+  }
+
+  @Test
+  void greatestOfANestedOrAbsentNullIsNull() throws Exception {
+    // A NULL argument of a narrower type is tested before it is widened and, as JSON leaves a
+    // NULL field out, before it is read, so a nested GREATEST or LEAST is NULL too.
+    String columns = "a INT, b BIGINT, x DOUBLE, d DECIMAL(10, 2), r STRUCT(x INT)";
+    Map<String, Object> present = new HashMap<>();
+    present.put("a", null);
+    present.put("b", null);
+    present.put("x", 0.5);
+    present.put("d", null);
+    present.put("r", null);
+    for (Map<String, Object> self : List.of(present, Map.<String, Object>of("x", 0.5))) {
+      Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
+      for (String sql : List.of("GREATEST(x, GREATEST(a, b)) IS NULL",
+          "LEAST(x, LEAST(b, a)) IS NULL", "GREATEST(GREATEST(x, a), x) IS NULL",
+          "COALESCE(LEAST(d, LEAST(a, b)), 7) = 7", "COALESCE(GREATEST(a, d), 7) = 7",
+          "COALESCE(GREATEST(r.x, d), 7) = 7", "COALESCE(LEAST(b, d), 7) = 7")) {
+        String cel = translateCheckOver(columns, sql);
+        assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+            CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars),
+            sql + " on " + self + " -> " + cel);
+      }
+    }
+  }
+
+  @Test
+  void aNullGreatestArgumentIsNull() throws Exception {
+    // GREATEST and LEAST are NULL when any argument is, as in Flink, not the other argument.
+    String columns = "i INT NOT NULL, ni INT, nb BIGINT, nd DECIMAL(10, 2), b BIGINT";
+    Map<String, Object> absent = Map.of("i", 1, "b", 40000L);
+    Map<String, Object> present = new HashMap<>(absent);
+    for (String col : List.of("ni", "nb", "nd")) {
+      present.put(col, null);
+    }
+    for (Map<String, Object> self : List.of(present, absent)) {
+      Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
+      for (String sql : List.of("LEAST(2.5, ni) IS NULL", "GREATEST(nd, i) IS NULL",
+          "NOT (COALESCE(GREATEST(nb, i), 0) > 0)",
+          "CASE WHEN GREATEST(ni, b) > 0 THEN 1 ELSE 2 END = 2",
+          "GREATEST(GREATEST(i, nb), i) IS NULL")) {
+        String cel = translateCheckOver(columns, sql);
+        assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+            CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars),
+            sql + " on " + self.keySet() + " -> " + cel);
+      }
+    }
+  }
+
+  @Test
+  void aNullCaseResultIsNull() throws Exception {
+    // A NULL branch is tested before it is widened and, as JSON leaves a NULL field out, before
+    // it is read, so IS NULL and COALESCE see the CASE's NULL.
+    String columns = "t BOOLEAN NOT NULL, nd DECIMAL(10, 2), i INT, ni INT, x DOUBLE";
+    Map<String, Object> present = new HashMap<>();
+    present.put("t", false);
+    present.put("nd", null);
+    present.put("i", 0);
+    present.put("ni", null);
+    present.put("x", null);
+    for (Map<String, Object> self : List.of(present, Map.<String, Object>of("t", false, "i", 0))) {
+      Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
+      for (String sql : List.of("CASE WHEN t THEN nd ELSE NULLIF(i, 0) END IS NULL",
+          "CASE WHEN t THEN nd ELSE ni END IS NULL",
+          "COALESCE(CASE WHEN t THEN nd ELSE ni END, -1) = -1",
+          "CASE WHEN t THEN x ELSE ni END IS NULL", "CASE WHEN t THEN ni ELSE ni END IS NULL")) {
+        String cel = translateCheckOver(columns, sql);
+        assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+            CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars),
+            sql + " on " + self + " -> " + cel);
+      }
+    }
+  }
+
+  @Test
+  void aNullNullifArgumentIsTestedFirst() throws Exception {
+    // A NULL first argument gives NULL and a NULL second gives the first, before either is
+    // compared, widened or, as JSON leaves a NULL field out, read.
+    String columns = "d DECIMAL(10, 2) NOT NULL, nd DECIMAL(10, 2), i INT NOT NULL, ni INT, "
+        + "s STRING NOT NULL, ns STRING, nx DOUBLE, nb BIGINT";
+    Map<String, Object> absent = new HashMap<>();
+    absent.put("d", CelDecimal.of(new BigDecimal("1.50")));
+    absent.put("i", 1);
+    absent.put("s", "a");
+    Map<String, Object> present = new HashMap<>(absent);
+    for (String c : List.of("nd", "ni", "ns", "nx", "nb")) {
+      present.put(c, null);
+    }
+    for (Map<String, Object> self : List.of(present, absent)) {
+      Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
+      for (String sql : List.of("NULLIF(d, nd) = d", "NULLIF(i, ni) = i", "NULLIF(s, ns) = s",
+          "NULLIF(nd, d) IS NULL", "NULLIF(ni, nd) IS NULL",
+          "COALESCE(NULLIF(nx, nb), -1) <> 2.5")) {
+        String cel = translateCheckOver(columns, sql);
+        assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+            CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars),
+            sql + " on " + self.keySet() + " -> " + cel);
+      }
+    }
+  }
+
+  @Test
+  void anExpressionOfANullIsNull() throws Exception {
+    // An operator or function of a NULL is NULL, so it is tested by its inputs before it's
+    // evaluated, which fails on a NULL or, as JSON leaves a NULL field out, a missing key.
+    String columns = "ni INT, ns STRING, nd DECIMAL(10, 2), arr INT ARRAY NOT NULL";
+    assertEquals("((!has(this.ni) || dyn(this.ni) == null) ? true : dyn(this.ni + 1) == null)",
+        translateCheckOver(columns, "ni + 1 IS NULL"));
+    Map<String, Object> absent = new HashMap<>();
+    absent.put("arr", List.of(1));
+    Map<String, Object> present = new HashMap<>(absent);
+    for (String col : List.of("ni", "ns", "nd")) {
+      present.put(col, null);
+    }
+    for (Map<String, Object> self : List.of(present, absent)) {
+      Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
+      for (String sql : List.of("ni + 1 IS NULL", "NOT (ni + 1 IS NOT NULL)",
+          "COALESCE(ni + 1, 0) = 0", "COALESCE(UPPER(ns), 'x') = 'x'",
+          "LEAST(LENGTH(ns), 2.5) IS NULL", "(ni = 1) IS NULL", "-ni IS NULL",
+          "(ns || 'x') IS NULL", "(ns LIKE 'a%') IS NULL", "nd * 2 IS NULL",
+          "EVERY(arr, e, (e > nd) IS NULL)")) {
+        String cel = translateCheckOver(columns, sql);
+        assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+            CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars),
+            sql + " on " + self.keySet() + " -> " + cel);
+      }
+    }
+  }
+
+  @Test
+  void aNullCaseConditionFallsThrough() throws Exception {
+    // A condition, or a simple CASE's match, that is NULL takes no branch, as SQL takes one only
+    // when TRUE; NOT, AND and OR keep SQL's three values.
+    String columns = "ni INT, nt BOOLEAN, nd DECIMAL(10, 2), ns STRING, t BOOLEAN NOT NULL";
+    Map<String, Object> absent = Map.of("t", true);
+    Map<String, Object> present = new HashMap<>(absent);
+    for (String col : List.of("ni", "nt", "nd", "ns")) {
+      present.put(col, null);
+    }
+    for (Map<String, Object> self : List.of(present, absent)) {
+      Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
+      for (String sql : List.of("CASE WHEN ni > 0 THEN 1 ELSE 2 END = 2",
+          "CASE WHEN nt THEN 1 ELSE 2 END = 2", "CASE nd WHEN 1.5 THEN 1 ELSE 2 END = 2",
+          "CASE ns WHEN 'a' THEN 1 ELSE 2 END = 2",
+          "NOT (CASE ns WHEN ns THEN 1 WHEN 'a' THEN 2 ELSE 3 END <= 2.5)",
+          "CASE WHEN NOT (ni > 0) THEN 1 ELSE 2 END = 2",
+          "CASE WHEN ni > 0 OR t THEN 1 ELSE 2 END = 1",
+          "CASE WHEN ni > 0 AND t THEN 1 ELSE 2 END = 2",
+          "CASE WHEN (ni > 0 OR NOT t) THEN 1 ELSE 2 END = 2")) {
+        String cel = translateCheckOver(columns, sql);
+        assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+            CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars),
+            sql + " on " + self.keySet() + " -> " + cel);
+      }
+    }
+  }
+
+  @Test
+  void anInOverANullIsThreeValued() throws Exception {
+    // An IN is TRUE on a match, else NULL when its subject or an element is NULL; each element is
+    // tested before it is compared, widened or, as JSON leaves a NULL field out, read.
+    String columns = "x DOUBLE NOT NULL, nd DECIMAL(10, 2), i INT NOT NULL, ni INT, nx DOUBLE, "
+        + "nb BIGINT, r STRUCT(a BIGINT), s STRING NOT NULL, ns STRING";
+    String niNull = "(!has(this.ni) || dyn(this.ni) == null)";
+    assertEquals("!(dyn(((this.i == 1 || (!" + niNull + " && this.i == this.ni)) ? true : ("
+        + niNull + " ? dyn(null) : false))) == false)",
+        translateCheckOver(columns, "i IN (1, ni)"));
+    Map<String, Object> absent = new HashMap<>();
+    absent.put("x", 0.5);
+    absent.put("i", 1);
+    absent.put("s", "a");
+    Map<String, Object> present = new HashMap<>(absent);
+    for (String col : List.of("nd", "ni", "nx", "nb", "r", "ns")) {
+      present.put(col, null);
+    }
+    for (Map<String, Object> self : List.of(present, absent)) {
+      Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
+      for (String sql : List.of("x IN (x, nd)", "i IN (1, ni)", "1 IN (1, r.a)",
+          "(1 NOT IN (nb, r.a)) IS NULL", "(i IN (2, ni)) IS NULL", "(nx IN (0, 0)) IS NULL",
+          "(ns NOT IN (ns, s)) IS NULL", "COALESCE(i IN (2, ni), TRUE) = TRUE",
+          "CASE WHEN i IN (2, ni) THEN 1 ELSE 2 END = 2",
+          "CASE WHEN i NOT IN (2, ni) THEN 1 ELSE 2 END = 2",
+          "CASE WHEN nx IN (0, 1) THEN 1 ELSE 2 END = 2")) {
+        String cel = translateCheckOver(columns, sql);
+        assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+            CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars),
+            sql + " on " + self.keySet() + " -> " + cel);
+      }
+    }
+  }
+
+  @Test
+  void aNullCaseOrNullifInsideAnExpressionIsNull() throws Exception {
+    // CASE, NULLIF and an IN with an element that may be NULL give NULL as null, so one inside
+    // an expression, an IN or a comparison is tested by its value, not evaluated through it.
+    String columns = "i INT NOT NULL, d DECIMAL(10, 2) NOT NULL, x DOUBLE NOT NULL, "
+        + "s STRING NOT NULL, t BOOLEAN NOT NULL, nx DOUBLE, ns STRING, b BIGINT, "
+        + "r STRUCT(a INT)";
+    Map<String, Object> absent = new HashMap<>();
+    absent.put("i", 0);
+    absent.put("d", CelDecimal.of(new BigDecimal("1.50")));
+    absent.put("x", 2.0);
+    absent.put("s", "a");
+    absent.put("t", true);
+    absent.put("b", 1L);
+    absent.put("r", Map.of("a", 1));
+    Map<String, Object> present = new HashMap<>(absent);
+    present.put("nx", null);
+    present.put("ns", null);
+    for (Map<String, Object> self : List.of(present, absent)) {
+      Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
+      for (String sql : List.of("(NULLIF(r.a, 1) IN (0, -1)) IS NULL",
+          "((CASE WHEN r.a NOT IN (i, d) THEN ns ELSE s END) IN ('a', 'Ab')) IS NULL",
+          "CASE (nx NOT IN (-1, b)) <> (-1 IN (x, d)) WHEN TRUE THEN 1 ELSE 2 END = 2",
+          "ABS(NULLIF(r.a, ABS(b))) IS NULL", "LENGTH(CASE WHEN t THEN ns ELSE s END) IS NULL",
+          "COALESCE(UPPER(CASE WHEN t THEN ns ELSE s END), 'x') = 'x'")) {
+        String cel = translateCheckOver(columns, sql);
+        assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+            CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars),
+            sql + " on " + self.keySet() + " -> " + cel);
+      }
+    }
+  }
+
+  @Test
+  void aBetweenOrLogicOverANullIsThreeValued() throws Exception {
+    // BETWEEN is FALSE when either comparison is and AND, OR and NOT follow Kleene's logic, so a
+    // NULL makes one NULL only when the rest doesn't decide it.
+    String columns = "i INT NOT NULL, x DOUBLE NOT NULL, s STRING NOT NULL, t BOOLEAN NOT NULL, "
+        + "ni INT, nb BIGINT, nd DECIMAL(10, 2), nx DOUBLE, ns STRING";
+    assertEquals("((!has(this.ni) || dyn(this.ni) == null) ? true"
+            + " : ((1 <= this.ni && this.ni <= 2) ? false : false))",
+        translateCheckOver(columns, "(ni BETWEEN 1 AND 2) IS NULL"));
+    Map<String, Object> absent = Map.of("i", 0, "x", 0.5, "s", "a", "t", true);
+    Map<String, Object> present = new HashMap<>(absent);
+    for (String col : List.of("ni", "nb", "nd", "nx", "ns")) {
+      present.put(col, null);
+    }
+    for (Map<String, Object> self : List.of(present, absent)) {
+      Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
+      for (String sql : List.of("(ni BETWEEN i AND ni) IS NULL",
+          "(nd BETWEEN SYMMETRIC x AND nb) IS NULL", "(nd BETWEEN 1 AND 2) IS NULL",
+          "((x BETWEEN nx AND 1) OR ('a' <> s)) IS NULL",
+          "((ns LIKE 'a%') AND (s LIKE 'a%')) IS NULL", "(x BETWEEN nx AND 0) IS NOT NULL",
+          "(x NOT BETWEEN 1 AND nx) IS NOT NULL", "(i BETWEEN nd AND -1) IS NOT NULL",
+          "((ns LIKE 'a%') AND (s LIKE 'b%')) IS NOT NULL", "((ns LIKE 'a%') OR t) IS NOT NULL",
+          "CASE WHEN x BETWEEN nx AND 1 THEN 1 ELSE 2 END = 2",
+          "CASE WHEN NOT (x BETWEEN nx AND 0) THEN 1 ELSE 2 END = 1",
+          "COALESCE((ns LIKE 'a%') AND t, FALSE) = FALSE")) {
+        String cel = translateCheckOver(columns, sql);
+        assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+            CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars),
+            sql + " on " + self.keySet() + " -> " + cel);
+      }
+    }
+  }
+
+  @Test
+  void anInOverAnArrayWithANullIsThreeValued() throws Exception {
+    // An IN over an array is TRUE on a match, else NULL when its subject, the array or an
+    // element is NULL, as an IN over a list is; with elements never NULL, NULL when the array
+    // is, or its subject is and the array isn't empty.
+    String columns = "i INT NOT NULL, ni INT, arr INT NOT NULL ARRAY NOT NULL, "
+        + "an INT ARRAY NOT NULL, na INT NOT NULL ARRAY";
+    assertEquals("!(dyn(((this.i in this.an) ? true : ((this.an).exists(v, dyn(v) == null) ?"
+            + " dyn(null) : false))) == false)", translateCheckOver(columns, "i IN an"));
+    // One whose elements are never NULL is two-valued.
+    assertEquals("!(((!has(this.ni) || dyn(this.ni) == null) && size(this.arr) > 0) ? false :"
+            + " !(!(size(this.arr) == 0 ? false : this.ni in this.arr)))",
+        translateCheckOver(columns, "ni NOT IN arr"));
+    Map<String, Object> absent = new HashMap<>();
+    absent.put("i", 2);
+    absent.put("arr", List.of(1, -2));
+    absent.put("an", Arrays.asList(1, null));
+    Map<String, Object> present = new HashMap<>(absent);
+    present.put("ni", null);
+    present.put("na", null);
+    for (Map<String, Object> self : List.of(present, absent)) {
+      Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
+      for (String sql : List.of("(i IN an) IS NULL", "(ni NOT IN arr) IS NULL",
+          "CASE WHEN i NOT IN an THEN 1 ELSE 2 END = 2", "(3 IN na) IS NULL", "1 IN an",
+          "COALESCE(i IN an, TRUE) = TRUE", "(i IN arr) IS NOT NULL")) {
+        String cel = translateCheckOver(columns, sql);
+        assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+            CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars),
+            sql + " on " + self.keySet() + " -> " + cel);
+      }
+    }
+  }
+
+  @Test
+  void aBooleanCoalesceOrNullifMayBeTheWholeCheck() throws Exception {
+    // A COALESCE or NULLIF of BOOLEANs is a BOOLEAN, as a CASE of them is.
+    String columns = "i INT NOT NULL, ni INT, nt BOOLEAN, nx DOUBLE, "
+        + "arr INT NOT NULL ARRAY NOT NULL";
+    for (Object[] c : new Object[][] {{"COALESCE(i IN arr, TRUE)", 1, null, true},
+        {"COALESCE(i IN arr, TRUE)", 5, null, false}, {"COALESCE(nt, TRUE)", 1, null, true},
+        {"NULLIF(i IN arr, TRUE)", 5, null, false},
+        {"COALESCE(nx BETWEEN SYMMETRIC (LENGTH('a')) AND nx, FALSE)", 1, null, false},
+        {"COALESCE(nx BETWEEN SYMMETRIC (LENGTH('a')) AND nx, FALSE)", 1, 1.0, true}}) {
+      Map<String, Object> present = new HashMap<>();
+      present.put("i", c[1]);
+      present.put("arr", List.of(1, -2));
+      present.put("ni", null);
+      present.put("nt", null);
+      present.put("nx", c[2]);
+      Map<String, Object> absent = new HashMap<>(present);
+      absent.values().removeIf(Objects::isNull);
+      String cel = translateCheckOver(columns, (String) c[0]);
+      for (Map<String, Object> self : List.of(present, absent)) {
+        Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
+        assertEquals(c[3], CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+            CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars),
+            c[0] + " on " + self + " -> " + cel);
+      }
+    }
+    assertThrows(ValidationException.class, () -> translateCheckOver(columns, "COALESCE(ni, 0)"));
+  }
+
+  @Test
+  void aNumericCaseIsNotACheck() {
+    // A CASE, or a COALESCE or NULLIF of them, is a CHECK only when its branches are BOOLEANs.
+    String columns = "t BOOLEAN NOT NULL, nt BOOLEAN";
+    for (String sql : List.of("CASE WHEN t THEN 1 ELSE 2 END",
+        "COALESCE(CASE WHEN t THEN 1 ELSE 2 END, CASE WHEN t THEN 3 ELSE 4 END)",
+        "NULLIF(CASE WHEN t THEN 1 ELSE 2 END, 1)")) {
+      ValidationException e = assertThrows(ValidationException.class,
+          () -> translateCheckOver(columns, sql), sql);
+      assertTrue(e.getMessage().contains("must yield a boolean"), e.getMessage());
+    }
+    translateCheckOver(columns, "CASE WHEN t THEN t ELSE NOT t END");
+    translateCheckOver(columns, "COALESCE(CASE WHEN t THEN nt ELSE t END, FALSE)");
+  }
+
+  @Test
+  void aBooleanArgumentIsGroupedInItsComparison() throws Exception {
+    // CEL binds == tighter than && and as tight as `in`, so NULLIF's and GREATEST's comparison
+    // groups an argument that is itself a predicate.
+    String columns = "t BOOLEAN NOT NULL, t2 BOOLEAN NOT NULL, nt BOOLEAN, i INT NOT NULL";
+    for (Object[] c : new Object[][] {{"NOT (NULLIF(t, t2 AND t) IS NOT NULL)", false, false},
+        {"NOT (NULLIF(t, t IN (TRUE, FALSE)) IS NULL)", false, false},
+        {"NULLIF(t2 AND t, t) IS NULL", false, false},
+        {"NOT (NULLIF(t OR t2, FALSE) IS NULL)", true, false},
+        {"NULLIF(t, t2 AND nt) IS NULL", false, false}, {"NULLIF(t, i = 0) IS NULL", true, false},
+        {"GREATEST(t, t AND t2) = TRUE", true, false}, {"NOT LEAST(t2 AND t, t)", true, false}}) {
+      Map<String, Object> present = new HashMap<>();
+      present.put("t", c[1]);
+      present.put("t2", c[2]);
+      present.put("i", 0);
+      present.put("nt", null);
+      Map<String, Object> absent = new HashMap<>(present);
+      absent.remove("nt");
+      String cel = translateCheckOver(columns, (String) c[0]);
+      for (Map<String, Object> self : List.of(present, absent)) {
+        Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
+        assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+            CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars),
+            c[0] + " on " + self + " -> " + cel);
+      }
+    }
+  }
+
+  @Test
+  void anInOverAMultisetOfNonStringsIsRefused() throws Exception {
+    // A MULTISET is held as entries of a value and its count, which no value matches, except
+    // one of strings, which Avro and JSON hold as a map of them.
+    String columns = "i INT NOT NULL, s STRING NOT NULL, ms INT MULTISET NOT NULL, "
+        + "nms DECIMAL(10, 2) NOT NULL MULTISET, sms STRING NOT NULL MULTISET NOT NULL";
+    for (String sql : List.of("i IN ms", "1.5 NOT IN nms", "(i IN ms) IS NULL")) {
+      ValidationException e = assertThrows(ValidationException.class,
+          () -> translateCheckOver(columns, sql), sql);
+      assertTrue(e.getMessage().contains("IN over a MULTISET of"), e.getMessage());
+    }
+    String cel = translateCheckOver(columns, "s IN sms");
+    Map<String, Object> vars = Map.of("this",
+        CelUtils.toCelValue(Map.of("i", 0, "s", "a", "sms", Map.of("a", 2))));
+    assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+        CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars), cel);
+  }
+
+  @Test
+  void aCoalesceWithAnArgumentNeverNullIsNeverNull() throws Exception {
+    // COALESCE with an argument never NULL never is, whatever the others are.
+    String columns = "s STRING NOT NULL, ni INT";
+    String vg = "VARIANT_GET(PARSE_JSON(s), '$.a' RETURNING INT)";
+    Map<String, Object> present = new HashMap<>();
+    present.put("s", "{\"a\": 1}");
+    present.put("ni", null);
+    for (Map<String, Object> self : List.of(present, Map.<String, Object>of("s", "{\"a\": 1}"))) {
+      Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
+      for (String sql : List.of("(COALESCE(" + vg + ", 0) > 0 AND ni > 0) IS NULL",
+          "(COALESCE(" + vg + ", 0) + ni) IS NULL")) {
+        String cel = translateCheckOver(columns, sql);
+        assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+            CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars),
+            sql + " on " + self.keySet() + " -> " + cel);
+      }
+    }
+  }
+
+  @Test
+  void aCastOfAParenthesizedFieldIsNullWhenTheFieldIs() throws Exception {
+    // A parenthesized field resolves to its type as an unparenthesized one does, rather than
+    // being taken for a VARIANT, whose CAST can be NULL however its inputs are.
+    String columns = "ns STRING, r STRUCT(a INT)";
+    Map<String, Object> present = new HashMap<>();
+    present.put("ns", null);
+    present.put("r", null);
+    for (Map<String, Object> self : List.of(present, Map.<String, Object>of())) {
+      Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
+      for (String sql : List.of("(CAST((r).a AS STRING) = 'q' OR ns = 'q') IS NULL",
+          "COALESCE(CAST((r).a AS STRING), 'z') = 'z'", "CAST((r).a AS STRING) IS NULL")) {
+        String cel = translateCheckOver(columns, sql);
+        assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+            CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars),
+            sql + " on " + self.keySet() + " -> " + cel);
+      }
+    }
+  }
+
+  @Test
+  void aQuantifierOverANullIsThreeValued() throws Exception {
+    // EVERY is TRUE when its body is for every element and FALSE when it is FALSE for any, ANY
+    // the other way round; over a NULL collection both are NULL, over an empty one never.
+    String columns = "ni INT, arr INT NOT NULL ARRAY NOT NULL, an INT ARRAY NOT NULL, "
+        + "na INT NOT NULL ARRAY, ea INT NOT NULL ARRAY NOT NULL";
+    Map<String, Object> absent = new HashMap<>();
+    absent.put("arr", List.of(1, -2));
+    absent.put("an", Arrays.asList(1, null));
+    absent.put("ea", List.of());
+    Map<String, Object> present = new HashMap<>(absent);
+    present.put("ni", null);
+    present.put("na", null);
+    for (Map<String, Object> self : List.of(present, absent)) {
+      Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
+      for (String sql : List.of("EVERY(arr, e, e > ni) IS NULL",
+          "NOT (EVERY(arr, e, e > ni) IS NOT NULL)", "ANY(an, e, e + 1 > 0) IS NOT NULL",
+          "ANY(an, e, e > 5) IS NULL", "EVERY(an, e, e > 5) IS NOT NULL",
+          "EVERY(na, e, e > 0) IS NULL", "EVERY(ea, e, e > ni) IS NOT NULL",
+          "EVERY(arr, e, e IN (1, ni)) IS NULL",
+          "CASE WHEN EVERY(arr, e, e > ni) THEN 1 ELSE 2 END = 2",
+          "CASE WHEN NOT EVERY(arr, e, e > ni) THEN 1 ELSE 2 END = 2",
+          "CASE EVERY(arr, e, GREATEST(e, ni) > 0) WHEN FALSE THEN 1 ELSE 2 END = 2",
+          "COALESCE(ANY(an, e, e > 5), TRUE) = TRUE")) {
+        String cel = translateCheckOver(columns, sql);
+        assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+            CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars),
+            sql + " on " + self.keySet() + " -> " + cel);
+      }
+    }
+  }
+
+  @Test
+  void aSubscriptOfANullOrMissingIsNull() throws Exception {
+    // A subscript is NULL when its collection, index or element is, or its key or index is
+    // missing, as SQL gives it.
+    String columns = "mv MAP<STRING, INT> NOT NULL, nm MAP<STRING, INT>, na INT NOT NULL ARRAY, "
+        + "an INT ARRAY NOT NULL, i INT NOT NULL, ni INT";
+    assertEquals("((size(this.an) < 5 || dyn(this.an[(5) - 1]) == null) ? true : false)",
+        translateCheckOver(columns, "an[5] IS NULL"));
+    Map<String, Object> mv = new HashMap<>();
+    mv.put("k", null);
+    mv.put("j", 2);
+    Map<String, Object> absent = new HashMap<>();
+    absent.put("mv", mv);
+    absent.put("an", Arrays.asList(1, null));
+    absent.put("i", 1);
+    Map<String, Object> present = new HashMap<>(absent);
+    present.put("nm", null);
+    present.put("na", null);
+    present.put("ni", null);
+    for (Map<String, Object> self : List.of(present, absent)) {
+      Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
+      for (String sql : List.of("mv['k'] + 1 IS NULL", "mv['zz'] IS NULL",
+          "mv['j'] IS NOT NULL", "COALESCE(mv['zz'], -1) = -1",
+          "CASE WHEN mv['k'] > 0 THEN 1 ELSE 2 END = 2", "COALESCE(na[1], -1) = -1",
+          "an[2] IS NULL", "an[5] IS NULL", "an[1] IS NOT NULL", "an[ni] IS NULL",
+          "nm['k'] IS NULL", "(an[5] > 0 OR i > 0) IS NOT NULL")) {
+        String cel = translateCheckOver(columns, sql);
+        assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+            CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars),
+            sql + " on " + self.keySet() + " -> " + cel);
+      }
+    }
+  }
+
+  @Test
+  void aVariantFunctionOfANullIsNull() throws Exception {
+    // VARIANT_GET and TRY_VARIANT_GET are NULL when an input is or the path is missing, which
+    // their CEL gives as null; TO_JSON and TYPE_OF_VARIANT when their input is.
+    String columns = "s STRING NOT NULL, nv VARIANT, ni INT";
+    String vg = "VARIANT_GET(PARSE_JSON(s), '$.a' RETURNING INT)";
+    Map<String, Object> present = new HashMap<>();
+    present.put("s", "{}");
+    present.put("nv", null);
+    present.put("ni", null);
+    for (Map<String, Object> self : List.of(present, Map.<String, Object>of("s", "{}"))) {
+      Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
+      for (String sql : List.of(vg + " IS NULL", "(" + vg + " > 0 OR ni > 0) IS NULL",
+          vg + " + 1 IS NULL", "CASE WHEN " + vg + " > 0 THEN 1 ELSE 2 END = 2",
+          "VARIANT_GET(nv, '$.a' RETURNING INT) IS NULL", "COALESCE(TO_JSON(nv), 'z') = 'z'",
+          "TYPE_OF_VARIANT(nv) IS NULL",
+          "TRY_VARIANT_GET(PARSE_JSON(s), '$.a' RETURNING INT) IS NULL")) {
+        String cel = translateCheckOver(columns, sql);
+        assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+            CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars),
+            sql + " on " + self.keySet() + " -> " + cel);
+      }
+    }
+  }
+
+  @Test
+  void anExpressionWhoseNullCantBeToldIsRefusedWhereTested() {
+    // Evaluated instead, VARIANT_IS_NULL could answer as if its NULL were a value, so a NULL
+    // test of one over a nullable input is refused; ONE's is told, and one over none is dead.
+    String columns = "ni INT, i INT NOT NULL, arr INT NOT NULL ARRAY NOT NULL, nv VARIANT";
+    for (String sql : List.of("VARIANT_IS_NULL(nv) IS NULL",
+        "COALESCE(VARIANT_IS_NULL(nv), TRUE) = TRUE")) {
+      ValidationException e = assertThrows(ValidationException.class,
+          () -> translateCheckOver(columns, sql), sql);
+      assertTrue(e.getMessage().contains("can't tell when"), e.getMessage());
+    }
+    ValidationException dead = assertThrows(ValidationException.class,
+        () -> translateCheckOver(columns, "ONE(arr, e, e > i) IS NULL"));
+    assertTrue(dead.getMessage().contains("dead code"), dead.getMessage());
+    translateCheckOver(columns, "ONE(arr, e, e > ni)");
+  }
+
+  @Test
+  void aOneIsThreeValued() throws Exception {
+    // ONE is TRUE when exactly one body is TRUE and every other FALSE, FALSE when two or more are
+    // TRUE or all are FALSE, and NULL otherwise, as EVERY and ANY fold theirs.
+    String columns = "ni INT, nt BOOLEAN, arr INT NOT NULL ARRAY NOT NULL, "
+        + "an INT ARRAY NOT NULL, ae INT NOT NULL ARRAY NOT NULL";
+    assertEquals("this.arr.exists_one(e, e > 0)",
+        translateCheckOver(columns, "ONE(arr, e, e > 0)"));
+    Map<String, Object> absent = new HashMap<>();
+    absent.put("arr", List.of(1, -2));
+    absent.put("an", Arrays.asList(0, null, 2));
+    absent.put("ae", List.of());
+    absent.put("nt", false);
+    Map<String, Object> present = new HashMap<>(absent);
+    present.put("ni", null);
+    Map<String, Object> one = new HashMap<>(absent);
+    one.put("ni", 1);
+    Map<List<Map<String, Object>>, List<String>> rows = Map.of(List.of(present, absent),
+        List.of("CASE WHEN ONE(an, e, e = ni OR nt) THEN 1 ELSE 2 END = 2",
+            "CASE WHEN ONE(arr, e, e > ni) THEN 1 ELSE 2 END = 2", "ONE(arr, e, e > ni) IS NULL",
+            "CASE ONE(arr, e, e > ni) WHEN TRUE THEN 1 ELSE 2 END = 2",
+            "COALESCE(ONE(arr, e, e > ni), TRUE)", "COALESCE(ONE(an, e, e = 0), FALSE) = FALSE",
+            "NOT ONE(ae, e, e > ni)", "ONE(an, e, e > 1) IS NULL"),
+        List.of(one), List.of("NOT ONE(an, e, e + ni > 0)", "ONE(arr, e, e >= ni)",
+            "NOT ONE(arr, e, e > ni)", "ONE(an, e, e > ni) IS NULL"));
+    for (Map.Entry<List<Map<String, Object>>, List<String>> row : rows.entrySet()) {
+      for (Map<String, Object> self : row.getKey()) {
+        for (String sql : row.getValue()) {
+          String cel = translateCheckOver(columns, sql);
+          assertEquals(true, evalOver(cel, self), sql + " on " + self + " -> " + cel);
+        }
+      }
+    }
+  }
+
+  @Test
+  void aCheckFailsOnlyWhenFalse() throws Exception {
+    // As in SQL, a CHECK fails only when it's FALSE: a NULL passes, on a null or a left-out
+    // field alike, while an error such as a division by zero or bad JSON still fails.
+    String columns = "ni INT, nb BIGINT, ns STRING, z INT NOT NULL, t BOOLEAN NOT NULL, "
+        + "arr INT NOT NULL ARRAY NOT NULL, an INT ARRAY NOT NULL";
+    assertEquals("!((!has(this.ni) || dyn(this.ni) == null) ? false : !(this.ni > 0))",
+        translateCheckOver(columns, "ni > 0"));
+    Map<String, Object> absent = Map.of("z", 0, "t", false, "arr", List.of(1),
+        "an", Arrays.asList(2, null));
+    Map<String, Object> present = new HashMap<>(absent);
+    present.put("ni", null);
+    present.put("nb", null);
+    present.put("ns", null);
+    for (String sql : List.of("ni > 0", "ni <> 5", "ni NOT IN (1, 2)", "NOT (ni = 1)",
+        "(nb / 0.00) IN (-1, 2.5)", "(nb / 0.00) BETWEEN 1 AND 2", "ni IN (1, nb)",
+        "(ni / z) IN (1, nb)", "ni IN an", "ONE(arr, e, e > ni) <> FALSE",
+        "NULLIF(ni, 1) <> 5", "COALESCE(ni, ni) <> 5", "POSITION('' IN ns FROM 1) <> 1",
+        "(ni / z) > 0 OR t", "CAST(ns AS INT) > 0", "PARSE_JSON(ns) IS NOT NULL OR ns IS NULL")) {
+      String cel = translateCheckOver(columns, sql);
+      for (Map<String, Object> self : List.of(present, absent)) {
+        assertEquals(true, evalOver(cel, self), sql + " on " + self.keySet() + " -> " + cel);
+      }
+    }
+    Map<String, Object> bad = Map.of("ni", 5, "nb", 40000L, "ns", "not-json", "z", 0,
+        "t", false, "arr", List.of(1), "an", Arrays.asList(2, null));
+    for (String sql : List.of("(nb / 0.00) IN (-1, 2.5)", "(nb / 0.00) BETWEEN 1 AND 2",
+        "(ni / z) IN (1, nb)", "(ni / z) IN an", "(ni / z) > 0 OR t", "CAST(ns AS INT) > 0",
+        "PARSE_JSON(ns) IS NOT NULL OR ns IS NULL")) {
+      String cel = translateCheckOver(columns, sql);
+      assertThrows(CelEvaluationException.class, () -> evalOver(cel, bad), sql + " -> " + cel);
+    }
+    Map<String, Object> negative = new HashMap<>(bad);
+    negative.put("ni", -1);
+    assertEquals(false, evalOver(translateCheckOver(columns, "ni > 0"), negative));
+  }
+
+  @Test
+  void aNullDoesNotHideAnError() throws Exception {
+    // A NULL operand decides neither AND nor OR, nor a quantifier or BETWEEN, so another's error
+    // still fails the CHECK, as SQL's does; a TRUE or FALSE one still decides it.
+    String columns = "ni INT, z INT NOT NULL, i INT NOT NULL, an INT ARRAY NOT NULL";
+    Map<String, Object> absent = Map.of("z", 0, "i", 5, "an", Arrays.asList(null, 0));
+    Map<String, Object> present = new HashMap<>(absent);
+    present.put("ni", null);
+    for (String sql : List.of("ni > 0 OR 1 / z > 0", "NOT (ni > 0 AND 1 / z > 0)",
+        "ANY(an, e, 1 / e > 0)", "NOT EVERY(an, e, 1 / e > 0)",
+        "NOT ((1 / z) BETWEEN ni AND 5)", "CASE WHEN ni > 0 AND 1 / z > 0 THEN 1 ELSE 2 END = 2",
+        "NOT ONE(an, e, 1 / e > 0)")) {
+      String cel = translateCheckOver(columns, sql);
+      for (Map<String, Object> self : List.of(present, absent)) {
+        assertThrows(CelEvaluationException.class, () -> evalOver(cel, self),
+            sql + " on " + self.keySet() + " -> " + cel);
+      }
+    }
+    for (String sql : List.of("i > 0 OR ni > 0 OR 1 / z > 0",
+        "NOT (i < 0 AND ni > 0 AND 1 / z > 0)")) {
+      String cel = translateCheckOver(columns, sql);
+      for (Map<String, Object> self : List.of(present, absent)) {
+        assertEquals(true, evalOver(cel, self), sql + " on " + self.keySet() + " -> " + cel);
+      }
+    }
+  }
+
+  @Test
+  void eachRaisingOperandKeepsItsErrorBesideANull() throws Exception {
+    // An operand that can raise an error, one of each kind, still fails the CHECK beside a NULL.
+    String columns = "ni INT, i INT NOT NULL, z INT NOT NULL, s STRING NOT NULL, "
+        + "p STRING NOT NULL, d DECIMAL(10, 2) NOT NULL, sc INT NOT NULL";
+    Map<String, Object> self = Map.of("i", 5, "z", 0, "s", "abc", "p", "(",
+        "d", CelDecimal.of(new BigDecimal("1.00")), "sc", -700_000_000);
+    for (String raising : List.of("i / z > 0", "i % z > 0", "CAST(s AS INT) > 0",
+        "PARSE_JSON(s) IS NOT NULL", "VARIANT_GET(TRY_PARSE_JSON('{}'), p) IS NOT NULL",
+        "TRY_VARIANT_GET(TRY_PARSE_JSON('{}'), p RETURNING INT) > 0", "ROUND(d, sc) > 0",
+        "TRUNCATE(d, sc) > 0", "ROUND(d, -700000000) > 0")) {
+      String cel = translateCheckOver(columns, "ni > 0 OR " + raising);
+      assertThrows(CelEvaluationException.class, () -> evalOver(cel, self), raising + " -> " + cel);
+    }
+    // Flink gives FALSE for a bad regex, so a NULL may drop CEL's error, and the operands are
+    // joined as is.
+    for (String celOnly : List.of("MATCHES(s, p)")) {
+      String cel = translateCheckOver(columns, "ni > 0 OR " + celOnly);
+      assertTrue(cel.startsWith("!(((!has(this.ni) || dyn(this.ni) == null) ? false"
+          + " : !(this.ni > 0)) && "), cel);
+      assertEquals(true, evalOver(cel, self), celOnly + " -> " + cel);
+    }
+  }
+
+  @Test
+  void aMalformedLiteralVariantPathIsRefused() {
+    // A literal path is parsed as the variants functions parse it, so it fails here, not on
+    // every record.
+    String columns = "v VARIANT NOT NULL";
+    for (String sql : List.of("VARIANT_GET(v, '$[') IS NULL", "VARIANT_GET(v, 'a') IS NULL",
+        "TRY_VARIANT_GET(v, '$[-1]' RETURNING INT) > 0",
+        "TRY_VARIANT_GET(v, ('$[') RETURNING INT) > 0")) {
+      ValidationException e = assertThrows(ValidationException.class,
+          () -> translateCheckOver(columns, sql), sql);
+      assertTrue(e.getMessage().contains("is malformed"), e.getMessage());
+    }
+    translateCheckOver(columns, "VARIANT_GET(v, '$.a[0]') IS NULL");
+    translateCheckOver(columns, "TRY_VARIANT_GET(v, '$[\"b\"]' RETURNING INT) > 0");
+  }
+
+  @Test
+  void aRoundScaleIsAtMost38() throws Exception {
+    // A scale over DECIMAL's 38 gives the value back, as in Flink, rather than padding it, which
+    // took time growing with the scale; the declared scale doesn't bound it, as a JSON or
+    // Protobuf value carries its own.
+    String columns = "d DECIMAL(10, 2) NOT NULL, i INT NOT NULL, ti TINYINT NOT NULL, "
+        + "bi BIGINT NOT NULL";
+    assertTrue(translateCheckOver(columns, "ROUND(d, 1) > 0")
+        .contains("decimals.round(this.d, 1)"));
+    assertTrue(translateCheckOver(columns, "ROUND(d, 50) > 0")
+        .contains("decimals.round(this.d, 38)"));
+    String cel = translateCheckOver(columns, "ROUND(d, i) = d");
+    assertTrue(cel.contains("decimals.round(this.d, (this.i < 38 ? this.i : 38))"), cel);
+    assertTimeoutPreemptively(Duration.ofSeconds(10), () -> assertEquals(true,
+        evalOver(cel, Map.of("d", CelDecimal.of(new BigDecimal("1.00")), "i", 100_000_000)),
+        cel));
+    String three = translateCheckOver(columns, "ROUND(d, 3) = d");
+    assertEquals(true, evalOver(three, Map.of("d", CelDecimal.of(new BigDecimal("1.234")))),
+        three);
+    // Flink takes the scale as an INT.
+    for (String sql : List.of("ROUND(d, 3000000000) > 0", "TRUNCATE(d, -2147483649) > 0",
+        "ROUND(d, bi) > 0", "TRUNCATE(d, bi) > 0")) {
+      ValidationException e = assertThrows(ValidationException.class,
+          () -> translateCheckOver(columns, sql), sql);
+      assertTrue(e.getMessage().contains("takes an INT scale"), e.getMessage());
+    }
+    translateCheckOver(columns, "ROUND(d, ti) > 0 AND TRUNCATE(d, -2) > 0");
+  }
+
+  @Test
+  void aReservedNameOfANullStructIsNull() throws Exception {
+    // has() can't take r["in"], so the path is tested step by step: a NULL r gives NULL.
+    String columns = "r STRUCT(`in` INT NOT NULL)";
+    Map<String, Object> present = new HashMap<>();
+    present.put("r", null);
+    String cel = translateCheckOver(columns, "COALESCE(r.`in`, 7) = 7");
+    for (Map<String, Object> self : List.of(present, Map.<String, Object>of())) {
+      assertEquals(true, evalOver(cel, self), self + " -> " + cel);
+    }
+    assertEquals(false, evalOver(cel, Map.of("r", Map.of("in", 5))), cel);
+  }
+
+  @Test
+  void aCastOfANullIsNull() throws Exception {
+    // A literal NULL has no type, so isn't taken for a VARIANT: its CAST is NULL.
+    String columns = "i INT NOT NULL, t BOOLEAN NOT NULL";
+    String inCase = translateCheckOver(columns,
+        "CASE WHEN t THEN CAST(NULL AS INT) ELSE i END < 1");
+    assertEquals(true, evalOver(inCase, Map.of("t", false, "i", 0)), inCase);
+    assertEquals(true, evalOver(inCase, Map.of("t", true, "i", 5)), inCase);
+    assertEquals(false, evalOver(inCase, Map.of("t", false, "i", 5)), inCase);
+    assertTrue(inCase.contains("(this.t ? (true ? dyn(null) : dyn(null)) : this.i)"), inCase);
+    for (String sql : List.of("COALESCE(CAST(NULL AS INT), i) = i",
+        "(CAST(NULL AS INT)) IS NULL", "CAST(NULL AS BOOLEAN) OR t",
+        "COALESCE(CAST(NULL AS BOOLEAN), t) = t", "CAST(NULL AS BYTES) IS NULL")) {
+      String cel = translateCheckOver(columns, sql);
+      assertEquals(true, evalOver(cel, Map.of("t", false, "i", 5)), sql + " -> " + cel);
+    }
+  }
+
+  @Test
+  void aSimpleCaseOverATimestampBetweenComparesItWhole() throws Exception {
+    // The subject is grouped, as a BETWEEN's && would bind to its last comparison.
+    String cel = translateCheckOver("lt TIMESTAMP_LTZ(3) NOT NULL",
+        "(CASE lt BETWEEN TIMESTAMP '2010-01-01 00:00:00' AND lt WHEN FALSE THEN 1 ELSE 2 END)"
+            + " = 1");
+    assertTrue(cel.contains("(timestamp(\"2010-01-01T00:00:00Z\") <= timestamp(this.lt)"
+        + " && timestamp(this.lt) <= timestamp(this.lt)) == (false)"), cel);
+    assertEquals(true, evalOver(cel, Map.of("lt", Instant.parse("1999-01-01T00:00:00Z"))), cel);
+    assertEquals(false, evalOver(cel, Map.of("lt", Instant.parse("2020-01-01T00:00:00Z"))), cel);
+  }
+
+  @Test
+  void anIsNullOfAPredicateKeepsItsOperandsErrors() throws Exception {
+    // A predicate's CEL may be || or &&, which hide an error once compared, so IS NULL tests its
+    // value as a ternary's condition, and a division by zero or bad JSON fails as SQL's does.
+    String columns = "nb BIGINT, ni INT, ns STRING, an INT ARRAY NOT NULL, z INT NOT NULL";
+    Map<String, Object> bad = Map.of("nb", 40000L, "ni", 5, "ns", "not-json",
+        "an", Arrays.asList(1, null), "z", 0);
+    for (String sql : List.of("((nb / 0.00) IN (-1, 2.5)) IS NOT NULL",
+        "((nb / 0.00) BETWEEN 1 AND 2) IS NOT NULL", "((ni / z) BETWEEN 1 AND 2) IS NULL",
+        "NOT ((VARIANT_GET(PARSE_JSON(ns), '$.a') IS NULL) = TRUE)",
+        "NOT ((an[1 / z] IS NULL) = TRUE)")) {
+      String cel = translateCheckOver(columns, sql);
+      assertThrows(CelEvaluationException.class, () -> evalOver(cel, bad), sql + " -> " + cel);
+    }
+    Map<String, Object> good = Map.of("nb", 5L, "ni", 4, "ns", "{}",
+        "an", Arrays.asList(1, null), "z", 2);
+    for (String sql : List.of("((nb / 2.5) IN (-1, 2.0)) IS NOT NULL",
+        "((nb / 2.5) BETWEEN 1 AND 2) IS NOT NULL", "((ni / z) BETWEEN 1 AND 2) IS NOT NULL",
+        "NOT ((VARIANT_GET(PARSE_JSON(ns), '$.a') IS NULL) = FALSE)",
+        "(an[4 / z] IS NULL) = TRUE")) {
+      String cel = translateCheckOver(columns, sql);
+      assertEquals(true, evalOver(cel, good), sql + " -> " + cel);
+    }
+  }
+
+  @Test
+  void anInOrLengthOfASubscriptIsTypedAsDyn() throws Exception {
+    // cel-java types in and size() of a subscript by their first overload, a list's or a
+    // string's, so a map's or multiset's reached by one is given as dyn, but not to the strict
+    // check, which still refuses an ill-typed one.
+    String columns = "s STRING NOT NULL, ns STRING, i INT NOT NULL, "
+        + "mm MAP<STRING, MAP<STRING, INT> NOT NULL> NOT NULL, "
+        + "mms MAP<STRING, STRING NOT NULL MULTISET NOT NULL> NOT NULL, "
+        + "ma MAP<STRING, ARRAY<INT NOT NULL> NOT NULL> NOT NULL, "
+        + "mi MAP<STRING, INT> NOT NULL, ai INT NOT NULL ARRAY NOT NULL";
+    for (String sql : List.of("i NOT IN mm['k']", "s NOT IN ma['k']", "LENGTH(mi['k']) = 1",
+        "i IN ai[1]", "LENGTH((mi['k'])) = 1")) {
+      ValidationException e = assertThrows(ValidationException.class,
+          () -> translateCheckOver(columns, sql), sql);
+      assertTrue(e.getMessage().contains("strict type-check"), e.getMessage());
+    }
+    Map<String, Object> self = Map.of("s", "a", "ns", "a", "mm", Map.of("k", Map.of("a", 1)),
+        "mms", Map.of("k", Map.of("a", 1)), "ma", Map.of("k", List.of(5)));
+    for (String sql : List.of("s IN mm['k']", "(s IN mm['k']) IS NOT NULL",
+        "COALESCE(s IN mm['k'], s = 'b')", "COALESCE(ns IN mms['k'], FALSE)",
+        "LENGTH(ma['k']) = 1", "LENGTH((ma['k'])) = 1")) {
+      String cel = translateCheckOver(columns, sql);
+      assertEquals(true, evalOver(cel, self), sql + " -> " + cel);
+    }
+  }
+
+  @Test
+  void aNullInAnEmptyCollectionIsFalse() throws Exception {
+    // SQL's = ANY over no elements is FALSE whatever its subject, as ANY() is, so a NULL IN an
+    // empty array, MULTISET or MAP is FALSE, and NULL only in a non-empty one.
+    String columns = "ni INT, ns STRING, arr INT NOT NULL ARRAY NOT NULL, an INT ARRAY NOT NULL, "
+        + "ms STRING NOT NULL MULTISET NOT NULL, nms STRING NOT NULL MULTISET, "
+        + "mv MAP<STRING, INT> NOT NULL";
+    assertEquals("(((!has(this.ni) || dyn(this.ni) == null) && size(this.arr) > 0) ? true"
+            + " : (((size(this.arr) == 0 ? false : this.ni in this.arr)) ? false : false))",
+        translateCheckOver(columns, "(ni IN arr) IS NULL"));
+    List<String> empty = List.of("ni NOT IN arr", "ni NOT IN an", "NOT (ni IN an)",
+        "COALESCE(ni NOT IN arr, FALSE)", "(ni NOT IN arr) IS NOT NULL",
+        "COALESCE(ni IN an, TRUE) = FALSE", "(ni IN an) IS NOT NULL",
+        "CASE WHEN ni IN arr THEN 1 ELSE 2 END = 2", "ns NOT IN ms", "(ns IN ms) IS NOT NULL",
+        "COALESCE(ns IN mv, TRUE) = FALSE", "ANY(arr, x, x = ni) IS NOT NULL",
+        "(ns IN nms) IS NULL");
+    List<String> nonEmpty = List.of("(ni IN arr) IS NULL", "(ni NOT IN an) IS NULL",
+        "COALESCE(ni IN arr, TRUE)", "(ns IN ms) IS NULL", "(ns NOT IN mv) IS NULL",
+        "COALESCE(ns IN mv, TRUE)", "ANY(arr, x, x = ni) IS NULL", "(ns IN nms) IS NULL");
+    for (List<String> sqls : List.of(empty, nonEmpty)) {
+      boolean none = sqls == empty;
+      Map<String, Object> absent = new HashMap<>();
+      absent.put("arr", none ? List.of() : List.of(1));
+      absent.put("an", none ? List.of() : Arrays.asList(1, null));
+      absent.put("ms", none ? Map.of() : Map.of("a", 1));
+      absent.put("mv", none ? Map.of() : Map.of("a", 1));
+      Map<String, Object> present = new HashMap<>(absent);
+      present.put("ni", null);
+      present.put("ns", null);
+      present.put("nms", null);
+      for (Map<String, Object> self : List.of(present, absent)) {
+        for (String sql : sqls) {
+          String cel = translateCheckOver(columns, sql);
+          assertEquals(true, evalOver(cel, self), sql + " on " + self + " -> " + cel);
+        }
+      }
+    }
+  }
+
+  @Test
+  void anIsNullOperandIsStillEvaluated() throws Exception {
+    // IS NULL of an expression tells its NULL from its inputs but still evaluates it, so a value
+    // SQL fails on, such as bad JSON or a division by zero, fails here too.
+    String columns = "v STRING, ni INT, b INT NOT NULL";
+    assertEquals("((!has(this.v) || dyn(this.v) == null) ? false"
+            + " : dyn(variants.parseJson(this.v)) != null)",
+        translateCheckOver(columns, "PARSE_JSON(v) IS NOT NULL"));
+    Map<String, Object> bad = Map.of("v", "not-json", "ni", 5, "b", 0);
+    Map<String, Object> good = Map.of("v", "{}", "ni", 4, "b", 2);
+    Map<String, Object> present = new HashMap<>();
+    present.put("v", null);
+    present.put("ni", null);
+    present.put("b", 0);
+    // Each CHECK's value on a good row and on a NULL one.
+    Map<String, List<Boolean>> rows = Map.of("PARSE_JSON(v) IS NOT NULL", List.of(true, false),
+        "CAST(v AS INT) IS NULL", List.of(false, true), "ni / b IS NULL", List.of(false, true),
+        "NOT ((ni / b) IS NOT NULL)", List.of(false, true),
+        "(PARSE_JSON(v) IS NOT NULL) = TRUE", List.of(true, false));
+    for (Map.Entry<String, List<Boolean>> row : rows.entrySet()) {
+      String sql = row.getKey();
+      String cel = translateCheckOver(columns, sql);
+      assertThrows(CelEvaluationException.class, () -> evalOver(cel, bad), sql + " -> " + cel);
+      if (!sql.startsWith("CAST")) {
+        assertEquals(row.getValue().get(0), evalOver(cel, good), sql + " -> " + cel);
+      }
+      for (Map<String, Object> self : List.of(present, Map.<String, Object>of("b", 0))) {
+        assertEquals(row.getValue().get(1), evalOver(cel, self),
+            sql + " on " + self.keySet() + " -> " + cel);
+      }
+    }
+  }
+
+  @Test
+  void aMapWithoutStringKeysIsNotReadAsAMap() {
+    // Avro and JSON hold a MAP without string keys as entries of a key and its value, which a
+    // subscript, quantifier, IN or comparison would read as a list, as a quantifier or
+    // comparison would a MULTISET of non-strings.
+    String columns = "m MAP<INT, STRING> NOT NULL, nm MAP<INT, STRING>, "
+        + "sm MAP<STRING, INT> NOT NULL, r STRUCT(m MAP<BIGINT, INT>) NOT NULL, "
+        + "m2 MAP<INT, STRING> NOT NULL, msi INT NOT NULL MULTISET NOT NULL, "
+        + "msi2 INT NOT NULL MULTISET NOT NULL";
+    for (String sql : List.of("m[1] = 'a'", "EVERY(m, k, k > 0)", "ANY(nm, k, k > 0)",
+        "(m)[1] IS NULL", "r.m[1] > 0", "EVERY(sm, k, ONE(m, j, j > 0))", "1 IN m",
+        "ANY(msi, x, x = 5)", "EVERY(msi, x, x > 0)", "m = m2", "msi <> msi2")) {
+      ValidationException e = assertThrows(ValidationException.class,
+          () -> translateCheckOver(columns, sql), sql);
+      assertTrue(e.getMessage().contains("is not supported: it is held as entries"),
+          e.getMessage());
+    }
+    for (String sql : List.of("nm IS NULL", "sm['a'] > 0",
+        "EVERY(sm, k, sm[k] > 0)", "'a' IN sm")) {
+      translateCheckOver(columns, sql);
+    }
+  }
+
+  @Test
+  void aFieldOfAParenthesizedReceiverIsNullStepByStep() throws Exception {
+    // (e).x and (arr[1]).x are NULL when their receiver or the field is, as e.x and arr[1].x are.
+    String columns = "items STRUCT(x INT) ARRAY NOT NULL, "
+        + "arr STRUCT(x INT) NOT NULL ARRAY NOT NULL";
+    Map<String, Object> present = new HashMap<>();
+    present.put("x", null);
+    Map<String, Object> seven = Map.of("x", 7);
+    for (Map<String, Object> self : List.of(
+        Map.<String, Object>of("items", Arrays.asList(null, seven), "arr", List.of(present)),
+        Map.<String, Object>of("items", Arrays.asList(Map.of(), seven), "arr",
+            List.of(Map.of())))) {
+      for (String sql : List.of("EVERY(items, e, COALESCE((e).x, 7) = 7)",
+          "EVERY(items, e, (e).x IS NULL OR (e).x = 7)", "(arr[1]).x IS NULL",
+          "COALESCE((arr[1]).x, 3) = 3")) {
+        String cel = translateCheckOver(columns, sql);
+        assertEquals(true, evalOver(cel, self), sql + " on " + self + " -> " + cel);
+      }
+    }
+  }
+
+  @Test
+  void aReservedNameInASubscriptPathIsTestedForNull() throws Exception {
+    // has() can't take r["in"], so a reserved name's step is tested by its value.
+    Schema ints = Schema.createArray(Schema.create(Schema.Type.INT).setNullable(false));
+    Schema inner = Schema.createStruct(Arrays.asList(new Schema.Field("in", ints, 0)))
+        .setNullable(false);
+    Schema root = Schema.createStruct(Arrays.asList(new Schema.Field("r", inner, 0)));
+    ConstraintValidationContext vctx = ConstraintValidationContext.tableLevel(root.getFields());
+    String cel = ConstraintToCelTranslator.translate(findFirstCheckExpr(LogicalTypesParserFactory
+        .parse("STRUCT __T (__x INT, CHECK (COALESCE(r.`in`[1], 0) = 0));")), vctx);
+    CelValidator.assertValidStrict(cel, root);
+    Map<String, Object> nullIn = new HashMap<>();
+    nullIn.put("in", null);
+    assertEquals(true, evalOver(cel, Map.of("r", nullIn)), cel);
+    assertEquals(true, evalOver(cel, Map.of("r", Map.of("in", List.of(0)))), cel);
+  }
+
+  @Test
+  void aSubscriptBehindAMapKeyIsTestedForNull() throws Exception {
+    // cel-java types size() and in of a subscript of dyn by their first overload, a string's
+    // or a list's, so those collections are given as dyn.
+    String columns = "mm MAP<STRING, MAP<STRING, INT> NOT NULL> NOT NULL, "
+        + "ma MAP<STRING, ARRAY<INT NOT NULL> NOT NULL> NOT NULL";
+    Map<String, Object> self = Map.of("mm", Map.of("a", Map.of("b", 1)),
+        "ma", Map.of("k", List.of(1)));
+    for (String sql : List.of("mm['a']['zz'] IS NULL", "mm['a']['b'] IS NOT NULL",
+        "ma['k'][5] IS NULL", "ma['k'][1] IS NOT NULL", "COALESCE(mm['a']['zz'], 0) = 0")) {
+      String cel = translateCheckOver(columns, sql);
+      assertEquals(true, evalOver(cel, self), sql + " -> " + cel);
+    }
+  }
+
+  private static Object evalOver(String cel, Map<String, Object> self) throws Exception {
+    Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
+    return CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+        CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars);
+  }
+
+  @Test
+  void aNullGuardDoesNotHideATypeError() {
+    // The dyn branch a NULL GREATEST, LEAST, COALESCE or NULLIF gives would pass any type; the
+    // strict check sees each call's own result type instead.
+    for (String[] c : new String[][] {
+        {"a INT, b INT", "UPPER(COALESCE(a, b)) = 'X'"},
+        {"a INT, b INT", "UPPER(GREATEST(a, b)) = 'X'"},
+        {"a INT, b INT", "UPPER(NULLIF(a, b)) = 'X'"},
+        {"a INT, b INT", "NULLIF('A', UPPER(COALESCE(a, b))) IS NULL"},
+        {"a INT, b INT", "(UPPER(COALESCE(a, b)) = 'X') IS NULL"},
+        {"a INT, x DOUBLE", "UPPER(LEAST(x, a)) = 'X'"},
+        {"r STRUCT(x INT), s STRING", "COALESCE((r).x, s) = 'a'"},
+        {"a INT ARRAY, b STRING ARRAY", "EVERY(COALESCE(a, b), e, e > 0)"},
+        {"xs INT ARRAY", "EVERY(xs, e, UPPER(COALESCE(e, e)) = 'X')"}}) {
+      assertThrows(ValidationException.class, () -> translateCheckOver(c[0], c[1]), c[1]);
+    }
+  }
+
+  @Test
+  void coalesceSkipsANullNestedCall() throws Exception {
+    // A NULL argument that is not a plain column is tested before it is widened, so COALESCE
+    // reaches its fallback.
+    String columns = "a INT, b BIGINT, x DOUBLE, d DECIMAL(10, 2)";
+    Map<String, Object> present = new HashMap<>();
+    present.put("a", null);
+    present.put("b", null);
+    present.put("x", 0.5);
+    present.put("d", null);
+    // JSON leaves a NULL field out, so a NULL last argument is read guarded too.
+    for (Map<String, Object> self : List.of(present, Map.<String, Object>of("x", 0.5))) {
+      Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
+      for (String sql : List.of("COALESCE(GREATEST(a, b), x) = x",
+          "COALESCE(COALESCE(a, b), x) = x", "COALESCE(LEAST(a, b), d, 7) = 7",
+          "COALESCE(COALESCE(d, a), x) = x")) {
+        String cel = translateCheckOver(columns, sql);
+        assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+            CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars),
+            sql + " on " + self + " -> " + cel);
+      }
+    }
+  }
+
+  @Test
+  void anEnumComparesAsItsSymbol() throws Exception {
+    // An ENUM is its symbol's text, as IN, CASE and COALESCE already took it, so it compares,
+    // orders and concatenates as a string.
+    String columns = "e ENUM('A', 'B', 'C') NOT NULL, s STRING";
+    assertEquals("this.e == 'A'", translateCheckOver(columns, "e = 'A'"));
+    Map<String, Object> self = new HashMap<>();
+    self.put("e", "A");
+    self.put("s", "B");
+    Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
+    for (String sql : List.of("e = 'A'", "'A' = e", "e <> s", "e < 'B'", "s >= e",
+        "e || 'x' = 'Ax'", "CASE e WHEN 'A' THEN 1 ELSE 2 END = 1", "e IN ('A', 'C')")) {
+      String cel = translateCheckOver(columns, sql);
+      assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+          CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars), sql + " -> " + cel);
+    }
+  }
+
+  private String translateCheckOver(String columns, String checkExpr) {
+    Schema schema = parseScript("STRUCT T (" + columns + ", CHECK (" + checkExpr + "));")
+        .getRootSchema();
+    String cel = schema.getRules().get(0).getExpr();
+    CelValidator.assertValidStrict(cel, schema);
+    return cel;
+  }
+
+  @Test
+  void integerOperandsAreCombinedBeforeWidening() {
+    // SQL types each operator by its own operands: the INTs are divided, then widened.
+    assertEquals("decimals.eq(decimal(this.x / 2), this.amount)",
+        translateCheckNotNull("x / 2 = amount"));
+    assertEquals("double(this.x / 2) == this.ratio", translateCheckNotNull("x / 2 = ratio"));
+    assertEquals("double(this.x % 2) == this.ratio", translateCheckNotNull("x % 2 = ratio"));
+    assertEquals("decimals.gt(decimals.add(this.amount, decimal(this.x / 2)), decimal(\"0\"))",
+        translateCheckNotNull("amount + x / 2 > 0"));
+    assertEquals("double(decimals.add(this.amount, decimal(\"1\"))) == this.ratio",
+        translateCheckNotNull("amount + 1 = ratio"));
+  }
+
+  @Test
+  void narrowerOperandsKeepTheirOwnArithmetic() throws Exception {
+    // Each answer is Flink's: INT / INT truncates, BIGINT and DECIMAL sums are exact.
+    for (String sql : List.of("7 / 2 = 3.0", "7 / 2 = 3.0E0", "-7 / 2 = -3.0", "7 % 4 = 3.0E0",
+        "7 / 2 + 0.5 = 3.5", "0.5 + 7 / 2 = 3.5", "-(7 / 2) = -3.0",
+        "CASE WHEN TRUE THEN 7 / 2 ELSE 1.5 END = 3.0", "7 / 2 BETWEEN 3.0 AND 3.0",
+        "7 / 2 IN (3.5, 3.0)", "GREATEST(7 / 2, 1.5) = 3.0",
+        "9007199254740993 + 1 = 9007199254740994E0", "0.10 + 0.20 = 0.3E0")) {
+      String cel = translateCheck(sql);
+      assertEquals(true, evalWithDecimals(cel), sql + " -> " + cel);
+    }
+  }
+
+  @Test
+  void narrowerOperandsStillOverflowAndDivideByZero() {
+    for (String sql : List.of("9223372036854775807 + 1 > 0.0",
+        "9223372036854775807 + 1 > 0.0E0", "-(-9223372036854775807 - 1) > 0.0",
+        "1 / 0 <> 0.0E0", "1 % 0 <> 0.0E0")) {
+      String cel = translateCheck(sql);
+      assertThrows(CelEvaluationException.class, () -> evalWithDecimals(cel), sql + " -> " + cel);
+    }
+  }
+
+  private static Object evalWithDecimals(String cel) throws Exception {
+    return CelUtils.buildProgram(CelUtils.ScriptType.AVRO, cel, null, List.of()).eval(Map.of());
   }
 
   // ---- numeric coercion: BETWEEN / IN ----
@@ -2801,7 +4216,7 @@ class CheckConstraintTest {
     // x (int) BETWEEN ratio (double) AND 5 (int) → common DOUBLE.
     assertEquals(
         "this.ratio <= double(this.x) && double(this.x) <= 5.0",
-        translateCheck("x BETWEEN ratio AND 5"));
+        translateCheckNotNull("x BETWEEN ratio AND 5"));
   }
 
   @Test
@@ -2809,13 +4224,13 @@ class CheckConstraintTest {
     // DECIMAL subject with a DOUBLE bound → common DOUBLE (not decimal).
     assertEquals(
         "this.ratio <= double(this.amount) && double(this.amount) <= 5.0",
-        translateCheck("amount BETWEEN ratio AND 5"));
+        translateCheckNotNull("amount BETWEEN ratio AND 5"));
   }
 
   @Test
   void inListDoubleCoercion() {
     // ratio (double) IN (1, 2) → common DOUBLE; int elements emit as doubles.
-    assertEquals("this.ratio in [1.0, 2.0]", translateCheck("ratio IN (1, 2)"));
+    assertEquals("this.ratio in [1.0, 2.0]", translateCheckNotNull("ratio IN (1, 2)"));
   }
 
   @Test
@@ -2824,7 +4239,7 @@ class CheckConstraintTest {
     assertEquals(
         "(decimals.eq(decimal(this.qty), decimal(\"1.5\")) "
             + "|| decimals.eq(decimal(this.qty), decimal(\"2.5\")))",
-        translateCheck("qty IN (1.5, 2.5)"));
+        translateCheckNotNull("qty IN (1.5, 2.5)"));
   }
 
   // ---- Calcite/Flink operator precedence ----
@@ -2833,7 +4248,7 @@ class CheckConstraintTest {
   void concatStillEmitsPlus() {
     // `||` (now at the multiplicative level) still maps to CEL `+`.
     assertEquals("this.name + this.last_name == 'foo'",
-        translateCheck("name || last_name = 'foo'"));
+        translateCheckNotNull("name || last_name = 'foo'"));
   }
 
   @Test
@@ -2843,7 +4258,7 @@ class CheckConstraintTest {
     // Postgres precedence this parsed the upper bound as `10 = active` and was
     // rejected.
     assertEquals("(0 <= this.x && this.x <= 10) == this.active",
-        translateCheck("x BETWEEN 0 AND 10 = active"));
+        translateCheckNotNull("x BETWEEN 0 AND 10 = active"));
   }
 
   @Test
@@ -2851,48 +4266,60 @@ class CheckConstraintTest {
     // IN binds tighter than `=`, so `x IN (1, 2) = active` groups as
     // `(x IN (1, 2)) = active`. Under the old precedence this was a parse error.
     assertEquals("(this.x in [1, 2]) == this.active",
-        translateCheck("x IN (1, 2) = active"));
+        translateCheckNotNull("x IN (1, 2) = active"));
   }
 
   // ---- Variant CHECK functions (Tier 1/2 + TYPE_OF_VARIANT/VARIANT_IS_NULL) ----
 
   @Test
   void variantParseJson() {
-    assertEquals("dyn(variants.parseJson(this.value)) != null",
+    // NULL exactly when its input is, and parsed otherwise, so bad JSON fails.
+    assertEquals("((!has(this.value) || dyn(this.value) == null) ? false"
+            + " : dyn(variants.parseJson(this.value)) != null)",
         translateCheck("PARSE_JSON(value) IS NOT NULL"));
   }
 
   @Test
   void variantTryParseJson() {
-    assertEquals("dyn(variants.tryParseJson(this.value)) != null",
+    // NULL when its input is, or for invalid JSON, which its CEL gives as null.
+    assertEquals("(((!has(this.value) || dyn(this.value) == null) "
+            + "|| dyn(variants.tryParseJson(this.value)) == null) ? false : true)",
         translateCheck("TRY_PARSE_JSON(value) IS NOT NULL"));
   }
 
   @Test
   void variantGetUntyped() {
     // 2-arg VARIANT_GET returns a sub-variant; IS NOT NULL is the existence test.
-    assertEquals("dyn(variants.path(this.data, '$.addr')) != null",
+    assertEquals("(((!has(this.data) || dyn(this.data) == null) "
+            + "|| dyn(variants.path(this.data, '$.addr')) == null) ? false : true)",
         translateCheck("VARIANT_GET(data, '$.addr') IS NOT NULL"));
   }
 
   @Test
   void variantGetReturning() {
     assertEquals(
-        "variants.as(variants.path(this.data, '$.age'), \"int\") > 18",
+        "!(((!has(this.data) || dyn(this.data) == null) ||"
+            + " dyn(variants.as(variants.path(this.data, '$.age'), \"int\")) == null) ? false :"
+            + " !(variants.as(variants.path(this.data, '$.age'), \"int\") > 18))",
         translateCheck("VARIANT_GET(data, '$.age' RETURNING INT) > 18"));
   }
 
   @Test
   void tryVariantGetReturning() {
     assertEquals(
-        "variants.tryAs(variants.path(this.data, '$.age'), \"int\") > 18",
+        "!(((!has(this.data) || dyn(this.data) == null) ||"
+            + " dyn(variants.tryAs(variants.path(this.data, '$.age'), \"int\")) == null) ? false"
+            + " : !(variants.tryAs(variants.path(this.data, '$.age'), \"int\") > 18))",
         translateCheck("TRY_VARIANT_GET(data, '$.age' RETURNING INT) > 18"));
   }
 
   @Test
   void variantGetReturningDecimal() {
     assertEquals(
-        "decimals.gt(variants.as(variants.path(this.data, '$.amt'), \"decimal\"), decimal(\"0\"))",
+        "!(((!has(this.data) || dyn(this.data) == null) ||"
+            + " dyn(variants.as(variants.path(this.data, '$.amt'), \"decimal\")) == null) ? false"
+            + " : !(decimals.gt(variants.as(variants.path(this.data, '$.amt'), \"decimal\"),"
+            + " decimal(\"0\"))))",
         translateCheck("VARIANT_GET(data, '$.amt' RETURNING DECIMAL(10,2)) > 0"));
   }
 
@@ -2901,28 +4328,34 @@ class CheckConstraintTest {
     // RETURNING TIMESTAMP resolves to a timestamp, so it composes with a
     // timestamp column (which normalizes via timestamp).
     assertEquals(
-        "variants.as(variants.path(this.data, '$.ts'), \"timestamp\") "
-            + "> timestamp(this.created_at)",
+        "!((((!has(this.data) || dyn(this.data) == null) ||"
+            + " dyn(variants.as(variants.path(this.data, '$.ts'), \"timestamp\")) == null) ||"
+            + " (!has(this.created_at) || dyn(this.created_at) == null)) ? false :"
+            + " !(variants.as(variants.path(this.data, '$.ts'), \"timestamp\") >"
+            + " timestamp(this.created_at)))",
         translateCheck("VARIANT_GET(data, '$.ts' RETURNING TIMESTAMP) > created_at"));
   }
 
   @Test
   void variantGetOverParseJson() {
     assertEquals(
-        "variants.as(variants.path(variants.parseJson(this.value), '$.x'), \"string\") == 'ok'",
+        "!(((!has(this.value) || dyn(this.value) == null) ||"
+            + " dyn(variants.as(variants.path(variants.parseJson(this.value), '$.x'),"
+            + " \"string\")) == null) ? false : !(variants.as(variants.path(variants.parseJson(thi"
+            + "s.value), '$.x'), \"string\") == 'ok'))",
         translateCheck("VARIANT_GET(PARSE_JSON(value), '$.x' RETURNING STRING) = 'ok'"));
   }
 
   @Test
   void variantToJson() {
     assertEquals("variants.toJson(this.data) == '{}'",
-        translateCheck("TO_JSON(data) = '{}'"));
+        translateCheckNotNull("TO_JSON(data) = '{}'"));
   }
 
   @Test
   void typeOfVariant() {
     assertEquals("variants.type(this.data) == 'OBJECT'",
-        translateCheck("TYPE_OF_VARIANT(data) = 'OBJECT'"));
+        translateCheckNotNull("TYPE_OF_VARIANT(data) = 'OBJECT'"));
   }
 
   @Test
@@ -2959,7 +4392,8 @@ class CheckConstraintTest {
         + "CHECK (ts <= CURRENT_TIMESTAMP)"
         + ");";
     Schema schema = parseScript(script).getRootSchema();
-    assertEquals("timestamp(this.ts) <= now", schema.getRules().get(0).getExpr());
+    assertEquals("!((!has(this.ts) || dyn(this.ts) == null) ? false : !(timestamp(this.ts) <="
+            + " now))", schema.getRules().get(0).getExpr());
   }
 
   // ---------------------------------------------------------------------
@@ -3078,7 +4512,8 @@ class CheckConstraintTest {
     LogicalType after = ddlRoundTrip(script);
     Schema struct = after.getRootSchema();
     assertEquals(1, struct.getRules().size());
-    assertEquals("this.lo < this.hi", struct.getRules().get(0).getExpr());
+    assertEquals("!(((!has(this.lo) || dyn(this.lo) == null) || (!has(this.hi) || dyn(this.hi) =="
+            + " null)) ? false : !(this.lo < this.hi))", struct.getRules().get(0).getExpr());
   }
 
   @Test
@@ -3258,26 +4693,26 @@ class CheckConstraintTest {
     // wrongly parsed as `(NOT x) BETWEEN 1 AND 10`. Real PG (and our fixed
     // grammar) scope NOT over the qualifier family.
     assertEquals("!(1 <= this.x && this.x <= 10)",
-        translateCheck("NOT x BETWEEN 1 AND 10"));
+        translateCheckNotNull("NOT x BETWEEN 1 AND 10"));
   }
 
   @Test
   void notPrefixOverIn() {
     assertEquals("!(this.x in [1, 2, 3])",
-        translateCheck("NOT x IN (1, 2, 3)"));
+        translateCheckNotNull("NOT x IN (1, 2, 3)"));
   }
 
   @Test
   void notPostfixBetween() {
     // postfix NOT BETWEEN was already correct via the BETWEEN production.
     assertEquals("!(1 <= this.x && this.x <= 10)",
-        translateCheck("x NOT BETWEEN 1 AND 10"));
+        translateCheckNotNull("x NOT BETWEEN 1 AND 10"));
   }
 
   @Test
   void notPostfixIn() {
     assertEquals("!(this.x in [1, 2, 3])",
-        translateCheck("x NOT IN (1, 2, 3)"));
+        translateCheckNotNull("x NOT IN (1, 2, 3)"));
   }
 
   @Test
@@ -3301,7 +4736,7 @@ class CheckConstraintTest {
         ValidationException.class,
         () -> translateCheck("COALESCE(x, name) = 'a'"));
     assertTrue(
-        t.getMessage().contains("strict type-check")
+        t.getMessage().contains("not comparable")
             || t.getMessage().contains("Cannot compare"),
         "expected type-mismatch rejection, got: " + t.getMessage());
   }
@@ -3390,11 +4825,14 @@ class CheckConstraintTest {
     // the `... == null` half: `!has(a) || dyn(a) == null && b > 0` would parse
     // as `!has(a) || (a == null && b > 0)` — wrong (returns true for absent
     // a with b <= 0). Wrapping yields `(!has(a) || dyn(a) == null) && b > 0`.
-    assertEquals("(!has(this.a) || dyn(this.a) == null) && this.b > 0",
+    assertEquals("!((!((!has(this.a) || dyn(this.a) == null))) || ((!has(this.b) || dyn(this.b)"
+            + " == null) ? false : !(this.b > 0)))",
         translateCheck("a IS NULL AND b > 0"));
-    assertEquals("this.b > 0 && (!has(this.a) || dyn(this.a) == null)",
+    assertEquals("!(((!has(this.b) || dyn(this.b) == null) ? false : !(this.b > 0)) ||"
+            + " (!((!has(this.a) || dyn(this.a) == null))))",
         translateCheck("b > 0 AND a IS NULL"));
-    assertEquals("this.a in [1, 2] && (!has(this.b) || dyn(this.b) == null)",
+    assertEquals("!(((!has(this.a) || dyn(this.a) == null) ? false : !(this.a in [1, 2])) ||"
+            + " (!((!has(this.b) || dyn(this.b) == null))))",
         translateCheck("a IN (1, 2) AND b IS NULL"));
   }
 
@@ -3611,7 +5049,8 @@ class CheckConstraintTest {
     LogicalTypesSchemaVisitor v = new LogicalTypesSchemaVisitor();
     v.visit(LogicalTypesParserFactory.parse(script));
     String cel = v.getRootSchema().getRules().get(0).getExpr();
-    assertEquals("this.a.zip > 0", cel);
+    assertEquals("!(((!has(this.a) || dyn(this.a) == null) || (!has(this.a.zip) ||"
+            + " dyn(this.a.zip) == null)) ? false : !(this.a.zip > 0))", cel);
   }
 
   @Test
@@ -3942,7 +5381,7 @@ class CheckConstraintTest {
     // through the column-level branch in ConstraintTypeProvider.
     String result = translateColumnCheck(
         "addr STRUCT(zip INT) NOT NULL", "addr.zip > 0");
-    assertEquals("this.zip > 0", result);
+    assertEquals("!((!has(this.zip) || dyn(this.zip) == null) ? false : !(this.zip > 0))", result);
   }
 
   @Test
@@ -3976,7 +5415,8 @@ class CheckConstraintTest {
         + "  CHECK (addr.zip > 0)"
         + ");";
     Schema person = parseScript(script).getRootSchema();
-    assertEquals("this.addr.zip > 0", person.getRules().get(0).getExpr());
+    assertEquals("!((!has(this.addr.zip) || dyn(this.addr.zip) == null) ? false : !(this.addr.zip"
+            + " > 0))", person.getRules().get(0).getExpr());
   }
 
   @Test
@@ -3989,7 +5429,7 @@ class CheckConstraintTest {
         + ");";
     Schema person = parseScript(script).getRootSchema();
     String cel = person.getField("addr").getRules().get(0).getExpr();
-    assertEquals("this.zip > 0", cel);
+    assertEquals("!((!has(this.zip) || dyn(this.zip) == null) ? false : !(this.zip > 0))", cel);
   }
 
   @Test
@@ -4012,12 +5452,12 @@ class CheckConstraintTest {
 
   @Test
   void isNullOnLengthRejected() {
-    // LENGTH(name) always returns a BIGINT — the IS NULL test is
+    // LENGTH of a NOT NULL name is never NULL — the IS NULL test is
     // unconditionally false. Strict accepts as well-typed; we reject for
     // the user.
     Throwable t = org.junit.jupiter.api.Assertions.assertThrows(
         ValidationException.class,
-        () -> translateCheck("LENGTH(name) IS NULL"));
+        () -> translateCheckOver("name STRING NOT NULL", "LENGTH(name) IS NULL"));
     assertTrue(t.getMessage().contains("dead code"),
         "expected dead-code rejection, got: " + t.getMessage());
   }
@@ -4028,7 +5468,7 @@ class CheckConstraintTest {
     // true.
     Throwable t = org.junit.jupiter.api.Assertions.assertThrows(
         ValidationException.class,
-        () -> translateCheck("LENGTH(name) IS NOT NULL"));
+        () -> translateCheckOver("name STRING NOT NULL", "LENGTH(name) IS NOT NULL"));
     assertTrue(t.getMessage().contains("dead code"),
         "expected dead-code rejection, got: " + t.getMessage());
   }
@@ -4037,7 +5477,7 @@ class CheckConstraintTest {
   void isNullOnUpperRejected() {
     Throwable t = org.junit.jupiter.api.Assertions.assertThrows(
         ValidationException.class,
-        () -> translateCheck("UPPER(name) IS NULL"));
+        () -> translateCheckOver("name STRING NOT NULL", "UPPER(name) IS NULL"));
     assertTrue(t.getMessage().contains("dead code"),
         "expected UPPER dead-code rejection, got: " + t.getMessage());
   }
@@ -4046,7 +5486,7 @@ class CheckConstraintTest {
   void isNullOnCastRejected() {
     Throwable t = org.junit.jupiter.api.Assertions.assertThrows(
         ValidationException.class,
-        () -> translateCheck("CAST(x AS STRING) IS NULL"));
+        () -> translateCheckOver("x INT NOT NULL", "CAST(x AS STRING) IS NULL"));
     assertTrue(t.getMessage().contains("dead code"),
         "expected CAST dead-code rejection, got: " + t.getMessage());
   }
@@ -4059,6 +5499,35 @@ class CheckConstraintTest {
     assertTrue(t.getMessage().contains("dead code"),
         "expected CURRENT_TIMESTAMP dead-code rejection, got: "
             + t.getMessage());
+  }
+
+  @Test
+  void isNullOnAFunctionOfANullableArgumentAccepted() throws Exception {
+    // A function NULL only for a NULL argument can be NULL when an argument can.
+    String columns = "ns STRING, ni INT, nd DECIMAL(10, 2), s STRING NOT NULL";
+    Map<String, Object> absent = Map.of("s", "a");
+    Map<String, Object> present = new HashMap<>(absent);
+    for (String col : List.of("ns", "ni", "nd")) {
+      present.put(col, null);
+    }
+    for (Map<String, Object> self : List.of(present, absent)) {
+      Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
+      for (String sql : List.of("UPPER(ns) IS NULL", "NOT (LENGTH(ns) IS NOT NULL)",
+          "SUBSTRING(ns FROM 1) IS NULL", "TRIM(ns) IS NULL", "REPLACE(s, ns, 'x') IS NULL",
+          "POSITION(ns IN s) IS NULL", "ABS(ni) IS NULL", "CAST(ni AS BIGINT) IS NULL",
+          "GREATEST(nd, ni) IS NULL", "GREATEST(nd, 1) IS NULL")) {
+        String cel = translateCheckOver(columns, sql);
+        assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+            CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars),
+            sql + " on " + self.keySet() + " -> " + cel);
+      }
+    }
+    // GREATEST of arguments never NULL never is, and a column-level CHECK never sees its column
+    // NULL.
+    assertThrows(ValidationException.class,
+        () -> translateCheckOver(columns, "GREATEST(LENGTH(s), 1) IS NULL"));
+    assertThrows(ValidationException.class,
+        () -> parseScript("STRUCT T (ns STRING CHECK (UPPER(ns) IS NULL));"));
   }
 
   @Test
@@ -4079,7 +5548,7 @@ class CheckConstraintTest {
   void isNullOnLengthInsideMacroRejected() {
     // The pass threads through macro bodies via recurseIntoMacro.
     String script = "STRUCT T ("
-        + "tags STRING ARRAY,"
+        + "tags STRING NOT NULL ARRAY,"
         + "CHECK (EVERY(tags, t, LENGTH(t) IS NULL))"
         + ");";
     Throwable t = org.junit.jupiter.api.Assertions.assertThrows(
@@ -4379,7 +5848,7 @@ class CheckConstraintTest {
     // strict-check); now each side is parenthesized.
     assertEquals(
         "(this.age in [1, 2]) == (this.qty in [3, 4])",
-        translateCheck("age IN (1, 2) = qty IN (3, 4)"));
+        translateCheckNotNull("age IN (1, 2) = qty IN (3, 4)"));
   }
 
   @Test
@@ -4391,7 +5860,7 @@ class CheckConstraintTest {
     assertEquals(
         "(1.0 <= this.ratio && this.ratio <= 10.0) "
             + "== (2.0 <= this.ratio && this.ratio <= 5.0)",
-        translateCheck("(ratio BETWEEN 1.0 AND 10.0) = (ratio BETWEEN 2.0 AND 5.0)"));
+        translateCheckNotNull("(ratio BETWEEN 1.0 AND 10.0) = (ratio BETWEEN 2.0 AND 5.0)"));
   }
 
   @Test
@@ -4409,20 +5878,19 @@ class CheckConstraintTest {
   }
 
   @Test
-  void multisetOfDecimalElementRoutesThroughDecimals() {
-    // Bug #3: resolveColumnRefType handled ARRAY/MAP indexing but not
-    // MULTISET, so a multiset element's type came back null and the
-    // comparison took the native path (opaque-decimal vs double → strict
-    // fail). It must resolve to decimal and route through decimals.*, the
-    // same as the ARRAY-of-decimal equivalent.
-    String multiset = translateCheck("dprices_ms[1] > 5.0");
-    String array = translateCheck("dprices[1] > 5.0");
-    assertTrue(multiset.contains("decimals.gt("),
-        "multiset element should route through decimals.*, got: " + multiset);
-    assertEquals(array.replace("dprices", "X"),
-        multiset.replace("dprices_ms", "X"),
-        "MULTISET and ARRAY decimal-element emit should match");
+  void aMultisetHasNoSubscript() {
+    // A MULTISET has no order, and Avro and JSON hold one as a map of each value to its count,
+    // so a subscript would read the wrong value or fail.
+    for (String sql : List.of("dprices_ms[1] > 5.0", "(dprices_ms)[1] > 5.0")) {
+      ValidationException e = assertThrows(ValidationException.class,
+          () -> translateCheck(sql), sql);
+      assertTrue(e.getMessage().contains("A subscript of a MULTISET is not supported"),
+          e.getMessage());
+    }
+    assertTrue(translateCheck("dprices[1] > 5.0")
+        .contains("decimals.gt(this.dprices[(1) - 1], decimal(\"5.0\"))"));
   }
+
 
   @Test
   void castAsRealResolvesToDoubleAndCoercesOperand() {
@@ -4477,7 +5945,10 @@ class CheckConstraintTest {
     LogicalTypesSchemaVisitor v = new LogicalTypesSchemaVisitor();
     v.visit(LogicalTypesParserFactory.parse(script));
     String cel = v.getRootSchema().getRules().get(0).getExpr();
-    assertEquals("this.addr.tags['home'] == 'x'", cel);
+    assertEquals("!(((!has(this.addr) || dyn(this.addr) == null) || (!has(this.addr.tags) ||"
+            + " dyn(this.addr.tags) == null) || !(('home') in this.addr.tags) ||"
+            + " dyn(this.addr.tags['home']) == null) ? false : !(this.addr.tags['home'] == 'x'))",
+        cel);
   }
 
   @Test
@@ -4502,7 +5973,7 @@ class CheckConstraintTest {
     for (String expr : new String[] {"ABS(x) IS NULL", "TYPE_OF_VARIANT(data) IS NULL"}) {
       Throwable t = org.junit.jupiter.api.Assertions.assertThrows(
           ValidationException.class,
-          () -> translateCheck(expr),
+          () -> translateCheckOver("x INT NOT NULL, data VARIANT NOT NULL", expr),
           "expected dead-code rejection for: " + expr);
       assertTrue(t.getMessage().contains("dead code"),
           "expected dead-code rejection, got: " + t.getMessage());
@@ -4537,7 +6008,7 @@ class CheckConstraintTest {
     // falls to the native path.
     assertEquals(
         "(this.ratio > 0.5) == (this.ratio < 0.3)",
-        translateCheck("(ratio > 0.5) = (ratio < 0.3)"));
+        translateCheckNotNull("(ratio > 0.5) = (ratio < 0.3)"));
   }
 
   @Test
@@ -4546,19 +6017,19 @@ class CheckConstraintTest {
     // emit mappers exact-matched the head and threw — a false rejection of the
     // ANSI spelling. Now consistent.
     assertEquals("double(this.x) > 0.5",
-        translateCheck("CAST(x AS DOUBLE PRECISION) > 0.5"));
+        translateCheckNotNull("CAST(x AS DOUBLE PRECISION) > 0.5"));
   }
 
   @Test
   void castCharacterVaryingAlias() {
     assertEquals("string(this.value) == 'a'",
-        translateCheck("CAST(value AS CHARACTER VARYING) = 'a'"));
+        translateCheckNotNull("CAST(value AS CHARACTER VARYING) = 'a'"));
   }
 
   @Test
   void castBinaryVaryingAlias() {
     assertEquals("bytes(this.name) == b\"\\x00\"",
-        translateCheck("CAST(name AS BINARY VARYING) = x'00'"));
+        translateCheckNotNull("CAST(name AS BINARY VARYING) = x'00'"));
   }
 
   // ---------------------------------------------------------------------
@@ -4573,7 +6044,13 @@ class CheckConstraintTest {
     // coerces its branches AND resolves to the common numeric type, so the
     // surrounding comparison coerces too.
     assertEquals(
-        "decimals.eq(((this.x > 0) ? this.amount : decimal(this.x)), decimal(\"1\"))",
+        "!(dyn((((!has(this.x) || dyn(this.x) == null) ? false : (this.x > 0)) ?"
+            + " ((!has(this.amount) || dyn(this.amount) == null) ? dyn(null) : this.amount) :"
+            + " ((!has(this.x) || dyn(this.x) == null) ? dyn(null) : decimal(this.x)))) == null ?"
+            + " false : !(decimals.eq((((!has(this.x) || dyn(this.x) == null) ? false : (this.x >"
+            + " 0)) ? ((!has(this.amount) || dyn(this.amount) == null) ? dyn(null) : this.amount)"
+            + " : ((!has(this.x) || dyn(this.x) == null) ? dyn(null) : decimal(this.x))),"
+            + " decimal(\"1\"))))",
         translateCheck("CASE WHEN x > 0 THEN amount ELSE x END = 1"));
   }
 
@@ -4605,8 +6082,8 @@ class CheckConstraintTest {
     // arg in a non-first position made the surrounding context coerce against
     // the wrong (narrow) type and fail strict-check. The result type is now
     // the common type, regardless of arg order.
-    String a = translateCheck("COALESCE(amount, x) = 1");
-    String b = translateCheck("COALESCE(x, amount) = 1");
+    String a = translateCheckNotNull("COALESCE(amount, x) = 1");
+    String b = translateCheckNotNull("COALESCE(x, amount) = 1");
     assertTrue(a.startsWith("decimals.eq(") && b.startsWith("decimals.eq("),
         "both arg orders should route through decimals.eq, got:\n  " + a + "\n  " + b);
   }
@@ -4614,8 +6091,8 @@ class CheckConstraintTest {
   @Test
   void greatestReturnTypeIsCommonNotFirstArg() {
     // Same order-independence for GREATEST (and LEAST).
-    String a = translateCheck("GREATEST(amount, x) > 1");
-    String b = translateCheck("GREATEST(x, amount) > 1");
+    String a = translateCheckNotNull("GREATEST(amount, x) > 1");
+    String b = translateCheckNotNull("GREATEST(x, amount) > 1");
     assertTrue(a.startsWith("decimals.gt(") && b.startsWith("decimals.gt("),
         "both arg orders should route through decimals.gt, got:\n  " + a + "\n  " + b);
   }
@@ -4624,7 +6101,9 @@ class CheckConstraintTest {
   void coalesceDoubleCommonRegardlessOfOrder() {
     // int-first with a double later arg resolves to double (was int → wrong).
     assertEquals(
-        "((has(this.x) && dyn(this.x) != null) ? double(this.x) : this.ratio) > 1.0",
+        "!(((!has(this.x) || dyn(this.x) == null) && (!has(this.ratio) || dyn(this.ratio) =="
+            + " null)) ? false : !(((has(this.x) && dyn(this.x) != null) ? double(this.x) :"
+            + " ((!has(this.ratio) || dyn(this.ratio) == null) ? dyn(null) : this.ratio)) > 1.0))",
         translateCheck("COALESCE(x, ratio) > 1.0"));
   }
 
@@ -4637,11 +6116,11 @@ class CheckConstraintTest {
     // decimal cascade.
     assertEquals(
         "decimals.gt(decimals.add(decimal(this.x), this.amount), decimal(\"0\"))",
-        translateCheck("(x + amount) > 0"));
+        translateCheckNotNull("(x + amount) > 0"));
     // (Bare, non-parenthesized form already worked — kept as a guard.)
     assertEquals(
         "decimals.gt(decimals.add(decimal(this.x), this.amount), decimal(\"0\"))",
-        translateCheck("x + amount > 0"));
+        translateCheckNotNull("x + amount > 0"));
   }
 
   @Test
@@ -4651,7 +6130,7 @@ class CheckConstraintTest {
     // outer comparison stayed native and hit a Decimal-vs-int mismatch. With the
     // arithmetic now resolving to DECIMAL, the CASE resolves to DECIMAL and the
     // whole construct routes through decimals.*.
-    String cel = translateCheck("CASE WHEN x > 0 THEN x + amount ELSE x END = 1");
+    String cel = translateCheckNotNull("CASE WHEN x > 0 THEN x + amount ELSE x END = 1");
     assertTrue(cel.startsWith("decimals.eq("),
         "expected decimals.eq, got: " + cel);
   }
@@ -4660,15 +6139,14 @@ class CheckConstraintTest {
   void mixedNumericArithmeticInsideCoalesceAndGreatestResolves() {
     // COALESCE/GREATEST/LEAST null checks used the native emit of each branch;
     // for a mixed-numeric arithmetic branch that native emit is an
-    // un-coercible int+Decimal add. The null check now uses the coerced value
-    // for non-field-selection branches, while plain column branches still use
-    // has(). Both arg orders work.
-    String c = translateCheck("COALESCE(x + amount, x) = 1");
-    assertTrue(c.startsWith("decimals.eq(") && c.contains("dyn(decimals.add("),
-        "got: " + c);
-    String g = translateCheck("GREATEST(x + amount, x) > 1");
-    assertTrue(g.startsWith("decimals.gt(") && g.contains("dyn(decimals.add("),
-        "got: " + g);
+    // un-coercible int+Decimal add. Such a branch is now tested by its inputs,
+    // and plain column branches by has(). Both arg orders work.
+    String c = translateCheckNotNull("COALESCE(x + amount, x) = 1");
+    assertTrue(c.startsWith("decimals.eq(") && c.contains("decimals.add(decimal(this.x), "
+        + "this.amount)") && !c.contains("this.x + this.amount"), "got: " + c);
+    String g = translateCheckNotNull("GREATEST(x + amount, x) > 1");
+    assertTrue(g.startsWith("decimals.gt(") && g.contains("decimals.add(decimal(this.x), "
+        + "this.amount)") && !g.contains("this.x + this.amount"), "got: " + g);
   }
 
   // ---------------------------------------------------------------------
@@ -4682,12 +6160,17 @@ class CheckConstraintTest {
     // emit coerces subject and elements to their common numeric type. INT
     // subject with a DECIMAL element now coerces to decimal.
     assertEquals(
-        "(decimals.eq(decimal(this.x), decimal(\"1\")) "
-            + "|| decimals.eq(decimal(this.x), decimal(\"2.5\")))",
+        "!((!has(this.x) || dyn(this.x) == null) ? false : !((decimals.eq(decimal(this.x),"
+            + " decimal(\"1\")) || decimals.eq(decimal(this.x), decimal(\"2.5\")))))",
         translateCheck("x IN (1, 2.5)"));
-    // INT subject, DECIMAL + DOUBLE elements → common double, native `in`.
-    assertEquals(
-        "double(this.x) in [double(this.amount), this.ratio]",
+    // INT subject, DECIMAL + DOUBLE elements → common double, each element widened only after
+    // its NULL test.
+    String amountNull = "(!has(this.amount) || dyn(this.amount) == null)";
+    String ratioNull = "(!has(this.ratio) || dyn(this.ratio) == null)";
+    assertEquals("!(dyn((" + X_NULL + " ? dyn(null) : (((!" + amountNull
+        + " && double(this.x) == double(this.amount)) || (!" + ratioNull
+        + " && double(this.x) == this.ratio)) ? true : ((" + amountNull + " || " + ratioNull
+        + ") ? dyn(null) : false)))) == false)",
         translateCheck("x IN (amount, ratio)"));
   }
 
@@ -4715,12 +6198,12 @@ class CheckConstraintTest {
     // reserved words already were.
     Throwable t = org.junit.jupiter.api.Assertions.assertThrows(
         ValidationException.class,
-        () -> translateCheck("EVERY(tags, this, this = 'x')"));
+        () -> translateCheckNotNull("EVERY(tags, this, this = 'x')"));
     assertTrue(t.getMessage().contains("this")
             && t.getMessage().toLowerCase(java.util.Locale.ROOT).contains("shadow"),
         "expected 'this' shadow rejection, got: " + t.getMessage());
     // A normal iteration variable name still works.
     assertEquals("this.tags.all(t, t == 'x')",
-        translateCheck("EVERY(tags, t, t = 'x')"));
+        translateCheckNotNull("EVERY(tags, t, t = 'x')"));
   }
 }
