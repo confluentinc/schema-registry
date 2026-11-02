@@ -15,6 +15,8 @@
 
 package io.confluent.dekregistry.storage;
 
+import static io.confluent.kafka.schemaregistry.encryption.tink.AeadWrapper.ENCRYPT_ALTERNATE_KMS_KEY_IDS;
+import static io.confluent.kafka.schemaregistry.encryption.tink.KmsDriver.RESTRICT_AMBIENT_CREDENTIALS;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_DELIMITER;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_PREFIX;
 
@@ -71,11 +73,16 @@ import io.kcache.utils.Caches;
 import io.kcache.utils.InMemoryCache;
 import java.io.Closeable;
 import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -111,6 +118,16 @@ public class DekRegistry implements Closeable {
   public static final String AWS_KMS = "aws-kms";
   public static final String AZURE_KMS = "azure-kms";
   public static final String GCP_KMS = "gcp-kms";
+  public static final String HCVAULT = "hcvault";
+  private static final Set<String> HCVAULT_KMS_PROPS = new HashSet<>(Arrays.asList(
+      KmsPropsRedactor.HCVAULT_TOKEN_ID,
+      KmsPropsRedactor.HCVAULT_NAMESPACE,
+      KmsPropsRedactor.HCVAULT_APPROLE_ROLE_ID,
+      KmsPropsRedactor.HCVAULT_APPROLE_SECRET_ID,
+      KmsPropsRedactor.HCVAULT_SSL_KEYSTORE_LOCATION,
+      KmsPropsRedactor.HCVAULT_SSL_KEYSTORE_PASSWORD,
+      KmsPropsRedactor.HCVAULT_SSL_TRUSTSTORE_LOCATION,
+      ENCRYPT_ALTERNATE_KMS_KEY_IDS));
 
   private static final String TEST_SUBJECT = "__TEST";
 
@@ -550,6 +567,7 @@ public class DekRegistry implements Closeable {
 
     String kmsType = normalizeKmsType(request.getKmsType());
 
+    validateCreateKek(request);
     KeyEncryptionKeyId keyId = new KeyEncryptionKeyId(tenant, request.getName());
     KeyEncryptionKey oldKey = (KeyEncryptionKey) keys.get(keyId);
 
@@ -577,6 +595,8 @@ public class DekRegistry implements Closeable {
       return AZURE_KMS;
     } else if (type.startsWith("gcp")) {
       return GCP_KMS;
+    } else if (type.equals(HCVAULT)) {
+      return HCVAULT;
     } else {
       return kmsType;
     }
@@ -746,7 +766,100 @@ public class DekRegistry implements Closeable {
   }
 
   protected Aead getAead(KeyEncryptionKey kek) throws GeneralSecurityException {
-    return toKekEntity(kek).toAead(config.originals());
+    try {
+      validateKmsHosts(kek.getKmsType(), kek.getKmsKeyId(), kek.getKmsProps());
+    } catch (InvalidKeyException e) {
+      throw new GeneralSecurityException(e.getMessage());
+    }
+    Map<String, Object> configs = new HashMap<>(config.originals());
+    configs.put(RESTRICT_AMBIENT_CREDENTIALS, "true");
+    return toKekEntity(kek).toAead(configs);
+  }
+
+  public void validateCreateKek(CreateKekRequest request) throws InvalidKeyException {
+    validateKmsKeyInfo(request.getKmsType(), request.getKmsKeyId(), request.getKmsProps(),
+        request.isShared());
+  }
+
+  // Doc-only updates of an existing KEK are not revalidated; getAead rechecks hosts before use.
+  public void validateUpdateKek(KeyEncryptionKey oldKek, UpdateKekRequest request)
+      throws InvalidKeyException {
+    boolean shared = request.isShared() != null ? request.isShared() : oldKek.isShared();
+    boolean propsChanged = request.getKmsProps() != null;
+    if (propsChanged || (shared && !oldKek.isShared())) {
+      Map<String, String> kmsProps = propsChanged ? request.getKmsProps() : oldKek.getKmsProps();
+      validateKmsKeyInfo(oldKek.getKmsType(), oldKek.getKmsKeyId(), kmsProps, shared);
+    }
+  }
+
+  // Only shared KEKs' kmsProps reach the server's KMS client, so only those are allowlisted.
+  private void validateKmsKeyInfo(String kmsType, String kmsKeyId, Map<String, String> kmsProps,
+      boolean shared) throws InvalidKeyException {
+    validateKmsType(kmsType);
+    kmsType = normalizeKmsType(kmsType);
+    if (shared && HCVAULT.equals(kmsType) && kmsProps != null) {
+      for (String prop : kmsProps.keySet()) {
+        if (!HCVAULT_KMS_PROPS.contains(prop)) {
+          throw new InvalidKeyException("Unsupported kmsProps key for " + HCVAULT + ": " + prop);
+        }
+      }
+    }
+    validateKmsHosts(kmsType, kmsKeyId, kmsProps);
+  }
+
+  // The KMS URL is kmsType + "://" + kmsKeyId, so a scheme in kmsType would move the host.
+  private static void validateKmsType(String kmsType) throws InvalidKeyException {
+    if (kmsType.contains(":") || kmsType.contains("/")) {
+      throw new InvalidKeyException("Invalid kmsType: " + kmsType);
+    }
+  }
+
+  // Applies to KMS types whose key ID is a URL the server connects to directly.
+  private void validateKmsHosts(String kmsType, String kmsKeyId, Map<String, String> kmsProps)
+      throws InvalidKeyException {
+    validateKmsType(kmsType);
+    List<String> allowedHosts = config.kmsAllowedHosts();
+    kmsType = normalizeKmsType(kmsType);
+    if (allowedHosts.isEmpty() || !(HCVAULT.equals(kmsType) || AZURE_KMS.equals(kmsType))) {
+      return;
+    }
+    List<String> keyIds = new ArrayList<>();
+    keyIds.add(kmsKeyId);
+    String alternates = kmsProps != null ? kmsProps.get(ENCRYPT_ALTERNATE_KMS_KEY_IDS) : null;
+    if (alternates != null && !alternates.isEmpty()) {
+      for (String id : alternates.split("\\s*,\\s*")) {
+        if (!id.isEmpty()) {
+          keyIds.add(id);
+        }
+      }
+    }
+    for (String keyId : keyIds) {
+      // The hcvault driver defaults scheme-less key IDs to https.
+      String host = getHost(HCVAULT.equals(kmsType) && !keyId.startsWith("http")
+          ? "https://" + keyId : keyId);
+      if (host == null || !isAllowedHost(host, allowedHosts)) {
+        throw new InvalidKeyException("KMS host not allowed: " + (host != null ? host : keyId));
+      }
+    }
+  }
+
+  private static String getHost(String keyId) {
+    try {
+      String host = new URI(keyId.trim()).getHost();
+      return host != null ? host.toLowerCase(Locale.ROOT) : null;
+    } catch (URISyntaxException e) {
+      return null;
+    }
+  }
+
+  private static boolean isAllowedHost(String host, List<String> allowedHosts) {
+    for (String allowed : allowedHosts) {
+      allowed = allowed.trim().toLowerCase(Locale.ROOT);
+      if (allowed.startsWith(".") ? host.endsWith(allowed) : host.equals(allowed)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   public Kek putKekOrForward(String name, UpdateKekRequest request,
@@ -804,6 +917,7 @@ public class DekRegistry implements Closeable {
     if (key == null || key.isDeleted()) {
       return null;
     }
+    validateUpdateKek(key, request);
     SortedMap<String, String> kmsProps = request.getOptionalKmsProps() != null
         ? (request.getOptionalKmsProps().isPresent()
             ? resolveKmsProps(key, request.getKmsProps())
