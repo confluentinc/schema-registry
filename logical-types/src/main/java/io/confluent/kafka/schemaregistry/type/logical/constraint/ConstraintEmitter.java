@@ -288,6 +288,8 @@ final class ConstraintEmitter {
    *   <li>{@code a IN (x, y, z)} → {@code a in [x, y, z]}</li>
    *   <li>{@code a IN list_field} → {@code a in list_field}</li>
    *   <li>{@code a NOT IN ...} → {@code !(a in ...)}</li>
+   *   <li>a value list with an element that may be NULL → three values, see
+   *       {@link #emitInMayBeNull}</li>
    * </ul>
    */
   private static void visitIn(
@@ -298,6 +300,10 @@ final class ConstraintEmitter {
     }
     boolean negated = ctx.NOT() != null;
     ConstraintValidationContext vctx = EMIT_VCTX.get();
+    if (inElementMayBeNull(ctx)) {
+      emitInMayBeNull(ctx, negated, sb);
+      return;
+    }
     if (vctx != null) {
       LogicalTypesParser.In_targetContext target = ctx.in_target();
       if (target instanceof LogicalTypesParser.InTargetParenListContext) {
@@ -344,6 +350,108 @@ final class ConstraintEmitter {
     if (negated) {
       sb.append(")");
     }
+  }
+
+  /**
+   * True if an element of an IN's value list may be NULL, and the inputs of each value tell.
+   * One whose elements never are is NULL exactly when its subject is, so is emitted as before.
+   */
+  private static boolean inElementMayBeNull(LogicalTypesParser.Check_expr_inContext ctx) {
+    if (EMIT_VCTX.get() == null || ctx.IN() == null
+        || !(ctx.in_target() instanceof LogicalTypesParser.InTargetParenListContext)
+        || ConstraintNullTest.of(ctx.check_expr_like()) == null) {
+      return false;
+    }
+    boolean mayBeNull = false;
+    for (LogicalTypesParser.Check_exprContext item : inItems(ctx)) {
+      String test = ConstraintNullTest.of(item);
+      if (test == null) {
+        return false;
+      }
+      mayBeNull |= !ConstraintNullTest.NEVER.equals(test);
+    }
+    return mayBeNull;
+  }
+
+  /**
+   * SQL's {@code x IN (a, b)}, {@code x = a OR x = b} in three values: NULL when {@code x} is,
+   * else TRUE on a match, else NULL when an element is NULL, else FALSE; NOT IN negates it,
+   * keeping NULL. Each value is tested before it is compared or converted to the common type.
+   */
+  private static void emitInMayBeNull(
+      LogicalTypesParser.Check_expr_inContext ctx, boolean negated, StringBuilder sb) {
+    ConstraintValidationContext vctx = EMIT_VCTX.get();
+    List<LogicalTypesParser.Check_exprContext> items = inItems(ctx);
+    String common = inListCommon(ctx, vctx);
+    boolean temporal = !"decimal".equals(common) && !"double".equals(common)
+        && inTargetHasTemporal(ctx, vctx);
+    StringBuilder subject = new StringBuilder();
+    if ("decimal".equals(common)) {
+      emitLikeAsDecimalValue(ctx.check_expr_like(), subject);
+    } else if ("double".equals(common)) {
+      emitDoubleValueLike(ctx.check_expr_like(), subject);
+    } else if (temporal) {
+      emitTimestampValueLike(ctx.check_expr_like(), subject);
+    } else {
+      visitLike(ctx.check_expr_like(), subject);
+    }
+    List<String> elementNulls = new ArrayList<>();
+    StringBuilder match = new StringBuilder("(");
+    for (int i = 0; i < items.size(); i++) {
+      String elementNull = ConstraintNullTest.of(items.get(i));
+      elementNulls.add(elementNull);
+      if (i > 0) {
+        match.append(" || ");
+      }
+      if (!ConstraintNullTest.NEVER.equals(elementNull)) {
+        match.append('(').append(ConstraintNullTest.not(elementNull)).append(" && ");
+      }
+      if ("decimal".equals(common)) {
+        match.append("decimals.eq(").append(subject).append(", ");
+        emitDecimalValue(items.get(i), match);
+        match.append(')');
+      } else {
+        match.append(subject).append(" == ");
+        if ("double".equals(common)) {
+          emitDoubleValueCheckExpr(items.get(i), match);
+        } else if (temporal) {
+          emitTimestampValueCheckExpr(items.get(i), match);
+        } else {
+          emitWrappedReceiver(items.get(i), match);
+        }
+      }
+      if (!ConstraintNullTest.NEVER.equals(elementNull)) {
+        match.append(')');
+      }
+    }
+    match.append(')');
+    String subjectNull = ConstraintNullTest.of(ctx.check_expr_like());
+    String anyElementNull = ConstraintNullTest.any(elementNulls);
+    if (vctx != null && vctx.isTypeOnly()) {
+      sb.append(negated ? "!" : "").append(match);
+      return;
+    }
+    StringBuilder noMatch = new StringBuilder();
+    if (ConstraintNullTest.NEVER.equals(anyElementNull)) {
+      noMatch.append(negated ? "true" : "false");
+    } else {
+      noMatch.append('(').append(anyElementNull).append(" ? dyn(null) : ")
+          .append(negated ? "true" : "false").append(')');
+    }
+    String unlessSubjectNull = "(" + match + " ? " + (negated ? "false" : "true") + " : "
+        + noMatch + ")";
+    if (ConstraintNullTest.NEVER.equals(subjectNull)) {
+      sb.append(unlessSubjectNull);
+    } else {
+      sb.append('(').append(subjectNull).append(" ? dyn(null) : ").append(unlessSubjectNull)
+          .append(')');
+    }
+  }
+
+  private static List<LogicalTypesParser.Check_exprContext> inItems(
+      LogicalTypesParser.Check_expr_inContext ctx) {
+    return ((LogicalTypesParser.InTargetParenListContext) ctx.in_target())
+        .check_expr_list().check_expr();
   }
 
   /** True if the IN LHS or any value-list element is temporal. */
@@ -2307,6 +2415,15 @@ final class ConstraintEmitter {
         return emitTruth(
             ((LogicalTypesParser.CheckParenContext) c).check_expr().check_expr_or(), truth, sb);
       }
+    }
+    if (is.IS() == null && is.check_expr_compare().check_expr_between().size() == 1
+        && is.check_expr_compare().check_expr_between(0).BETWEEN() == null
+        && inElementMayBeNull(is.check_expr_compare().check_expr_between(0).check_expr_in(0))) {
+      // Its CEL gives NULL as null, which equals neither true nor false.
+      sb.append("(dyn(");
+      visitIs(is, sb);
+      sb.append(") == ").append(truth).append(')');
+      return true;
     }
     String isNull = is.IS() != null ? null : ConstraintNullTest.of(is.check_expr_compare());
     boolean guarded = isNull != null && !ConstraintNullTest.NEVER.equals(isNull);

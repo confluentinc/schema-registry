@@ -3123,6 +3123,39 @@ class CheckConstraintTest {
   }
 
   @Test
+  void anInOverANullIsThreeValued() throws Exception {
+    // An IN is TRUE on a match, else NULL when its subject or an element is NULL; each element is
+    // tested before it is compared, widened or, as JSON leaves a NULL field out, read.
+    String columns = "x DOUBLE NOT NULL, nd DECIMAL(10, 2), i INT NOT NULL, ni INT, nx DOUBLE, "
+        + "nb BIGINT, r STRUCT(a BIGINT), s STRING NOT NULL, ns STRING";
+    String niNull = "(!has(this.ni) || dyn(this.ni) == null)";
+    assertEquals("((this.i == 1 || (!" + niNull + " && this.i == this.ni)) ? true : (" + niNull
+        + " ? dyn(null) : false))", translateCheckOver(columns, "i IN (1, ni)"));
+    Map<String, Object> absent = new HashMap<>();
+    absent.put("x", 0.5);
+    absent.put("i", 1);
+    absent.put("s", "a");
+    Map<String, Object> present = new HashMap<>(absent);
+    for (String col : List.of("nd", "ni", "nx", "nb", "r", "ns")) {
+      present.put(col, null);
+    }
+    for (Map<String, Object> self : List.of(present, absent)) {
+      Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
+      for (String sql : List.of("x IN (x, nd)", "i IN (1, ni)", "1 IN (1, r.a)",
+          "(1 NOT IN (nb, r.a)) IS NULL", "(i IN (2, ni)) IS NULL", "(nx IN (0, 0)) IS NULL",
+          "(ns NOT IN (ns, s)) IS NULL", "COALESCE(i IN (2, ni), TRUE) = TRUE",
+          "CASE WHEN i IN (2, ni) THEN 1 ELSE 2 END = 2",
+          "CASE WHEN i NOT IN (2, ni) THEN 1 ELSE 2 END = 2",
+          "CASE WHEN nx IN (0, 1) THEN 1 ELSE 2 END = 2")) {
+        String cel = translateCheckOver(columns, sql);
+        assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+            CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars),
+            sql + " on " + self.keySet() + " -> " + cel);
+      }
+    }
+  }
+
+  @Test
   void aNullGuardDoesNotHideATypeError() {
     // The dyn branch a NULL GREATEST, LEAST, COALESCE or NULLIF gives would pass any type; the
     // strict check sees each call's own result type instead.
@@ -5152,9 +5185,14 @@ class CheckConstraintTest {
         "(decimals.eq(decimal(this.x), decimal(\"1\")) "
             + "|| decimals.eq(decimal(this.x), decimal(\"2.5\")))",
         translateCheck("x IN (1, 2.5)"));
-    // INT subject, DECIMAL + DOUBLE elements → common double, native `in`.
-    assertEquals(
-        "double(this.x) in [double(this.amount), this.ratio]",
+    // INT subject, DECIMAL + DOUBLE elements → common double, each element widened only after
+    // its NULL test.
+    String amountNull = "(!has(this.amount) || dyn(this.amount) == null)";
+    String ratioNull = "(!has(this.ratio) || dyn(this.ratio) == null)";
+    assertEquals("(" + X_NULL + " ? dyn(null) : (((!" + amountNull
+        + " && double(this.x) == double(this.amount)) || (!" + ratioNull
+        + " && double(this.x) == this.ratio)) ? true : ((" + amountNull + " || " + ratioNull
+        + ") ? dyn(null) : false)))",
         translateCheck("x IN (amount, ratio)"));
   }
 

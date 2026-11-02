@@ -35,8 +35,8 @@ import org.antlr.v4.runtime.tree.ParseTree;
  * tell. COALESCE, GREATEST and LEAST are NULL when all their arguments are.
  *
  * <p>{@code "false"} means the expression is never NULL. Null means it can't be told without
- * evaluating it: NULLIF, CASE, AND, OR, BETWEEN, IN, a subscript, a quantifier, or a VARIANT
- * function or cast.
+ * evaluating it: NULLIF, CASE, AND, OR, BETWEEN, an IN with an element that may be NULL, a
+ * subscript, a quantifier, or a VARIANT function or cast.
  */
 final class ConstraintNullTest {
 
@@ -75,15 +75,25 @@ final class ConstraintNullTest {
   static String of(LogicalTypesParser.Check_expr_compareContext ctx) {
     List<String> tests = new ArrayList<>();
     for (LogicalTypesParser.Check_expr_betweenContext between : ctx.check_expr_between()) {
-      if (between.BETWEEN() != null || between.check_expr_in(0).IN() != null) {
+      if (between.BETWEEN() != null) {
         return null;
       }
-      // A LIKE pattern is a literal.
-      for (LogicalTypesParser.Check_expr_mulContext mul
-          : between.check_expr_in(0).check_expr_like().check_expr_add().check_expr_mul()) {
-        for (LogicalTypesParser.Check_expr_unary_signContext sign : mul.check_expr_unary_sign()) {
-          tests.add(of(sign.c_expr()));
-        }
+      LogicalTypesParser.Check_expr_inContext in = between.check_expr_in(0);
+      if (in.IN() != null && !elementsNeverNull(in)) {
+        return null;
+      }
+      // An IN over elements never NULL is NULL exactly when its subject is.
+      tests.add(of(in.check_expr_like()));
+    }
+    return any(tests);
+  }
+
+  static String of(LogicalTypesParser.Check_expr_likeContext like) {
+    // A LIKE pattern is a literal.
+    List<String> tests = new ArrayList<>();
+    for (LogicalTypesParser.Check_expr_mulContext mul : like.check_expr_add().check_expr_mul()) {
+      for (LogicalTypesParser.Check_expr_unary_signContext sign : mul.check_expr_unary_sign()) {
+        tests.add(of(sign.c_expr()));
       }
     }
     return any(tests);
@@ -239,8 +249,22 @@ final class ConstraintNullTest {
     return type == null || type.getType() == Schema.Type.VARIANT;
   }
 
+  private static boolean elementsNeverNull(LogicalTypesParser.Check_expr_inContext in) {
+    if (!(in.in_target() instanceof LogicalTypesParser.InTargetParenListContext)) {
+      return false;
+    }
+    for (LogicalTypesParser.Check_exprContext item
+        : ((LogicalTypesParser.InTargetParenListContext) in.in_target())
+            .check_expr_list().check_expr()) {
+      if (!NEVER.equals(of(item))) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   // NULL when any input is.
-  private static String any(List<String> tests) {
+  static String any(List<String> tests) {
     if (tests.contains(null)) {
       return null;
     }

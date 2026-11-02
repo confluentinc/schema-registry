@@ -93,6 +93,22 @@ class ProtoCheckPresenceTest {
   }
 
   @Test
+  void anUnsetInElementOrSubjectIsNull() {
+    // An unset nullable field makes an IN that doesn't match NULL, but a NOT NULL zero subject
+    // still matches.
+    String ddl = "STRUCT T (i INT NOT NULL, ni INT, "
+        + "CONSTRAINT c1 CHECK ((i IN (1, ni)) IS NULL), "
+        + "CONSTRAINT c2 CHECK ((ni IN (0, 1)) IS NULL), "
+        + "CONSTRAINT c3 CHECK (i IN (0, ni)));";
+    LogicalTypesSchemaVisitor visitor = new LogicalTypesSchemaVisitor();
+    visitor.visit(LogicalTypesParserFactory.parse(ddl));
+    ProtobufSchema schema = LogicalTypeToProtoConverter.fromLogicalType(
+        visitor.toLogicalType(), "T");
+    DynamicMessage message = DynamicMessage.newBuilder(schema.toDescriptor()).build();
+    assertEquals(List.of(), schema.validateMessage(new CelValidator(), message));
+  }
+
+  @Test
   void anUnsetNullifArgumentIsNull() {
     // NULLIF tests an unset nullable field, which reads as its zero, but not a NOT NULL zero.
     String ddl = "STRUCT T (i INT NOT NULL, ni INT, "
