@@ -949,7 +949,8 @@ final class ConstraintFunctions {
     LogicalTypesParser.Check_exprContext arg = ctx.check_expr();
     // A NULL's CAST is null, as int(null) would fail; the strict check still types it.
     ConstraintValidationContext vctx = EMIT_VCTX.get();
-    if (ConstraintResolver.isLiteralNull(arg) && vctx != null && !vctx.isTypeOnly()) {
+    boolean nullArg = ConstraintResolver.isLiteralNull(arg);
+    if (nullArg && vctx != null && !vctx.isTypeOnly()) {
       sb.append("dyn(null)");
       return;
     }
@@ -962,7 +963,7 @@ final class ConstraintFunctions {
         ConstraintEmitter.emitDecimalValue(arg, sb);
       } else {
         sb.append("decimal(");
-        visitCheckExpr(arg, sb);
+        emitCastArg(arg, nullArg, sb);
         sb.append(')');
       }
       sb.append(", ").append(scale).append(')');
@@ -992,8 +993,18 @@ final class ConstraintFunctions {
               + "CAST(... AS DOUBLE), and CAST(... AS DECIMAL(p,s)) are available.");
     }
     sb.append(celFn).append('(');
-    visitCheckExpr(arg, sb);
+    emitCastArg(arg, nullArg, sb);
     sb.append(')');
+  }
+
+  // A NULL as dyn, as bool(null) and bytes(null) have no overload, while the cast types it.
+  private static void emitCastArg(
+      LogicalTypesParser.Check_exprContext arg, boolean nullArg, StringBuilder sb) {
+    if (nullArg) {
+      sb.append("dyn(null)");
+    } else {
+      visitCheckExpr(arg, sb);
+    }
   }
 
   /** True if the CAST target type is DECIMAL / DEC / NUMERIC. */
