@@ -235,4 +235,13 @@ public class VariantPathTest {
     assertTrue(e.getMessage().contains("index out of int range"),
         "expected 'index out of int range' message; got: " + e.getMessage());
   }
+
+  @Test
+  void variantPathsCheckRefusesWhatParseRefuses() {
+    VariantPaths.check("$.a[0]");
+    VariantPaths.check("$[\"b\"]");
+    for (String path : List.of("$[", "a", "$[-1]")) {
+      assertThrows(IllegalArgumentException.class, () -> VariantPaths.check(path), path);
+    }
+  }
 }

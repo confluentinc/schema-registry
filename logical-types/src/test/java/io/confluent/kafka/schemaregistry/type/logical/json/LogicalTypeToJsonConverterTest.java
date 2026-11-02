@@ -950,6 +950,27 @@ class LogicalTypeToJsonConverterTest {
     }
   }
 
+  @Test
+  void testDecimalWithoutScaleIsWrittenWithScaleZero() {
+    // DECIMAL(p) and bare DECIMAL are DECIMAL(p, 0), never a scale of -1.
+    for (Schema d : Arrays.asList(Schema.createDecimal(18, Schema.NO_PARAM),
+        Schema.createDecimal(Schema.NO_PARAM, Schema.NO_PARAM))) {
+      Schema rootSchema = Schema.createStruct(Arrays.asList(
+          new Field("d", d.setNullable(false), 0))).setNullable(false);
+      JsonSchema json = convertSchema(rootSchema);
+      assertTrue(json.canonicalString().contains("\"scale\":\"0\""), json.canonicalString());
+      assertEquals(Schema.DEFAULT_DECIMAL_SCALE, JsonToLogicalTypeConverter.toLogicalType(json)
+          .getRootSchema().getField("d").getSchema().getScale());
+    }
+    // A schema registered with the old -1 reads as scale 0.
+    JsonSchema old = new JsonSchema("{\"type\":\"object\",\"properties\":{\"d\":{"
+        + "\"type\":\"number\",\"title\":\"org.apache.kafka.connect.data.Decimal\","
+        + "\"connect.type\":\"bytes\",\"connect.parameters\":{"
+        + "\"connect.decimal.precision\":\"10\",\"scale\":\"-1\"}}}}");
+    assertEquals(Schema.DEFAULT_DECIMAL_SCALE, JsonToLogicalTypeConverter.toLogicalType(old)
+        .getRootSchema().getField("d").getSchema().getScale());
+  }
+
   // =========================================================================
   // Length-constrained primitives round-trip
   // =========================================================================
