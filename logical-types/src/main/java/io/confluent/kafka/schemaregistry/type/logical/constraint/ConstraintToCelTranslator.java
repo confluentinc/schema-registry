@@ -102,7 +102,7 @@ public final class ConstraintToCelTranslator {
       ConstraintEmitter.visitCheckExpr(ctx, typed);
       EMIT_VCTX.set(validationContext);
       StringBuilder sb = new StringBuilder();
-      ConstraintEmitter.visitCheckExpr(ctx, sb);
+      ConstraintEmitter.emitCheck(ctx, sb);
       String cel = sb.toString();
       // Post-emit safety net: strict cel-java type-check the result. Catches
       // type/overload mismatches the hand-coded validator passes don't cover

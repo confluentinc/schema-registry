@@ -2566,6 +2566,19 @@ final class ConstraintEmitter {
     }
   }
 
+  /**
+   * A CHECK's CEL, failing only when SQL's result is FALSE, so a NULL one passes, as in SQL.
+   * One with nothing that may be NULL is emitted as is.
+   */
+  static void emitCheck(LogicalTypesParser.Check_exprContext ctx, StringBuilder sb) {
+    StringBuilder whenFalse = new StringBuilder();
+    if ((emitTruth(ctx.check_expr_or(), false, whenFalse) & MAY_BE_NULL) != 0) {
+      sb.append('!').append(whenFalse);
+    } else {
+      visitCheckExpr(ctx, sb);
+    }
+  }
+
   // emitTruth's result: a predicate may be NULL; a predicate's NULL can't be told.
   static final int MAY_BE_NULL = 1;
   static final int UNTOLD = 2;
