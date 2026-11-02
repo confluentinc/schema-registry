@@ -37,6 +37,7 @@ import org.antlr.v4.runtime.atn.PredictionMode;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -45,6 +46,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -1358,6 +1360,35 @@ class CheckConstraintTest {
             + "((has(this.b) && dyn(this.b) != null) ? this.b : "
             + "((!has(this.c) || dyn(this.c) == null) ? dyn(null) : this.c))) > 0",
         translateCheck("COALESCE(a, b, c) > 0"));
+  }
+
+  @Test
+  void aNestedCheckIsEmittedOnceAtEachLevel() {
+    // A NULL test or a common type emits a subexpression again, which multiplied the work at
+    // each level of nesting; one over CEL's limit is refused before it grows further.
+    String columns = "t BOOLEAN NOT NULL, d DECIMAL(10, 2), i INT, x DOUBLE";
+    assertTimeoutPreemptively(Duration.ofSeconds(30), () -> {
+      translateCheckOver(columns, nest("d", "CASE WHEN t THEN %s ELSE d END") + " = d");
+      translateCheckOver(columns, nest("i", "CASE WHEN t THEN %s ELSE x END") + " = x");
+      translateCheckOver(columns, nest("d", "COALESCE(%s, d)") + " = d");
+      translateCheckOver(columns, nest("d", "COALESCE(d, %s)") + " = d");
+      for (String tooLarge : List.of(nest("d", "NULLIF(%s, d)") + " = d",
+          nest("d", "NULLIF(d, %s)") + " = d", nest("i", "GREATEST(%s, x)") + " = x",
+          nest("d", "COALESCE(CASE WHEN t THEN %s ELSE i END, x)") + " = x")) {
+        ValidationException e = assertThrows(ValidationException.class,
+            () -> translateCheckOver(columns, tooLarge));
+        assertTrue(e.getMessage().contains("CHECK constraint is too large"), e.getMessage());
+      }
+    });
+  }
+
+  // leaf nested 30 deep in a call or CASE, %s marking where.
+  private static String nest(String leaf, String wrap) {
+    String nested = leaf;
+    for (int i = 0; i < 30; i++) {
+      nested = String.format(wrap, nested);
+    }
+    return nested;
   }
 
   @Test

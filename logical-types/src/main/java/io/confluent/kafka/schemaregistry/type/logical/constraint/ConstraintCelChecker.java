@@ -97,14 +97,7 @@ final class ConstraintCelChecker {
       return;
     }
     // Checked before compiling, which would report it as a failed type check.
-    int size = cel.codePointCount(0, cel.length());
-    int limit = CelOptions.DEFAULT.maxExpressionCodePointSize();
-    if (size > limit) {
-      throw new ValidationException("CHECK constraint is too large: its CEL is " + size
-          + " code points, over CEL's limit of " + limit + ". Nested calls such as GREATEST "
-          + "and LEAST repeat their arguments at each level; use fewer of them."
-          + (sourceSql != null ? " SQL: " + sourceSql : ""));
-    }
+    checkSize(cel, false, sourceSql);
     CelCompiler compiler = newStrictCompiler(vctx);
     try {
       compiler.compile(cel).getAst();
@@ -112,6 +105,24 @@ final class ConstraintCelChecker {
       throw new ValidationException(
           "Emitted expression fails strict type-check. "
               + sourceContext(sourceSql, cel) + e.getMessage());
+    }
+  }
+
+  /**
+   * Refuses {@code cel} over CEL's size limit; {@code part} when it is only part of the CHECK's
+   * CEL, which is then larger still.
+   */
+  static void checkSize(String cel, boolean part, String sourceSql) {
+    int limit = CelOptions.DEFAULT.maxExpressionCodePointSize();
+    if (cel.length() <= limit) {
+      return;
+    }
+    int size = cel.codePointCount(0, cel.length());
+    if (size > limit) {
+      throw new ValidationException("CHECK constraint is too large: its CEL is "
+          + (part ? "at least " : "") + size + " code points, over CEL's limit of " + limit
+          + ". Nested calls such as GREATEST and LEAST repeat their arguments at each level; "
+          + "use fewer of them." + (sourceSql != null ? " SQL: " + sourceSql : ""));
     }
   }
 

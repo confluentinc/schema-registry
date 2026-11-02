@@ -94,6 +94,7 @@ public final class ConstraintToCelTranslator {
     ConstraintValidator.validateFunctionArgs(ctx, validationContext);
     ConstraintValidator.validateIsNullOperand(ctx, validationContext);
     ConstraintValidator.validateMacroBodies(ctx, validationContext);
+    ConstraintEmitter.EMIT_CACHE.set(new ConstraintEmitter.EmitCache(ctx.getText()));
     EMIT_VCTX.set(validationContext.forTypeCheck());
     try {
       StringBuilder typed = new StringBuilder();
@@ -113,6 +114,7 @@ public final class ConstraintToCelTranslator {
       return cel;
     } finally {
       EMIT_VCTX.remove();
+      ConstraintEmitter.EMIT_CACHE.remove();
     }
   }
 

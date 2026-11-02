@@ -27,7 +27,10 @@ import org.antlr.v4.runtime.tree.ParseTree;
 import org.antlr.v4.runtime.tree.TerminalNode;
 
 import java.util.ArrayList;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Consumer;
 
 /**
  * Cascade visitors for the CHECK→CEL translator. Each visitor walks one
@@ -57,9 +60,49 @@ final class ConstraintEmitter {
     // static utility
   }
 
+  /**
+   * The CEL of each subexpression emitted during one translation, by context and form. A NULL
+   * test or a common type emits a subexpression again, which, nested, would multiply the work
+   * at each level.
+   */
+  static final class EmitCache {
+    private final String sourceSql;
+    private final Map<ConstraintValidationContext, Map<ParseTree, String[]>> emitted =
+        new IdentityHashMap<>();
+
+    EmitCache(String sourceSql) {
+      this.sourceSql = sourceSql;
+    }
+  }
+
+  static final ThreadLocal<EmitCache> EMIT_CACHE = new ThreadLocal<>();
+
+  private enum Form { NATIVE, DECIMAL, DOUBLE, TIMESTAMP }
+
+  // ctx's CEL in a form, emitted once per translation and context. One over CEL's size limit is
+  // refused at once, as nesting may multiply it further.
+  private static void emitCached(LogicalTypesParser.Check_exprContext ctx, Form form,
+      StringBuilder sb, Consumer<StringBuilder> emit) {
+    EmitCache cache = EMIT_CACHE.get();
+    ConstraintValidationContext vctx = EMIT_VCTX.get();
+    if (cache == null || vctx == null) {
+      emit.accept(sb);
+      return;
+    }
+    String[] forms = cache.emitted.computeIfAbsent(vctx, k -> new IdentityHashMap<>())
+        .computeIfAbsent(ctx, k -> new String[Form.values().length]);
+    if (forms[form.ordinal()] == null) {
+      StringBuilder cel = new StringBuilder();
+      emit.accept(cel);
+      forms[form.ordinal()] = cel.toString();
+      ConstraintCelChecker.checkSize(forms[form.ordinal()], true, cache.sourceSql);
+    }
+    sb.append(forms[form.ordinal()]);
+  }
+
   static void visitCheckExpr(
       LogicalTypesParser.Check_exprContext ctx, StringBuilder sb) {
-    visitOr(ctx.check_expr_or(), sb);
+    emitCached(ctx, Form.NATIVE, sb, out -> visitOr(ctx.check_expr_or(), out));
   }
 
   private static void visitOr(
@@ -885,12 +928,14 @@ final class ConstraintEmitter {
 
   static void emitTimestampValueCheckExpr(
       LogicalTypesParser.Check_exprContext ctx, StringBuilder sb) {
-    LogicalTypesParser.Check_expr_addContext add = bareAddOfOr(ctx.check_expr_or());
-    if (add != null) {
-      emitTimestampValueAdd(add, sb);
-    } else {
-      visitCheckExpr(ctx, sb);  // not a bare value (defensive)
-    }
+    emitCached(ctx, Form.TIMESTAMP, sb, out -> {
+      LogicalTypesParser.Check_expr_addContext add = bareAddOfOr(ctx.check_expr_or());
+      if (add != null) {
+        emitTimestampValueAdd(add, out);
+      } else {
+        visitCheckExpr(ctx, out);  // not a bare value (defensive)
+      }
+    });
   }
 
   private static void emitTimestampValueAdd(
@@ -1264,14 +1309,16 @@ final class ConstraintEmitter {
    */
   private static void emitCheckExprAsDecimal(
       LogicalTypesParser.Check_exprContext ctx, StringBuilder sb) {
-    LogicalTypesParser.Check_expr_addContext add = bareAddOfOr(ctx.check_expr_or());
-    if (add != null) {
-      emitAddAsDecimal(add, sb);
-    } else {
-      sb.append("decimal((");
-      visitCheckExpr(ctx, sb);
-      sb.append("))");
-    }
+    emitCached(ctx, Form.DECIMAL, sb, out -> {
+      LogicalTypesParser.Check_expr_addContext add = bareAddOfOr(ctx.check_expr_or());
+      if (add != null) {
+        emitAddAsDecimal(add, out);
+      } else {
+        out.append("decimal((");
+        visitCheckExpr(ctx, out);
+        out.append("))");
+      }
+    });
   }
 
   /**
@@ -1471,14 +1518,16 @@ final class ConstraintEmitter {
 
   private static void emitDoubleValueCheckExpr(
       LogicalTypesParser.Check_exprContext ctx, StringBuilder sb) {
-    LogicalTypesParser.Check_expr_addContext add = bareAddOfOr(ctx.check_expr_or());
-    if (add != null) {
-      emitDoubleValueAdd(add, sb);
-    } else {
-      sb.append("double((");
-      visitCheckExpr(ctx, sb);
-      sb.append("))");
-    }
+    emitCached(ctx, Form.DOUBLE, sb, out -> {
+      LogicalTypesParser.Check_expr_addContext add = bareAddOfOr(ctx.check_expr_or());
+      if (add != null) {
+        emitDoubleValueAdd(add, out);
+      } else {
+        out.append("double((");
+        visitCheckExpr(ctx, out);
+        out.append("))");
+      }
+    });
   }
 
   // Leading integer or decimal operands are combined in their own type and converted once:
