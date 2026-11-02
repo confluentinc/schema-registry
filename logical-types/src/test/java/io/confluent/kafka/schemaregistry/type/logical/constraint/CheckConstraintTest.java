@@ -3793,11 +3793,53 @@ class CheckConstraintTest {
         "d", CelDecimal.of(new BigDecimal("1.00")), "bi", Long.MAX_VALUE);
     for (String raising : List.of("i / z > 0", "i % z > 0", "CAST(s AS INT) > 0",
         "PARSE_JSON(s) IS NOT NULL", "VARIANT_GET(TRY_PARSE_JSON('{}'), p) IS NOT NULL",
-        "MATCHES(s, p)", "ROUND(d, bi) > 0",
         "TRY_VARIANT_GET(TRY_PARSE_JSON('{}'), p RETURNING INT) > 0")) {
       String cel = translateCheckOver(columns, "ni > 0 OR " + raising);
       assertThrows(CelEvaluationException.class, () -> evalOver(cel, self), raising + " -> " + cel);
     }
+    // Flink raises for neither a bad regex nor a large scale, so a NULL may drop CEL's error,
+    // and the operands are joined as is.
+    for (String celOnly : List.of("MATCHES(s, p)", "ROUND(d, bi) > 0", "TRUNCATE(d, bi) > 0")) {
+      String cel = translateCheckOver(columns, "ni > 0 OR " + celOnly);
+      assertTrue(cel.startsWith("!(((!has(this.ni) || dyn(this.ni) == null) ? false"
+          + " : !(this.ni > 0)) && "), cel);
+      assertEquals(true, evalOver(cel, self), celOnly + " -> " + cel);
+    }
+  }
+
+  @Test
+  void aMalformedLiteralVariantPathIsRefused() {
+    // A literal path is parsed as the variants functions parse it, so it fails here, not on
+    // every record.
+    String columns = "v VARIANT NOT NULL";
+    for (String sql : List.of("VARIANT_GET(v, '$[') IS NULL", "VARIANT_GET(v, 'a') IS NULL",
+        "TRY_VARIANT_GET(v, '$[-1]' RETURNING INT) > 0",
+        "TRY_VARIANT_GET(v, ('$[') RETURNING INT) > 0")) {
+      ValidationException e = assertThrows(ValidationException.class,
+          () -> translateCheckOver(columns, sql), sql);
+      assertTrue(e.getMessage().contains("is malformed"), e.getMessage());
+    }
+    translateCheckOver(columns, "VARIANT_GET(v, '$.a[0]') IS NULL");
+    translateCheckOver(columns, "TRY_VARIANT_GET(v, '$[\"b\"]' RETURNING INT) > 0");
+  }
+
+  @Test
+  void aRoundScaleIsAtMostTheValues() throws Exception {
+    // A larger scale gives the value back, as in Flink, rather than padding it, which took time
+    // growing with the scale.
+    String columns = "d DECIMAL(10, 2) NOT NULL, i INT NOT NULL";
+    assertTrue(translateCheckOver(columns, "ROUND(d, 1) > 0")
+        .contains("decimals.round(this.d, 1)"));
+    assertTrue(translateCheckOver(columns, "ROUND(d, 50) > 0")
+        .contains("decimals.round(this.d, 2)"));
+    assertTrue(translateCheckOver(columns, "ROUND(d * 2, i) > 0")
+        .contains("(this.i < 38 ? this.i : 38))"));
+    String cel = translateCheckOver(columns, "ROUND(d, i) = d");
+    assertTrue(cel.contains("decimals.round(this.d, (this.i < 2 ? this.i : 2))"), cel);
+    Map<String, Object> self = Map.of("d", CelDecimal.of(new BigDecimal("1.00")),
+        "i", 100_000_000);
+    assertTimeoutPreemptively(Duration.ofSeconds(10),
+        () -> assertEquals(true, evalOver(cel, self), cel));
   }
 
   @Test
