@@ -215,12 +215,12 @@ final class ConstraintResolver {
     }
     if (c instanceof LogicalTypesParser.CheckParenContext) {
       LogicalTypesParser.CheckParenContext paren = (LogicalTypesParser.CheckParenContext) c;
-      // Indirection (e.g. `(arr)[0]`) requires receiver-aware resolution
-      // we don't do here — defer.
-      if (paren.indirection() != null) {
-        return null;
+      Schema inner = tryResolveCheckExprType(paren.check_expr(), vctx);
+      if (paren.indirection() == null) {
+        return inner;
       }
-      return tryResolveCheckExprType(paren.check_expr(), vctx);
+      inner = resolveIfNamedRef(inner, vctx);
+      return inner == null ? null : resolveIndirection(inner, paren.indirection(), vctx);
     }
     if (c instanceof LogicalTypesParser.CheckFuncContext) {
       return tryResolveFuncReturnType(
@@ -980,10 +980,14 @@ final class ConstraintResolver {
     if (current == null) {
       return null;
     }
-    if (col.indirection() == null) {
-      return current;
-    }
-    for (LogicalTypesParser.Indirection_elContext el : col.indirection().indirection_el()) {
+    return col.indirection() == null ? current
+        : resolveIndirection(current, col.indirection(), vctx);
+  }
+
+  // A type after an indirection's steps, or null when a step doesn't resolve.
+  private static Schema resolveIndirection(Schema current,
+      LogicalTypesParser.IndirectionContext indirection, ConstraintValidationContext vctx) {
+    for (LogicalTypesParser.Indirection_elContext el : indirection.indirection_el()) {
       if (el.colid() != null && current.getType() == Schema.Type.STRUCT) {
         Schema.Field nested = current.getField(colidName(el));
         if (nested == null) {

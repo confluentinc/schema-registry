@@ -3440,6 +3440,26 @@ class CheckConstraintTest {
   }
 
   @Test
+  void aCastOfAParenthesizedFieldIsNullWhenTheFieldIs() throws Exception {
+    // A parenthesized field resolves to its type as an unparenthesized one does, rather than
+    // being taken for a VARIANT, whose CAST can be NULL however its inputs are.
+    String columns = "ns STRING, r STRUCT(a INT)";
+    Map<String, Object> present = new HashMap<>();
+    present.put("ns", null);
+    present.put("r", null);
+    for (Map<String, Object> self : List.of(present, Map.<String, Object>of())) {
+      Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
+      for (String sql : List.of("(CAST((r).a AS STRING) = 'q' OR ns = 'q') IS NULL",
+          "COALESCE(CAST((r).a AS STRING), 'z') = 'z'", "CAST((r).a AS STRING) IS NULL")) {
+        String cel = translateCheckOver(columns, sql);
+        assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+            CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars),
+            sql + " on " + self.keySet() + " -> " + cel);
+      }
+    }
+  }
+
+  @Test
   void aNullGuardDoesNotHideATypeError() {
     // The dyn branch a NULL GREATEST, LEAST, COALESCE or NULLIF gives would pass any type; the
     // strict check sees each call's own result type instead.
