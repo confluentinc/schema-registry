@@ -2859,9 +2859,11 @@ final class ConstraintEmitter {
   }
 
   // An operand of size() or in given as dyn when it's a subscript, as typedCollection gives
-  // one; any other keeps its type, for the strict check.
+  // one; any other, or any in the type-only pass, keeps its type for the strict check.
   static String typedSubscript(CharSequence cel) {
-    return cel.charAt(cel.length() - 1) == ']' ? "dyn(" + cel + ")" : cel.toString();
+    ConstraintValidationContext vctx = EMIT_VCTX.get();
+    return cel.charAt(cel.length() - 1) == ']' && (vctx == null || !vctx.isTypeOnly())
+        ? "dyn(" + cel + ")" : cel.toString();
   }
 
   // An IN whose three-valued CEL gives NULL as null.
