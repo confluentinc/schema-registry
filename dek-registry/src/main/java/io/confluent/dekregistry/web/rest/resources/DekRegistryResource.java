@@ -30,6 +30,7 @@ import io.confluent.dekregistry.client.rest.entities.UpdateKekRequest;
 import io.confluent.dekregistry.storage.DataEncryptionKey;
 import io.confluent.dekregistry.storage.DekRegistry;
 import io.confluent.dekregistry.storage.KeyEncryptionKey;
+import io.confluent.dekregistry.storage.KmsPropsRedactor;
 import io.confluent.dekregistry.storage.exceptions.AlreadyExistsException;
 import io.confluent.dekregistry.storage.exceptions.KeyNotSoftDeletedException;
 import io.confluent.dekregistry.storage.exceptions.KeyReferenceExistsException;
@@ -50,10 +51,10 @@ import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.SortedMap;
-import java.util.TreeMap;
 import java.util.stream.Collectors;
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -147,7 +148,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
     if (key == null) {
       throw DekRegistryErrors.keyNotFoundException(name);
     }
-    return dekRegistry.toKekEntity(key);
+    return KmsPropsRedactor.redact(dekRegistry.toKekEntity(key));
   }
 
   @GET
@@ -363,13 +364,16 @@ public class DekRegistryResource extends SchemaRegistryResource {
 
     try {
       if (request.isShared() && testSharing) {
+        SortedMap<String, String> kmsProps = DekRegistry.resolveKmsProps(
+            dekRegistry.getKek(request.getName(), true),
+            request.getKmsProps() != null ? request.getKmsProps() : Collections.emptyMap());
         KeyEncryptionKey kek = new KeyEncryptionKey(request.getName(), request.getKmsType(),
-            request.getKmsKeyId(), new TreeMap<>(request.getKmsProps()), null, true, false);
+            request.getKmsKeyId(), kmsProps, null, true, false);
         dekRegistry.testKek(kek);
       }
 
       Kek kek = dekRegistry.createKekOrForward(request, headerProperties);
-      asyncResponse.resume(kek);
+      asyncResponse.resume(KmsPropsRedactor.redact(kek));
     } catch (AlreadyExistsException e) {
       throw DekRegistryErrors.alreadyExistsException(e.getMessage());
     } catch (TooManyKeysException e) {
@@ -405,7 +409,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
 
     try {
       dekRegistry.testKek(kek);
-      asyncResponse.resume(kek);
+      asyncResponse.resume(KmsPropsRedactor.redact(kek));
     } catch (DekGenerationException e) {
       throw DekRegistryErrors.dekGenerationException(e.getMessage());
     } catch (InvalidKeyException e) {
@@ -534,9 +538,8 @@ public class DekRegistryResource extends SchemaRegistryResource {
     try {
       boolean shared = request.isShared() != null ? request.isShared() : oldKek.isShared();
       if (shared && testSharing) {
-        SortedMap<String, String> kmsProps = request.getKmsProps() != null
-            ? new TreeMap<>(request.getKmsProps())
-            : oldKek.getKmsProps();
+        SortedMap<String, String> kmsProps =
+            DekRegistry.resolveKmsProps(oldKek, request.getKmsProps());
         KeyEncryptionKey newKek = new KeyEncryptionKey(name, oldKek.getKmsType(),
             oldKek.getKmsKeyId(), kmsProps, null, true, false);
         dekRegistry.testKek(newKek);
@@ -546,7 +549,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
       if (kek == null) {
         throw DekRegistryErrors.keyNotFoundException(name);
       }
-      asyncResponse.resume(kek);
+      asyncResponse.resume(KmsPropsRedactor.redact(kek));
     } catch (AlreadyExistsException e) {
       throw DekRegistryErrors.alreadyExistsException(e.getMessage());
     } catch (SchemaRegistryException e) {
