@@ -3785,6 +3785,22 @@ class CheckConstraintTest {
   }
 
   @Test
+  void eachRaisingOperandKeepsItsErrorBesideANull() throws Exception {
+    // An operand that can raise an error, one of each kind, still fails the CHECK beside a NULL.
+    String columns = "ni INT, i INT NOT NULL, z INT NOT NULL, s STRING NOT NULL, "
+        + "p STRING NOT NULL, d DECIMAL(10, 2) NOT NULL, bi BIGINT NOT NULL";
+    Map<String, Object> self = Map.of("i", 5, "z", 0, "s", "abc", "p", "(",
+        "d", CelDecimal.of(new BigDecimal("1.00")), "bi", Long.MAX_VALUE);
+    for (String raising : List.of("i / z > 0", "i % z > 0", "CAST(s AS INT) > 0",
+        "PARSE_JSON(s) IS NOT NULL", "VARIANT_GET(TRY_PARSE_JSON('{}'), p) IS NOT NULL",
+        "MATCHES(s, p)", "ROUND(d, bi) > 0",
+        "TRY_VARIANT_GET(TRY_PARSE_JSON('{}'), p RETURNING INT) > 0")) {
+      String cel = translateCheckOver(columns, "ni > 0 OR " + raising);
+      assertThrows(CelEvaluationException.class, () -> evalOver(cel, self), raising + " -> " + cel);
+    }
+  }
+
+  @Test
   void aReservedNameOfANullStructIsNull() throws Exception {
     // has() can't take r["in"], so the path is tested step by step: a NULL r gives NULL.
     String columns = "r STRUCT(`in` INT NOT NULL)";
@@ -3806,8 +3822,10 @@ class CheckConstraintTest {
     assertEquals(true, evalOver(inCase, Map.of("t", false, "i", 0)), inCase);
     assertEquals(true, evalOver(inCase, Map.of("t", true, "i", 5)), inCase);
     assertEquals(false, evalOver(inCase, Map.of("t", false, "i", 5)), inCase);
+    assertTrue(inCase.contains("(this.t ? (true ? dyn(null) : dyn(null)) : this.i)"), inCase);
     for (String sql : List.of("COALESCE(CAST(NULL AS INT), i) = i",
-        "(CAST(NULL AS INT)) IS NULL")) {
+        "(CAST(NULL AS INT)) IS NULL", "CAST(NULL AS BOOLEAN) OR t",
+        "COALESCE(CAST(NULL AS BOOLEAN), t) = t", "CAST(NULL AS BYTES) IS NULL")) {
       String cel = translateCheckOver(columns, sql);
       assertEquals(true, evalOver(cel, Map.of("t", false, "i", 5)), sql + " -> " + cel);
     }
