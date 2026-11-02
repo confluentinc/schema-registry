@@ -154,9 +154,9 @@ class ProtoCheckPresenceTest {
   }
 
   @Test
-  void anUnsetInSubjectOverAnArrayIsNull() {
-    // An unset nullable subject makes an IN over an array NULL, but an empty array still holds
-    // no match.
+  void anUnsetInSubjectOverAnArrayIsNullUnlessItIsEmpty() {
+    // An unset nullable subject makes an IN over an array NULL, but over an empty one FALSE, as
+    // SQL's = ANY over no elements is.
     String ddl = "STRUCT T (ni INT, arr INT NOT NULL ARRAY NOT NULL, "
         + "CONSTRAINT c1 CHECK ((ni IN arr) IS NULL), "
         + "CONSTRAINT c2 CHECK ((ni NOT IN arr) IS NULL), "
@@ -165,13 +165,19 @@ class ProtoCheckPresenceTest {
     visitor.visit(LogicalTypesParserFactory.parse(ddl));
     ProtobufSchema schema = LogicalTypeToProtoConverter.fromLogicalType(
         visitor.toLogicalType(), "T");
-    DynamicMessage message = DynamicMessage.newBuilder(schema.toDescriptor()).build();
-    assertEquals(List.of(), schema.validateMessage(new CelValidator(), message));
+    Descriptor descriptor = schema.toDescriptor();
+    DynamicMessage one = DynamicMessage.newBuilder(descriptor)
+        .addRepeatedField(descriptor.findFieldByName("arr"), 1).build();
+    assertEquals(List.of(), schema.validateMessage(new CelValidator(), one));
+    DynamicMessage empty = DynamicMessage.newBuilder(descriptor).build();
+    assertEquals("[<root>: c1: (ni IN arr) IS NULL, <root>: c2: (ni NOT IN arr) IS NULL]",
+        String.valueOf(schema.validateMessage(new CelValidator(), empty)));
   }
 
   @Test
   void aBooleanCoalesceMayBeTheWholeCheck() {
-    // An unset nullable BOOLEAN or IN subject is NULL, so COALESCE gives its fallback.
+    // An unset nullable BOOLEAN or IN subject is NULL, so COALESCE gives its fallback, but an
+    // IN over an empty array is FALSE.
     String ddl = "STRUCT T (ni INT, nt BOOLEAN, arr INT NOT NULL ARRAY NOT NULL, "
         + "CONSTRAINT c1 CHECK (COALESCE(ni IN arr, TRUE)), "
         + "CONSTRAINT c2 CHECK (COALESCE(nt, TRUE)));";
@@ -179,8 +185,13 @@ class ProtoCheckPresenceTest {
     visitor.visit(LogicalTypesParserFactory.parse(ddl));
     ProtobufSchema schema = LogicalTypeToProtoConverter.fromLogicalType(
         visitor.toLogicalType(), "T");
-    DynamicMessage message = DynamicMessage.newBuilder(schema.toDescriptor()).build();
-    assertEquals(List.of(), schema.validateMessage(new CelValidator(), message));
+    Descriptor descriptor = schema.toDescriptor();
+    DynamicMessage one = DynamicMessage.newBuilder(descriptor)
+        .addRepeatedField(descriptor.findFieldByName("arr"), 1).build();
+    assertEquals(List.of(), schema.validateMessage(new CelValidator(), one));
+    DynamicMessage empty = DynamicMessage.newBuilder(descriptor).build();
+    assertEquals("[<root>: c1: COALESCE(ni IN arr, TRUE)]",
+        String.valueOf(schema.validateMessage(new CelValidator(), empty)));
   }
 
   @Test

@@ -1075,7 +1075,8 @@ class CheckConstraintTest {
         + "CHECK (value IN tags)"
         + ");";
     Schema schema = parseScript(script).getRootSchema();
-    assertEquals("this.value in this.tags", schema.getRules().get(0).getExpr());
+    assertEquals("(size(this.tags) == 0 ? false : this.value in this.tags)",
+        schema.getRules().get(0).getExpr());
   }
 
   @Test
@@ -1086,7 +1087,8 @@ class CheckConstraintTest {
         + "CHECK (value NOT IN tags)"
         + ");";
     Schema schema = parseScript(script).getRootSchema();
-    assertEquals("!(this.value in this.tags)", schema.getRules().get(0).getExpr());
+    assertEquals("!(size(this.tags) == 0 ? false : this.value in this.tags)",
+        schema.getRules().get(0).getExpr());
   }
 
   // ---------------------------------------------------------------------
@@ -1378,6 +1380,12 @@ class CheckConstraintTest {
       // So do the NULL tests of AND and OR, a CASE, and a quantifier's body.
       translateCheckOver(columns, nest("t", "((%s) AND t) IS NULL"));
       translateCheckOver(columns, nest("i", "CASE WHEN %s > 0 THEN 1 ELSE 2 END") + " = 1");
+      // And a quantifier's NULL test, of each one compared in another's body.
+      String quantifiers = nest("t", "EVERY(an, e, %s = TRUE)", 30);
+      translateCheckOver(columns, "CASE WHEN " + quantifiers + " THEN 1 ELSE 2 END = 1");
+      translateCheckOver(columns, "(" + quantifiers + " OR i > 0) IS NOT NULL");
+      translateCheckOver(columns, "CASE WHEN " + nest("t", "ANY(an, e, %s IN (TRUE))", 30)
+          + " THEN 1 ELSE 2 END = 1");
 
       for (String tooLarge : List.of(nest("d", "NULLIF(%s, d)") + " = d",
           nest("d", "NULLIF(d, %s)") + " = d", nest("t", "((%s) AND i > 0) IS NULL"),
@@ -3309,14 +3317,15 @@ class CheckConstraintTest {
   @Test
   void anInOverAnArrayWithANullIsThreeValued() throws Exception {
     // An IN over an array is TRUE on a match, else NULL when its subject, the array or an
-    // element is NULL, as an IN over a list is; with elements never NULL, NULL exactly when its
-    // subject or the array is.
+    // element is NULL, as an IN over a list is; with elements never NULL, NULL when the array
+    // is, or its subject is and the array isn't empty.
     String columns = "i INT NOT NULL, ni INT, arr INT NOT NULL ARRAY NOT NULL, "
         + "an INT ARRAY NOT NULL, na INT NOT NULL ARRAY";
     assertEquals("((this.i in this.an) ? true : ((this.an).exists(v, dyn(v) == null) ? "
         + "dyn(null) : false))", translateCheckOver(columns, "i IN an"));
-    // One whose elements are never NULL is emitted as before.
-    assertEquals("!(this.ni in this.arr)", translateCheckOver(columns, "ni NOT IN arr"));
+    // One whose elements are never NULL is two-valued.
+    assertEquals("!(size(this.arr) == 0 ? false : this.ni in this.arr)",
+        translateCheckOver(columns, "ni NOT IN arr"));
     Map<String, Object> absent = new HashMap<>();
     absent.put("i", 2);
     absent.put("arr", List.of(1, -2));
@@ -3577,6 +3586,45 @@ class CheckConstraintTest {
   }
 
   @Test
+  void aNullInAnEmptyCollectionIsFalse() throws Exception {
+    // SQL's = ANY over no elements is FALSE whatever its subject, as ANY() is, so a NULL IN an
+    // empty array, MULTISET or MAP is FALSE, and NULL only in a non-empty one.
+    String columns = "ni INT, ns STRING, arr INT NOT NULL ARRAY NOT NULL, an INT ARRAY NOT NULL, "
+        + "ms STRING NOT NULL MULTISET NOT NULL, nms STRING NOT NULL MULTISET, "
+        + "mv MAP<STRING, INT> NOT NULL";
+    assertEquals("(((!has(this.ni) || dyn(this.ni) == null) && size(this.arr) > 0) ? true"
+            + " : dyn(((size(this.arr) == 0 ? false : this.ni in this.arr))) == null)",
+        translateCheckOver(columns, "(ni IN arr) IS NULL"));
+    List<String> empty = List.of("ni NOT IN arr", "ni NOT IN an", "NOT (ni IN an)",
+        "COALESCE(ni NOT IN arr, FALSE)", "(ni NOT IN arr) IS NOT NULL",
+        "COALESCE(ni IN an, TRUE) = FALSE", "(ni IN an) IS NOT NULL",
+        "CASE WHEN ni IN arr THEN 1 ELSE 2 END = 2", "ns NOT IN ms", "(ns IN ms) IS NOT NULL",
+        "COALESCE(ns IN mv, TRUE) = FALSE", "ANY(arr, x, x = ni) IS NOT NULL",
+        "(ns IN nms) IS NULL");
+    List<String> nonEmpty = List.of("(ni IN arr) IS NULL", "(ni NOT IN an) IS NULL",
+        "COALESCE(ni IN arr, TRUE)", "(ns IN ms) IS NULL", "(ns NOT IN mv) IS NULL",
+        "COALESCE(ns IN mv, TRUE)", "ANY(arr, x, x = ni) IS NULL", "(ns IN nms) IS NULL");
+    for (List<String> sqls : List.of(empty, nonEmpty)) {
+      boolean none = sqls == empty;
+      Map<String, Object> absent = new HashMap<>();
+      absent.put("arr", none ? List.of() : List.of(1));
+      absent.put("an", none ? List.of() : Arrays.asList(1, null));
+      absent.put("ms", none ? Map.of() : Map.of("a", 1));
+      absent.put("mv", none ? Map.of() : Map.of("a", 1));
+      Map<String, Object> present = new HashMap<>(absent);
+      present.put("ni", null);
+      present.put("ns", null);
+      present.put("nms", null);
+      for (Map<String, Object> self : List.of(present, absent)) {
+        for (String sql : sqls) {
+          String cel = translateCheckOver(columns, sql);
+          assertEquals(true, evalOver(cel, self), sql + " on " + self + " -> " + cel);
+        }
+      }
+    }
+  }
+
+  @Test
   void anIsNullOperandIsStillEvaluated() throws Exception {
     // IS NULL of an expression tells its NULL from its inputs but still evaluates it, so a value
     // SQL fails on, such as bad JSON or a division by zero, fails here too.
@@ -3612,17 +3660,17 @@ class CheckConstraintTest {
   @Test
   void aMapWithoutStringKeysIsNotReadAsAMap() {
     // Avro and JSON hold a MAP without string keys as entries of a key and its value, which a
-    // subscript or quantifier would read as a list.
+    // subscript, quantifier or IN would read as a list.
     String columns = "m MAP<INT, STRING> NOT NULL, nm MAP<INT, STRING>, "
         + "sm MAP<STRING, INT> NOT NULL, r STRUCT(m MAP<BIGINT, INT>) NOT NULL";
     for (String sql : List.of("m[1] = 'a'", "EVERY(m, k, k > 0)", "ANY(nm, k, k > 0)",
-        "(m)[1] IS NULL", "r.m[1] > 0", "EVERY(sm, k, ONE(m, j, j > 0))")) {
+        "(m)[1] IS NULL", "r.m[1] > 0", "EVERY(sm, k, ONE(m, j, j > 0))", "1 IN m")) {
       ValidationException e = assertThrows(ValidationException.class,
           () -> translateCheckOver(columns, sql), sql);
       assertTrue(e.getMessage().contains("keys is not supported"), e.getMessage());
     }
     for (String sql : List.of("nm IS NULL", "sm['a'] > 0",
-        "EVERY(sm, k, sm[k] > 0)")) {
+        "EVERY(sm, k, sm[k] > 0)", "'a' IN sm")) {
       translateCheckOver(columns, sql);
     }
   }
