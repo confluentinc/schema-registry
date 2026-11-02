@@ -427,9 +427,9 @@ class StrictCelCheckSmokeTest {
   }
 
   @Test void allowsTernaryWithDynNull() {
-    // Our NULLIF emit uses dyn(null)/dyn(value) — branches unify on dyn.
+    // Our NULLIF emit uses dyn(null) — branches unify on dyn.
     CelValidator.assertValidStrict(
-        "(this.active ? dyn(null) : dyn(this.x)) != null", fixture());
+        "(this.active ? dyn(null) : this.x) != null", fixture());
   }
 
   @Test void rejectsTernaryCrossCategory() {
