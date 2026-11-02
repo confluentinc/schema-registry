@@ -27,6 +27,7 @@ import org.antlr.v4.runtime.tree.ParseTree;
 import org.antlr.v4.runtime.tree.TerminalNode;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
@@ -2401,56 +2402,60 @@ final class ConstraintEmitter {
   private static void emitCondition(
       LogicalTypesParser.Check_exprContext cond, StringBuilder sb) {
     StringBuilder whenTrue = new StringBuilder();
-    if (emitTruth(cond.check_expr_or(), true, whenTrue)) {
+    if ((emitTruth(cond.check_expr_or(), true, whenTrue) & MAY_BE_NULL) != 0) {
       sb.append(whenTrue);
     } else {
       emitWrappedReceiver(cond, sb);
     }
   }
 
+  // emitTruth's result: a predicate may be NULL; a predicate's NULL can't be told.
+  static final int MAY_BE_NULL = 1;
+  static final int UNTOLD = 2;
+
   /**
    * A condition true only when SQL's is {@code truth} (TRUE, or with {@code truth} false,
    * FALSE): a predicate that may be NULL is false then, while NOT, AND and OR keep SQL's three
-   * values. Returns whether any predicate may be NULL; one whose inputs don't tell is emitted as
-   * is, as a NULL or missing input fails it either way.
+   * values. Returns {@link #MAY_BE_NULL} and {@link #UNTOLD} flags; a predicate whose inputs
+   * don't tell is emitted as is, as a NULL or missing input fails it either way.
    */
-  static boolean emitTruth(
+  static int emitTruth(
       LogicalTypesParser.Check_expr_orContext or, boolean truth, StringBuilder sb) {
     List<LogicalTypesParser.Check_expr_andContext> ands = or.check_expr_and();
     if (ands.size() == 1) {
       return emitTruth(ands.get(0), truth, sb);
     }
-    boolean guarded = false;
+    int flags = 0;
     sb.append('(');
     for (int i = 0; i < ands.size(); i++) {
       if (i > 0) {
         sb.append(truth ? " || " : " && ");
       }
-      guarded |= emitTruth(ands.get(i), truth, sb);
+      flags |= emitTruth(ands.get(i), truth, sb);
     }
     sb.append(')');
-    return guarded;
+    return flags;
   }
 
-  private static boolean emitTruth(
+  private static int emitTruth(
       LogicalTypesParser.Check_expr_andContext and, boolean truth, StringBuilder sb) {
     List<LogicalTypesParser.Check_expr_unary_notContext> nots = and.check_expr_unary_not();
     if (nots.size() == 1) {
       return emitTruth(nots.get(0), truth, sb);
     }
-    boolean guarded = false;
+    int flags = 0;
     sb.append('(');
     for (int i = 0; i < nots.size(); i++) {
       if (i > 0) {
         sb.append(truth ? " && " : " || ");
       }
-      guarded |= emitTruth(nots.get(i), truth, sb);
+      flags |= emitTruth(nots.get(i), truth, sb);
     }
     sb.append(')');
-    return guarded;
+    return flags;
   }
 
-  private static boolean emitTruth(
+  private static int emitTruth(
       LogicalTypesParser.Check_expr_unary_notContext not, boolean truth, StringBuilder sb) {
     if (not instanceof LogicalTypesParser.CheckExprNotContext) {
       return emitTruth(
@@ -2473,7 +2478,11 @@ final class ConstraintEmitter {
       sb.append("(dyn(");
       visitIs(is, sb);
       sb.append(") == ").append(truth).append(')');
-      return true;
+      return MAY_BE_NULL;
+    }
+    if (is.IS() == null && is.check_expr_compare().check_expr_between().size() == 1
+        && is.check_expr_compare().check_expr_between(0).BETWEEN() != null) {
+      return emitBetweenTruth(is.check_expr_compare().check_expr_between(0), truth, sb);
     }
     String isNull = is.IS() != null ? null : ConstraintNullTest.of(is.check_expr_compare());
     boolean guarded = isNull != null && !ConstraintNullTest.NEVER.equals(isNull);
@@ -2484,7 +2493,83 @@ final class ConstraintEmitter {
     sb.append(truth ? "(" : "!(");
     visitIs(is, sb);
     sb.append("))");
-    return guarded;
+    return guarded ? MAY_BE_NULL : is.IS() == null && isNull == null ? UNTOLD : 0;
+  }
+
+  /**
+   * {@link #emitTruth} of a BETWEEN, SQL's {@code lo <= a AND a <= hi}: TRUE when both hold,
+   * FALSE when either fails, whatever the other is. SYMMETRIC is NULL when any operand is.
+   */
+  static int emitBetweenTruth(
+      LogicalTypesParser.Check_expr_betweenContext between, boolean truth, StringBuilder sb) {
+    List<LogicalTypesParser.Check_expr_inContext> ins = between.check_expr_in();
+    String a = ConstraintNullTest.of(ins.get(0));
+    String lo = ConstraintNullTest.of(ins.get(1));
+    String hi = ConstraintNullTest.of(ins.get(2));
+    String anyNull = a == null || lo == null || hi == null ? null
+        : ConstraintNullTest.any(Arrays.asList(a, lo, hi));
+    if (anyNull == null || ConstraintNullTest.NEVER.equals(anyNull)) {
+      sb.append(truth ? "(" : "!(");
+      visitBetween(between, sb);
+      sb.append(')');
+      return anyNull == null ? UNTOLD : 0;
+    }
+    StringBuilder lower = new StringBuilder();
+    emitBetweenLe(ins, 1, 0, lower);
+    StringBuilder upper = new StringBuilder();
+    emitBetweenLe(ins, 0, 2, upper);
+    boolean holds = truth != (between.NOT() != null);
+    if (between.SYMMETRIC() != null) {
+      StringBuilder ordered = new StringBuilder("(");
+      emitBetweenLe(ins, 1, 2, ordered);
+      ordered.append(" ? (").append(lower).append(" && ").append(upper).append(") : (");
+      emitBetweenLe(ins, 2, 0, ordered);
+      ordered.append(" && ");
+      emitBetweenLe(ins, 0, 1, ordered);
+      ordered.append("))");
+      sb.append('(').append(anyNull).append(" ? false : ").append(holds ? "" : "!")
+          .append(ordered).append(')');
+    } else if (holds) {
+      sb.append('(').append(anyNull).append(" ? false : (").append(lower).append(" && ")
+          .append(upper).append("))");
+    } else {
+      sb.append('(');
+      falseIfNull(ConstraintNullTest.either(lo, a), "!(" + lower + ")", sb);
+      sb.append(" || ");
+      falseIfNull(ConstraintNullTest.either(a, hi), "!(" + upper + ")", sb);
+      sb.append(')');
+    }
+    return MAY_BE_NULL;
+  }
+
+  // p, or false when isNull.
+  private static void falseIfNull(String isNull, String p, StringBuilder sb) {
+    if (ConstraintNullTest.NEVER.equals(isNull)) {
+      sb.append(p);
+    } else {
+      sb.append('(').append(isNull).append(" ? false : ").append(p).append(')');
+    }
+  }
+
+  // ins[x] <= ins[y] for BETWEEN operands, compared in the type visitBetween compares them in.
+  private static void emitBetweenLe(
+      List<LogicalTypesParser.Check_expr_inContext> ins, int x, int y, StringBuilder sb) {
+    ConstraintValidationContext vctx = EMIT_VCTX.get();
+    String common = (vctx != null) ? numericCommonOf(ins, vctx) : null;
+    if ("decimal".equals(common)) {
+      emitDecimalLe(ins.get(x), ins.get(y), sb);
+    } else if ("double".equals(common)) {
+      emitDoubleLe(ins.get(x), ins.get(y), sb);
+    } else if (vctx != null
+        && (ConstraintResolver.subtreeHasTemporal(ins.get(0), vctx)
+            || ConstraintResolver.subtreeHasTemporal(ins.get(1), vctx)
+            || ConstraintResolver.subtreeHasTemporal(ins.get(2), vctx))) {
+      emitTimestampLe(ins.get(x), ins.get(y), sb);
+    } else {
+      emitParenIn(ins.get(x), sb);
+      sb.append(" <= ");
+      emitParenIn(ins.get(y), sb);
+    }
   }
 
   /**

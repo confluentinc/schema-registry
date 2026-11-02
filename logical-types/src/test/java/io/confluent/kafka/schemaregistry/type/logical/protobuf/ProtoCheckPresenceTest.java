@@ -139,6 +139,21 @@ class ProtoCheckPresenceTest {
   }
 
   @Test
+  void anUnsetBetweenOrLogicOperandIsNull() {
+    // An unset nullable operand makes BETWEEN, AND or OR NULL unless the rest decides it.
+    String ddl = "STRUCT T (i INT NOT NULL, s STRING NOT NULL, ni INT, ns STRING, "
+        + "CONSTRAINT c1 CHECK ((ni BETWEEN 0 AND 5) IS NULL), "
+        + "CONSTRAINT c2 CHECK (((ns LIKE 'a%') OR (s LIKE 'a%')) IS NULL), "
+        + "CONSTRAINT c3 CHECK ((i BETWEEN ni AND -1) IS NOT NULL));";
+    LogicalTypesSchemaVisitor visitor = new LogicalTypesSchemaVisitor();
+    visitor.visit(LogicalTypesParserFactory.parse(ddl));
+    ProtobufSchema schema = LogicalTypeToProtoConverter.fromLogicalType(
+        visitor.toLogicalType(), "T");
+    DynamicMessage message = DynamicMessage.newBuilder(schema.toDescriptor()).build();
+    assertEquals(List.of(), schema.validateMessage(new CelValidator(), message));
+  }
+
+  @Test
   void anUnsetNullifArgumentIsNull() {
     // NULLIF tests an unset nullable field, which reads as its zero, but not a NOT NULL zero.
     String ddl = "STRUCT T (i INT NOT NULL, ni INT, "

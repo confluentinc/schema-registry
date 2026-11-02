@@ -35,9 +35,10 @@ import org.antlr.v4.runtime.tree.ParseTree;
  * tell. COALESCE is NULL when all its arguments are.
  *
  * <p>CASE, NULLIF and an IN with an element that may be NULL give NULL as null, so are tested by
- * their value. {@code "false"} means the expression is never NULL. Null means it can't be told
- * without evaluating it: AND, OR, BETWEEN, an IN over an array or whose inputs don't tell, a
- * subscript, a quantifier, or a VARIANT function or cast.
+ * their value. AND, OR and BETWEEN are NULL when neither definitely TRUE nor definitely FALSE.
+ * {@code "false"} means the expression is never NULL. Null means it can't be told without
+ * evaluating it: an IN over an array or whose inputs don't tell, a subscript, a quantifier, a
+ * VARIANT function or cast, or any of these over one.
  */
 final class ConstraintNullTest {
 
@@ -58,13 +59,14 @@ final class ConstraintNullTest {
 
   static String of(LogicalTypesParser.Check_exprContext ctx) {
     LogicalTypesParser.Check_expr_orContext or = ctx.check_expr_or();
-    if (or.check_expr_and().size() > 1) {
-      return null;
+    if (or.check_expr_and().size() > 1
+        || or.check_expr_and(0).check_expr_unary_not().size() > 1) {
+      StringBuilder whenTrue = new StringBuilder();
+      StringBuilder whenFalse = new StringBuilder();
+      return neither(ConstraintEmitter.emitTruth(or, true, whenTrue)
+          | ConstraintEmitter.emitTruth(or, false, whenFalse), whenTrue, whenFalse);
     }
     LogicalTypesParser.Check_expr_andContext and = or.check_expr_and(0);
-    if (and.check_expr_unary_not().size() > 1) {
-      return null;
-    }
     LogicalTypesParser.Check_expr_unary_notContext not = and.check_expr_unary_not(0);
     while (not instanceof LogicalTypesParser.CheckExprNotContext) {
       not = ((LogicalTypesParser.CheckExprNotContext) not).check_expr_unary_not();
@@ -78,7 +80,8 @@ final class ConstraintNullTest {
     List<String> tests = new ArrayList<>();
     for (LogicalTypesParser.Check_expr_betweenContext between : ctx.check_expr_between()) {
       if (between.BETWEEN() != null) {
-        return null;
+        tests.add(ofBetween(between));
+        continue;
       }
       LogicalTypesParser.Check_expr_inContext in = between.check_expr_in(0);
       if (in.IN() != null && !elementsNeverNull(in)) {
@@ -94,6 +97,10 @@ final class ConstraintNullTest {
       tests.add(of(in.check_expr_like()));
     }
     return any(tests);
+  }
+
+  static String of(LogicalTypesParser.Check_expr_inContext in) {
+    return in.IN() == null ? of(in.check_expr_like()) : null;
   }
 
   static String of(LogicalTypesParser.Check_expr_likeContext like) {
@@ -289,6 +296,29 @@ final class ConstraintNullTest {
   private static boolean isVariant(LogicalTypesParser.Check_exprContext operand) {
     Schema type = ConstraintResolver.tryResolveCheckExprType(operand, EMIT_VCTX.get());
     return type == null || type.getType() == Schema.Type.VARIANT;
+  }
+
+  // SYMMETRIC, or with bounds never NULL, NULL exactly when an operand is; else by Kleene's AND.
+  private static String ofBetween(LogicalTypesParser.Check_expr_betweenContext between) {
+    List<LogicalTypesParser.Check_expr_inContext> ins = between.check_expr_in();
+    String lo = of(ins.get(1));
+    String hi = of(ins.get(2));
+    if (between.SYMMETRIC() != null || NEVER.equals(lo) && NEVER.equals(hi)) {
+      return any(Arrays.asList(of(ins.get(0)), lo, hi));
+    }
+    StringBuilder whenTrue = new StringBuilder();
+    StringBuilder whenFalse = new StringBuilder();
+    return neither(ConstraintEmitter.emitBetweenTruth(between, true, whenTrue)
+        | ConstraintEmitter.emitBetweenTruth(between, false, whenFalse), whenTrue, whenFalse);
+  }
+
+  // NULL when neither definitely TRUE nor definitely FALSE, from emitTruth's flags.
+  private static String neither(int flags, CharSequence whenTrue, CharSequence whenFalse) {
+    if ((flags & ConstraintEmitter.UNTOLD) != 0) {
+      return null;
+    }
+    return (flags & ConstraintEmitter.MAY_BE_NULL) == 0 ? NEVER
+        : "(!" + whenTrue + " && !" + whenFalse + ")";
   }
 
   private static boolean elementsNeverNull(LogicalTypesParser.Check_expr_inContext in) {

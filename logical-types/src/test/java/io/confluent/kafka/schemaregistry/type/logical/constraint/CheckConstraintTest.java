@@ -3240,6 +3240,38 @@ class CheckConstraintTest {
   }
 
   @Test
+  void aBetweenOrLogicOverANullIsThreeValued() throws Exception {
+    // BETWEEN is FALSE when either comparison is and AND, OR and NOT follow Kleene's logic, so a
+    // NULL makes one NULL only when the rest doesn't decide it.
+    String columns = "i INT NOT NULL, x DOUBLE NOT NULL, s STRING NOT NULL, t BOOLEAN NOT NULL, "
+        + "ni INT, nb BIGINT, nd DECIMAL(10, 2), nx DOUBLE, ns STRING";
+    assertEquals("(!has(this.ni) || dyn(this.ni) == null)",
+        translateCheckOver(columns, "(ni BETWEEN 1 AND 2) IS NULL"));
+    Map<String, Object> absent = Map.of("i", 0, "x", 0.5, "s", "a", "t", true);
+    Map<String, Object> present = new HashMap<>(absent);
+    for (String col : List.of("ni", "nb", "nd", "nx", "ns")) {
+      present.put(col, null);
+    }
+    for (Map<String, Object> self : List.of(present, absent)) {
+      Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
+      for (String sql : List.of("(ni BETWEEN i AND ni) IS NULL",
+          "(nd BETWEEN SYMMETRIC x AND nb) IS NULL", "(nd BETWEEN 1 AND 2) IS NULL",
+          "((x BETWEEN nx AND 1) OR ('a' <> s)) IS NULL",
+          "((ns LIKE 'a%') AND (s LIKE 'a%')) IS NULL", "(x BETWEEN nx AND 0) IS NOT NULL",
+          "(x NOT BETWEEN 1 AND nx) IS NOT NULL", "(i BETWEEN nd AND -1) IS NOT NULL",
+          "((ns LIKE 'a%') AND (s LIKE 'b%')) IS NOT NULL", "((ns LIKE 'a%') OR t) IS NOT NULL",
+          "CASE WHEN x BETWEEN nx AND 1 THEN 1 ELSE 2 END = 2",
+          "CASE WHEN NOT (x BETWEEN nx AND 0) THEN 1 ELSE 2 END = 1",
+          "COALESCE((ns LIKE 'a%') AND t, FALSE) = FALSE")) {
+        String cel = translateCheckOver(columns, sql);
+        assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+            CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars),
+            sql + " on " + self.keySet() + " -> " + cel);
+      }
+    }
+  }
+
+  @Test
   void aNullGuardDoesNotHideATypeError() {
     // The dyn branch a NULL GREATEST, LEAST, COALESCE or NULLIF gives would pass any type; the
     // strict check sees each call's own result type instead.
