@@ -403,13 +403,16 @@ final class ConstraintFunctions {
               + "operands; for INT/DOUBLE only the single-argument form is "
               + "available (math." + shortName + " has no scale parameter).");
     }
+    if (args.size() == 2) {
+      refuseNonIntScale(args.get(1), vctx, sqlName);
+    }
     if (decimal) {
       sb.append("decimals.").append(shortName).append('(');
       ConstraintEmitter.emitDecimalValue(args.get(0), sb);
       if (args.size() == 2) {
         sb.append(", ");
         if ("round".equals(shortName)) {
-          emitRoundScale(args.get(0), t, args.get(1), sb);
+          emitRoundScale(args.get(1), sb);
         } else {
           visitCheckExpr(args.get(1), sb);
         }
@@ -423,23 +426,35 @@ final class ConstraintFunctions {
   }
 
   /**
-   * ROUND's scale, at most the value's: a larger one gives the value back, as in Flink, where
-   * decimals.round would pad it, taking time that grows with the scale. The declared scale of a
-   * column or field bounds it, else DECIMAL's 38.
+   * ROUND's scale, at most DECIMAL's 38: a larger one gives the value back, as in Flink, where
+   * decimals.round would pad it, taking time that grows with the scale. The declared scale
+   * doesn't bound it, as a JSON or Protobuf value carries its own, which may be larger.
    */
-  private static void emitRoundScale(LogicalTypesParser.Check_exprContext value, Schema type,
+  private static void emitRoundScale(
       LogicalTypesParser.Check_exprContext scale, StringBuilder sb) {
-    int bound = ConstraintResolver.selectionPath(value) != null && type.getScale() >= 0
-        ? type.getScale() : 38;
     Long literal = tryLiteralIntValue(scale);
     if (literal != null) {
-      sb.append(Math.min(literal, bound));
+      sb.append(Math.min(literal, 38));
       return;
     }
     StringBuilder emitted = new StringBuilder();
     visitCheckExpr(scale, emitted);
-    sb.append('(').append(emitted).append(" < ").append(bound).append(" ? ").append(emitted)
-        .append(" : ").append(bound).append(')');
+    sb.append('(').append(emitted).append(" < 38 ? ").append(emitted).append(" : 38)");
+  }
+
+  // Flink takes ROUND's and TRUNCATE's scale as an INT, refusing a BIGINT one or a literal out
+  // of range.
+  private static void refuseNonIntScale(LogicalTypesParser.Check_exprContext scale,
+      ConstraintValidationContext vctx, String sqlName) {
+    Long literal = tryLiteralIntValue(scale);
+    Schema type = vctx == null || literal != null ? null
+        : ConstraintResolver.tryResolveCheckExprType(scale, vctx);
+    boolean outOfRange = literal != null
+        && (literal < Integer.MIN_VALUE || literal > Integer.MAX_VALUE);
+    if (outOfRange || type != null && type.getType() == Schema.Type.BIGINT) {
+      throw locatedError(scale, sqlName + "() takes an INT scale, as in Flink: '"
+          + scale.getText() + "' is " + (outOfRange ? "out of its range." : "a BIGINT."));
+    }
   }
 
   /**

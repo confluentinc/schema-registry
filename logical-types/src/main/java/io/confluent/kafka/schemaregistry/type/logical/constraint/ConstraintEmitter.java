@@ -2661,8 +2661,9 @@ final class ConstraintEmitter {
   }
 
   // True if evaluating node can raise an error SQL raises too: a division, CAST, PARSE_JSON or
-  // VARIANT_GET, or TRY_VARIANT_GET with a path that isn't a literal, so isn't checked
-  // beforehand. Flink raises for neither a bad regex nor ROUND's or TRUNCATE's scale.
+  // VARIANT_GET, TRY_VARIANT_GET with a path that isn't a literal, so isn't checked beforehand,
+  // or ROUND or TRUNCATE with a scale that isn't a literal at least 0, as Flink raises for a
+  // very negative one. Flink gives FALSE for a bad regex.
   static boolean mayRaise(ParseTree node) {
     if (node instanceof LogicalTypesParser.FuncCastContext
         || node instanceof LogicalTypesParser.FuncVariantGetContext) {
@@ -2690,7 +2691,17 @@ final class ConstraintEmitter {
   }
 
   private static boolean raises(LogicalTypesParser.Func_applicationContext app) {
-    return "PARSE_JSON".equalsIgnoreCase(app.identifier().getText());
+    String name = app.identifier().getText().toUpperCase(java.util.Locale.ROOT);
+    if ("PARSE_JSON".equals(name)) {
+      return true;
+    }
+    List<LogicalTypesParser.Check_exprContext> args = app.check_expr_list() == null
+        ? java.util.Collections.emptyList() : app.check_expr_list().check_expr();
+    if (("ROUND".equals(name) || "TRUNCATE".equals(name)) && args.size() == 2) {
+      Long scale = ConstraintResolver.tryLiteralIntValue(args.get(1));
+      return scale == null || scale < 0;
+    }
+    return false;
   }
 
   // emitTruth of operand i in a truth.
