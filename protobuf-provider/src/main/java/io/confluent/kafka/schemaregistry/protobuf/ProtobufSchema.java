@@ -2970,13 +2970,12 @@ public class ProtobufSchema implements ParsedSchema {
     List<Integer> indexes = new ArrayList<>();
     ProtoFileElement file = effectiveFile();
     List<TypeElement> types = file.getTypes();
-    // For an empty public-import wrapper, `file` is the imported file. Strip
-    // its package from `name` so the per-part walk matches local type names.
-    if (file != schemaObj) {
-      String pkg = file.getPackageName();
-      if (pkg != null && !pkg.isEmpty() && name.startsWith(pkg + ".")) {
-        name = name.substring(pkg.length() + 1);
-      }
+    // Walk only the name within the package, so that a message named like a package part
+    // doesn't match before the message named. For an empty public-import wrapper, `file` is
+    // the imported file.
+    String pkg = file.getPackageName();
+    if (pkg != null && !pkg.isEmpty() && name.startsWith(pkg + ".")) {
+      name = name.substring(pkg.length() + 1);
     }
     String[] parts = name.split("\\.");
     for (String part : parts) {
