@@ -444,6 +444,11 @@ final class ConstraintValidator {
           }
         }
         refuseEntryMap(current, el, "A subscript of", vctx);
+        if (t == Schema.Type.MULTISET) {
+          throw locatedError(el, "A subscript of a MULTISET is not supported: a MULTISET has "
+              + "no order, and Avro and JSON hold it as a map of each value to its count. Use "
+              + "EVERY, ANY or IN over it instead.");
+        }
         current = (t == Schema.Type.MAP) ? current.getValueType()
             : current.getElementType();
         current = ConstraintResolver.resolveIfNamedRef(current, vctx);

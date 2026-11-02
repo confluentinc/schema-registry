@@ -2595,8 +2595,8 @@ final class ConstraintEmitter {
     if (ands.size() == 1) {
       return emitTruth(ands.get(0), truth, sb);
     }
-    return emitJunction(ands.size(), (i, t, out) -> emitTruth(ands.get(i), t, out), !truth,
-        truth, sb);
+    return emitJunction(or, ands.size(), (i, t, out) -> emitTruth(ands.get(i), t, out),
+        !truth, truth, sb);
   }
 
   private static int emitTruth(
@@ -2605,8 +2605,35 @@ final class ConstraintEmitter {
     if (nots.size() == 1) {
       return emitTruth(nots.get(0), truth, sb);
     }
-    return emitJunction(nots.size(), (i, t, out) -> emitTruth(nots.get(i), t, out), truth,
-        truth, sb);
+    return emitJunction(and, nots.size(), (i, t, out) -> emitTruth(nots.get(i), t, out),
+        truth, truth, sb);
+  }
+
+  // True if evaluating node can raise an error, as a division, CAST, PARSE_JSON or VARIANT_GET
+  // can; TRY_CAST and TRY_VARIANT_GET give NULL instead.
+  static boolean mayRaise(ParseTree node) {
+    if (node instanceof LogicalTypesParser.FuncCastContext
+        || node instanceof LogicalTypesParser.FuncVariantGetContext) {
+      return true;
+    }
+    if (node instanceof LogicalTypesParser.Func_applicationContext) {
+      LogicalTypesParser.Func_applicationContext app =
+          (LogicalTypesParser.Func_applicationContext) node;
+      if ("PARSE_JSON".equalsIgnoreCase(app.identifier().getText())) {
+        return true;
+      }
+    }
+    if (node instanceof TerminalNode
+        && node.getParent() instanceof LogicalTypesParser.Check_expr_mulContext
+        && ("/".equals(node.getText()) || "%".equals(node.getText()))) {
+      return true;
+    }
+    for (int i = 0; i < node.getChildCount(); i++) {
+      if (mayRaise(node.getChild(i))) {
+        return true;
+      }
+    }
+    return false;
   }
 
   // emitTruth of operand i in a truth.
@@ -2616,11 +2643,11 @@ final class ConstraintEmitter {
 
   /**
    * The operands' truths joined by && when {@code all}, else ||. A NULL operand is false there,
-   * which cel-java's && lets swallow another's error, so one that may be NULL is joined only
-   * once no operand decides it the other way.
+   * which cel-java's && lets swallow another's error, so where one may raise an error they're
+   * joined only once no operand decides it the other way.
    */
-  private static int emitJunction(
-      int count, OperandTruth operand, boolean all, boolean truth, StringBuilder sb) {
+  private static int emitJunction(ParseTree node, int count, OperandTruth operand,
+      boolean all, boolean truth, StringBuilder sb) {
     StringBuilder joined = new StringBuilder("(");
     int flags = 0;
     for (int i = 0; i < count; i++) {
@@ -2630,7 +2657,7 @@ final class ConstraintEmitter {
       flags |= operand.emit(i, truth, joined);
     }
     joined.append(')');
-    if (!all || (flags & MAY_BE_NULL) == 0) {
+    if (!all || (flags & MAY_BE_NULL) == 0 || !mayRaise(node)) {
       sb.append(joined);
       return flags;
     }
@@ -2768,13 +2795,15 @@ final class ConstraintEmitter {
     if (one) {
       // TRUE when exactly one body is TRUE and every other FALSE; FALSE when two or more are
       // TRUE, or all are FALSE.
+      // A ternary, as && would let a NULL body, false there, swallow exists_one's error.
       String exactlyOne = coll + ".exists_one(" + iterVar + ", " + bodyTruth + ")";
       fold = truth
-          ? "(" + exactlyOne + " && " + coll + ".all(" + iterVar + ", " + bodyTruth + " || "
-              + bodyFalse + "))"
+          ? "(" + exactlyOne + " ? " + coll + ".all(" + iterVar + ", " + bodyTruth + " || "
+              + bodyFalse + ") : false)"
           : "((" + coll + ".exists(" + iterVar + ", " + bodyTruth + ") && !" + exactlyOne
               + ") || " + coll + ".all(" + iterVar + ", " + bodyFalse + "))";
-    } else if ("EVERY".equals(name) == truth && (flags & MAY_BE_NULL) != 0) {
+    } else if ("EVERY".equals(name) == truth && (flags & MAY_BE_NULL) != 0
+        && mayRaise(args.get(2))) {
       // all() lets a NULL element, false there, swallow another's error, so it's taken only
       // once no element decides it the other way.
       StringBuilder decides = new StringBuilder();
@@ -2948,6 +2977,9 @@ final class ConstraintEmitter {
       ordered.append("))");
       sb.append('(').append(anyNull).append(" ? false : ").append(holds ? "" : "!")
           .append(ordered).append(')');
+    } else if (holds && !mayRaise(between)) {
+      sb.append('(').append(anyNull).append(" ? false : (").append(lower).append(" && ")
+          .append(upper).append("))");
     } else if (holds) {
       // TRUE when both comparisons are, taken only once neither fails, so a NULL operand
       // doesn't hide another's error.
