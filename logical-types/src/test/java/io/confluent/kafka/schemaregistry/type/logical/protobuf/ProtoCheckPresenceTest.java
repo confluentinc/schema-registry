@@ -192,6 +192,28 @@ class ProtoCheckPresenceTest {
   }
 
   @Test
+  void aCheckFailsOnlyWhenFalse() {
+    // An unset nullable field is NULL, which passes a CHECK as in SQL; only FALSE fails one.
+    String ddl = "STRUCT T (ni INT, arr INT NOT NULL ARRAY NOT NULL, "
+        + "CONSTRAINT c1 CHECK (ni > 0), "
+        + "CONSTRAINT c2 CHECK (ni <> 5), "
+        + "CONSTRAINT c3 CHECK (ni NOT IN (1, 2)), "
+        + "CONSTRAINT c4 CHECK (ONE(arr, e, e > ni)));";
+    LogicalTypesSchemaVisitor visitor = new LogicalTypesSchemaVisitor();
+    visitor.visit(LogicalTypesParserFactory.parse(ddl));
+    ProtobufSchema schema = LogicalTypeToProtoConverter.fromLogicalType(
+        visitor.toLogicalType(), "T");
+    Descriptor descriptor = schema.toDescriptor();
+    FieldDescriptor arr = descriptor.findFieldByName("arr");
+    DynamicMessage unset = DynamicMessage.newBuilder(descriptor).addRepeatedField(arr, 1).build();
+    assertEquals(List.of(), schema.validateMessage(new CelValidator(), unset));
+    DynamicMessage negative = DynamicMessage.newBuilder(descriptor).addRepeatedField(arr, 1)
+        .setField(descriptor.findFieldByName("ni"), -1).build();
+    assertEquals("[<root>: c1: ni > 0]",
+        String.valueOf(schema.validateMessage(new CelValidator(), negative)));
+  }
+
+  @Test
   void aBooleanCoalesceMayBeTheWholeCheck() {
     // An unset nullable BOOLEAN or IN subject is NULL, so COALESCE gives its fallback, but an
     // IN over an empty array is FALSE.
