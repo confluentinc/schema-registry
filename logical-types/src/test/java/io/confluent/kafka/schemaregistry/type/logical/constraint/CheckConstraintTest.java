@@ -3647,11 +3647,19 @@ class CheckConstraintTest {
   @Test
   void anInOrLengthOfASubscriptIsTypedAsDyn() throws Exception {
     // cel-java types in and size() of a subscript by their first overload, a list's or a
-    // string's, so a map's or multiset's reached by one is given as dyn.
-    String columns = "s STRING NOT NULL, ns STRING, "
+    // string's, so a map's or multiset's reached by one is given as dyn, but not to the strict
+    // check, which still refuses an ill-typed one.
+    String columns = "s STRING NOT NULL, ns STRING, i INT NOT NULL, "
         + "mm MAP<STRING, MAP<STRING, INT> NOT NULL> NOT NULL, "
         + "mms MAP<STRING, STRING NOT NULL MULTISET NOT NULL> NOT NULL, "
-        + "ma MAP<STRING, ARRAY<INT NOT NULL> NOT NULL> NOT NULL";
+        + "ma MAP<STRING, ARRAY<INT NOT NULL> NOT NULL> NOT NULL, "
+        + "mi MAP<STRING, INT> NOT NULL, ai INT NOT NULL ARRAY NOT NULL";
+    for (String sql : List.of("i NOT IN mm['k']", "s NOT IN ma['k']", "LENGTH(mi['k']) = 1",
+        "i IN ai[1]")) {
+      ValidationException e = assertThrows(ValidationException.class,
+          () -> translateCheckOver(columns, sql), sql);
+      assertTrue(e.getMessage().contains("strict type-check"), e.getMessage());
+    }
     Map<String, Object> self = Map.of("s", "a", "ns", "a", "mm", Map.of("k", Map.of("a", 1)),
         "mms", Map.of("k", Map.of("a", 1)), "ma", Map.of("k", List.of(5)));
     for (String sql : List.of("s IN mm['k']", "(s IN mm['k']) IS NOT NULL",
