@@ -3374,6 +3374,34 @@ class CheckConstraintTest {
   }
 
   @Test
+  void aBooleanArgumentIsGroupedInItsComparison() throws Exception {
+    // CEL binds == tighter than && and as tight as `in`, so NULLIF's and GREATEST's comparison
+    // groups an argument that is itself a predicate.
+    String columns = "t BOOLEAN NOT NULL, t2 BOOLEAN NOT NULL, nt BOOLEAN, i INT NOT NULL";
+    for (Object[] c : new Object[][] {{"NOT (NULLIF(t, t2 AND t) IS NOT NULL)", false, false},
+        {"NOT (NULLIF(t, t IN (TRUE, FALSE)) IS NULL)", false, false},
+        {"NULLIF(t2 AND t, t) IS NULL", false, false},
+        {"NOT (NULLIF(t OR t2, FALSE) IS NULL)", true, false},
+        {"NULLIF(t, t2 AND nt) IS NULL", false, false}, {"NULLIF(t, i = 0) IS NULL", true, false},
+        {"GREATEST(t, t AND t2) = TRUE", true, false}, {"NOT LEAST(t2 AND t, t)", true, false}}) {
+      Map<String, Object> present = new HashMap<>();
+      present.put("t", c[1]);
+      present.put("t2", c[2]);
+      present.put("i", 0);
+      present.put("nt", null);
+      Map<String, Object> absent = new HashMap<>(present);
+      absent.remove("nt");
+      String cel = translateCheckOver(columns, (String) c[0]);
+      for (Map<String, Object> self : List.of(present, absent)) {
+        Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
+        assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+            CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars),
+            c[0] + " on " + self + " -> " + cel);
+      }
+    }
+  }
+
+  @Test
   void aNullGuardDoesNotHideATypeError() {
     // The dyn branch a NULL GREATEST, LEAST, COALESCE or NULLIF gives would pass any type; the
     // strict check sees each call's own result type instead.

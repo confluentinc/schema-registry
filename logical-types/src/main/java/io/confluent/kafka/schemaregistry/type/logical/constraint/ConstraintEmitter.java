@@ -1412,7 +1412,7 @@ final class ConstraintEmitter {
   // is a boolean predicate rather than a bare arithmetic/decimal value. Follows
   // the precedence chain or → and → not → isnull → compare → between → in → like.
 
-  private static LogicalTypesParser.Check_expr_addContext bareAddOfOr(
+  static LogicalTypesParser.Check_expr_addContext bareAddOfOr(
       LogicalTypesParser.Check_expr_orContext or) {
     if (or.check_expr_and().size() != 1) {
       return null;

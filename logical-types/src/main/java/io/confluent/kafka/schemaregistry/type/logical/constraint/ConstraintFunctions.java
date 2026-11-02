@@ -606,19 +606,21 @@ final class ConstraintFunctions {
       equal.append(", ");
       ConstraintEmitter.emitDecimalValue(args.get(1), equal);
       equal.append(')');
-    } else if ("double".equals(common)) {
-      ConstraintEmitter.emitNumericAs(args.get(0), "double", equal);
-      equal.append(" == ");
-      ConstraintEmitter.emitNumericAs(args.get(1), "double", equal);
-    } else if (temporal) {
-      // Native `==`, operands timestamp-normalized.
-      ConstraintEmitter.emitTimestampValueCheckExpr(args.get(0), equal);
-      equal.append(" == ");
-      ConstraintEmitter.emitTimestampValueCheckExpr(args.get(1), equal);
     } else {
-      visitCheckExpr(args.get(0), equal);
-      equal.append(" == ");
-      visitCheckExpr(args.get(1), equal);
+      // Native `==`, operands cast to double or timestamp-normalized when they need it.
+      StringBuilder a = new StringBuilder();
+      StringBuilder b = new StringBuilder();
+      if ("double".equals(common)) {
+        ConstraintEmitter.emitNumericAs(args.get(0), "double", a);
+        ConstraintEmitter.emitNumericAs(args.get(1), "double", b);
+      } else if (temporal) {
+        ConstraintEmitter.emitTimestampValueCheckExpr(args.get(0), a);
+        ConstraintEmitter.emitTimestampValueCheckExpr(args.get(1), b);
+      } else {
+        visitCheckExpr(args.get(0), a);
+        visitCheckExpr(args.get(1), b);
+      }
+      equal.append(operand(args.get(0), a)).append(" == ").append(operand(args.get(1), b));
     }
     // Normalize the returned value too (so a temporal NULLIF result is a CEL
     // timestamp), keeping the decimal/native paths unchanged.
@@ -743,12 +745,20 @@ final class ConstraintFunctions {
           .append('(').append(a).append(", ").append(b).append(')');
     } else {
       // Temporal / string / other comparable — native min/max via ternary.
-      pick.append('(').append(a).append(' ').append(op).append(' ').append(b)
-          .append(" ? ").append(a).append(" : ").append(b).append(')');
+      pick.append('(').append(operand(args.get(0), a)).append(' ').append(op).append(' ')
+          .append(operand(args.get(1), b)).append(" ? ").append(a).append(" : ").append(b)
+          .append(')');
     }
     // Each operand is tested before it is converted or, as JSON leaves a NULL field out, read.
     emitNullOr(ConstraintNullTest.either(nullTestOf(args.get(0), nativeA, a),
         nullTestOf(args.get(1), nativeB, b)), true, pick.toString(), sb);
+  }
+
+  // An operand of a comparison, parenthesized unless arithmetic or a primary, which bind tighter.
+  private static CharSequence operand(
+      LogicalTypesParser.Check_exprContext arg, CharSequence emitted) {
+    return ConstraintEmitter.bareAddOfOr(arg.check_expr_or()) != null ? emitted
+        : "(" + emitted + ")";
   }
 
   /**
