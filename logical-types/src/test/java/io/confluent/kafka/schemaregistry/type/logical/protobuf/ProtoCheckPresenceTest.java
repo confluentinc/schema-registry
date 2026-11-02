@@ -211,6 +211,15 @@ class ProtoCheckPresenceTest {
         .setField(descriptor.findFieldByName("ni"), -1).build();
     assertEquals("[<root>: c1: ni > 0]",
         String.valueOf(schema.validateMessage(new CelValidator(), negative)));
+    // An error still fails one, though a NULL operand is beside it.
+    visitor = new LogicalTypesSchemaVisitor();
+    visitor.visit(LogicalTypesParserFactory.parse(
+        "STRUCT T (ni INT, z INT NOT NULL, CONSTRAINT c1 CHECK (ni > 0 OR 1 / z > 0));"));
+    ProtobufSchema divides = LogicalTypeToProtoConverter.fromLogicalType(
+        visitor.toLogicalType(), "T");
+    assertEquals("[<root>: c1: ni > 0 OR 1 / z > 0 (caused by: Could not execute validation "
+        + "rule 'c1')]", String.valueOf(divides.validateMessage(
+        new CelValidator(), DynamicMessage.newBuilder(divides.toDescriptor()).build())));
   }
 
   @Test

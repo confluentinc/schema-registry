@@ -1224,14 +1224,9 @@ class CheckConstraintTest {
 
   @Test
   void betweenWithLogical() {
-    assertEquals("!((((((!has(this.age) || dyn(this.age) == null) ? false : !(0 <= this.age)) ||"
-            + " ((!has(this.age) || dyn(this.age) == null) ? false : !(this.age <= 150))) ? false"
-            + " : (((!has(this.age) || dyn(this.age) == null) ? false : 0 <= this.age) &&"
-            + " ((!has(this.age) || dyn(this.age) == null) ? false : this.age <= 150))) ||"
-            + " (((!has(this.age) || dyn(this.age) == null)))) ? false : ((((!has(this.age) ||"
-            + " dyn(this.age) == null) ? false : !(0 <= this.age)) || ((!has(this.age) ||"
-            + " dyn(this.age) == null) ? false : !(this.age <= 150))) && (!((!has(this.age) ||"
-            + " dyn(this.age) == null)))))",
+    assertEquals("!((((!has(this.age) || dyn(this.age) == null) ? false : !(0 <= this.age)) ||"
+            + " ((!has(this.age) || dyn(this.age) == null) ? false : !(this.age <= 150))) &&"
+            + " (!((!has(this.age) || dyn(this.age) == null))))",
         translateCheck("age BETWEEN 0 AND 150 OR age IS NULL"));
   }
 
@@ -1442,8 +1437,10 @@ class CheckConstraintTest {
     // A NULL test or a common type emits a subexpression again, which multiplied the work at
     // each level of nesting; one over CEL's limit is refused before it grows further.
     String columns = "t BOOLEAN NOT NULL, d DECIMAL(10, 2), i INT, x DOUBLE, "
-        + "an INT ARRAY NOT NULL";
+        + "an INT ARRAY NOT NULL, nt BOOLEAN";
     assertTimeoutPreemptively(Duration.ofSeconds(30), () -> {
+      // Alternating AND and OR over a NULL emit each operand once.
+      translateCheckOver(columns, nest("nt", "((%s) AND nt) OR nt"));
       translateCheckOver(columns, nest("d", "CASE WHEN t THEN %s ELSE d END") + " = d");
       translateCheckOver(columns, nest("i", "CASE WHEN t THEN %s ELSE x END") + " = x");
       translateCheckOver(columns, nest("d", "COALESCE(%s, d)") + " = d");
@@ -1466,7 +1463,8 @@ class CheckConstraintTest {
           nest("d", "NULLIF(d, %s)") + " = d", nest("t", "((%s) AND i > 0) IS NULL"),
           nest("i", "CASE WHEN EVERY(an, e, (%s) = e) THEN i ELSE 2 END", 20) + " = 1",
           nest("i", "CASE WHEN %s + an[1] > 0 THEN i ELSE 2 END") + " = 1",
-          nest("d", "COALESCE(CASE WHEN t THEN %s ELSE i END, x)") + " = x")) {
+          nest("d", "COALESCE(CASE WHEN t THEN %s ELSE i END, x)") + " = x",
+          nest("1 / i > 0", "((%s) AND nt) OR i > 0"))) {
         ValidationException e = assertThrows(ValidationException.class,
             () -> translateCheckOver(columns, tooLarge));
         assertTrue(e.getMessage().contains("CHECK constraint is too large"), e.getMessage());
@@ -1508,9 +1506,10 @@ class CheckConstraintTest {
 
   @Test
   void aNestedLastCoalesceIsWrittenOnce() {
-    // Its NULL is already null, so it is not tested again, which would double it at each level.
-    assertEquals(translateCheckNotNull("COALESCE(a, b, c) > 0"),
-        translateCheckNotNull("COALESCE(a, COALESCE(b, c)) > 0"));
+    // Its NULL is already null, so it is not tested again, which would double it at each level;
+    // read as a CASE's value, it's emitted as the flat one is.
+    assertEquals(translateCheck("CASE WHEN active THEN COALESCE(a, b, c) ELSE 0 END > 0"),
+        translateCheck("CASE WHEN active THEN COALESCE(a, COALESCE(b, c)) ELSE 0 END > 0"));
   }
 
   @Test
@@ -2068,7 +2067,7 @@ class CheckConstraintTest {
   @Test
   void positionFromOfANullIsNull() throws Exception {
     // An empty needle or a start past the end gives its answer without the other operands, so
-    // a NULL one is tested first, and the CHECK passes on it, as SQL's does.
+    // a NULL one is tested first: read as a CASE's value, it's NULL, and the CHECK passes.
     String columns = "s STRING, ns STRING, ni INT";
     Map<String, Object> present = new HashMap<>();
     present.put("s", "abc");
@@ -2076,8 +2075,10 @@ class CheckConstraintTest {
     present.put("ni", null);
     for (Map<String, Object> self : List.of(present, Map.<String, Object>of("s", "abc"))) {
       Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
-      for (String sql : List.of("POSITION('' IN ns FROM 1) = 1", "POSITION('' IN s FROM ni) = 1",
-          "POSITION(ns IN s FROM 9) = 0", "POSITION('' IN s FROM 1) = 1")) {
+      for (String sql : List.of("CASE WHEN s = 'abc' THEN POSITION('' IN ns FROM 1) ELSE 0 END = 7",
+          "CASE WHEN s = 'abc' THEN POSITION('' IN s FROM ni) ELSE 0 END = 7",
+          "CASE WHEN s = 'abc' THEN POSITION(ns IN s FROM 9) ELSE 0 END = 7",
+          "POSITION('' IN s FROM 1) = 1")) {
         String cel = translateCheckOver(columns, sql);
         assertEquals(true, CelUtils.buildProgram(
             CelUtils.ScriptType.JSON, cel, null, CelUtils.toVarDecls(CelUtils.toDeclTypes(vars)))
@@ -2406,9 +2407,8 @@ class CheckConstraintTest {
         + "CHECK (ANY(tags, t, t = 'admin'))"
         + ");";
     Schema schema = parseScript(script).getRootSchema();
-    assertEquals("!((!has(this.tags) || dyn(this.tags) == null) ? false : (this.tags.exists(t,"
-            + " (dyn(t) == null ? false : (t == 'admin'))) ? false : this.tags.all(t, (dyn(t) =="
-            + " null ? false : !(t == 'admin')))))", schema.getRules().get(0).getExpr());
+    assertEquals("!((!has(this.tags) || dyn(this.tags) == null) ? false : this.tags.all(t,"
+            + " (dyn(t) == null ? false : !(t == 'admin'))))", schema.getRules().get(0).getExpr());
   }
 
   @Test
@@ -2454,11 +2454,8 @@ class CheckConstraintTest {
         + "CHECK (ANY(ages, a, a BETWEEN 18 AND 65))"
         + ");";
     Schema schema = parseScript(script).getRootSchema();
-    assertEquals("!((!has(this.ages) || dyn(this.ages) == null) ? false : (this.ages.exists(a,"
-            + " (((dyn(a) == null ? false : !(18 <= a)) || (dyn(a) == null ? false : !(a <= 65)))"
-            + " ? false : ((dyn(a) == null ? false : 18 <= a) && (dyn(a) == null ? false : a <="
-            + " 65)))) ? false : this.ages.all(a, ((dyn(a) == null ? false : !(18 <= a)) ||"
-            + " (dyn(a) == null ? false : !(a <= 65))))))",
+    assertEquals("!((!has(this.ages) || dyn(this.ages) == null) ? false : this.ages.all(a,"
+            + " ((dyn(a) == null ? false : !(18 <= a)) || (dyn(a) == null ? false : !(a <= 65)))))",
         schema.getRules().get(0).getExpr());
   }
 
@@ -3769,7 +3766,8 @@ class CheckConstraintTest {
     present.put("ni", null);
     for (String sql : List.of("ni > 0 OR 1 / z > 0", "NOT (ni > 0 AND 1 / z > 0)",
         "ANY(an, e, 1 / e > 0)", "NOT EVERY(an, e, 1 / e > 0)",
-        "NOT ((1 / z) BETWEEN ni AND 5)", "CASE WHEN ni > 0 AND 1 / z > 0 THEN 1 ELSE 2 END = 2")) {
+        "NOT ((1 / z) BETWEEN ni AND 5)", "CASE WHEN ni > 0 AND 1 / z > 0 THEN 1 ELSE 2 END = 2",
+        "NOT ONE(an, e, 1 / e > 0)")) {
       String cel = translateCheckOver(columns, sql);
       for (Map<String, Object> self : List.of(present, absent)) {
         assertThrows(CelEvaluationException.class, () -> evalOver(cel, self),
@@ -5780,18 +5778,19 @@ class CheckConstraintTest {
   }
 
   @Test
-  void multisetOfDecimalElementRoutesThroughDecimals() {
-    // Bug #3: resolveColumnRefType handled ARRAY/MAP indexing but not
-    // MULTISET, so a multiset element's type came back null and the
-    // comparison took the native path (opaque-decimal vs double → strict
-    // fail). It must resolve to decimal and route through decimals.*, the
-    // same as the ARRAY-of-decimal equivalent.
-    String multiset = translateCheck("dprices_ms[1] > 5.0");
-    String array = translateCheck("dprices[1] > 5.0");
-    assertEquals("decimals.gt(this.dprices_ms[(1) - 1], decimal(\"5.0\"))", multiset);
-    assertTrue(array.contains("decimals.gt(this.dprices[(1) - 1], decimal(\"5.0\"))"),
-        "MULTISET and ARRAY decimal-element emit should match, got: " + array);
+  void aMultisetHasNoSubscript() {
+    // A MULTISET has no order, and Avro and JSON hold one as a map of each value to its count,
+    // so a subscript would read the wrong value or fail.
+    for (String sql : List.of("dprices_ms[1] > 5.0", "(dprices_ms)[1] > 5.0")) {
+      ValidationException e = assertThrows(ValidationException.class,
+          () -> translateCheck(sql), sql);
+      assertTrue(e.getMessage().contains("A subscript of a MULTISET is not supported"),
+          e.getMessage());
+    }
+    assertTrue(translateCheck("dprices[1] > 5.0")
+        .contains("decimals.gt(this.dprices[(1) - 1], decimal(\"5.0\"))"));
   }
+
 
   @Test
   void castAsRealResolvesToDoubleAndCoercesOperand() {
