@@ -94,19 +94,27 @@ public final class ConstraintToCelTranslator {
     ConstraintValidator.validateFunctionArgs(ctx, validationContext);
     ConstraintValidator.validateIsNullOperand(ctx, validationContext);
     ConstraintValidator.validateMacroBodies(ctx, validationContext);
-    EMIT_VCTX.set(validationContext);
+    ConstraintEmitter.EMIT_CACHE.set(new ConstraintEmitter.EmitCache(ctx.getText()));
+    EMIT_VCTX.set(validationContext.forTypeCheck());
     try {
+      StringBuilder typed = new StringBuilder();
+      ConstraintEmitter.visitCheckExpr(ctx, typed);
+      EMIT_VCTX.set(validationContext);
       StringBuilder sb = new StringBuilder();
       ConstraintEmitter.visitCheckExpr(ctx, sb);
       String cel = sb.toString();
       // Post-emit safety net: strict cel-java type-check the result. Catches
       // type/overload mismatches the hand-coded validator passes don't cover
       // (compound expressions, function-result types, has() argument shape,
-      // etc.). Throws ValidationException on failure.
+      // etc.). Throws ValidationException on failure. The expression without
+      // NULL guards is typed, as its calls keep their result types; the one
+      // returned must compile too.
+      ConstraintCelChecker.strictCheck(typed.toString(), validationContext, ctx.getText());
       ConstraintCelChecker.strictCheck(cel, validationContext, ctx.getText());
       return cel;
     } finally {
       EMIT_VCTX.remove();
+      ConstraintEmitter.EMIT_CACHE.remove();
     }
   }
 
