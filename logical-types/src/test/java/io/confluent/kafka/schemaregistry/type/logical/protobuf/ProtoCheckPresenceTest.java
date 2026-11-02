@@ -124,6 +124,21 @@ class ProtoCheckPresenceTest {
   }
 
   @Test
+  void anUnsetFieldInsideACaseOrNullifIsNull() {
+    // A CASE or NULLIF inside an expression or an IN is NULL when the branch it takes is.
+    String ddl = "STRUCT T (i INT NOT NULL, s STRING NOT NULL, ns STRING, "
+        + "CONSTRAINT c1 CHECK (LENGTH(CASE WHEN i = 0 THEN ns ELSE s END) IS NULL), "
+        + "CONSTRAINT c2 CHECK (ABS(NULLIF(i, 0)) IS NULL), "
+        + "CONSTRAINT c3 CHECK ((NULLIF(i, 0) IN (1, 2)) IS NULL));";
+    LogicalTypesSchemaVisitor visitor = new LogicalTypesSchemaVisitor();
+    visitor.visit(LogicalTypesParserFactory.parse(ddl));
+    ProtobufSchema schema = LogicalTypeToProtoConverter.fromLogicalType(
+        visitor.toLogicalType(), "T");
+    DynamicMessage message = DynamicMessage.newBuilder(schema.toDescriptor()).build();
+    assertEquals(List.of(), schema.validateMessage(new CelValidator(), message));
+  }
+
+  @Test
   void anUnsetNullifArgumentIsNull() {
     // NULLIF tests an unset nullable field, which reads as its zero, but not a NOT NULL zero.
     String ddl = "STRUCT T (i INT NOT NULL, ni INT, "

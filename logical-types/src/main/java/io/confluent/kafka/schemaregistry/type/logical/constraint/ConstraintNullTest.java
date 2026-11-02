@@ -34,8 +34,9 @@ import org.antlr.v4.runtime.tree.ParseTree;
  * one of its nullable columns is, and need not be evaluated (which, on a NULL input, fails) to
  * tell. COALESCE is NULL when all its arguments are.
  *
- * <p>{@code "false"} means the expression is never NULL. Null means it can't be told without
- * evaluating it: NULLIF, CASE, AND, OR, BETWEEN, an IN with an element that may be NULL, a
+ * <p>CASE, NULLIF and an IN with an element that may be NULL give NULL as null, so are tested by
+ * their value. {@code "false"} means the expression is never NULL. Null means it can't be told
+ * without evaluating it: AND, OR, BETWEEN, an IN over an array or whose inputs don't tell, a
  * subscript, a quantifier, or a VARIANT function or cast.
  */
 final class ConstraintNullTest {
@@ -81,7 +82,13 @@ final class ConstraintNullTest {
       }
       LogicalTypesParser.Check_expr_inContext in = between.check_expr_in(0);
       if (in.IN() != null && !elementsNeverNull(in)) {
-        return null;
+        if (!ConstraintEmitter.inElementMayBeNull(in)) {
+          return null;
+        }
+        StringBuilder emitted = new StringBuilder();
+        ConstraintEmitter.emitParenIn(in, emitted);
+        tests.add("dyn(" + emitted + ") == null");
+        continue;
       }
       // An IN over elements never NULL is NULL exactly when its subject is.
       tests.add(of(in.check_expr_like()));
@@ -105,8 +112,10 @@ final class ConstraintNullTest {
       return ((LogicalTypesParser.CheckLiteralContext) c).literal().NULL() != null
           ? "true" : NEVER;
     }
-    if (c instanceof LogicalTypesParser.CheckCaseContext) {
-      return null;
+    if (isTestedByValue(c)) {
+      StringBuilder emitted = new StringBuilder();
+      ConstraintEmitter.visitCExpr(c, emitted);
+      return "dyn(" + emitted + ") == null";
     }
     if (c instanceof LogicalTypesParser.CheckFuncContext) {
       return of(((LogicalTypesParser.CheckFuncContext) c).func_expr());
@@ -197,14 +206,37 @@ final class ConstraintNullTest {
   }
 
   /**
+   * True if {@code ctx} is a CASE or NULLIF, which the input test tells by its value: a caller
+   * testing one as a whole tests its value in its own type instead.
+   */
+  static boolean isTestedByValue(LogicalTypesParser.Check_expr_compareContext ctx) {
+    return isTestedByValue(unparen(ConstraintResolver.leafPrimary(ctx)));
+  }
+
+  /**
+   * {@link #isTestedByValue(LogicalTypesParser.Check_expr_compareContext)} of an argument.
+   */
+  static boolean isTestedByValue(LogicalTypesParser.Check_exprContext arg) {
+    return isTestedByValue(unparen(ConstraintResolver.leafPrimary(arg)));
+  }
+
+  private static boolean isTestedByValue(LogicalTypesParser.C_exprContext c) {
+    if (c instanceof LogicalTypesParser.CheckCaseContext) {
+      return true;
+    }
+    if (!(c instanceof LogicalTypesParser.CheckFuncContext)) {
+      return false;
+    }
+    LogicalTypesParser.Func_applicationContext app =
+        ((LogicalTypesParser.CheckFuncContext) c).func_expr().func_application();
+    return app != null && "NULLIF".equalsIgnoreCase(app.identifier().getText());
+  }
+
+  /**
    * True if {@code arg} is a COALESCE, GREATEST or LEAST, whose CEL gives NULL as null.
    */
   static boolean givesNullAsNull(LogicalTypesParser.Check_exprContext arg) {
-    LogicalTypesParser.C_exprContext c = ConstraintResolver.leafPrimary(arg);
-    while (c instanceof LogicalTypesParser.CheckParenContext
-        && ((LogicalTypesParser.CheckParenContext) c).indirection() == null) {
-      c = ConstraintResolver.leafPrimary(((LogicalTypesParser.CheckParenContext) c).check_expr());
-    }
+    LogicalTypesParser.C_exprContext c = unparen(ConstraintResolver.leafPrimary(arg));
     if (!(c instanceof LogicalTypesParser.CheckFuncContext)) {
       return false;
     }
@@ -212,6 +244,15 @@ final class ConstraintNullTest {
         ((LogicalTypesParser.CheckFuncContext) c).func_expr().func_application();
     return app != null
         && NULL_AS_NULL_FUNCS.contains(app.identifier().getText().toUpperCase(Locale.ROOT));
+  }
+
+  // c without the parentheses around it.
+  private static LogicalTypesParser.C_exprContext unparen(LogicalTypesParser.C_exprContext c) {
+    while (c instanceof LogicalTypesParser.CheckParenContext
+        && ((LogicalTypesParser.CheckParenContext) c).indirection() == null) {
+      c = ConstraintResolver.leafPrimary(((LogicalTypesParser.CheckParenContext) c).check_expr());
+    }
+    return c;
   }
 
   // The index of the parenthesis closing the one at open.

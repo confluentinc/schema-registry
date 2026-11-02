@@ -3207,6 +3207,39 @@ class CheckConstraintTest {
   }
 
   @Test
+  void aNullCaseOrNullifInsideAnExpressionIsNull() throws Exception {
+    // CASE, NULLIF and an IN with an element that may be NULL give NULL as null, so one inside
+    // an expression, an IN or a comparison is tested by its value, not evaluated through it.
+    String columns = "i INT NOT NULL, d DECIMAL(10, 2) NOT NULL, x DOUBLE NOT NULL, "
+        + "s STRING NOT NULL, t BOOLEAN NOT NULL, nx DOUBLE, ns STRING, b BIGINT, "
+        + "r STRUCT(a INT)";
+    Map<String, Object> absent = new HashMap<>();
+    absent.put("i", 0);
+    absent.put("d", CelDecimal.of(new BigDecimal("1.50")));
+    absent.put("x", 2.0);
+    absent.put("s", "a");
+    absent.put("t", true);
+    absent.put("b", 1L);
+    absent.put("r", Map.of("a", 1));
+    Map<String, Object> present = new HashMap<>(absent);
+    present.put("nx", null);
+    present.put("ns", null);
+    for (Map<String, Object> self : List.of(present, absent)) {
+      Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
+      for (String sql : List.of("(NULLIF(r.a, 1) IN (0, -1)) IS NULL",
+          "((CASE WHEN r.a NOT IN (i, d) THEN ns ELSE s END) IN ('a', 'Ab')) IS NULL",
+          "CASE (nx NOT IN (-1, b)) <> (-1 IN (x, d)) WHEN TRUE THEN 1 ELSE 2 END = 2",
+          "ABS(NULLIF(r.a, ABS(b))) IS NULL", "LENGTH(CASE WHEN t THEN ns ELSE s END) IS NULL",
+          "COALESCE(UPPER(CASE WHEN t THEN ns ELSE s END), 'x') = 'x'")) {
+        String cel = translateCheckOver(columns, sql);
+        assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+            CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars),
+            sql + " on " + self.keySet() + " -> " + cel);
+      }
+    }
+  }
+
+  @Test
   void aNullGuardDoesNotHideATypeError() {
     // The dyn branch a NULL GREATEST, LEAST, COALESCE or NULLIF gives would pass any type; the
     // strict check sees each call's own result type instead.

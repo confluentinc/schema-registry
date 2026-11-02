@@ -399,7 +399,7 @@ final class ConstraintEmitter {
    * True if an element of an IN's value list may be NULL, and the inputs of each value tell.
    * One whose elements never are is NULL exactly when its subject is, so is emitted as before.
    */
-  private static boolean inElementMayBeNull(LogicalTypesParser.Check_expr_inContext ctx) {
+  static boolean inElementMayBeNull(LogicalTypesParser.Check_expr_inContext ctx) {
     if (EMIT_VCTX.get() == null || ctx.IN() == null
         || !(ctx.in_target() instanceof LogicalTypesParser.InTargetParenListContext)
         || ConstraintNullTest.of(ctx.check_expr_like()) == null) {
@@ -726,7 +726,8 @@ final class ConstraintEmitter {
     // check still types it, in its own numeric type, as DECIMAL arithmetic has no native form.
     LogicalTypesParser.Check_expr_compareContext operand = ctx.check_expr_compare();
     ConstraintValidationContext vctx = EMIT_VCTX.get();
-    String byInputs = ConstraintNullTest.of(operand);
+    String byInputs = ConstraintNullTest.isTestedByValue(operand) ? null
+        : ConstraintNullTest.of(operand);
     if (byInputs != null && (vctx == null || !vctx.isTypeOnly())) {
       sb.append(negated ? ConstraintNullTest.not(byInputs) : byInputs);
       return;
