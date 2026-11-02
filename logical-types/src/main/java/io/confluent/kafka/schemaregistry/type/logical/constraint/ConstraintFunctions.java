@@ -442,13 +442,24 @@ final class ConstraintFunctions {
     sb.append('(').append(emitted).append(" < 38 ? ").append(emitted).append(" : 38)");
   }
 
+  // A column, field, variable or subscript of one, parenthesized or not, whose declared type is
+  // exact, unlike an expression's.
+  private static boolean isPath(LogicalTypesParser.Check_exprContext e) {
+    LogicalTypesParser.C_exprContext c = ConstraintResolver.leafPrimary(e);
+    if (c instanceof LogicalTypesParser.CheckColumnRefContext) {
+      return true;
+    }
+    return c instanceof LogicalTypesParser.CheckParenContext
+        && isPath(((LogicalTypesParser.CheckParenContext) c).check_expr());
+  }
+
   // Flink takes ROUND's and TRUNCATE's scale as an INT, refusing a BIGINT one or a literal out
-  // of range. Only a column's or variable's BIGINT is told: an expression's integer resolves
-  // as CEL's int64 whatever its width, as CAST(x AS INT) or LENGTH(s) does.
+  // of range. Only a path's BIGINT is told: an expression's integer resolves as CEL's int64
+  // whatever its width, as CAST(x AS INT) or LENGTH(s) does.
   private static void refuseNonIntScale(LogicalTypesParser.Check_exprContext scale,
       ConstraintValidationContext vctx, String sqlName) {
     Long literal = tryLiteralIntValue(scale);
-    Schema type = vctx == null || literal != null || ConstraintResolver.selectionPath(scale) == null
+    Schema type = vctx == null || literal != null || !isPath(scale)
         ? null : ConstraintResolver.tryResolveCheckExprType(scale, vctx);
     boolean outOfRange = literal != null
         && (literal < Integer.MIN_VALUE || literal > Integer.MAX_VALUE);
