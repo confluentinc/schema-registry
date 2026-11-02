@@ -74,10 +74,9 @@ final class ConstraintResolver {
   }
 
   /**
-   * Whether an element of the array an IN tests may be NULL, or {@code null} when its type
-   * doesn't resolve.
+   * The element type of the array an IN tests, or {@code null} when it doesn't resolve.
    */
-  static Boolean inArrayElementNullable(
+  static Schema inArrayElementType(
       LogicalTypesParser.Check_expr_inContext ctx, ConstraintValidationContext vctx) {
     LogicalTypesParser.Check_expr_likeContext array =
         ((LogicalTypesParser.InTargetExprContext) ctx.in_target()).check_expr_like();
@@ -87,7 +86,7 @@ final class ConstraintResolver {
         || type.getType() != Schema.Type.ARRAY && type.getType() != Schema.Type.MULTISET) {
       return null;
     }
-    return type.getElementType().isNullable();
+    return type.getElementType();
   }
 
   /**

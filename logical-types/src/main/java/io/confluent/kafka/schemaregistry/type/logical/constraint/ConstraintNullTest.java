@@ -328,9 +328,8 @@ final class ConstraintNullTest {
   private static String ofElements(LogicalTypesParser.Check_expr_inContext in) {
     if (in.in_target() instanceof LogicalTypesParser.InTargetExprContext) {
       ConstraintValidationContext vctx = EMIT_VCTX.get();
-      boolean neverNull = vctx != null
-          && Boolean.FALSE.equals(ConstraintResolver.inArrayElementNullable(in, vctx));
-      return neverNull
+      Schema element = vctx == null ? null : ConstraintResolver.inArrayElementType(in, vctx);
+      return element != null && !element.isNullable()
           ? of(((LogicalTypesParser.InTargetExprContext) in.in_target()).check_expr_like()) : null;
     }
     for (LogicalTypesParser.Check_exprContext item

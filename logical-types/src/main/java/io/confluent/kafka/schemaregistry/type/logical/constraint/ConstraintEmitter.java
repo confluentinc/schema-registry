@@ -511,8 +511,8 @@ final class ConstraintEmitter {
     String subject = ConstraintNullTest.of(ctx.check_expr_like());
     String array = ConstraintNullTest.of(
         ((LogicalTypesParser.InTargetExprContext) ctx.in_target()).check_expr_like());
-    Boolean elementNullable = ConstraintResolver.inArrayElementNullable(ctx, vctx);
-    return subject != null && array != null && Boolean.TRUE.equals(elementNullable);
+    Schema element = ConstraintResolver.inArrayElementType(ctx, vctx);
+    return subject != null && array != null && element != null && element.isNullable();
   }
 
   /**
