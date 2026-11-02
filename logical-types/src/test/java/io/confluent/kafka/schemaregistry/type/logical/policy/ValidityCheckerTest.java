@@ -83,9 +83,8 @@ class ValidityCheckerTest {
 
   @Test
   void anOmittedDecimalScaleIsAccepted() {
-    // NO_PARAM is SRLT's encoding of "scale omitted", and it round-trips through DDL as
-    // DECIMAL(p), which SQL reads as DECIMAL(p, 0). Rejecting it would reject valid DDL.
-    assertThat(Schema.createDecimal(10, Schema.NO_PARAM).toDdl()).isEqualTo("DECIMAL(10)");
+    // An omitted scale is SQL's default: DECIMAL(p) is DECIMAL(p, 0), which is valid.
+    assertThat(Schema.createDecimal(10, Schema.NO_PARAM).toDdl()).isEqualTo("DECIMAL(10, 0)");
     assertThat(ValidityChecker
         .validate(Mode.FLINK, col(Schema.createDecimal(10, Schema.NO_PARAM))).isValid()).isTrue();
   }
