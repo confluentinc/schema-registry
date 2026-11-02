@@ -446,14 +446,11 @@ public abstract class Schema {
   }
 
   public static Schema createDecimal(int precision, int scale) {
-    // NO_PARAM precision and scale flow through to DecimalSchema and are
-    // emitted by toDdl as `DECIMAL` / `DECIMAL(p)` (omitting the absent
-    // parameters). Coercing scale to DEFAULT_DECIMAL_SCALE here would lose
-    // the user's "scale omitted" intent and break round-tripping the
-    // SQL form `DECIMAL(p)` through schema → toDdl.
+    // An omitted precision or scale takes SQL's default, so `DECIMAL(p)` is
+    // `DECIMAL(p, 0)` everywhere and no writer emits a scale of -1.
     return new DecimalSchema(
         precision == NO_PARAM ? DEFAULT_DECIMAL_PRECISION : precision,
-        scale);
+        scale == NO_PARAM ? DEFAULT_DECIMAL_SCALE : scale);
   }
 
   /** Creates an unbounded string type (alias for VARCHAR(MAX_LENGTH)). */

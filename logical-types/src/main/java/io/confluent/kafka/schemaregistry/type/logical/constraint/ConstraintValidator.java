@@ -21,6 +21,7 @@ import static io.confluent.kafka.schemaregistry.type.logical.constraint.Constrai
 
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesParser;
+import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.tree.ParseTree;
 import org.antlr.v4.runtime.tree.TerminalNode;
 
@@ -192,12 +193,13 @@ final class ConstraintValidator {
       return paren.indirection() == null && isBooleanShaped(paren.check_expr(), vctx);
     }
     if (c instanceof LogicalTypesParser.CheckCaseContext) {
-      // CASE branches' types are not tracked in v1; assume the user knows
-      // what they're doing and accept (defer to runtime CEL type-check).
-      return true;
+      // One whose branches' type doesn't resolve is accepted, as before.
+      Schema type = ConstraintResolver.tryResolveCaseExprType(
+          ((LogicalTypesParser.CheckCaseContext) c).case_expr(), vctx);
+      return type == null || type.getType() == Schema.Type.BOOLEAN;
     }
     if (c instanceof LogicalTypesParser.CheckFuncContext) {
-      return isBooleanFunc(((LogicalTypesParser.CheckFuncContext) c).func_expr());
+      return isBooleanFunc(((LogicalTypesParser.CheckFuncContext) c).func_expr(), vctx);
     }
     return false;
   }
@@ -217,7 +219,8 @@ final class ConstraintValidator {
    * functions only; everything else assumed non-boolean (CASE handled
    * separately via "assume true" above).
    */
-  private static boolean isBooleanFunc(LogicalTypesParser.Func_exprContext fctx) {
+  private static boolean isBooleanFunc(
+      LogicalTypesParser.Func_exprContext fctx, ConstraintValidationContext vctx) {
     if (fctx.func_application() == null) {
       // Special-syntax forms: CAST(x AS BOOLEAN) and VARIANT_GET/TRY_VARIANT_GET
       // with RETURNING BOOLEAN are the boolean-returning ones; EXTRACT,
@@ -256,6 +259,11 @@ final class ConstraintValidator {
       case "ONE":
       case "VARIANT_IS_NULL":
         return true;
+      case "COALESCE":
+      case "NULLIF":
+        // Of BOOLEANs, a BOOLEAN; a NULL result is refused, as a NULL CASE result is.
+        LogicalTypesParser.Check_expr_listContext args = fctx.func_application().check_expr_list();
+        return args != null && args.check_expr().stream().allMatch(a -> isBooleanShaped(a, vctx));
       default:
         return false;
     }
@@ -318,6 +326,8 @@ final class ConstraintValidator {
           }
           // Validate the collection (arg 0) in the outer context.
           validateColumnRefs(args.get(0), vctx);
+          refuseEntryCollection(ConstraintResolver.tryResolveCheckExprType(args.get(0), vctx),
+              args.get(0), name + " over", vctx);
           // Skip arg 1 (the iteration var binding name itself); validate the
           // predicate body (arg 2) in a context that includes the binding,
           // typed as the collection's element type if we can resolve it.
@@ -433,11 +443,42 @@ final class ConstraintValidator {
                     + "]`) and crash at runtime. Use a positive index.");
           }
         }
+        refuseEntryMap(current, el, "A subscript of", vctx);
         current = (t == Schema.Type.MAP) ? current.getValueType()
             : current.getElementType();
         current = ConstraintResolver.resolveIfNamedRef(current, vctx);
         pathSoFar = pathSoFar + "[...]";
       }
+    }
+  }
+
+  // Avro and JSON hold a MAP without string keys as entries of a key and its value, which a
+  // subscript, quantifier, IN or comparison would read as a list.
+  private static void refuseEntryMap(
+      Schema map, ParserRuleContext node, String use,
+      ConstraintValidationContext vctx) {
+    Schema resolved = ConstraintResolver.resolveIfNamedRef(map, vctx);
+    if (resolved != null && resolved.getType() == Schema.Type.MAP
+        && resolved.getKeyType().getType() != Schema.Type.VARCHAR
+        && resolved.getKeyType().getType() != Schema.Type.CHAR) {
+      throw locatedError(node, use + " a MAP with " + resolved.getKeyType().getType()
+          + " keys is not supported: it is held as entries of a key and its value, so it "
+          + "would be read as a list. A MAP with string keys is supported.");
+    }
+  }
+
+  // Likewise a MULTISET of non-strings, held as entries of a value and its count.
+  private static void refuseEntryCollection(
+      Schema collection, ParserRuleContext node, String use,
+      ConstraintValidationContext vctx) {
+    refuseEntryMap(collection, node, use, vctx);
+    Schema resolved = ConstraintResolver.resolveIfNamedRef(collection, vctx);
+    if (resolved != null && resolved.getType() == Schema.Type.MULTISET
+        && resolved.getElementType().getType() != Schema.Type.VARCHAR
+        && resolved.getElementType().getType() != Schema.Type.CHAR) {
+      throw locatedError(node, use + " a MULTISET of " + resolved.getElementType().getType()
+          + " is not supported: it is held as entries of a value and its count, so it would "
+          + "be read as a list. A MULTISET of strings is supported.");
     }
   }
 
@@ -547,6 +588,11 @@ final class ConstraintValidator {
     }
     Schema lhsType = ConstraintResolver.tryResolveCompareOperandType(lhs, vctx);
     Schema rhsType = ConstraintResolver.tryResolveCompareOperandType(rhs, vctx);
+    if (isEquality) {
+      // Entries compare in their order, but a MAP's or MULTISET's don't have one.
+      refuseEntryCollection(lhsType, cmp, "Comparing", vctx);
+      refuseEntryCollection(rhsType, cmp, "Comparing", vctx);
+    }
     // Cross-category check for EQUALITY operators only. CEL spec: `==`/`!=`
     // accept any two types and return false for type mismatch — strict
     // cel-java accepts `int == string`. SQL semantics treats this as a
@@ -958,10 +1004,7 @@ final class ConstraintValidator {
     // overload for — runtime "no matching overload" error. Reject early.
     rejectNullBound(ins.get(1), "lower");
     rejectNullBound(ins.get(2), "upper");
-    // Null-returning function check applies to ALL three positions —
-    // subject, lower bound, upper bound. The emit produces
-    // `lo <= subject && subject <= hi`, so a null in any position hits
-    // a comparison with no null overload at runtime.
+    // A NULLIF operand is refused in all three positions.
     rejectNullReturningFuncBound(ins.get(0), "subject");
     rejectNullReturningFuncBound(ins.get(1), "lower bound");
     rejectNullReturningFuncBound(ins.get(2), "upper bound");
@@ -973,12 +1016,9 @@ final class ConstraintValidator {
   }
 
   /**
-   * Reject a BETWEEN operand that's a function call which can return null
-   * (currently just NULLIF). Strict cel-java accepts the emit because the
-   * function's return type is the non-null type, but at runtime a null
-   * result hits a comparison op with no null overload and the constraint
-   * crashes. Applies to subject and both bounds: the emit shape
-   * {@code lo <= subj && subj <= hi} fails for a null in any position.
+   * Reject a BETWEEN operand that's a function call which can return null (currently just
+   * NULLIF), refused since before BETWEEN tested an operand's NULL; COALESCE gives an explicit
+   * fallback.
    */
   private static void rejectNullReturningFuncBound(
       LogicalTypesParser.Check_expr_inContext operand, String role) {
@@ -987,8 +1027,7 @@ final class ConstraintValidator {
         && ConstraintResolver.NULL_RETURNING_FUNCS.contains(funcName)) {
       throw locatedError(operand,
           "BETWEEN " + role + " cannot be " + funcName
-              + "(...) — the function can return null, and there is no "
-              + "comparison overload taking null. Use COALESCE to provide "
+              + "(...), which can return null. Use COALESCE to provide "
               + "an explicit fallback value.");
     }
   }
@@ -1024,6 +1063,17 @@ final class ConstraintValidator {
           && in.in_target() instanceof LogicalTypesParser.InTargetParenListContext) {
         validateInParenList(
             (LogicalTypesParser.InTargetParenListContext) in.in_target(), vctx);
+      } else if (in.IN() != null) {
+        // Avro and JSON hold a MULTISET of strings as a map, whose keys `in` tests.
+        Schema target = ConstraintResolver.inTargetType(in, vctx);
+        if (target != null && target.getType() == Schema.Type.MULTISET
+            && target.getElementType().getType() != Schema.Type.VARCHAR
+            && target.getElementType().getType() != Schema.Type.CHAR) {
+          throw locatedError(in, "IN over a MULTISET of " + target.getElementType().getType()
+              + " is not supported: it is held as entries of a value and its count, so no "
+              + "value would ever match. A MULTISET of strings, held as a map, is supported.");
+        }
+        refuseEntryMap(target, in, "IN over", vctx);
       }
     }
     if (recurseIntoMacro(node, vctx,
@@ -1097,10 +1147,9 @@ final class ConstraintValidator {
   /**
    * For functions whose CEL emit unifies argument types — GREATEST, LEAST,
    * COALESCE, NULLIF — require all args to share a comparable type category
-   * (matching the rest of the validator's policy). Also reject literal NULL
-   * for GREATEST/LEAST/NULLIF: each emits CEL operators that fail on null
-   * operands. COALESCE explicitly handles nulls so a literal NULL arg is
-   * allowed there (the emit's null-check guards the value branch).
+   * (matching the rest of the validator's policy). Also reject a literal
+   * NULL argument of GREATEST, LEAST, NULLIF or COALESCE, which is dead
+   * code there.
    *
    * <p>Args whose type can't be resolved (function results, complex
    * sub-expressions) are skipped — the validator stays best-effort.
@@ -1123,6 +1172,9 @@ final class ConstraintValidator {
       // type, but our SQL-semantic policy is to reject it explicitly.
       if (NULL_REJECTING_FUNCS.contains(name) && !args.isEmpty()) {
         rejectLiteralNullArgs(name, args);
+      }
+      if ("COALESCE".equals(name)) {
+        requireComparableArgs(name, args, vctx);
       }
       // Column-level skip-on-null contract: COALESCE(<constrained-col>,
       // fallback) is dead because `this` is guaranteed non-null at
@@ -1154,6 +1206,31 @@ final class ConstraintValidator {
     }
   }
 
+  /**
+   * Reject arguments of incomparable types, as SQL does. COALESCE's emit ends
+   * in a {@code dyn} branch, so the strict check no longer unifies them.
+   */
+  private static void requireComparableArgs(
+      String name, List<LogicalTypesParser.Check_exprContext> args,
+      ConstraintValidationContext vctx) {
+    Schema first = null;
+    for (LogicalTypesParser.Check_exprContext arg : args) {
+      Schema t = ConstraintResolver.tryResolveCheckExprType(arg, vctx);
+      if (t == null) {
+        continue;
+      }
+      if (first == null) {
+        first = t;
+      } else if (!ConstraintResolver.areComparable(first.getType(), t.getType())) {
+        throw locatedError(arg,
+            name + "() argument type " + t.getType() + " is not comparable with the "
+                + "earlier argument type " + first.getType() + "; make the arguments "
+                + "share a category (numeric, string, bytes, or date/time), CAST if "
+                + "needed.");
+      }
+    }
+  }
+
   private static final java.util.Set<String> NULL_REJECTING_FUNCS =
       java.util.Collections.unmodifiableSet(new java.util.HashSet<>(
           java.util.Arrays.asList(
@@ -1162,20 +1239,21 @@ final class ConstraintValidator {
   /**
    * Reject literal NULL args in GREATEST/LEAST/NULLIF/COALESCE. Strict
    * cel-java accepts {@code null} as a typed value, but our SQL semantic
-   * is that a literal NULL in these contexts is dead code (NULLIF: never
-   * matches; COALESCE: never the first non-null; GREATEST/LEAST: emits
-   * CEL operators with no null overload). Direct the user to IS NULL or
-   * to drop the NULL argument.
+   * is that a literal NULL in these contexts is dead code (NULLIF: always
+   * NULL first, never matches second; COALESCE: never the first non-null;
+   * GREATEST/LEAST: always NULL). Direct the user to IS NULL or to drop
+   * the NULL argument.
    */
   private static void rejectLiteralNullArgs(
       String name, List<LogicalTypesParser.Check_exprContext> args) {
     for (LogicalTypesParser.Check_exprContext arg : args) {
       if (ConstraintResolver.isLiteralNull(arg)) {
         throw locatedError(arg,
-            name + "() cannot take a literal NULL — the emit applies "
-                + "operators that have no null overload (or, for COALESCE, "
-                + "produces a conditional whose branches don't type-unify). "
-                + "Drop the NULL argument or use IS NULL to test for null.");
+            name + "() cannot take a literal NULL, which is dead code there: "
+                + "COALESCE skips it, NULLIF is always NULL with it first and "
+                + "never matches it second, and it makes GREATEST and LEAST "
+                + "always NULL. Drop the NULL argument or use IS NULL to test "
+                + "for null.");
       }
     }
   }
@@ -1188,11 +1266,10 @@ final class ConstraintValidator {
    * Walk every {@code IS NULL} / {@code IS NOT NULL} test and reject when
    * the operand can never be null. Three shapes are detected:
    * <ul>
-   *   <li>Function call to a never-null-returning function (e.g.
-   *       {@code LENGTH(name) IS NULL}) — the emit produces a well-typed
-   *       CEL expression ({@code dyn(size(this.name)) == null}) that
-   *       strict cel-java accepts, but the comparison is unconditionally
-   *       false at runtime.</li>
+   *   <li>Function call to a function never NULL for non-NULL arguments
+   *       (e.g. {@code LENGTH(name) IS NULL}) where no argument can be
+   *       NULL, or whose inputs can't tell — the test is unconditionally
+   *       false.</li>
    *   <li>Bare column reference at column-level placement — the runtime
    *       guarantees {@code this} is non-null when the CHECK fires (the
    *       skip-on-null contract: column-level CHECKs are not invoked for
@@ -1223,11 +1300,17 @@ final class ConstraintValidator {
             is.check_expr_compare());
         if (funcName != null
             && ConstraintResolver.NEVER_NULL_FUNCS.contains(funcName)) {
-          throw locatedError(is,
-              "IS NULL on " + funcName + "(...) is dead code — the function "
-                  + "always returns a non-null value, so the comparison is "
-                  + "unconditionally false. Drop the IS NULL test, or apply "
-                  + "IS NULL to a column reference instead.");
+          // One whose NULL can't be told is refused when emitted if an input may be NULL.
+          String byInputs = ConstraintNullTest.of(is.check_expr_compare(), vctx);
+          if (ConstraintNullTest.NEVER.equals(byInputs) || byInputs == null
+              && !ConstraintNullTest.mayBeNullByInput(is.check_expr_compare(), vctx)) {
+            throw locatedError(is,
+                "IS NULL on " + funcName + "(...) is dead code — the function "
+                    + "returns a non-null value here, as no argument can be "
+                    + "NULL, so the comparison is unconditionally false. Drop "
+                    + "the IS NULL test, or apply IS NULL to a column reference "
+                    + "instead.");
+          }
         }
         LogicalTypesParser.ColumnrefContext col =
             ConstraintResolver.tryExtractLeafColumnRefCompare(is.check_expr_compare());

@@ -1,0 +1,259 @@
+/*
+ * Copyright 2026 Confluent Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package io.confluent.kafka.schemaregistry.type.logical.protobuf;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import com.google.protobuf.Descriptors.Descriptor;
+import com.google.protobuf.Descriptors.FieldDescriptor;
+import com.google.protobuf.DynamicMessage;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
+import io.confluent.kafka.schemaregistry.rules.cel.CelValidator;
+import io.confluent.kafka.schemaregistry.type.logical.LogicalTypesParserFactory;
+import io.confluent.kafka.schemaregistry.type.logical.LogicalTypesSchemaVisitor;
+import java.util.List;
+import org.junit.jupiter.api.Test;
+
+/**
+ * CHECKs written as Protobuf and run on real messages. A proto3 scalar has no presence, so its
+ * has() is false for a zero; a NOT NULL column holding one must not read as NULL.
+ */
+class ProtoCheckPresenceTest {
+
+  @Test
+  void aNotNullZeroIsNotNull() {
+    String ddl = "STRUCT T (a INT NOT NULL, s STRING NOT NULL, t BOOLEAN NOT NULL, "
+        + "r STRUCT(x INT NOT NULL), items STRUCT(x INT NOT NULL) NOT NULL ARRAY NOT NULL, "
+        + "CONSTRAINT c7 CHECK (COALESCE((r).x, 7) = 0), "
+        + "CONSTRAINT c8 CHECK (EVERY(items, e, COALESCE(e.x, 7) = 0)), "
+        + "CONSTRAINT c1 CHECK (COALESCE(a, 7) = 0), "
+        + "CONSTRAINT c2 CHECK (GREATEST(a, -3) = 0), "
+        + "CONSTRAINT c3 CHECK (COALESCE(s, 'x') = ''), "
+        + "CONSTRAINT c4 CHECK (COALESCE(t, TRUE) = FALSE), "
+        + "CONSTRAINT c5 CHECK (LEAST(r.x, 1) = 0), "
+        + "CONSTRAINT c6 CHECK (r.x IS NOT NULL));";
+    LogicalTypesSchemaVisitor visitor = new LogicalTypesSchemaVisitor();
+    visitor.visit(LogicalTypesParserFactory.parse(ddl));
+    ProtobufSchema schema = LogicalTypeToProtoConverter.fromLogicalType(
+        visitor.toLogicalType(), "T");
+    // Every scalar left at its zero value, r present with x = 0, and one item with x = 0.
+    Descriptor descriptor = schema.toDescriptor();
+    FieldDescriptor r = descriptor.findFieldByName("r");
+    FieldDescriptor items = descriptor.findFieldByName("items");
+    DynamicMessage message = DynamicMessage.newBuilder(descriptor)
+        .setField(r, DynamicMessage.newBuilder(r.getMessageType()).build())
+        .addRepeatedField(items, DynamicMessage.newBuilder(items.getMessageType()).build())
+        .build();
+    assertEquals(List.of(), schema.validateMessage(new CelValidator(), message));
+  }
+
+  @Test
+  void anExpressionOfAnUnsetFieldIsNull() {
+    // An unset nullable field makes an expression of it NULL, but a NOT NULL zero does not.
+    String ddl = "STRUCT T (i INT NOT NULL, ni INT, "
+        + "CONSTRAINT c1 CHECK (ni + 1 IS NULL), "
+        + "CONSTRAINT c2 CHECK (COALESCE(ni + 1, 0) = 0), "
+        + "CONSTRAINT c3 CHECK (COALESCE(i + 1, 0) = 1));";
+    LogicalTypesSchemaVisitor visitor = new LogicalTypesSchemaVisitor();
+    visitor.visit(LogicalTypesParserFactory.parse(ddl));
+    ProtobufSchema schema = LogicalTypeToProtoConverter.fromLogicalType(
+        visitor.toLogicalType(), "T");
+    DynamicMessage message = DynamicMessage.newBuilder(schema.toDescriptor()).build();
+    assertEquals(List.of(), schema.validateMessage(new CelValidator(), message));
+  }
+
+  @Test
+  void anUnsetCaseConditionFallsThrough() {
+    // An unset nullable field makes a condition NULL, which takes no branch, but a NOT NULL zero
+    // subject still matches.
+    String ddl = "STRUCT T (i INT NOT NULL, ni INT, "
+        + "CONSTRAINT c1 CHECK (CASE WHEN ni >= 0 THEN 1 ELSE 2 END = 2), "
+        + "CONSTRAINT c2 CHECK (CASE ni WHEN 0 THEN 1 ELSE 2 END = 2), "
+        + "CONSTRAINT c3 CHECK (CASE i WHEN 0 THEN 1 ELSE 2 END = 1));";
+    LogicalTypesSchemaVisitor visitor = new LogicalTypesSchemaVisitor();
+    visitor.visit(LogicalTypesParserFactory.parse(ddl));
+    ProtobufSchema schema = LogicalTypeToProtoConverter.fromLogicalType(
+        visitor.toLogicalType(), "T");
+    DynamicMessage message = DynamicMessage.newBuilder(schema.toDescriptor()).build();
+    assertEquals(List.of(), schema.validateMessage(new CelValidator(), message));
+  }
+
+  @Test
+  void anUnsetInElementOrSubjectIsNull() {
+    // An unset nullable field makes an IN that doesn't match NULL, but a NOT NULL zero subject
+    // still matches.
+    String ddl = "STRUCT T (i INT NOT NULL, ni INT, "
+        + "CONSTRAINT c1 CHECK ((i IN (1, ni)) IS NULL), "
+        + "CONSTRAINT c2 CHECK ((ni IN (0, 1)) IS NULL), "
+        + "CONSTRAINT c3 CHECK (i IN (0, ni)));";
+    LogicalTypesSchemaVisitor visitor = new LogicalTypesSchemaVisitor();
+    visitor.visit(LogicalTypesParserFactory.parse(ddl));
+    ProtobufSchema schema = LogicalTypeToProtoConverter.fromLogicalType(
+        visitor.toLogicalType(), "T");
+    DynamicMessage message = DynamicMessage.newBuilder(schema.toDescriptor()).build();
+    assertEquals(List.of(), schema.validateMessage(new CelValidator(), message));
+  }
+
+  @Test
+  void anUnsetGreatestArgumentIsNull() {
+    // An unset nullable argument makes GREATEST NULL, but a NOT NULL zero does not.
+    String ddl = "STRUCT T (i INT NOT NULL, ni INT, "
+        + "CONSTRAINT c1 CHECK (GREATEST(i, ni) IS NULL), "
+        + "CONSTRAINT c2 CHECK (COALESCE(LEAST(ni, i), 7) = 7), "
+        + "CONSTRAINT c3 CHECK (GREATEST(i, -1) = 0));";
+    LogicalTypesSchemaVisitor visitor = new LogicalTypesSchemaVisitor();
+    visitor.visit(LogicalTypesParserFactory.parse(ddl));
+    ProtobufSchema schema = LogicalTypeToProtoConverter.fromLogicalType(
+        visitor.toLogicalType(), "T");
+    DynamicMessage message = DynamicMessage.newBuilder(schema.toDescriptor()).build();
+    assertEquals(List.of(), schema.validateMessage(new CelValidator(), message));
+  }
+
+  @Test
+  void anUnsetFieldInsideACaseOrNullifIsNull() {
+    // A CASE or NULLIF inside an expression or an IN is NULL when the branch it takes is.
+    String ddl = "STRUCT T (i INT NOT NULL, s STRING NOT NULL, ns STRING, "
+        + "CONSTRAINT c1 CHECK (LENGTH(CASE WHEN i = 0 THEN ns ELSE s END) IS NULL), "
+        + "CONSTRAINT c2 CHECK (ABS(NULLIF(i, 0)) IS NULL), "
+        + "CONSTRAINT c3 CHECK ((NULLIF(i, 0) IN (1, 2)) IS NULL));";
+    LogicalTypesSchemaVisitor visitor = new LogicalTypesSchemaVisitor();
+    visitor.visit(LogicalTypesParserFactory.parse(ddl));
+    ProtobufSchema schema = LogicalTypeToProtoConverter.fromLogicalType(
+        visitor.toLogicalType(), "T");
+    DynamicMessage message = DynamicMessage.newBuilder(schema.toDescriptor()).build();
+    assertEquals(List.of(), schema.validateMessage(new CelValidator(), message));
+  }
+
+  @Test
+  void anUnsetBetweenOrLogicOperandIsNull() {
+    // An unset nullable operand makes BETWEEN, AND or OR NULL unless the rest decides it.
+    String ddl = "STRUCT T (i INT NOT NULL, s STRING NOT NULL, ni INT, ns STRING, "
+        + "CONSTRAINT c1 CHECK ((ni BETWEEN 0 AND 5) IS NULL), "
+        + "CONSTRAINT c2 CHECK (((ns LIKE 'a%') OR (s LIKE 'a%')) IS NULL), "
+        + "CONSTRAINT c3 CHECK ((i BETWEEN ni AND -1) IS NOT NULL));";
+    LogicalTypesSchemaVisitor visitor = new LogicalTypesSchemaVisitor();
+    visitor.visit(LogicalTypesParserFactory.parse(ddl));
+    ProtobufSchema schema = LogicalTypeToProtoConverter.fromLogicalType(
+        visitor.toLogicalType(), "T");
+    DynamicMessage message = DynamicMessage.newBuilder(schema.toDescriptor()).build();
+    assertEquals(List.of(), schema.validateMessage(new CelValidator(), message));
+  }
+
+  @Test
+  void anUnsetInSubjectOverAnArrayIsNullUnlessItIsEmpty() {
+    // An unset nullable subject makes an IN over an array NULL, but over an empty one FALSE, as
+    // SQL's = ANY over no elements is.
+    String ddl = "STRUCT T (ni INT, arr INT NOT NULL ARRAY NOT NULL, "
+        + "CONSTRAINT c1 CHECK ((ni IN arr) IS NULL), "
+        + "CONSTRAINT c2 CHECK ((ni NOT IN arr) IS NULL), "
+        + "CONSTRAINT c3 CHECK (NOT (5 IN arr)));";
+    LogicalTypesSchemaVisitor visitor = new LogicalTypesSchemaVisitor();
+    visitor.visit(LogicalTypesParserFactory.parse(ddl));
+    ProtobufSchema schema = LogicalTypeToProtoConverter.fromLogicalType(
+        visitor.toLogicalType(), "T");
+    Descriptor descriptor = schema.toDescriptor();
+    DynamicMessage one = DynamicMessage.newBuilder(descriptor)
+        .addRepeatedField(descriptor.findFieldByName("arr"), 1).build();
+    assertEquals(List.of(), schema.validateMessage(new CelValidator(), one));
+    DynamicMessage empty = DynamicMessage.newBuilder(descriptor).build();
+    assertEquals("[<root>: c1: (ni IN arr) IS NULL, <root>: c2: (ni NOT IN arr) IS NULL]",
+        String.valueOf(schema.validateMessage(new CelValidator(), empty)));
+  }
+
+  @Test
+  void anUnsetFieldInAOneBodyIsNull() {
+    // ONE over an unset nullable field is NULL, rather than matching its zero.
+    String ddl = "STRUCT T (ni INT, arr INT NOT NULL ARRAY NOT NULL, "
+        + "CONSTRAINT c1 CHECK (CASE WHEN ONE(arr, e, e > ni) THEN 1 ELSE 2 END = 2), "
+        + "CONSTRAINT c2 CHECK (ONE(arr, e, e > ni) IS NULL));";
+    LogicalTypesSchemaVisitor visitor = new LogicalTypesSchemaVisitor();
+    visitor.visit(LogicalTypesParserFactory.parse(ddl));
+    ProtobufSchema schema = LogicalTypeToProtoConverter.fromLogicalType(
+        visitor.toLogicalType(), "T");
+    Descriptor descriptor = schema.toDescriptor();
+    FieldDescriptor arr = descriptor.findFieldByName("arr");
+    DynamicMessage message = DynamicMessage.newBuilder(descriptor)
+        .addRepeatedField(arr, 1).addRepeatedField(arr, -2).build();
+    assertEquals(List.of(), schema.validateMessage(new CelValidator(), message));
+  }
+
+  @Test
+  void aBooleanCoalesceMayBeTheWholeCheck() {
+    // An unset nullable BOOLEAN or IN subject is NULL, so COALESCE gives its fallback, but an
+    // IN over an empty array is FALSE.
+    String ddl = "STRUCT T (ni INT, nt BOOLEAN, arr INT NOT NULL ARRAY NOT NULL, "
+        + "CONSTRAINT c1 CHECK (COALESCE(ni IN arr, TRUE)), "
+        + "CONSTRAINT c2 CHECK (COALESCE(nt, TRUE)));";
+    LogicalTypesSchemaVisitor visitor = new LogicalTypesSchemaVisitor();
+    visitor.visit(LogicalTypesParserFactory.parse(ddl));
+    ProtobufSchema schema = LogicalTypeToProtoConverter.fromLogicalType(
+        visitor.toLogicalType(), "T");
+    Descriptor descriptor = schema.toDescriptor();
+    DynamicMessage one = DynamicMessage.newBuilder(descriptor)
+        .addRepeatedField(descriptor.findFieldByName("arr"), 1).build();
+    assertEquals(List.of(), schema.validateMessage(new CelValidator(), one));
+    DynamicMessage empty = DynamicMessage.newBuilder(descriptor).build();
+    assertEquals("[<root>: c1: COALESCE(ni IN arr, TRUE)]",
+        String.valueOf(schema.validateMessage(new CelValidator(), empty)));
+  }
+
+  @Test
+  void anIndexPastTheEndOrAnUnsetQuantifierInputIsNull() {
+    // An index past the end is NULL, and so is EVERY over an unset input.
+    String ddl = "STRUCT T (ni INT, an INT NOT NULL ARRAY NOT NULL, "
+        + "arr INT NOT NULL ARRAY NOT NULL, "
+        + "CONSTRAINT c1 CHECK (an[1] IS NULL), "
+        + "CONSTRAINT c2 CHECK (EVERY(arr, e, e > ni) IS NULL), "
+        + "CONSTRAINT c3 CHECK (arr[1] = 1));";
+    LogicalTypesSchemaVisitor visitor = new LogicalTypesSchemaVisitor();
+    visitor.visit(LogicalTypesParserFactory.parse(ddl));
+    ProtobufSchema schema = LogicalTypeToProtoConverter.fromLogicalType(
+        visitor.toLogicalType(), "T");
+    Descriptor descriptor = schema.toDescriptor();
+    DynamicMessage message = DynamicMessage.newBuilder(descriptor)
+        .addRepeatedField(descriptor.findFieldByName("arr"), 1).build();
+    assertEquals(List.of(), schema.validateMessage(new CelValidator(), message));
+  }
+
+  @Test
+  void anUnsetNullifArgumentIsNull() {
+    // NULLIF tests an unset nullable field, which reads as its zero, but not a NOT NULL zero.
+    String ddl = "STRUCT T (i INT NOT NULL, ni INT, "
+        + "CONSTRAINT c1 CHECK (NULLIF(i, ni) = i), "
+        + "CONSTRAINT c2 CHECK (NULLIF(ni, 5) IS NULL));";
+    LogicalTypesSchemaVisitor visitor = new LogicalTypesSchemaVisitor();
+    visitor.visit(LogicalTypesParserFactory.parse(ddl));
+    ProtobufSchema schema = LogicalTypeToProtoConverter.fromLogicalType(
+        visitor.toLogicalType(), "T");
+    DynamicMessage message = DynamicMessage.newBuilder(schema.toDescriptor()).build();
+    assertEquals(List.of(), schema.validateMessage(new CelValidator(), message));
+  }
+
+  @Test
+  void anUnsetCaseResultIsNull() {
+    // An unset nullable field reads as its zero; a CASE gives it as NULL, as has() says.
+    String ddl = "STRUCT T (t BOOLEAN NOT NULL, ni INT, "
+        + "CONSTRAINT c1 CHECK (CASE WHEN t THEN ni ELSE ni END IS NULL), "
+        + "CONSTRAINT c2 CHECK (CASE WHEN t THEN 1.5 ELSE ni END IS NULL));";
+    LogicalTypesSchemaVisitor visitor = new LogicalTypesSchemaVisitor();
+    visitor.visit(LogicalTypesParserFactory.parse(ddl));
+    ProtobufSchema schema = LogicalTypeToProtoConverter.fromLogicalType(
+        visitor.toLogicalType(), "T");
+    DynamicMessage message = DynamicMessage.newBuilder(schema.toDescriptor()).build();
+    assertEquals(List.of(), schema.validateMessage(new CelValidator(), message));
+  }
+}
