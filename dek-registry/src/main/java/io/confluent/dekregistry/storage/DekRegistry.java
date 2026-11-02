@@ -120,8 +120,13 @@ public class DekRegistry implements Closeable {
   public static final String GCP_KMS = "gcp-kms";
   public static final String HCVAULT = "hcvault";
   private static final Set<String> HCVAULT_KMS_PROPS = new HashSet<>(Arrays.asList(
-      "token.id", "namespace", "approle.role.id", "approle.secret.id",
-      "ssl.keystore.location", "ssl.keystore.password", "ssl.truststore.location",
+      KmsPropsRedactor.HCVAULT_TOKEN_ID,
+      KmsPropsRedactor.HCVAULT_NAMESPACE,
+      KmsPropsRedactor.HCVAULT_APPROLE_ROLE_ID,
+      KmsPropsRedactor.HCVAULT_APPROLE_SECRET_ID,
+      KmsPropsRedactor.HCVAULT_SSL_KEYSTORE_LOCATION,
+      KmsPropsRedactor.HCVAULT_SSL_KEYSTORE_PASSWORD,
+      KmsPropsRedactor.HCVAULT_SSL_TRUSTSTORE_LOCATION,
       ENCRYPT_ALTERNATE_KMS_KEY_IDS));
 
   private static final String TEST_SUBJECT = "__TEST";
