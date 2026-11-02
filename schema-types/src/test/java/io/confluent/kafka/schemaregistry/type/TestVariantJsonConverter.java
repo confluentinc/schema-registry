@@ -586,4 +586,15 @@ public class TestVariantJsonConverter {
     Assert.assertTrue(
         VariantUtils.toJsonNode(VariantUtils.fromJsonNode(original)).isNull());
   }
+
+  @Test
+  public void testFromJsonNumberWiderThanDecimal16IsADouble() {
+    // As Flink parses it: past 38 digits a JSON number is a double, not a wrapped decimal.
+    Variant wide = VariantUtils.fromJson("123456789012345678901234567890123456789012");
+    Assert.assertEquals(Variant.Type.DOUBLE, wide.getType());
+    Assert.assertEquals(1.2345678901234568E41, wide.getDouble(), 0.0);
+    Variant fits = VariantUtils.fromJson("12345678901234567890123456789012345678");
+    Assert.assertEquals(new BigDecimal("12345678901234567890123456789012345678"),
+        fits.getDecimal());
+  }
 }
