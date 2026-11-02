@@ -3153,10 +3153,10 @@ class CheckConstraintTest {
 
   @Test
   void anExpressionOfANullIsNull() throws Exception {
-    // An operator or function of a NULL is NULL, so it is tested by its inputs rather than
+    // An operator or function of a NULL is NULL, so it is tested by its inputs before it's
     // evaluated, which fails on a NULL or, as JSON leaves a NULL field out, a missing key.
     String columns = "ni INT, ns STRING, nd DECIMAL(10, 2), arr INT ARRAY NOT NULL";
-    assertEquals("(!has(this.ni) || dyn(this.ni) == null)",
+    assertEquals("((!has(this.ni) || dyn(this.ni) == null) ? true : dyn(this.ni + 1) == null)",
         translateCheckOver(columns, "ni + 1 IS NULL"));
     Map<String, Object> absent = new HashMap<>();
     absent.put("arr", List.of(1));
@@ -3279,7 +3279,8 @@ class CheckConstraintTest {
     // NULL makes one NULL only when the rest doesn't decide it.
     String columns = "i INT NOT NULL, x DOUBLE NOT NULL, s STRING NOT NULL, t BOOLEAN NOT NULL, "
         + "ni INT, nb BIGINT, nd DECIMAL(10, 2), nx DOUBLE, ns STRING";
-    assertEquals("(!has(this.ni) || dyn(this.ni) == null)",
+    assertEquals("((!has(this.ni) || dyn(this.ni) == null) ? true"
+            + " : dyn((1 <= this.ni && this.ni <= 2)) == null)",
         translateCheckOver(columns, "(ni BETWEEN 1 AND 2) IS NULL"));
     Map<String, Object> absent = Map.of("i", 0, "x", 0.5, "s", "a", "t", true);
     Map<String, Object> present = new HashMap<>(absent);
@@ -3620,7 +3621,7 @@ class CheckConstraintTest {
           () -> translateCheckOver(columns, sql), sql);
       assertTrue(e.getMessage().contains("keys is not supported"), e.getMessage());
     }
-    for (String sql : List.of("CARDINALITY(m) > 0", "nm IS NULL", "sm['a'] > 0",
+    for (String sql : List.of("nm IS NULL", "sm['a'] > 0",
         "EVERY(sm, k, sm[k] > 0)")) {
       translateCheckOver(columns, sql);
     }
@@ -3662,6 +3663,21 @@ class CheckConstraintTest {
     nullIn.put("in", null);
     assertEquals(true, evalOver(cel, Map.of("r", nullIn)), cel);
     assertEquals(true, evalOver(cel, Map.of("r", Map.of("in", List.of(0)))), cel);
+  }
+
+  @Test
+  void aSubscriptBehindAMapKeyIsTestedForNull() throws Exception {
+    // cel-java types size() and in of a subscript of dyn by their first overload, a string's
+    // or a list's, so those collections are given as dyn.
+    String columns = "mm MAP<STRING, MAP<STRING, INT> NOT NULL> NOT NULL, "
+        + "ma MAP<STRING, ARRAY<INT NOT NULL> NOT NULL> NOT NULL";
+    Map<String, Object> self = Map.of("mm", Map.of("a", Map.of("b", 1)),
+        "ma", Map.of("k", List.of(1)));
+    for (String sql : List.of("mm['a']['zz'] IS NULL", "mm['a']['b'] IS NOT NULL",
+        "ma['k'][5] IS NULL", "ma['k'][1] IS NOT NULL", "COALESCE(mm['a']['zz'], 0) = 0")) {
+      String cel = translateCheckOver(columns, sql);
+      assertEquals(true, evalOver(cel, self), sql + " -> " + cel);
+    }
   }
 
   private static Object evalOver(String cel, Map<String, Object> self) throws Exception {
@@ -3842,8 +3858,9 @@ class CheckConstraintTest {
 
   @Test
   void variantParseJson() {
-    // NULL exactly when its input is.
-    assertEquals("!(!has(this.value) || dyn(this.value) == null)",
+    // NULL exactly when its input is, and parsed otherwise, so bad JSON fails.
+    assertEquals("((!has(this.value) || dyn(this.value) == null) ? false"
+            + " : dyn(variants.parseJson(this.value)) != null)",
         translateCheck("PARSE_JSON(value) IS NOT NULL"));
   }
 

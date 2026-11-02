@@ -833,22 +833,24 @@ final class ConstraintEmitter {
     ConstraintValidationContext vctx = EMIT_VCTX.get();
     String byInputs = ConstraintNullTest.isTestedByValue(operand) ? null
         : ConstraintNullTest.told(ConstraintNullTest.of(operand), operand);
-    boolean guarded = byInputs != null && (vctx == null || !vctx.isTypeOnly());
-    if (guarded) {
-      // A ternary, as cel-java's || hides an error once its result is compared.
-      sb.append('(').append(byInputs).append(negated ? " ? false : " : " ? true : ");
-    }
     String category = operand.check_expr_between().size() == 1 && vctx != null
         ? ConstraintResolver.coercedNumericCategory(operand.check_expr_between(0), vctx) : null;
-    sb.append("dyn(");
+    StringBuilder value = new StringBuilder("dyn(");
     if ("decimal".equals(category) || "double".equals(category)) {
-      emitNumericBetweenAs(operand.check_expr_between(0), category, sb);
+      emitNumericBetweenAs(operand.check_expr_between(0), category, value);
     } else {
-      visitCompare(operand, sb);
+      visitCompare(operand, value);
     }
-    sb.append(negated ? ") != null" : ") == null");
-    if (guarded) {
-      sb.append(')');
+    value.append(") == null");
+    if (byInputs == null || vctx != null && vctx.isTypeOnly()) {
+      sb.append(negated ? ConstraintNullTest.not(value.toString()) : value);
+    } else if (byInputs.contains(value)) {
+      // The test evaluates it already, as a VARIANT_GET's or a subscript's does.
+      sb.append(negated ? ConstraintNullTest.not(byInputs) : byInputs);
+    } else {
+      // A ternary, as cel-java's || hides an error once its result is compared.
+      sb.append('(').append(byInputs).append(negated ? " ? false : " : " ? true : ")
+          .append(negated ? ConstraintNullTest.not(value.toString()) : value).append(')');
     }
   }
 
@@ -2717,13 +2719,14 @@ final class ConstraintEmitter {
         tests.add(ConstraintNullTest.of(el.check_expr()));
         StringBuilder index = new StringBuilder();
         visitCheckExpr(el.check_expr(), index);
+        String collection = typedCollection(prefix);
         if (type.getType() == Schema.Type.MAP) {
-          tests.add("!((" + index + ") in " + prefix + ")");
+          tests.add("!((" + index + ") in " + collection + ")");
           prefix.append('[').append(index).append(']');
           next = type.getValueType();
         } else if (type.getType() == Schema.Type.ARRAY) {
-          tests.add(index.toString().matches("\\d+") ? "size(" + prefix + ") < " + index
-              : "((" + index + ") < 1 || (" + index + ") > size(" + prefix + "))");
+          tests.add(index.toString().matches("\\d+") ? "size(" + collection + ") < " + index
+              : "((" + index + ") < 1 || (" + index + ") > size(" + collection + "))");
           prefix.append("[(").append(index).append(") - 1]");
           next = type.getElementType();
         } else {
@@ -2736,6 +2739,13 @@ final class ConstraintEmitter {
       type = resolveRef(next);
     }
     return ConstraintNullTest.any(tests);
+  }
+
+  // A collection for size() or in: cel-java types a subscript of dyn as the first overload's
+  // argument (size(m['k']) as a string's), unless it's dyn() itself.
+  private static String typedCollection(CharSequence prefix) {
+    char last = prefix.charAt(prefix.length() - 1);
+    return last == ']' || last == ')' ? "dyn(" + prefix + ")" : prefix.toString();
   }
 
   // An IN whose three-valued CEL gives NULL as null.
