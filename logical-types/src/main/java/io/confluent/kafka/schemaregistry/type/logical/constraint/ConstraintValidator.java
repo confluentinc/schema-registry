@@ -197,7 +197,7 @@ final class ConstraintValidator {
       return true;
     }
     if (c instanceof LogicalTypesParser.CheckFuncContext) {
-      return isBooleanFunc(((LogicalTypesParser.CheckFuncContext) c).func_expr());
+      return isBooleanFunc(((LogicalTypesParser.CheckFuncContext) c).func_expr(), vctx);
     }
     return false;
   }
@@ -217,7 +217,8 @@ final class ConstraintValidator {
    * functions only; everything else assumed non-boolean (CASE handled
    * separately via "assume true" above).
    */
-  private static boolean isBooleanFunc(LogicalTypesParser.Func_exprContext fctx) {
+  private static boolean isBooleanFunc(
+      LogicalTypesParser.Func_exprContext fctx, ConstraintValidationContext vctx) {
     if (fctx.func_application() == null) {
       // Special-syntax forms: CAST(x AS BOOLEAN) and VARIANT_GET/TRY_VARIANT_GET
       // with RETURNING BOOLEAN are the boolean-returning ones; EXTRACT,
@@ -256,6 +257,11 @@ final class ConstraintValidator {
       case "ONE":
       case "VARIANT_IS_NULL":
         return true;
+      case "COALESCE":
+      case "NULLIF":
+        // Of BOOLEANs, a BOOLEAN; a NULL result is refused, as a NULL CASE result is.
+        LogicalTypesParser.Check_expr_listContext args = fctx.func_application().check_expr_list();
+        return args != null && args.check_expr().stream().allMatch(a -> isBooleanShaped(a, vctx));
       default:
         return false;
     }
@@ -1124,6 +1130,9 @@ final class ConstraintValidator {
       if (NULL_REJECTING_FUNCS.contains(name) && !args.isEmpty()) {
         rejectLiteralNullArgs(name, args);
       }
+      if ("COALESCE".equals(name)) {
+        requireComparableArgs(name, args, vctx);
+      }
       // Column-level skip-on-null contract: COALESCE(<constrained-col>,
       // fallback) is dead because `this` is guaranteed non-null at
       // evaluation time, so the fallback args never run. Fires only when
@@ -1151,6 +1160,31 @@ final class ConstraintValidator {
     }
     for (int i = 0; i < node.getChildCount(); i++) {
       validateFunctionArgs(node.getChild(i), vctx);
+    }
+  }
+
+  /**
+   * Reject arguments of incomparable types, as SQL does. COALESCE's emit ends
+   * in a {@code dyn} branch, so the strict check no longer unifies them.
+   */
+  private static void requireComparableArgs(
+      String name, List<LogicalTypesParser.Check_exprContext> args,
+      ConstraintValidationContext vctx) {
+    Schema first = null;
+    for (LogicalTypesParser.Check_exprContext arg : args) {
+      Schema t = ConstraintResolver.tryResolveCheckExprType(arg, vctx);
+      if (t == null) {
+        continue;
+      }
+      if (first == null) {
+        first = t;
+      } else if (!ConstraintResolver.areComparable(first.getType(), t.getType())) {
+        throw locatedError(arg,
+            name + "() argument type " + t.getType() + " is not comparable with the "
+                + "earlier argument type " + first.getType() + "; make the arguments "
+                + "share a category (numeric, string, bytes, or date/time), CAST if "
+                + "needed.");
+      }
     }
   }
 
@@ -1188,11 +1222,10 @@ final class ConstraintValidator {
    * Walk every {@code IS NULL} / {@code IS NOT NULL} test and reject when
    * the operand can never be null. Three shapes are detected:
    * <ul>
-   *   <li>Function call to a never-null-returning function (e.g.
-   *       {@code LENGTH(name) IS NULL}) — the emit produces a well-typed
-   *       CEL expression ({@code dyn(size(this.name)) == null}) that
-   *       strict cel-java accepts, but the comparison is unconditionally
-   *       false at runtime.</li>
+   *   <li>Function call to a function never NULL for non-NULL arguments
+   *       (e.g. {@code LENGTH(name) IS NULL}) where no argument can be
+   *       NULL, or whose inputs can't tell — the test is unconditionally
+   *       false.</li>
    *   <li>Bare column reference at column-level placement — the runtime
    *       guarantees {@code this} is non-null when the CHECK fires (the
    *       skip-on-null contract: column-level CHECKs are not invoked for
@@ -1223,11 +1256,15 @@ final class ConstraintValidator {
             is.check_expr_compare());
         if (funcName != null
             && ConstraintResolver.NEVER_NULL_FUNCS.contains(funcName)) {
-          throw locatedError(is,
-              "IS NULL on " + funcName + "(...) is dead code — the function "
-                  + "always returns a non-null value, so the comparison is "
-                  + "unconditionally false. Drop the IS NULL test, or apply "
-                  + "IS NULL to a column reference instead.");
+          String byInputs = ConstraintNullTest.of(is.check_expr_compare(), vctx);
+          if (byInputs == null || ConstraintNullTest.NEVER.equals(byInputs)) {
+            throw locatedError(is,
+                "IS NULL on " + funcName + "(...) is dead code — the function "
+                    + "returns a non-null value here, as no argument can be "
+                    + "NULL, so the comparison is unconditionally false. Drop "
+                    + "the IS NULL test, or apply IS NULL to a column reference "
+                    + "instead.");
+          }
         }
         LogicalTypesParser.ColumnrefContext col =
             ConstraintResolver.tryExtractLeafColumnRefCompare(is.check_expr_compare());

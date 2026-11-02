@@ -76,16 +76,24 @@ public final class ConstraintValidationContext {
    * become {@code this.<col>}.
    */
   private final boolean isColumnLevel;
+  /**
+   * True while emitting the expression the strict check types: the NULL
+   * guards of GREATEST, LEAST and COALESCE are left out, as their
+   * {@code dyn(null)} branch would make each call's result {@code dyn}, which
+   * passes any type. Macro-derived contexts inherit it.
+   */
+  private final boolean typeOnly;
 
   private ConstraintValidationContext(
       Map<String, Schema> columns, Map<String, Schema> bindings,
-      Map<String, Schema> namedTypes, boolean isColumnLevel) {
+      Map<String, Schema> namedTypes, boolean isColumnLevel, boolean typeOnly) {
     this.columns = Collections.unmodifiableMap(new LinkedHashMap<>(columns));
     this.bindings = Collections.unmodifiableMap(new LinkedHashMap<>(bindings));
     this.namedTypes = namedTypes != null
         ? Collections.unmodifiableMap(new LinkedHashMap<>(namedTypes))
         : Collections.emptyMap();
     this.isColumnLevel = isColumnLevel;
+    this.typeOnly = typeOnly;
   }
 
   /**
@@ -108,7 +116,7 @@ public final class ConstraintValidationContext {
   public ConstraintValidationContext withBinding(String name, Schema type) {
     Map<String, Schema> next = new LinkedHashMap<>(bindings);
     next.put(name, type);
-    return new ConstraintValidationContext(columns, next, namedTypes, isColumnLevel);
+    return new ConstraintValidationContext(columns, next, namedTypes, isColumnLevel, typeOnly);
   }
 
   /**
@@ -117,7 +125,23 @@ public final class ConstraintValidationContext {
    * {@code NAMED_TYPE_REF} resolution during indirection validation.
    */
   public ConstraintValidationContext withNamedTypes(Map<String, Schema> types) {
-    return new ConstraintValidationContext(columns, bindings, types, isColumnLevel);
+    return new ConstraintValidationContext(columns, bindings, types, isColumnLevel, typeOnly);
+  }
+
+  /**
+   * Returns a derived context for emitting the expression the strict check
+   * types, without NULL guards; see {@link #isTypeOnly()}.
+   */
+  public ConstraintValidationContext forTypeCheck() {
+    return new ConstraintValidationContext(columns, bindings, namedTypes, isColumnLevel, true);
+  }
+
+  /**
+   * True if this context emits the expression the strict check types, without
+   * the NULL guards of GREATEST, LEAST and COALESCE.
+   */
+  public boolean isTypeOnly() {
+    return typeOnly;
   }
 
   /**
@@ -140,7 +164,7 @@ public final class ConstraintValidationContext {
     map.put(fieldName, fieldSchema);
     return new ConstraintValidationContext(
         map, java.util.Collections.emptyMap(),
-        java.util.Collections.emptyMap(), true);
+        java.util.Collections.emptyMap(), true, false);
   }
 
   /**
@@ -153,7 +177,7 @@ public final class ConstraintValidationContext {
     }
     return new ConstraintValidationContext(
         map, java.util.Collections.emptyMap(),
-        java.util.Collections.emptyMap(), false);
+        java.util.Collections.emptyMap(), false, false);
   }
 
   /**
