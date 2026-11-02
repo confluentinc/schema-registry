@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.type.logical.constraint;
 
+import io.confluent.kafka.schemaregistry.rules.cel.builtin.VariantPaths;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 import io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesParser;
@@ -407,7 +408,11 @@ final class ConstraintFunctions {
       ConstraintEmitter.emitDecimalValue(args.get(0), sb);
       if (args.size() == 2) {
         sb.append(", ");
-        visitCheckExpr(args.get(1), sb);
+        if ("round".equals(shortName)) {
+          emitRoundScale(args.get(0), t, args.get(1), sb);
+        } else {
+          visitCheckExpr(args.get(1), sb);
+        }
       }
       sb.append(')');
     } else {
@@ -415,6 +420,26 @@ final class ConstraintFunctions {
       visitCheckExpr(args.get(0), sb);
       sb.append(')');
     }
+  }
+
+  /**
+   * ROUND's scale, at most the value's: a larger one gives the value back, as in Flink, where
+   * decimals.round would pad it, taking time that grows with the scale. The declared scale of a
+   * column or field bounds it, else DECIMAL's 38.
+   */
+  private static void emitRoundScale(LogicalTypesParser.Check_exprContext value, Schema type,
+      LogicalTypesParser.Check_exprContext scale, StringBuilder sb) {
+    int bound = ConstraintResolver.selectionPath(value) != null && type.getScale() >= 0
+        ? type.getScale() : 38;
+    Long literal = tryLiteralIntValue(scale);
+    if (literal != null) {
+      sb.append(Math.min(literal, bound));
+      return;
+    }
+    StringBuilder emitted = new StringBuilder();
+    visitCheckExpr(scale, emitted);
+    sb.append('(').append(emitted).append(" < ").append(bound).append(" ? ").append(emitted)
+        .append(" : ").append(bound).append(')');
   }
 
   /**
@@ -844,6 +869,7 @@ final class ConstraintFunctions {
    */
   private static void visitVariantGet(
       LogicalTypesParser.FuncVariantGetContext ctx, StringBuilder sb) {
+    checkLiteralPath(ctx.check_expr(1));
     if (ctx.castType() == null) {
       sb.append("variants.path(");
       visitCheckExpr(ctx.check_expr(0), sb);
@@ -863,8 +889,24 @@ final class ConstraintFunctions {
    */
   private static void visitTryVariantGet(
       LogicalTypesParser.FuncTryVariantGetContext ctx, StringBuilder sb) {
+    checkLiteralPath(ctx.check_expr(1));
     emitVariantPathAs("variants.tryAs", ctx.check_expr(0), ctx.check_expr(1),
         ctx.castType(), sb);
+  }
+
+  // A literal path is parsed as the variants functions parse it, so a malformed one is refused
+  // here rather than failing every record.
+  private static void checkLiteralPath(LogicalTypesParser.Check_exprContext path) {
+    ConstraintResolver.LiteralMatch m = tryAsLiteral(path);
+    if (m == null || m.lit.stringLiteral() == null) {
+      return;
+    }
+    String value = ConstraintPatterns.extractSqlStringContent(m.lit.stringLiteral().getText());
+    try {
+      VariantPaths.check(value);
+    } catch (IllegalArgumentException e) {
+      throw locatedError(path, "variant path '" + value + "' is malformed: " + e.getMessage());
+    }
   }
 
   private static void emitVariantPathAs(
