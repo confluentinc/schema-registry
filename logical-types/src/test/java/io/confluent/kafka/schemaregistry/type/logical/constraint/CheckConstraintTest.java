@@ -1375,6 +1375,9 @@ class CheckConstraintTest {
       translateCheckOver(columns, nest("d", "COALESCE(%s, d)") + " = d");
       translateCheckOver(columns, nest("d", "COALESCE(d, %s)") + " = d");
       translateCheckOver(columns, nest("i", "GREATEST(%s, x)") + " = x");
+      // The IS NULL lint's NULL analysis emits too.
+      translateCheckOver(columns, "ABS(" + nest("d", "CASE WHEN t THEN %s ELSE d END")
+          + ") IS NULL");
       for (String tooLarge : List.of(nest("d", "NULLIF(%s, d)") + " = d",
           nest("d", "NULLIF(d, %s)") + " = d",
           nest("d", "COALESCE(CASE WHEN t THEN %s ELSE i END, x)") + " = x")) {

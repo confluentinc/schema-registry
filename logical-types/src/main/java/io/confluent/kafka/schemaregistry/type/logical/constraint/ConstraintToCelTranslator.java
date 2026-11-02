@@ -81,22 +81,23 @@ public final class ConstraintToCelTranslator {
               + "cannot run without one.");
     }
     ConstraintValidator.enforceMaxParseDepth(ctx);
-    ConstraintValidator.validateBooleanRoot(ctx, validationContext);
-    ConstraintValidator.validateColumnRefs(ctx, validationContext);
-    ConstraintValidator.validateLiterals(ctx);
-    ConstraintValidator.validateLikePatterns(ctx, validationContext);
-    ConstraintValidator.validateComparisons(ctx, validationContext);
-    ConstraintValidator.validateConcatOperands(ctx, validationContext);
-    ConstraintValidator.validateArithmeticOperands(ctx, validationContext);
-    ConstraintValidator.validateCaseBranches(ctx, validationContext);
-    ConstraintValidator.validateBetweenOperands(ctx, validationContext);
-    ConstraintValidator.validateInList(ctx, validationContext);
-    ConstraintValidator.validateFunctionArgs(ctx, validationContext);
-    ConstraintValidator.validateIsNullOperand(ctx, validationContext);
-    ConstraintValidator.validateMacroBodies(ctx, validationContext);
+    // Installed first, as the IS NULL lint's NULL analysis emits too.
     ConstraintEmitter.EMIT_CACHE.set(new ConstraintEmitter.EmitCache(ctx.getText()));
-    EMIT_VCTX.set(validationContext.forTypeCheck());
     try {
+      ConstraintValidator.validateBooleanRoot(ctx, validationContext);
+      ConstraintValidator.validateColumnRefs(ctx, validationContext);
+      ConstraintValidator.validateLiterals(ctx);
+      ConstraintValidator.validateLikePatterns(ctx, validationContext);
+      ConstraintValidator.validateComparisons(ctx, validationContext);
+      ConstraintValidator.validateConcatOperands(ctx, validationContext);
+      ConstraintValidator.validateArithmeticOperands(ctx, validationContext);
+      ConstraintValidator.validateCaseBranches(ctx, validationContext);
+      ConstraintValidator.validateBetweenOperands(ctx, validationContext);
+      ConstraintValidator.validateInList(ctx, validationContext);
+      ConstraintValidator.validateFunctionArgs(ctx, validationContext);
+      ConstraintValidator.validateIsNullOperand(ctx, validationContext);
+      ConstraintValidator.validateMacroBodies(ctx, validationContext);
+      EMIT_VCTX.set(validationContext.forTypeCheck());
       StringBuilder typed = new StringBuilder();
       ConstraintEmitter.visitCheckExpr(ctx, typed);
       EMIT_VCTX.set(validationContext);
