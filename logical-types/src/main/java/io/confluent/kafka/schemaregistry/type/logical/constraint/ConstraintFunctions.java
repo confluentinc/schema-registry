@@ -676,8 +676,8 @@ final class ConstraintFunctions {
   }
 
   /**
-   * GREATEST(a, b) / LEAST(a, b) — emit a NULL-skipping comparison.
-   * Limited to 2 arguments in v1. Per-arg null guards use
+   * GREATEST(a, b) / LEAST(a, b) — NULL when either argument is, as in Flink, else the
+   * comparison. Limited to 2 arguments in v1. Per-arg null guards use
    * {@link #nullTestOf}, a {@code has()} guard when the arg is a CEL
    * field-selection chain.
    */
@@ -694,8 +694,8 @@ final class ConstraintFunctions {
     // selection). The inner min/max picks by common type: DECIMAL uses
     // decimals.greatest/least; INT/DOUBLE use the math extension's
     // greatest/least (operands cast to the common type); temporal/other use a
-    // native compare ternary. The NULL-skipping wrapper means greatest/least
-    // only ever see non-null operands.
+    // native compare ternary. The NULL guard means greatest/least only ever
+    // see non-null operands.
     ConstraintValidationContext vctx = EMIT_VCTX.get();
     String common = (vctx != null)
         ? ConstraintEmitter.numericCommonOf(args.get(0), args.get(1), vctx) : null;
@@ -734,27 +734,21 @@ final class ConstraintFunctions {
       a = tsA.toString();
       b = tsB.toString();
     }
-    // Each operand is tested before it is converted, so a NULL is not.
-    String nullTestB = nullTestOf(args.get(1), nativeB, b);
-    sb.append('(').append(nullTestOf(args.get(0), nativeA, a));
-    // With both NULL the result is NULL (dyn, to type-check against the other
-    // branches), not B converted or read: converting a NULL fails, and JSON
-    // leaves a NULL field out. An outer GREATEST, LEAST or COALESCE skips it.
-    sb.append(" ? ");
-    emitNullOrValue(args.get(1), nativeB, b, nullTestB, sb);
-    sb.append(" : (").append(nullTestB).append(" ? ").append(a).append(" : ");
+    StringBuilder pick = new StringBuilder();
     if (decimal) {
-      sb.append(">".equals(op) ? "decimals.greatest" : "decimals.least")
+      pick.append(">".equals(op) ? "decimals.greatest" : "decimals.least")
           .append('(').append(a).append(", ").append(b).append(')');
     } else if (dbl || "int".equals(common)) {
-      sb.append(">".equals(op) ? "math.greatest" : "math.least")
+      pick.append(">".equals(op) ? "math.greatest" : "math.least")
           .append('(').append(a).append(", ").append(b).append(')');
     } else {
       // Temporal / string / other comparable — native min/max via ternary.
-      sb.append('(').append(a).append(' ').append(op).append(' ').append(b)
+      pick.append('(').append(a).append(' ').append(op).append(' ').append(b)
           .append(" ? ").append(a).append(" : ").append(b).append(')');
     }
-    sb.append("))");
+    // Each operand is tested before it is converted or, as JSON leaves a NULL field out, read.
+    emitNullOr(ConstraintNullTest.either(nullTestOf(args.get(0), nativeA, a),
+        nullTestOf(args.get(1), nativeB, b)), true, pick.toString(), sb);
   }
 
   /**

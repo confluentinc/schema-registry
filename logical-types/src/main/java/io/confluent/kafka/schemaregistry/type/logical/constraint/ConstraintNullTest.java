@@ -32,7 +32,7 @@ import org.antlr.v4.runtime.tree.ParseTree;
  * The test that a CHECK expression is NULL, from its inputs rather than its value. Almost every
  * SQL operator and function is NULL exactly when an input is, so such an expression is NULL when
  * one of its nullable columns is, and need not be evaluated (which, on a NULL input, fails) to
- * tell. COALESCE, GREATEST and LEAST are NULL when all their arguments are.
+ * tell. COALESCE is NULL when all its arguments are.
  *
  * <p>{@code "false"} means the expression is never NULL. Null means it can't be told without
  * evaluating it: NULLIF, CASE, AND, OR, BETWEEN, an IN with an element that may be NULL, a
@@ -46,10 +46,11 @@ final class ConstraintNullTest {
   private static final Set<String> STRICT_FUNCS = Set.of(
       "LENGTH", "UPPER", "LOWER", "REPLACE", "STARTS_WITH", "ENDS_WITH", "CONTAINS", "MATCHES",
       "IS_EMAIL", "IS_HOSTNAME", "IS_IPV4", "IS_IPV6", "IS_URI", "IS_URI_REF", "IS_UUID",
-      "ABS", "SIGN", "FLOOR", "CEIL", "CEILING", "SQRT", "ROUND", "TRUNCATE");
+      "ABS", "SIGN", "FLOOR", "CEIL", "CEILING", "SQRT", "ROUND", "TRUNCATE",
+      "GREATEST", "LEAST");
 
-  // NULL exactly when every argument is.
-  private static final Set<String> NULL_IF_ALL_FUNCS = Set.of("COALESCE", "GREATEST", "LEAST");
+  // Their CEL gives NULL as null.
+  private static final Set<String> NULL_AS_NULL_FUNCS = Set.of("COALESCE", "GREATEST", "LEAST");
 
   private ConstraintNullTest() {
   }
@@ -121,7 +122,7 @@ final class ConstraintNullTest {
     if (f.func_application() != null) {
       String name = f.func_application().identifier().getText().toUpperCase(Locale.ROOT);
       boolean strict = STRICT_FUNCS.contains(name);
-      if (!strict && !NULL_IF_ALL_FUNCS.contains(name)) {
+      if (!strict && !"COALESCE".equals(name)) {
         return null;
       }
       List<String> tests = new ArrayList<>();
@@ -210,7 +211,7 @@ final class ConstraintNullTest {
     LogicalTypesParser.Func_applicationContext app =
         ((LogicalTypesParser.CheckFuncContext) c).func_expr().func_application();
     return app != null
-        && NULL_IF_ALL_FUNCS.contains(app.identifier().getText().toUpperCase(Locale.ROOT));
+        && NULL_AS_NULL_FUNCS.contains(app.identifier().getText().toUpperCase(Locale.ROOT));
   }
 
   // The index of the parenthesis closing the one at open.

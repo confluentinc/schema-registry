@@ -109,6 +109,21 @@ class ProtoCheckPresenceTest {
   }
 
   @Test
+  void anUnsetGreatestArgumentIsNull() {
+    // An unset nullable argument makes GREATEST NULL, but a NOT NULL zero does not.
+    String ddl = "STRUCT T (i INT NOT NULL, ni INT, "
+        + "CONSTRAINT c1 CHECK (GREATEST(i, ni) IS NULL), "
+        + "CONSTRAINT c2 CHECK (COALESCE(LEAST(ni, i), 7) = 7), "
+        + "CONSTRAINT c3 CHECK (GREATEST(i, -1) = 0));";
+    LogicalTypesSchemaVisitor visitor = new LogicalTypesSchemaVisitor();
+    visitor.visit(LogicalTypesParserFactory.parse(ddl));
+    ProtobufSchema schema = LogicalTypeToProtoConverter.fromLogicalType(
+        visitor.toLogicalType(), "T");
+    DynamicMessage message = DynamicMessage.newBuilder(schema.toDescriptor()).build();
+    assertEquals(List.of(), schema.validateMessage(new CelValidator(), message));
+  }
+
+  @Test
   void anUnsetNullifArgumentIsNull() {
     // NULLIF tests an unset nullable field, which reads as its zero, but not a NOT NULL zero.
     String ddl = "STRUCT T (i INT NOT NULL, ni INT, "

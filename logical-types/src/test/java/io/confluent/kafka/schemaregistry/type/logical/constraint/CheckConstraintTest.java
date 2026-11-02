@@ -1372,8 +1372,9 @@ class CheckConstraintTest {
       translateCheckOver(columns, nest("i", "CASE WHEN t THEN %s ELSE x END") + " = x");
       translateCheckOver(columns, nest("d", "COALESCE(%s, d)") + " = d");
       translateCheckOver(columns, nest("d", "COALESCE(d, %s)") + " = d");
+      translateCheckOver(columns, nest("i", "GREATEST(%s, x)") + " = x");
       for (String tooLarge : List.of(nest("d", "NULLIF(%s, d)") + " = d",
-          nest("d", "NULLIF(d, %s)") + " = d", nest("i", "GREATEST(%s, x)") + " = x",
+          nest("d", "NULLIF(d, %s)") + " = d",
           nest("d", "COALESCE(CASE WHEN t THEN %s ELSE i END, x)") + " = x")) {
         ValidationException e = assertThrows(ValidationException.class,
             () -> translateCheckOver(columns, tooLarge));
@@ -1393,19 +1394,20 @@ class CheckConstraintTest {
 
   @Test
   void aCheckTooLargeForCelSaysSo() {
-    // A nested GREATEST repeats its arguments at each level: eight deep fits, nine does not.
-    String columns = "c0 INT, c1 INT, c2 INT, c3 INT, c4 INT, c5 INT, c6 INT, c7 INT, c8 INT, "
-        + "c9 INT";
-    String nested = "c9";
-    for (int i = 0; i < 9; i++) {
-      if (i == 8) {
-        translateCheckOver(columns, nested + " > 0");
+    // A nested GREATEST of strings repeats its arguments at each level: nine deep fits, ten do
+    // not.
+    String columns = "s0 STRING, s1 STRING, s2 STRING, s3 STRING, s4 STRING, s5 STRING, "
+        + "s6 STRING, s7 STRING, s8 STRING, s9 STRING, s10 STRING";
+    String nested = "s10";
+    for (int i = 0; i < 10; i++) {
+      if (i == 9) {
+        translateCheckOver(columns, nested + " > 'a'");
       }
-      nested = "GREATEST(c" + i + ", " + nested + ")";
+      nested = "GREATEST(s" + i + ", " + nested + ")";
     }
-    String nine = nested;
+    String ten = nested;
     ValidationException e = assertThrows(ValidationException.class,
-        () -> translateCheckOver(columns, nine + " > 0"));
+        () -> translateCheckOver(columns, ten + " > 'a'"));
     assertTrue(e.getMessage().contains("CHECK constraint is too large"), e.getMessage());
   }
 
@@ -1425,24 +1427,18 @@ class CheckConstraintTest {
 
   @Test
   void greatestTwoArgs() {
-    // PG semantics: NULLs are skipped; result is NULL only when ALL args are
-    // NULL. Translator emits a NULL-skipping nested ternary so a single
-    // NULL operand doesn't cause CEL to error on the relational compare.
+    // NULL when either argument is, as in Flink.
     assertEquals(
-        "((!has(this.a) || dyn(this.a) == null) ? "
-            + "((!has(this.b) || dyn(this.b) == null) ? dyn(null) : this.b) : "
-            + "((!has(this.b) || dyn(this.b) == null) ? this.a : "
-            + "math.greatest(this.a, this.b))) > 10",
+        "(((!has(this.a) || dyn(this.a) == null) || (!has(this.b) || dyn(this.b) == null)) "
+            + "? dyn(null) : math.greatest(this.a, this.b)) > 10",
         translateCheck("GREATEST(a, b) > 10"));
   }
 
   @Test
   void leastTwoArgs() {
     assertEquals(
-        "((!has(this.a) || dyn(this.a) == null) ? "
-            + "((!has(this.b) || dyn(this.b) == null) ? dyn(null) : this.b) : "
-            + "((!has(this.b) || dyn(this.b) == null) ? this.a : "
-            + "math.least(this.a, this.b))) > 0",
+        "(((!has(this.a) || dyn(this.a) == null) || (!has(this.b) || dyn(this.b) == null)) "
+            + "? dyn(null) : math.least(this.a, this.b)) > 0",
         translateCheck("LEAST(a, b) > 0"));
   }
 
@@ -2963,9 +2959,8 @@ class CheckConstraintTest {
         translateCheckOver(columns, "COALESCE(n, 7) = 0"));
     assertEquals("((has(this.r) && dyn(this.r) != null) ? this.r.x : 7) == 0",
         translateCheckOver(columns, "COALESCE(r.x, 7) = 0"));
-    assertEquals("(false ? ((!has(this.n) || dyn(this.n) == null) ? dyn(null) : this.n) : "
-        + "((!has(this.n) || dyn(this.n) == null) ? this.a : math.greatest(this.a, this.n))) == 0",
-        translateCheckOver(columns, "GREATEST(a, n) = 0"));
+    assertEquals("((!has(this.n) || dyn(this.n) == null) ? dyn(null) : "
+        + "math.greatest(this.a, this.n)) == 0", translateCheckOver(columns, "GREATEST(a, n) = 0"));
     assertEquals("(!has(this.r) || dyn(this.r) == null)",
         translateCheckOver(columns, "r.x IS NULL"));
     assertEquals("((has(this.r) && dyn(this.r) != null) && (has(this.r.y) "
@@ -2992,7 +2987,7 @@ class CheckConstraintTest {
     self.put("r", null);
     Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
     for (String sql : List.of("r.f0 IS NULL", "NOT (r.q.g IS NOT NULL)", "COALESCE(r.f0, 7) = 7",
-        "GREATEST(r.q.g, 1) = 1", "CASE WHEN r.f0 IS NULL THEN 1 ELSE 2 END = 1")) {
+        "GREATEST(r.q.g, 1) IS NULL", "CASE WHEN r.f0 IS NULL THEN 1 ELSE 2 END = 1")) {
       String cel = translateCheckOver(columns, sql);
       assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
           CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars), sql + " -> " + cel);
@@ -3000,9 +2995,9 @@ class CheckConstraintTest {
   }
 
   @Test
-  void greatestOfTwoNullsWithACastIsNull() throws Exception {
-    // With both arguments NULL the result is NULL, not a cast of NULL, so an outer GREATEST,
-    // LEAST or COALESCE skips it.
+  void greatestOfANullWithACastIsNull() throws Exception {
+    // With an argument NULL the result is NULL, not a cast of NULL, so an outer GREATEST or
+    // LEAST is NULL too and COALESCE skips it.
     String columns = "a INT, x DOUBLE, d DECIMAL(10, 2), t TIMESTAMP_LTZ(3), u TIMESTAMP_LTZ(3)";
     Map<String, Object> self = new HashMap<>();
     self.put("a", 5);
@@ -3011,8 +3006,9 @@ class CheckConstraintTest {
     self.put("t", null);
     self.put("u", null);
     Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
-    for (String sql : List.of("GREATEST(a, GREATEST(x, d)) > 1", "LEAST(a, LEAST(d, x)) = 5",
-        "COALESCE(GREATEST(x, a), 7) = 5", "COALESCE(LEAST(d, x), 7) = 7",
+    for (String sql : List.of("GREATEST(a, GREATEST(x, d)) IS NULL",
+        "LEAST(a, LEAST(d, x)) IS NULL", "COALESCE(GREATEST(x, a), 7) = 7",
+        "COALESCE(LEAST(d, x), 7) = 7",
         "COALESCE(GREATEST(x, d), 7) = 7", "COALESCE(LEAST(t, u), TIMESTAMP '2020-01-01 00:00:00') "
             + "= TIMESTAMP '2020-01-01 00:00:00'")) {
       String cel = translateCheckOver(columns, sql);
@@ -3023,8 +3019,8 @@ class CheckConstraintTest {
 
   @Test
   void greatestOfANestedOrAbsentNullIsNull() throws Exception {
-    // A NULL nested GREATEST or LEAST of a narrower type is tested before it is widened, and a
-    // NULL second argument JSON leaves out is not read, so an outer call or COALESCE skips it.
+    // A NULL argument of a narrower type is tested before it is widened and, as JSON leaves a
+    // NULL field out, before it is read, so a nested GREATEST or LEAST is NULL too.
     String columns = "a INT, b BIGINT, x DOUBLE, d DECIMAL(10, 2), r STRUCT(x INT)";
     Map<String, Object> present = new HashMap<>();
     present.put("a", null);
@@ -3034,13 +3030,37 @@ class CheckConstraintTest {
     present.put("r", null);
     for (Map<String, Object> self : List.of(present, Map.<String, Object>of("x", 0.5))) {
       Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
-      for (String sql : List.of("GREATEST(x, GREATEST(a, b)) < 5", "LEAST(x, LEAST(b, a)) = x",
+      for (String sql : List.of("GREATEST(x, GREATEST(a, b)) IS NULL",
+          "LEAST(x, LEAST(b, a)) IS NULL", "GREATEST(GREATEST(x, a), x) IS NULL",
           "COALESCE(LEAST(d, LEAST(a, b)), 7) = 7", "COALESCE(GREATEST(a, d), 7) = 7",
           "COALESCE(GREATEST(r.x, d), 7) = 7", "COALESCE(LEAST(b, d), 7) = 7")) {
         String cel = translateCheckOver(columns, sql);
         assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
             CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars),
             sql + " on " + self + " -> " + cel);
+      }
+    }
+  }
+
+  @Test
+  void aNullGreatestArgumentIsNull() throws Exception {
+    // GREATEST and LEAST are NULL when any argument is, as in Flink, not the other argument.
+    String columns = "i INT NOT NULL, ni INT, nb BIGINT, nd DECIMAL(10, 2), b BIGINT";
+    Map<String, Object> absent = Map.of("i", 1, "b", 40000L);
+    Map<String, Object> present = new HashMap<>(absent);
+    for (String col : List.of("ni", "nb", "nd")) {
+      present.put(col, null);
+    }
+    for (Map<String, Object> self : List.of(present, absent)) {
+      Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
+      for (String sql : List.of("LEAST(2.5, ni) IS NULL", "GREATEST(nd, i) IS NULL",
+          "NOT (COALESCE(GREATEST(nb, i), 0) > 0)",
+          "CASE WHEN GREATEST(ni, b) > 0 THEN 1 ELSE 2 END = 2",
+          "GREATEST(GREATEST(i, nb), i) IS NULL")) {
+        String cel = translateCheckOver(columns, sql);
+        assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+            CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars),
+            sql + " on " + self.keySet() + " -> " + cel);
       }
     }
   }
@@ -3114,7 +3134,7 @@ class CheckConstraintTest {
       Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
       for (String sql : List.of("ni + 1 IS NULL", "NOT (ni + 1 IS NOT NULL)",
           "COALESCE(ni + 1, 0) = 0", "COALESCE(UPPER(ns), 'x') = 'x'",
-          "LEAST(LENGTH(ns), 2.5) > 0", "(ni = 1) IS NULL", "-ni IS NULL",
+          "LEAST(LENGTH(ns), 2.5) IS NULL", "(ni = 1) IS NULL", "-ni IS NULL",
           "(ns || 'x') IS NULL", "(ns LIKE 'a%') IS NULL", "nd * 2 IS NULL",
           "EVERY(arr, e, (e > nd) IS NULL)")) {
         String cel = translateCheckOver(columns, sql);
@@ -4575,17 +4595,17 @@ class CheckConstraintTest {
       for (String sql : List.of("UPPER(ns) IS NULL", "NOT (LENGTH(ns) IS NOT NULL)",
           "SUBSTRING(ns FROM 1) IS NULL", "TRIM(ns) IS NULL", "REPLACE(s, ns, 'x') IS NULL",
           "POSITION(ns IN s) IS NULL", "ABS(ni) IS NULL", "CAST(ni AS BIGINT) IS NULL",
-          "GREATEST(nd, ni) IS NULL")) {
+          "GREATEST(nd, ni) IS NULL", "GREATEST(nd, 1) IS NULL")) {
         String cel = translateCheckOver(columns, sql);
         assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
             CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars),
             sql + " on " + self.keySet() + " -> " + cel);
       }
     }
-    // GREATEST skips a NULL argument, so with one never NULL it never is; and a column-level
-    // CHECK never sees its column NULL.
+    // GREATEST of arguments never NULL never is, and a column-level CHECK never sees its column
+    // NULL.
     assertThrows(ValidationException.class,
-        () -> translateCheckOver(columns, "GREATEST(nd, 1) IS NULL"));
+        () -> translateCheckOver(columns, "GREATEST(LENGTH(s), 1) IS NULL"));
     assertThrows(ValidationException.class,
         () -> parseScript("STRUCT T (ns STRING CHECK (UPPER(ns) IS NULL));"));
   }
