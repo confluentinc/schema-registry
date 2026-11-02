@@ -184,6 +184,24 @@ class ProtoCheckPresenceTest {
   }
 
   @Test
+  void anIndexPastTheEndOrAnUnsetQuantifierInputIsNull() {
+    // An index past the end is NULL, and so is EVERY over an unset input.
+    String ddl = "STRUCT T (ni INT, an INT NOT NULL ARRAY NOT NULL, "
+        + "arr INT NOT NULL ARRAY NOT NULL, "
+        + "CONSTRAINT c1 CHECK (an[1] IS NULL), "
+        + "CONSTRAINT c2 CHECK (EVERY(arr, e, e > ni) IS NULL), "
+        + "CONSTRAINT c3 CHECK (arr[1] = 1));";
+    LogicalTypesSchemaVisitor visitor = new LogicalTypesSchemaVisitor();
+    visitor.visit(LogicalTypesParserFactory.parse(ddl));
+    ProtobufSchema schema = LogicalTypeToProtoConverter.fromLogicalType(
+        visitor.toLogicalType(), "T");
+    Descriptor descriptor = schema.toDescriptor();
+    DynamicMessage message = DynamicMessage.newBuilder(descriptor)
+        .addRepeatedField(descriptor.findFieldByName("arr"), 1).build();
+    assertEquals(List.of(), schema.validateMessage(new CelValidator(), message));
+  }
+
+  @Test
   void anUnsetNullifArgumentIsNull() {
     // NULLIF tests an unset nullable field, which reads as its zero, but not a NOT NULL zero.
     String ddl = "STRUCT T (i INT NOT NULL, ni INT, "

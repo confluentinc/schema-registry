@@ -1381,11 +1381,12 @@ class CheckConstraintTest {
           + ") IS NULL");
       // So do the NULL tests of AND and OR, a CASE, and a quantifier's body.
       translateCheckOver(columns, nest("t", "((%s) AND t) IS NULL"));
-      translateCheckOver(columns, nest("i", "CASE WHEN %s + an[1] > 0 THEN i ELSE 2 END") + " = 1");
-      translateCheckOver(columns,
-          nest("i", "CASE WHEN EVERY(an, e, (%s) = e) THEN i ELSE 2 END", 20) + " = 1");
+      translateCheckOver(columns, nest("i", "CASE WHEN %s > 0 THEN 1 ELSE 2 END") + " = 1");
+
       for (String tooLarge : List.of(nest("d", "NULLIF(%s, d)") + " = d",
           nest("d", "NULLIF(d, %s)") + " = d", nest("t", "((%s) AND i > 0) IS NULL"),
+          nest("i", "CASE WHEN EVERY(an, e, (%s) = e) THEN i ELSE 2 END", 20) + " = 1",
+          nest("i", "CASE WHEN %s + an[1] > 0 THEN i ELSE 2 END") + " = 1",
           nest("d", "COALESCE(CASE WHEN t THEN %s ELSE i END, x)") + " = x")) {
         ValidationException e = assertThrows(ValidationException.class,
             () -> translateCheckOver(columns, tooLarge));
@@ -3470,6 +3471,115 @@ class CheckConstraintTest {
   }
 
   @Test
+  void aQuantifierOverANullIsThreeValued() throws Exception {
+    // EVERY is TRUE when its body is for every element and FALSE when it is FALSE for any, ANY
+    // the other way round; over a NULL collection both are NULL, over an empty one never.
+    String columns = "ni INT, arr INT NOT NULL ARRAY NOT NULL, an INT ARRAY NOT NULL, "
+        + "na INT NOT NULL ARRAY, ea INT NOT NULL ARRAY NOT NULL";
+    Map<String, Object> absent = new HashMap<>();
+    absent.put("arr", List.of(1, -2));
+    absent.put("an", Arrays.asList(1, null));
+    absent.put("ea", List.of());
+    Map<String, Object> present = new HashMap<>(absent);
+    present.put("ni", null);
+    present.put("na", null);
+    for (Map<String, Object> self : List.of(present, absent)) {
+      Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
+      for (String sql : List.of("EVERY(arr, e, e > ni) IS NULL",
+          "NOT (EVERY(arr, e, e > ni) IS NOT NULL)", "ANY(an, e, e + 1 > 0) IS NOT NULL",
+          "ANY(an, e, e > 5) IS NULL", "EVERY(an, e, e > 5) IS NOT NULL",
+          "EVERY(na, e, e > 0) IS NULL", "EVERY(ea, e, e > ni) IS NOT NULL",
+          "EVERY(arr, e, e IN (1, ni)) IS NULL",
+          "CASE WHEN EVERY(arr, e, e > ni) THEN 1 ELSE 2 END = 2",
+          "CASE WHEN NOT EVERY(arr, e, e > ni) THEN 1 ELSE 2 END = 2",
+          "CASE EVERY(arr, e, GREATEST(e, ni) > 0) WHEN FALSE THEN 1 ELSE 2 END = 2",
+          "COALESCE(ANY(an, e, e > 5), TRUE) = TRUE")) {
+        String cel = translateCheckOver(columns, sql);
+        assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+            CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars),
+            sql + " on " + self.keySet() + " -> " + cel);
+      }
+    }
+  }
+
+  @Test
+  void aSubscriptOfANullOrMissingIsNull() throws Exception {
+    // A subscript is NULL when its collection, index or element is, or its key or index is
+    // missing, as SQL gives it.
+    String columns = "mv MAP<STRING, INT> NOT NULL, nm MAP<STRING, INT>, na INT NOT NULL ARRAY, "
+        + "an INT ARRAY NOT NULL, i INT NOT NULL, ni INT";
+    assertEquals("(size(this.an) < 5 || dyn(this.an[(5) - 1]) == null)",
+        translateCheckOver(columns, "an[5] IS NULL"));
+    Map<String, Object> mv = new HashMap<>();
+    mv.put("k", null);
+    mv.put("j", 2);
+    Map<String, Object> absent = new HashMap<>();
+    absent.put("mv", mv);
+    absent.put("an", Arrays.asList(1, null));
+    absent.put("i", 1);
+    Map<String, Object> present = new HashMap<>(absent);
+    present.put("nm", null);
+    present.put("na", null);
+    present.put("ni", null);
+    for (Map<String, Object> self : List.of(present, absent)) {
+      Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
+      for (String sql : List.of("mv['k'] + 1 IS NULL", "mv['zz'] IS NULL",
+          "mv['j'] IS NOT NULL", "COALESCE(mv['zz'], -1) = -1",
+          "CASE WHEN mv['k'] > 0 THEN 1 ELSE 2 END = 2", "COALESCE(na[1], -1) = -1",
+          "an[2] IS NULL", "an[5] IS NULL", "an[1] IS NOT NULL", "an[ni] IS NULL",
+          "nm['k'] IS NULL", "(an[5] > 0 OR i > 0) IS NOT NULL")) {
+        String cel = translateCheckOver(columns, sql);
+        assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+            CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars),
+            sql + " on " + self.keySet() + " -> " + cel);
+      }
+    }
+  }
+
+  @Test
+  void aVariantFunctionOfANullIsNull() throws Exception {
+    // VARIANT_GET and TRY_VARIANT_GET are NULL when an input is or the path is missing, which
+    // their CEL gives as null; TO_JSON and TYPE_OF_VARIANT when their input is.
+    String columns = "s STRING NOT NULL, nv VARIANT, ni INT";
+    String vg = "VARIANT_GET(PARSE_JSON(s), '$.a' RETURNING INT)";
+    Map<String, Object> present = new HashMap<>();
+    present.put("s", "{}");
+    present.put("nv", null);
+    present.put("ni", null);
+    for (Map<String, Object> self : List.of(present, Map.<String, Object>of("s", "{}"))) {
+      Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
+      for (String sql : List.of(vg + " IS NULL", "(" + vg + " > 0 OR ni > 0) IS NULL",
+          vg + " + 1 IS NULL", "CASE WHEN " + vg + " > 0 THEN 1 ELSE 2 END = 2",
+          "VARIANT_GET(nv, '$.a' RETURNING INT) IS NULL", "COALESCE(TO_JSON(nv), 'z') = 'z'",
+          "TYPE_OF_VARIANT(nv) IS NULL",
+          "TRY_VARIANT_GET(PARSE_JSON(s), '$.a' RETURNING INT) IS NULL")) {
+        String cel = translateCheckOver(columns, sql);
+        assertEquals(true, CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+            CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars),
+            sql + " on " + self.keySet() + " -> " + cel);
+      }
+    }
+  }
+
+  @Test
+  void anExpressionWhoseNullCantBeToldIsRefusedWhereTested() {
+    // Evaluated instead, ONE or VARIANT_IS_NULL could answer as if its NULL were a value, so a
+    // NULL test of one over a nullable input is refused; one over none is dead code.
+    String columns = "ni INT, i INT NOT NULL, arr INT NOT NULL ARRAY NOT NULL, nv VARIANT";
+    for (String sql : List.of("ONE(arr, e, e > ni) IS NULL",
+        "COALESCE(ONE(arr, e, e > ni), TRUE) = TRUE", "VARIANT_IS_NULL(nv) IS NULL",
+        "CASE ONE(arr, e, e > ni) WHEN TRUE THEN 1 ELSE 2 END = 2")) {
+      ValidationException e = assertThrows(ValidationException.class,
+          () -> translateCheckOver(columns, sql), sql);
+      assertTrue(e.getMessage().contains("can't tell when"), e.getMessage());
+    }
+    ValidationException dead = assertThrows(ValidationException.class,
+        () -> translateCheckOver(columns, "ONE(arr, e, e > i) IS NULL"));
+    assertTrue(dead.getMessage().contains("dead code"), dead.getMessage());
+    translateCheckOver(columns, "ONE(arr, e, e > ni)");
+  }
+
+  @Test
   void aNullGuardDoesNotHideATypeError() {
     // The dyn branch a NULL GREATEST, LEAST, COALESCE or NULLIF gives would pass any type; the
     // strict check sees each call's own result type instead.
@@ -3641,20 +3751,24 @@ class CheckConstraintTest {
 
   @Test
   void variantParseJson() {
-    assertEquals("dyn(variants.parseJson(this.value)) != null",
+    // NULL exactly when its input is.
+    assertEquals("!(!has(this.value) || dyn(this.value) == null)",
         translateCheck("PARSE_JSON(value) IS NOT NULL"));
   }
 
   @Test
   void variantTryParseJson() {
-    assertEquals("dyn(variants.tryParseJson(this.value)) != null",
+    // NULL when its input is, or for invalid JSON, which its CEL gives as null.
+    assertEquals("!((!has(this.value) || dyn(this.value) == null) "
+            + "|| dyn(variants.tryParseJson(this.value)) == null)",
         translateCheck("TRY_PARSE_JSON(value) IS NOT NULL"));
   }
 
   @Test
   void variantGetUntyped() {
     // 2-arg VARIANT_GET returns a sub-variant; IS NOT NULL is the existence test.
-    assertEquals("dyn(variants.path(this.data, '$.addr')) != null",
+    assertEquals("!((!has(this.data) || dyn(this.data) == null) "
+            + "|| dyn(variants.path(this.data, '$.addr')) == null)",
         translateCheck("VARIANT_GET(data, '$.addr') IS NOT NULL"));
   }
 
@@ -5314,7 +5428,7 @@ class CheckConstraintTest {
     for (String expr : new String[] {"ABS(x) IS NULL", "TYPE_OF_VARIANT(data) IS NULL"}) {
       Throwable t = org.junit.jupiter.api.Assertions.assertThrows(
           ValidationException.class,
-          () -> translateCheckOver("x INT NOT NULL, data VARIANT", expr),
+          () -> translateCheckOver("x INT NOT NULL, data VARIANT NOT NULL", expr),
           "expected dead-code rejection for: " + expr);
       assertTrue(t.getMessage().contains("dead code"),
           "expected dead-code rejection, got: " + t.getMessage());

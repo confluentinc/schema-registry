@@ -831,7 +831,7 @@ final class ConstraintEmitter {
     LogicalTypesParser.Check_expr_compareContext operand = ctx.check_expr_compare();
     ConstraintValidationContext vctx = EMIT_VCTX.get();
     String byInputs = ConstraintNullTest.isTestedByValue(operand) ? null
-        : ConstraintNullTest.of(operand);
+        : ConstraintNullTest.told(ConstraintNullTest.of(operand), operand);
     if (byInputs != null && (vctx == null || !vctx.isTypeOnly())) {
       sb.append(negated ? ConstraintNullTest.not(byInputs) : byInputs);
       return;
@@ -2444,7 +2444,8 @@ final class ConstraintEmitter {
         ConstraintValidationContext vctx = EMIT_VCTX.get();
         // SQL's `=` matches no NULL, so a subject or WHEN value that may be NULL is tested first.
         String eitherNull = ConstraintNullTest.either(
-            ConstraintNullTest.of(caseArg), ConstraintNullTest.of(when.check_expr(0)));
+            ConstraintNullTest.told(ConstraintNullTest.of(caseArg), caseArg),
+            ConstraintNullTest.told(ConstraintNullTest.of(when.check_expr(0)), when.check_expr(0)));
         boolean guarded = eitherNull != null && !ConstraintNullTest.NEVER.equals(eitherNull);
         if (guarded) {
           sb.append('(').append(eitherNull).append(" ? false : ");
@@ -2592,6 +2593,12 @@ final class ConstraintEmitter {
         && is.check_expr_compare().check_expr_between(0).BETWEEN() != null) {
       return emitBetweenTruth(is.check_expr_compare().check_expr_between(0), truth, sb);
     }
+    LogicalTypesParser.C_exprContext leaf =
+        is.IS() == null ? ConstraintResolver.leafPrimary(is.check_expr_compare()) : null;
+    if (leaf instanceof LogicalTypesParser.CheckFuncContext
+        && ConstraintNullTest.isQuantifier((LogicalTypesParser.CheckFuncContext) leaf)) {
+      return emitQuantifierTruth((LogicalTypesParser.CheckFuncContext) leaf, truth, sb);
+    }
     String isNull = is.IS() != null ? null : ConstraintNullTest.of(is.check_expr_compare());
     boolean guarded = isNull != null && !ConstraintNullTest.NEVER.equals(isNull);
     sb.append('(');
@@ -2602,6 +2609,127 @@ final class ConstraintEmitter {
     visitIs(is, sb);
     sb.append("))");
     return guarded ? MAY_BE_NULL : is.IS() == null && isNull == null ? UNTOLD : 0;
+  }
+
+  /**
+   * {@link #emitTruth} of EVERY or ANY: EVERY is TRUE when its body is TRUE for every element and
+   * FALSE when it is FALSE for any, ANY the other way round, and both are NULL over a NULL
+   * collection. One with nothing that may be NULL is emitted as before.
+   */
+  static int emitQuantifierTruth(
+      LogicalTypesParser.CheckFuncContext func, boolean truth, StringBuilder sb) {
+    LogicalTypesParser.Func_applicationContext app = func.func_expr().func_application();
+    List<LogicalTypesParser.Check_exprContext> args = app.check_expr_list().check_expr();
+    String name = app.identifier().getText().toUpperCase(java.util.Locale.ROOT);
+    ConstraintValidationContext outer = EMIT_VCTX.get();
+    String collectionNull = ConstraintNullTest.of(args.get(0));
+    if (outer == null || collectionNull == null) {
+      sb.append(truth ? "(" : "!(");
+      visitCExpr(func, sb);
+      sb.append(')');
+      return UNTOLD;
+    }
+    String iterVar = ConstraintFunctions.extractIterationVar(args.get(1), name);
+    ConstraintValidationContext body = bodyContext(app, outer, () -> outer.withBinding(iterVar,
+        ConstraintResolver.resolveCollectionElementType(args.get(0), outer)));
+    StringBuilder bodyTruth = new StringBuilder();
+    int flags;
+    EMIT_VCTX.set(body);
+    try {
+      flags = emitTruth(args.get(2).check_expr_or(), truth, bodyTruth);
+    } finally {
+      EMIT_VCTX.set(outer);
+    }
+    if (flags == 0 && ConstraintNullTest.NEVER.equals(collectionNull)) {
+      sb.append(truth ? "(" : "!(");
+      visitCExpr(func, sb);
+      sb.append(')');
+      return 0;
+    }
+    StringBuilder fold = new StringBuilder();
+    emitWrappedReceiver(args.get(0), fold);
+    fold.append("EVERY".equals(name) == truth ? ".all(" : ".exists(").append(iterVar)
+        .append(", ").append(bodyTruth).append(')');
+    falseIfNull(collectionNull, fold.toString(), sb);
+    return flags | (ConstraintNullTest.NEVER.equals(collectionNull) ? 0 : MAY_BE_NULL);
+  }
+
+  /**
+   * The NULL test of a selection with a subscript, NULL as SQL gives it: when a step, an index
+   * or the element is NULL, or a key or index is missing; null when a step's type doesn't
+   * resolve.
+   */
+  static String subscriptNullTest(LogicalTypesParser.C_exprContext c) {
+    ConstraintValidationContext vctx = EMIT_VCTX.get();
+    if (vctx == null) {
+      return null;
+    }
+    List<String> tests = new ArrayList<>();
+    StringBuilder prefix = new StringBuilder();
+    Schema type;
+    LogicalTypesParser.IndirectionContext indirection;
+    if (c instanceof LogicalTypesParser.CheckColumnRefContext) {
+      LogicalTypesParser.ColumnrefContext col =
+          ((LogicalTypesParser.CheckColumnRefContext) c).columnref();
+      String root = colidName(col.colid());
+      Schema rootSchema = vctx.schemaOf(root);
+      if (rootSchema == null) {
+        return null;
+      }
+      emitColumnRoot(root, prefix);
+      // A column-level CHECK is skipped when its column is null.
+      if (rootSchema.isNullable() && !(vctx.isColumnLevel() && vctx.isColumn(root))) {
+        tests.add(stepTest(prefix.toString(), true));
+      }
+      type = resolveRef(rootSchema);
+      indirection = col.indirection();
+    } else {
+      LogicalTypesParser.CheckParenContext paren = (LogicalTypesParser.CheckParenContext) c;
+      tests.add(ConstraintNullTest.of(paren.check_expr()));
+      prefix.append('(');
+      visitCheckExpr(paren.check_expr(), prefix);
+      prefix.append(')');
+      type = resolveRef(ConstraintResolver.tryResolveCheckExprType(paren.check_expr(), vctx));
+      indirection = paren.indirection();
+    }
+    for (LogicalTypesParser.Indirection_elContext el : indirection.indirection_el()) {
+      if (type == null) {
+        return null;
+      }
+      Schema next;
+      boolean field = el.colid() != null;
+      if (field) {
+        Schema.Field f = type.getType() == Schema.Type.STRUCT ? type.getField(colidName(el)) : null;
+        if (f == null) {
+          return null;
+        }
+        String fieldName = colidName(el);
+        prefix.append(Schema.isCelReservedName(fieldName)
+            ? "[\"" + fieldName + "\"]" : "." + fieldName);
+        next = f.getSchema();
+      } else {
+        tests.add(ConstraintNullTest.of(el.check_expr()));
+        StringBuilder index = new StringBuilder();
+        visitCheckExpr(el.check_expr(), index);
+        if (type.getType() == Schema.Type.MAP) {
+          tests.add("!((" + index + ") in " + prefix + ")");
+          prefix.append('[').append(index).append(']');
+          next = type.getValueType();
+        } else if (type.getType() == Schema.Type.ARRAY) {
+          tests.add(index.toString().matches("\\d+") ? "size(" + prefix + ") < " + index
+              : "((" + index + ") < 1 || (" + index + ") > size(" + prefix + "))");
+          prefix.append("[(").append(index).append(") - 1]");
+          next = type.getElementType();
+        } else {
+          return null;
+        }
+      }
+      if (next.isNullable()) {
+        tests.add(field ? stepTest(prefix.toString(), true) : "dyn(" + prefix + ") == null");
+      }
+      type = resolveRef(next);
+    }
+    return ConstraintNullTest.any(tests);
   }
 
   // An IN whose three-valued CEL gives NULL as null.

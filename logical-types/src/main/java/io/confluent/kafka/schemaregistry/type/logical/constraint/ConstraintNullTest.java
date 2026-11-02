@@ -36,10 +36,12 @@ import org.antlr.v4.runtime.tree.ParseTree;
  *
  * <p>CASE, NULLIF and an IN with an element that may be NULL give NULL as null, so are tested by
  * their value; an IN over an array of elements never NULL is NULL when its subject or array is.
- * AND, OR and BETWEEN are NULL when neither definitely TRUE nor definitely FALSE.
- * {@code "false"} means the expression is never NULL. Null means it can't be told without
- * evaluating it: an IN whose inputs or array type don't tell, a subscript, a quantifier, a
- * VARIANT function or cast, or any of these over one.
+ * AND, OR, BETWEEN, EVERY and ANY are NULL when neither definitely TRUE nor definitely FALSE. A
+ * subscript is NULL when a step, its index or its element is, or its key or index is missing.
+ * VARIANT_GET, TRY_VARIANT_GET and TRY_PARSE_JSON are NULL when an input is or their CEL gives
+ * null. {@code "false"} means the expression is never NULL. Null means it can't be told without
+ * evaluating it: ONE, VARIANT_IS_NULL, a CAST of a VARIANT, an IN whose inputs or array type
+ * don't tell, or any of these over one.
  */
 final class ConstraintNullTest {
 
@@ -50,7 +52,7 @@ final class ConstraintNullTest {
       "LENGTH", "UPPER", "LOWER", "REPLACE", "STARTS_WITH", "ENDS_WITH", "CONTAINS", "MATCHES",
       "IS_EMAIL", "IS_HOSTNAME", "IS_IPV4", "IS_IPV6", "IS_URI", "IS_URI_REF", "IS_UUID",
       "ABS", "SIGN", "FLOOR", "CEIL", "CEILING", "SQRT", "ROUND", "TRUNCATE",
-      "GREATEST", "LEAST");
+      "GREATEST", "LEAST", "PARSE_JSON", "TO_JSON", "TYPE_OF_VARIANT");
 
   // Their CEL gives NULL as null.
   private static final Set<String> NULL_AS_NULL_FUNCS = Set.of("COALESCE", "GREATEST", "LEAST");
@@ -107,13 +109,36 @@ final class ConstraintNullTest {
       return ((LogicalTypesParser.CheckLiteralContext) c).literal().NULL() != null
           ? "true" : NEVER;
     }
+    if (c instanceof LogicalTypesParser.CheckCaseContext
+        && neverNull(((LogicalTypesParser.CheckCaseContext) c).case_expr())) {
+      return NEVER;
+    }
     if (isTestedByValue(c)) {
       StringBuilder emitted = new StringBuilder();
       ConstraintEmitter.visitCExpr(c, emitted);
       return "dyn(" + emitted + ") == null";
     }
     if (c instanceof LogicalTypesParser.CheckFuncContext) {
-      return of(((LogicalTypesParser.CheckFuncContext) c).func_expr());
+      LogicalTypesParser.CheckFuncContext func = (LogicalTypesParser.CheckFuncContext) c;
+      if (isQuantifier(func)) {
+        StringBuilder whenTrue = new StringBuilder();
+        StringBuilder whenFalse = new StringBuilder();
+        return neither(ConstraintEmitter.emitQuantifierTruth(func, true, whenTrue)
+            | ConstraintEmitter.emitQuantifierTruth(func, false, whenFalse), whenTrue, whenFalse);
+      }
+      List<LogicalTypesParser.Check_exprContext> inputs = valueTestedInputs(func.func_expr());
+      if (inputs != null) {
+        // NULL when an input is, or when there is no value, which its CEL gives as null.
+        List<String> tests = new ArrayList<>();
+        for (LogicalTypesParser.Check_exprContext input : inputs) {
+          tests.add(of(input));
+        }
+        StringBuilder emitted = new StringBuilder();
+        ConstraintEmitter.visitCExpr(c, emitted);
+        tests.add("dyn(" + emitted + ") == null");
+        return any(tests);
+      }
+      return of(func.func_expr());
     }
     if (c instanceof LogicalTypesParser.CheckParenContext
         && ((LogicalTypesParser.CheckParenContext) c).indirection() == null) {
@@ -239,7 +264,7 @@ final class ConstraintNullTest {
 
   private static boolean isTestedByValue(LogicalTypesParser.C_exprContext c) {
     if (c instanceof LogicalTypesParser.CheckCaseContext) {
-      return true;
+      return !neverNull(((LogicalTypesParser.CheckCaseContext) c).case_expr());
     }
     if (!(c instanceof LogicalTypesParser.CheckFuncContext)) {
       return false;
@@ -261,6 +286,29 @@ final class ConstraintNullTest {
         ((LogicalTypesParser.CheckFuncContext) c).func_expr().func_application();
     return app != null
         && NULL_AS_NULL_FUNCS.contains(app.identifier().getText().toUpperCase(Locale.ROOT));
+  }
+
+  // A CASE with an ELSE whose results are never NULL.
+  private static boolean neverNull(LogicalTypesParser.Case_exprContext ctx) {
+    boolean afterElse = false;
+    for (int i = 0; i < ctx.getChildCount(); i++) {
+      ParseTree child = ctx.getChild(i);
+      if (child instanceof org.antlr.v4.runtime.tree.TerminalNode
+          && "ELSE".equalsIgnoreCase(child.getText())) {
+        afterElse = true;
+      } else if (afterElse && child instanceof LogicalTypesParser.Check_exprContext) {
+        if (!NEVER.equals(of((LogicalTypesParser.Check_exprContext) child))) {
+          return false;
+        }
+        for (LogicalTypesParser.When_clauseContext when : ctx.when_clause()) {
+          if (!NEVER.equals(of(when.check_expr(1)))) {
+            return false;
+          }
+        }
+        return true;
+      }
+    }
+    return false;
   }
 
   // c without the parentheses around it.
@@ -287,6 +335,9 @@ final class ConstraintNullTest {
 
   // A column, a macro variable or a field of either, by its nullable steps.
   private static String ofSelection(LogicalTypesParser.C_exprContext c) {
+    if (hasSubscript(c)) {
+      return ConstraintEmitter.subscriptNullTest(c);
+    }
     ConstraintValidationContext vctx = EMIT_VCTX.get();
     List<String> path = ConstraintResolver.selectionPathCExpr(c);
     List<Integer> steps = path == null ? null : ConstraintResolver.nullableSteps(path, vctx);
@@ -301,6 +352,132 @@ final class ConstraintNullTest {
     return ConstraintResolver.isHasCompatibleCExpr(c, vctx)
         ? ConstraintEmitter.nullTest(path, emitted.toString(), true)
         : "dyn(" + emitted + ") == null";
+  }
+
+  private static boolean hasSubscript(LogicalTypesParser.C_exprContext c) {
+    LogicalTypesParser.IndirectionContext indirection =
+        c instanceof LogicalTypesParser.CheckColumnRefContext
+            ? ((LogicalTypesParser.CheckColumnRefContext) c).columnref().indirection()
+            : c instanceof LogicalTypesParser.CheckParenContext
+                ? ((LogicalTypesParser.CheckParenContext) c).indirection() : null;
+    return indirection != null && indirection.indirection_el().stream()
+        .anyMatch(el -> el.check_expr() != null);
+  }
+
+  /**
+   * True if {@code func} is EVERY or ANY, whose three values emitTruth folds over the elements.
+   */
+  static boolean isQuantifier(LogicalTypesParser.CheckFuncContext func) {
+    LogicalTypesParser.Func_applicationContext app = func.func_expr().func_application();
+    if (app == null || app.check_expr_list() == null
+        || app.check_expr_list().check_expr().size() != 3) {
+      return false;
+    }
+    String name = app.identifier().getText().toUpperCase(Locale.ROOT);
+    return "EVERY".equals(name) || "ANY".equals(name);
+  }
+
+  // The inputs of a function NULL either when one is or when its value is missing, which its
+  // CEL gives as null: VARIANT_GET, TRY_VARIANT_GET and TRY_PARSE_JSON.
+  private static List<LogicalTypesParser.Check_exprContext> valueTestedInputs(
+      LogicalTypesParser.Func_exprContext f) {
+    LogicalTypesParser.Func_expr_common_subexprContext sub = f.func_expr_common_subexpr();
+    if (sub instanceof LogicalTypesParser.FuncVariantGetContext) {
+      return ((LogicalTypesParser.FuncVariantGetContext) sub).check_expr();
+    }
+    if (sub instanceof LogicalTypesParser.FuncTryVariantGetContext) {
+      return ((LogicalTypesParser.FuncTryVariantGetContext) sub).check_expr();
+    }
+    LogicalTypesParser.Func_applicationContext app = f.func_application();
+    return app != null && app.check_expr_list() != null
+        && "TRY_PARSE_JSON".equalsIgnoreCase(app.identifier().getText())
+        ? app.check_expr_list().check_expr() : null;
+  }
+
+  /**
+   * {@code test}, refusing an expression whose NULL can't be told when an input may be NULL:
+   * evaluated instead, it could answer as if its NULL were a value.
+   */
+  static String told(String test, org.antlr.v4.runtime.ParserRuleContext node) {
+    if (test == null && mayBeNullByInput(node)) {
+      throw ConstraintToCelTranslator.locatedError(node, "can't tell when '" + node.getText()
+          + "' is NULL, so it can't be tested for NULL here; test its inputs instead.");
+    }
+    return test;
+  }
+
+  /**
+   * {@link #mayBeNullByInput(ParseTree)} outside an emission, as during validation.
+   */
+  static boolean mayBeNullByInput(ParseTree node, ConstraintValidationContext vctx) {
+    ConstraintValidationContext emitting = EMIT_VCTX.get();
+    EMIT_VCTX.set(vctx);
+    try {
+      return mayBeNullByInput(node);
+    } finally {
+      if (emitting == null) {
+        EMIT_VCTX.remove();
+      } else {
+        EMIT_VCTX.set(emitting);
+      }
+    }
+  }
+
+  /**
+   * True if a NULL can reach {@code node}: a nullable or unresolved column or field, a
+   * subscript, a literal NULL, or a function that can give NULL on its own.
+   */
+  static boolean mayBeNullByInput(ParseTree node) {
+    ConstraintValidationContext vctx = EMIT_VCTX.get();
+    if (node instanceof LogicalTypesParser.CheckLiteralContext) {
+      return ((LogicalTypesParser.CheckLiteralContext) node).literal().NULL() != null;
+    }
+    if (node instanceof LogicalTypesParser.C_exprContext && hasSubscript(
+        (LogicalTypesParser.C_exprContext) node)) {
+      return true;
+    }
+    if (node instanceof LogicalTypesParser.CheckColumnRefContext
+        || node instanceof LogicalTypesParser.CheckParenContext
+            && ((LogicalTypesParser.CheckParenContext) node).indirection() != null) {
+      List<String> path =
+          ConstraintResolver.selectionPathCExpr((LogicalTypesParser.C_exprContext) node);
+      List<Integer> steps = path == null ? null : ConstraintResolver.nullableSteps(path, vctx);
+      if (steps == null || !steps.isEmpty()) {
+        return true;
+      }
+    }
+    if (node instanceof LogicalTypesParser.CheckFuncContext) {
+      LogicalTypesParser.CheckFuncContext func = (LogicalTypesParser.CheckFuncContext) node;
+      if (valueTestedInputs(func.func_expr()) != null || isTestedByValue(func)) {
+        return true;
+      }
+      LogicalTypesParser.Func_applicationContext app = func.func_expr().func_application();
+      if (app != null && app.check_expr_list() != null
+          && app.check_expr_list().check_expr().size() == 3 && vctx != null) {
+        // A quantifier's body sees its variable bound to the collection's element.
+        List<LogicalTypesParser.Check_exprContext> args = app.check_expr_list().check_expr();
+        String name = app.identifier().getText().toUpperCase(Locale.ROOT);
+        if ("EVERY".equals(name) || "ANY".equals(name) || "ONE".equals(name)) {
+          if (mayBeNullByInput(args.get(0))) {
+            return true;
+          }
+          ConstraintValidationContext body = vctx.withBinding(args.get(1).getText(),
+              ConstraintResolver.resolveCollectionElementType(args.get(0), vctx));
+          EMIT_VCTX.set(body);
+          try {
+            return mayBeNullByInput(args.get(2));
+          } finally {
+            EMIT_VCTX.set(vctx);
+          }
+        }
+      }
+    }
+    for (int i = 0; i < node.getChildCount(); i++) {
+      if (mayBeNullByInput(node.getChild(i))) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private static boolean isVariant(LogicalTypesParser.Check_exprContext operand) {

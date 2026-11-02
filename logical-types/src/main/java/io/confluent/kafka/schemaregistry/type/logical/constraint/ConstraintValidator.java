@@ -1258,8 +1258,10 @@ final class ConstraintValidator {
             is.check_expr_compare());
         if (funcName != null
             && ConstraintResolver.NEVER_NULL_FUNCS.contains(funcName)) {
+          // One whose NULL can't be told is refused when emitted if an input may be NULL.
           String byInputs = ConstraintNullTest.of(is.check_expr_compare(), vctx);
-          if (byInputs == null || ConstraintNullTest.NEVER.equals(byInputs)) {
+          if (ConstraintNullTest.NEVER.equals(byInputs) || byInputs == null
+              && !ConstraintNullTest.mayBeNullByInput(is.check_expr_compare(), vctx)) {
             throw locatedError(is,
                 "IS NULL on " + funcName + "(...) is dead code — the function "
                     + "returns a non-null value here, as no argument can be "

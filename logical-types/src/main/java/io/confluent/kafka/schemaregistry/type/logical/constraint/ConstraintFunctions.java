@@ -283,7 +283,7 @@ final class ConstraintFunctions {
    * Validate that the iter-var arg is a bare identifier and not a reserved
    * word.
    */
-  private static String extractIterationVar(
+  static String extractIterationVar(
       LogicalTypesParser.Check_exprContext ctx, String sqlName) {
     String text = ctx.getText();
     if (!text.matches("[A-Za-z_][A-Za-z0-9_]*")) {
@@ -539,7 +539,8 @@ final class ConstraintFunctions {
     if (ConstraintResolver.isHasCompatible(arg, vctx)) {
       return ConstraintEmitter.nullTest(ConstraintResolver.selectionPath(arg), nativeEmit, true);
     }
-    String byInputs = ConstraintNullTest.isTestedByValue(arg) ? null : ConstraintNullTest.of(arg);
+    String byInputs = ConstraintNullTest.isTestedByValue(arg) ? null
+        : ConstraintNullTest.told(ConstraintNullTest.of(arg), arg);
     return byInputs != null ? byInputs
         : "dyn(" + ownTypeValue(arg, nativeEmit, value, vctx) + ") == null";
   }
@@ -553,7 +554,8 @@ final class ConstraintFunctions {
     if (ConstraintResolver.isHasCompatible(arg, vctx)) {
       return ConstraintEmitter.nullTest(ConstraintResolver.selectionPath(arg), nativeEmit, false);
     }
-    String byInputs = ConstraintNullTest.isTestedByValue(arg) ? null : ConstraintNullTest.of(arg);
+    String byInputs = ConstraintNullTest.isTestedByValue(arg) ? null
+        : ConstraintNullTest.told(ConstraintNullTest.of(arg), arg);
     return byInputs != null ? ConstraintNullTest.not(byInputs)
         : "dyn(" + ownTypeValue(arg, nativeEmit, value, vctx) + ") != null";
   }
