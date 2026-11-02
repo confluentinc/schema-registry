@@ -965,10 +965,7 @@ final class ConstraintValidator {
     // overload for — runtime "no matching overload" error. Reject early.
     rejectNullBound(ins.get(1), "lower");
     rejectNullBound(ins.get(2), "upper");
-    // Null-returning function check applies to ALL three positions —
-    // subject, lower bound, upper bound. The emit produces
-    // `lo <= subject && subject <= hi`, so a null in any position hits
-    // a comparison with no null overload at runtime.
+    // A NULLIF operand is refused in all three positions.
     rejectNullReturningFuncBound(ins.get(0), "subject");
     rejectNullReturningFuncBound(ins.get(1), "lower bound");
     rejectNullReturningFuncBound(ins.get(2), "upper bound");
@@ -980,12 +977,9 @@ final class ConstraintValidator {
   }
 
   /**
-   * Reject a BETWEEN operand that's a function call which can return null
-   * (currently just NULLIF). Strict cel-java accepts the emit because the
-   * function's return type is the non-null type, but at runtime a null
-   * result hits a comparison op with no null overload and the constraint
-   * crashes. Applies to subject and both bounds: the emit shape
-   * {@code lo <= subj && subj <= hi} fails for a null in any position.
+   * Reject a BETWEEN operand that's a function call which can return null (currently just
+   * NULLIF), refused since before BETWEEN tested an operand's NULL; COALESCE gives an explicit
+   * fallback.
    */
   private static void rejectNullReturningFuncBound(
       LogicalTypesParser.Check_expr_inContext operand, String role) {
@@ -994,8 +988,7 @@ final class ConstraintValidator {
         && ConstraintResolver.NULL_RETURNING_FUNCS.contains(funcName)) {
       throw locatedError(operand,
           "BETWEEN " + role + " cannot be " + funcName
-              + "(...) — the function can return null, and there is no "
-              + "comparison overload taking null. Use COALESCE to provide "
+              + "(...), which can return null. Use COALESCE to provide "
               + "an explicit fallback value.");
     }
   }
@@ -1114,10 +1107,9 @@ final class ConstraintValidator {
   /**
    * For functions whose CEL emit unifies argument types — GREATEST, LEAST,
    * COALESCE, NULLIF — require all args to share a comparable type category
-   * (matching the rest of the validator's policy). Also reject literal NULL
-   * for GREATEST/LEAST/NULLIF: each emits CEL operators that fail on null
-   * operands. COALESCE explicitly handles nulls so a literal NULL arg is
-   * allowed there (the emit's null-check guards the value branch).
+   * (matching the rest of the validator's policy). Also reject a literal
+   * NULL argument of GREATEST, LEAST, NULLIF or COALESCE, which is dead
+   * code there.
    *
    * <p>Args whose type can't be resolved (function results, complex
    * sub-expressions) are skipped — the validator stays best-effort.
@@ -1208,19 +1200,18 @@ final class ConstraintValidator {
    * Reject literal NULL args in GREATEST/LEAST/NULLIF/COALESCE. Strict
    * cel-java accepts {@code null} as a typed value, but our SQL semantic
    * is that a literal NULL in these contexts is dead code (NULLIF: never
-   * matches; COALESCE: never the first non-null; GREATEST/LEAST: emits
-   * CEL operators with no null overload). Direct the user to IS NULL or
-   * to drop the NULL argument.
+   * matches; COALESCE: never the first non-null; GREATEST/LEAST: always
+   * NULL). Direct the user to IS NULL or to drop the NULL argument.
    */
   private static void rejectLiteralNullArgs(
       String name, List<LogicalTypesParser.Check_exprContext> args) {
     for (LogicalTypesParser.Check_exprContext arg : args) {
       if (ConstraintResolver.isLiteralNull(arg)) {
         throw locatedError(arg,
-            name + "() cannot take a literal NULL — the emit applies "
-                + "operators that have no null overload (or, for COALESCE, "
-                + "produces a conditional whose branches don't type-unify). "
-                + "Drop the NULL argument or use IS NULL to test for null.");
+            name + "() cannot take a literal NULL, which is dead code there: "
+                + "COALESCE skips it, NULLIF never matches it, and it makes "
+                + "GREATEST and LEAST always NULL. Drop the NULL argument or "
+                + "use IS NULL to test for null.");
       }
     }
   }

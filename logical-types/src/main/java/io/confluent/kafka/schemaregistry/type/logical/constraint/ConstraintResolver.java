@@ -1843,7 +1843,6 @@ final class ConstraintResolver {
     return compare == null ? null : tryExtractLeafColumnRefCompare(compare);
   }
 
-  // The comparison level of a pass-through cascade, or null if a level branches.
   /**
    * The primary at the leaf of a pass-through cascade, or null.
    */
@@ -1860,6 +1859,7 @@ final class ConstraintResolver {
     return leafCExpr(ctx);
   }
 
+  // The comparison level of a pass-through cascade, or null if a level branches.
   private static LogicalTypesParser.Check_expr_compareContext leafCompare(
       LogicalTypesParser.Check_exprContext ctx) {
     LogicalTypesParser.Check_expr_orContext or = ctx.check_expr_or();

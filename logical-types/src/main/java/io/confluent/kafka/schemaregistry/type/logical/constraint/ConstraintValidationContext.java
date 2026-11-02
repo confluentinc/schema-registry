@@ -137,8 +137,9 @@ public final class ConstraintValidationContext {
   }
 
   /**
-   * True if this context emits the expression the strict check types, without
-   * the NULL guards of GREATEST, LEAST and COALESCE.
+   * True if this context emits the expression the strict check types, without the NULL guards
+   * of COALESCE, GREATEST, LEAST, NULLIF, CASE results, POSITION's FROM form and a three-valued
+   * IN.
    */
   public boolean isTypeOnly() {
     return typeOnly;
