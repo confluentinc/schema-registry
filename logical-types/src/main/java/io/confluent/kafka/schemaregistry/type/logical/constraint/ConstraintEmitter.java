@@ -2666,16 +2666,48 @@ final class ConstraintEmitter {
    */
   static int emitQuantifierTruth(
       LogicalTypesParser.CheckFuncContext func, boolean truth, StringBuilder sb) {
-    LogicalTypesParser.Func_applicationContext app = func.func_expr().func_application();
+    int flags = quantifierFold(func.func_expr().func_application(), truth, sb);
+    if ((flags & NATIVE) != 0) {
+      sb.append(truth ? "(" : "!(");
+      visitCExpr(func, sb);
+      sb.append(')');
+    }
+    return flags & ~NATIVE;
+  }
+
+  // quantifierFold's flag for one emitted as is: nothing may be NULL, or its NULL can't be told.
+  private static final int NATIVE = 4;
+
+  /**
+   * ONE's own CEL: TRUE, FALSE or null from its three-valued forms, as cel-java's exists_one,
+   * unlike all and exists, doesn't absorb a NULL body's error once the answer is decided; as is
+   * when nothing may be NULL.
+   */
+  static void emitOne(
+      LogicalTypesParser.Func_applicationContext app, StringBuilder sb, Runnable asIs) {
+    ConstraintValidationContext vctx = EMIT_VCTX.get();
+    boolean folds = vctx != null && !vctx.isTypeOnly() && app.check_expr_list() != null
+        && app.check_expr_list().check_expr().size() == 3;
+    StringBuilder whenTrue = new StringBuilder();
+    if (!folds || (quantifierFold(app, true, whenTrue) & NATIVE) != 0) {
+      asIs.run();
+      return;
+    }
+    StringBuilder whenFalse = new StringBuilder();
+    quantifierFold(app, false, whenFalse);
+    sb.append('(').append(whenTrue).append(" ? true : (").append(whenFalse)
+        .append(" ? false : dyn(null)))");
+  }
+
+  // The three-valued fold of EVERY, ANY or ONE in a truth, or NATIVE with nothing emitted.
+  private static int quantifierFold(
+      LogicalTypesParser.Func_applicationContext app, boolean truth, StringBuilder sb) {
     List<LogicalTypesParser.Check_exprContext> args = app.check_expr_list().check_expr();
     String name = app.identifier().getText().toUpperCase(java.util.Locale.ROOT);
     ConstraintValidationContext outer = EMIT_VCTX.get();
     String collectionNull = ConstraintNullTest.of(args.get(0));
     if (outer == null || collectionNull == null) {
-      sb.append(truth ? "(" : "!(");
-      visitCExpr(func, sb);
-      sb.append(')');
-      return UNTOLD;
+      return NATIVE | UNTOLD;
     }
     String iterVar = ConstraintFunctions.extractIterationVar(args.get(1), name);
     ConstraintValidationContext body = bodyContext(app, outer, () -> outer.withBinding(iterVar,
@@ -2695,10 +2727,7 @@ final class ConstraintEmitter {
       EMIT_VCTX.set(outer);
     }
     if (flags == 0 && ConstraintNullTest.NEVER.equals(collectionNull)) {
-      sb.append(truth ? "(" : "!(");
-      visitCExpr(func, sb);
-      sb.append(')');
-      return 0;
+      return NATIVE;
     }
     StringBuilder coll = new StringBuilder();
     emitWrappedReceiver(args.get(0), coll);

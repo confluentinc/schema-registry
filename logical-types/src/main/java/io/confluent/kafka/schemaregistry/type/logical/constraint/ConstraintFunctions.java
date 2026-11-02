@@ -204,7 +204,7 @@ final class ConstraintFunctions {
         emitMacro(ctx, args, "exists", sb, name);
         break;
       case "ONE":
-        emitMacro(ctx, args, "exists_one", sb, name);
+        ConstraintEmitter.emitOne(ctx, sb, () -> emitMacro(ctx, args, "exists_one", sb, name));
         break;
 
       default:
