@@ -335,10 +335,14 @@ final class ConstraintNullTest {
 
   // A column, a macro variable or a field of either, by its nullable steps.
   private static String ofSelection(LogicalTypesParser.C_exprContext c) {
-    if (hasSubscript(c)) {
+    ConstraintValidationContext vctx = EMIT_VCTX.get();
+    // A field of a parenthesized receiver that isn't a plain path, (e).x or (arr[1]).x, is
+    // tested step by step from the receiver's own test.
+    if (hasSubscript(c) || c instanceof LogicalTypesParser.CheckParenContext
+        && ((LogicalTypesParser.CheckParenContext) c).indirection() != null
+        && !ConstraintResolver.isHasCompatibleCExpr(c, vctx)) {
       return ConstraintEmitter.subscriptNullTest(c);
     }
-    ConstraintValidationContext vctx = EMIT_VCTX.get();
     List<String> path = ConstraintResolver.selectionPathCExpr(c);
     List<Integer> steps = path == null ? null : ConstraintResolver.nullableSteps(path, vctx);
     if (steps == null) {

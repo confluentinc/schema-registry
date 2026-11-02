@@ -613,15 +613,11 @@ class CheckConstraintTest {
   }
 
   @Test
-  void mapIndexingWithIntKeyPassesThrough() {
-    // Same for int-keyed maps — the key is a key, not a 1-based position.
-    String script = "STRUCT T ("
-        + "scores MAP<INT, INT>,"
-        + "CHECK (scores[42] > 0)"
-        + ");";
-    Schema schema = parseScript(script).getRootSchema();
-    Rule r = schema.getRules().get(0);
-    assertEquals("this.scores[42] > 0", r.getExpr());
+  void mapIndexingWithIntKeyIsRefused() {
+    // An int-keyed map is held as entries, which a subscript would index as a list.
+    ValidationException e = assertThrows(ValidationException.class,
+        () -> parseScript("STRUCT T (scores MAP<INT, INT>, CHECK (scores[42] > 0));"));
+    assertTrue(e.getMessage().contains("INT keys is not supported"), e.getMessage());
   }
 
   @Test
@@ -3577,6 +3573,101 @@ class CheckConstraintTest {
         () -> translateCheckOver(columns, "ONE(arr, e, e > i) IS NULL"));
     assertTrue(dead.getMessage().contains("dead code"), dead.getMessage());
     translateCheckOver(columns, "ONE(arr, e, e > ni)");
+  }
+
+  @Test
+  void anIsNullOperandIsStillEvaluated() throws Exception {
+    // IS NULL of an expression tells its NULL from its inputs but still evaluates it, so a value
+    // SQL fails on, such as bad JSON or a division by zero, fails here too.
+    String columns = "v STRING, ni INT, b INT NOT NULL";
+    assertEquals("((!has(this.v) || dyn(this.v) == null) ? false"
+            + " : dyn(variants.parseJson(this.v)) != null)",
+        translateCheckOver(columns, "PARSE_JSON(v) IS NOT NULL"));
+    Map<String, Object> bad = Map.of("v", "not-json", "ni", 5, "b", 0);
+    Map<String, Object> good = Map.of("v", "{}", "ni", 4, "b", 2);
+    Map<String, Object> present = new HashMap<>();
+    present.put("v", null);
+    present.put("ni", null);
+    present.put("b", 0);
+    // Each CHECK's value on a good row and on a NULL one.
+    Map<String, List<Boolean>> rows = Map.of("PARSE_JSON(v) IS NOT NULL", List.of(true, false),
+        "CAST(v AS INT) IS NULL", List.of(false, true), "ni / b IS NULL", List.of(false, true),
+        "NOT ((ni / b) IS NOT NULL)", List.of(false, true),
+        "(PARSE_JSON(v) IS NOT NULL) = TRUE", List.of(true, false));
+    for (Map.Entry<String, List<Boolean>> row : rows.entrySet()) {
+      String sql = row.getKey();
+      String cel = translateCheckOver(columns, sql);
+      assertThrows(CelEvaluationException.class, () -> evalOver(cel, bad), sql + " -> " + cel);
+      if (!sql.startsWith("CAST")) {
+        assertEquals(row.getValue().get(0), evalOver(cel, good), sql + " -> " + cel);
+      }
+      for (Map<String, Object> self : List.of(present, Map.<String, Object>of("b", 0))) {
+        assertEquals(row.getValue().get(1), evalOver(cel, self),
+            sql + " on " + self.keySet() + " -> " + cel);
+      }
+    }
+  }
+
+  @Test
+  void aMapWithoutStringKeysIsNotReadAsAMap() {
+    // Avro and JSON hold a MAP without string keys as entries of a key and its value, which a
+    // subscript or quantifier would read as a list.
+    String columns = "m MAP<INT, STRING> NOT NULL, nm MAP<INT, STRING>, "
+        + "sm MAP<STRING, INT> NOT NULL, r STRUCT(m MAP<BIGINT, INT>) NOT NULL";
+    for (String sql : List.of("m[1] = 'a'", "EVERY(m, k, k > 0)", "ANY(nm, k, k > 0)",
+        "(m)[1] IS NULL", "r.m[1] > 0", "EVERY(sm, k, ONE(m, j, j > 0))")) {
+      ValidationException e = assertThrows(ValidationException.class,
+          () -> translateCheckOver(columns, sql), sql);
+      assertTrue(e.getMessage().contains("keys is not supported"), e.getMessage());
+    }
+    for (String sql : List.of("CARDINALITY(m) > 0", "nm IS NULL", "sm['a'] > 0",
+        "EVERY(sm, k, sm[k] > 0)")) {
+      translateCheckOver(columns, sql);
+    }
+  }
+
+  @Test
+  void aFieldOfAParenthesizedReceiverIsNullStepByStep() throws Exception {
+    // (e).x and (arr[1]).x are NULL when their receiver or the field is, as e.x and arr[1].x are.
+    String columns = "items STRUCT(x INT) ARRAY NOT NULL, "
+        + "arr STRUCT(x INT) NOT NULL ARRAY NOT NULL";
+    Map<String, Object> present = new HashMap<>();
+    present.put("x", null);
+    Map<String, Object> seven = Map.of("x", 7);
+    for (Map<String, Object> self : List.of(
+        Map.<String, Object>of("items", Arrays.asList(null, seven), "arr", List.of(present)),
+        Map.<String, Object>of("items", Arrays.asList(Map.of(), seven), "arr",
+            List.of(Map.of())))) {
+      for (String sql : List.of("EVERY(items, e, COALESCE((e).x, 7) = 7)",
+          "EVERY(items, e, (e).x IS NULL OR (e).x = 7)", "(arr[1]).x IS NULL",
+          "COALESCE((arr[1]).x, 3) = 3")) {
+        String cel = translateCheckOver(columns, sql);
+        assertEquals(true, evalOver(cel, self), sql + " on " + self + " -> " + cel);
+      }
+    }
+  }
+
+  @Test
+  void aReservedNameInASubscriptPathIsTestedForNull() throws Exception {
+    // has() can't take r["in"], so a reserved name's step is tested by its value.
+    Schema ints = Schema.createArray(Schema.create(Schema.Type.INT).setNullable(false));
+    Schema inner = Schema.createStruct(Arrays.asList(new Schema.Field("in", ints, 0)))
+        .setNullable(false);
+    Schema root = Schema.createStruct(Arrays.asList(new Schema.Field("r", inner, 0)));
+    ConstraintValidationContext vctx = ConstraintValidationContext.tableLevel(root.getFields());
+    String cel = ConstraintToCelTranslator.translate(findFirstCheckExpr(LogicalTypesParserFactory
+        .parse("STRUCT __T (__x INT, CHECK (COALESCE(r.`in`[1], 0) = 0));")), vctx);
+    CelValidator.assertValidStrict(cel, root);
+    Map<String, Object> nullIn = new HashMap<>();
+    nullIn.put("in", null);
+    assertEquals(true, evalOver(cel, Map.of("r", nullIn)), cel);
+    assertEquals(true, evalOver(cel, Map.of("r", Map.of("in", List.of(0)))), cel);
+  }
+
+  private static Object evalOver(String cel, Map<String, Object> self) throws Exception {
+    Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
+    return CelUtils.buildProgram(CelUtils.ScriptType.JSON, cel, null,
+        CelUtils.toVarDecls(CelUtils.toDeclTypes(vars))).eval(vars);
   }
 
   @Test

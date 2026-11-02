@@ -826,15 +826,17 @@ final class ConstraintEmitter {
           emitted.toString(), !negated));
       return;
     }
-    // An expression is tested by its inputs, as evaluating it on a NULL one fails; the strict
-    // check still types it, in its own numeric type, as DECIMAL arithmetic has no native form.
+    // An expression is tested by its inputs, as evaluating it on a NULL one fails, and is still
+    // evaluated otherwise, so an error such as bad JSON fails as SQL's does. The strict check
+    // types it in its own numeric type, as DECIMAL arithmetic has no native form.
     LogicalTypesParser.Check_expr_compareContext operand = ctx.check_expr_compare();
     ConstraintValidationContext vctx = EMIT_VCTX.get();
     String byInputs = ConstraintNullTest.isTestedByValue(operand) ? null
         : ConstraintNullTest.told(ConstraintNullTest.of(operand), operand);
-    if (byInputs != null && (vctx == null || !vctx.isTypeOnly())) {
-      sb.append(negated ? ConstraintNullTest.not(byInputs) : byInputs);
-      return;
+    boolean guarded = byInputs != null && (vctx == null || !vctx.isTypeOnly());
+    if (guarded) {
+      // A ternary, as cel-java's || hides an error once its result is compared.
+      sb.append('(').append(byInputs).append(negated ? " ? false : " : " ? true : ");
     }
     String category = operand.check_expr_between().size() == 1 && vctx != null
         ? ConstraintResolver.coercedNumericCategory(operand.check_expr_between(0), vctx) : null;
@@ -845,6 +847,9 @@ final class ConstraintEmitter {
       visitCompare(operand, sb);
     }
     sb.append(negated ? ") != null" : ") == null");
+    if (guarded) {
+      sb.append(')');
+    }
   }
 
   private static void visitCompare(
@@ -2697,15 +2702,16 @@ final class ConstraintEmitter {
         return null;
       }
       Schema next;
-      boolean field = el.colid() != null;
-      if (field) {
+      // has() takes a field's selection, but not a reserved name's bracket form.
+      boolean selected = false;
+      if (el.colid() != null) {
         Schema.Field f = type.getType() == Schema.Type.STRUCT ? type.getField(colidName(el)) : null;
         if (f == null) {
           return null;
         }
         String fieldName = colidName(el);
-        prefix.append(Schema.isCelReservedName(fieldName)
-            ? "[\"" + fieldName + "\"]" : "." + fieldName);
+        selected = !Schema.isCelReservedName(fieldName);
+        prefix.append(selected ? "." + fieldName : "[\"" + fieldName + "\"]");
         next = f.getSchema();
       } else {
         tests.add(ConstraintNullTest.of(el.check_expr()));
@@ -2725,7 +2731,7 @@ final class ConstraintEmitter {
         }
       }
       if (next.isNullable()) {
-        tests.add(field ? stepTest(prefix.toString(), true) : "dyn(" + prefix + ") == null");
+        tests.add(selected ? stepTest(prefix.toString(), true) : "dyn(" + prefix + ") == null");
       }
       type = resolveRef(next);
     }

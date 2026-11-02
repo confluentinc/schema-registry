@@ -21,6 +21,7 @@ import static io.confluent.kafka.schemaregistry.type.logical.constraint.Constrai
 
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesParser;
+import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.tree.ParseTree;
 import org.antlr.v4.runtime.tree.TerminalNode;
 
@@ -325,6 +326,8 @@ final class ConstraintValidator {
           }
           // Validate the collection (arg 0) in the outer context.
           validateColumnRefs(args.get(0), vctx);
+          refuseEntryMap(ConstraintResolver.tryResolveCheckExprType(args.get(0), vctx),
+              args.get(0), name + " over", vctx);
           // Skip arg 1 (the iteration var binding name itself); validate the
           // predicate body (arg 2) in a context that includes the binding,
           // typed as the collection's element type if we can resolve it.
@@ -440,11 +443,27 @@ final class ConstraintValidator {
                     + "]`) and crash at runtime. Use a positive index.");
           }
         }
+        refuseEntryMap(current, el, "A subscript of", vctx);
         current = (t == Schema.Type.MAP) ? current.getValueType()
             : current.getElementType();
         current = ConstraintResolver.resolveIfNamedRef(current, vctx);
         pathSoFar = pathSoFar + "[...]";
       }
+    }
+  }
+
+  // Avro and JSON hold a MAP without string keys as entries of a key and its value, which a
+  // subscript or quantifier would read as a list.
+  private static void refuseEntryMap(
+      Schema map, ParserRuleContext node, String use,
+      ConstraintValidationContext vctx) {
+    Schema resolved = ConstraintResolver.resolveIfNamedRef(map, vctx);
+    if (resolved != null && resolved.getType() == Schema.Type.MAP
+        && resolved.getKeyType().getType() != Schema.Type.VARCHAR
+        && resolved.getKeyType().getType() != Schema.Type.CHAR) {
+      throw locatedError(node, use + " a MAP with " + resolved.getKeyType().getType()
+          + " keys is not supported: it is held as entries of a key and its value, so it "
+          + "would be read as a list. A MAP with string keys is supported.");
     }
   }
 
