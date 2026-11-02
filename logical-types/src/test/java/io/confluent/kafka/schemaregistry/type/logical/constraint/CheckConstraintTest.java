@@ -1956,9 +1956,31 @@ class CheckConstraintTest {
 
   @Test
   void positionFrom() {
-    assertEquals("('@' == '' ? 1 : (this.qty > size(this.name) ? 0 : "
-            + "this.name.indexOf('@', this.qty <= 1 ? 0 : this.qty - 1) + 1)) > 0",
+    assertEquals("(((!has(this.name) || dyn(this.name) == null) || (!has(this.qty) "
+            + "|| dyn(this.qty) == null)) ? dyn(null) : ('@' == '' ? 1 : (this.qty > size(this.name) "
+            + "? 0 : this.name.indexOf('@', this.qty <= 1 ? 0 : this.qty - 1) + 1))) > 0",
         translateCheck("POSITION('@' IN name FROM qty) > 0"));
+  }
+
+  @Test
+  void positionFromOfANullIsNull() throws Exception {
+    // An empty needle or a start past the end gives its answer without the other operands, so
+    // a NULL one is tested first.
+    String columns = "s STRING, ns STRING, ni INT";
+    Map<String, Object> present = new HashMap<>();
+    present.put("s", "abc");
+    present.put("ns", null);
+    present.put("ni", null);
+    for (Map<String, Object> self : List.of(present, Map.<String, Object>of("s", "abc"))) {
+      Map<String, Object> vars = Map.of("this", CelUtils.toCelValue(self));
+      for (String sql : List.of("POSITION('' IN ns FROM 1) = 1", "POSITION('' IN s FROM ni) = 1",
+          "POSITION(ns IN s FROM 9) = 0", "POSITION('' IN s FROM 1) = 1")) {
+        String cel = translateCheckOver(columns, sql);
+        assertEquals(!sql.contains("ns") && !sql.contains("ni"), CelUtils.buildProgram(
+            CelUtils.ScriptType.JSON, cel, null, CelUtils.toVarDecls(CelUtils.toDeclTypes(vars)))
+            .eval(vars), sql + " on " + self.keySet() + " -> " + cel);
+      }
+    }
   }
 
   @Test

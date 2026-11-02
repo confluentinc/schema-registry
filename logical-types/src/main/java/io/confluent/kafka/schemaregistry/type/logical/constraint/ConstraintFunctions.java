@@ -1146,8 +1146,8 @@ final class ConstraintFunctions {
   private static void visitPosition(
       LogicalTypesParser.FuncPositionContext ctx, StringBuilder sb) {
     LogicalTypesParser.Check_exprContext haystack = ctx.check_expr(0);
-    sb.append('(');
     if (ctx.FROM() == null) {
+      sb.append('(');
       emitWrappedReceiver(haystack, sb);
       sb.append(".indexOf(");
       visitCExpr(ctx.c_expr(), sb);
@@ -1156,15 +1156,24 @@ final class ConstraintFunctions {
     }
     StringBuilder start = new StringBuilder();
     emitWrappedReceiver(ctx.check_expr(1), start);
-    visitCExpr(ctx.c_expr(), sb);
-    sb.append(" == '' ? 1 : (").append(start).append(" > size(");
-    visitCheckExpr(haystack, sb);
-    sb.append(") ? 0 : ");
-    emitWrappedReceiver(haystack, sb);
-    sb.append(".indexOf(");
-    visitCExpr(ctx.c_expr(), sb);
-    sb.append(", ").append(start).append(" <= 1 ? 0 : ").append(start).append(" - 1) + 1))");
+    StringBuilder value = new StringBuilder("(");
+    visitCExpr(ctx.c_expr(), value);
+    value.append(" == '' ? 1 : (").append(start).append(" > size(");
+    visitCheckExpr(haystack, value);
+    value.append(") ? 0 : ");
+    emitWrappedReceiver(haystack, value);
+    value.append(".indexOf(");
+    visitCExpr(ctx.c_expr(), value);
+    value.append(", ").append(start).append(" <= 1 ? 0 : ").append(start).append(" - 1) + 1))");
+    // NULL when an operand is: an empty needle or a start past the end skips the others.
+    String isNull = ConstraintNullTest.of(ctx);
+    if (isNull == null) {
+      sb.append(value);
+    } else {
+      emitNullOr(isNull, true, value.toString(), sb);
+    }
   }
+
 
   /** TRIM(x) → x.trim() (whitespace, both ends). */
   private static void visitTrim(

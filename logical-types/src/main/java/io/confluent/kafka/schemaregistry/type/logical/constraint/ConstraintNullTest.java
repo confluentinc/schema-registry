@@ -153,7 +153,10 @@ final class ConstraintNullTest {
       }
       return strict ? any(tests) : all(tests);
     }
-    LogicalTypesParser.Func_expr_common_subexprContext sub = f.func_expr_common_subexpr();
+    return of(f.func_expr_common_subexpr());
+  }
+
+  static String of(LogicalTypesParser.Func_expr_common_subexprContext sub) {
     if (sub instanceof LogicalTypesParser.FuncCurrentTimestampContext) {
       return NEVER;
     }
