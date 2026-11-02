@@ -3788,18 +3788,19 @@ class CheckConstraintTest {
   void eachRaisingOperandKeepsItsErrorBesideANull() throws Exception {
     // An operand that can raise an error, one of each kind, still fails the CHECK beside a NULL.
     String columns = "ni INT, i INT NOT NULL, z INT NOT NULL, s STRING NOT NULL, "
-        + "p STRING NOT NULL, d DECIMAL(10, 2) NOT NULL, bi BIGINT NOT NULL";
+        + "p STRING NOT NULL, d DECIMAL(10, 2) NOT NULL, sc INT NOT NULL";
     Map<String, Object> self = Map.of("i", 5, "z", 0, "s", "abc", "p", "(",
-        "d", CelDecimal.of(new BigDecimal("1.00")), "bi", Long.MAX_VALUE);
+        "d", CelDecimal.of(new BigDecimal("1.00")), "sc", -700_000_000);
     for (String raising : List.of("i / z > 0", "i % z > 0", "CAST(s AS INT) > 0",
         "PARSE_JSON(s) IS NOT NULL", "VARIANT_GET(TRY_PARSE_JSON('{}'), p) IS NOT NULL",
-        "TRY_VARIANT_GET(TRY_PARSE_JSON('{}'), p RETURNING INT) > 0")) {
+        "TRY_VARIANT_GET(TRY_PARSE_JSON('{}'), p RETURNING INT) > 0", "ROUND(d, sc) > 0",
+        "TRUNCATE(d, sc) > 0", "ROUND(d, -700000000) > 0")) {
       String cel = translateCheckOver(columns, "ni > 0 OR " + raising);
       assertThrows(CelEvaluationException.class, () -> evalOver(cel, self), raising + " -> " + cel);
     }
-    // Flink raises for neither a bad regex nor a large scale, so a NULL may drop CEL's error,
-    // and the operands are joined as is.
-    for (String celOnly : List.of("MATCHES(s, p)", "ROUND(d, bi) > 0", "TRUNCATE(d, bi) > 0")) {
+    // Flink gives FALSE for a bad regex, so a NULL may drop CEL's error, and the operands are
+    // joined as is.
+    for (String celOnly : List.of("MATCHES(s, p)")) {
       String cel = translateCheckOver(columns, "ni > 0 OR " + celOnly);
       assertTrue(cel.startsWith("!(((!has(this.ni) || dyn(this.ni) == null) ? false"
           + " : !(this.ni > 0)) && "), cel);
@@ -3824,22 +3825,32 @@ class CheckConstraintTest {
   }
 
   @Test
-  void aRoundScaleIsAtMostTheValues() throws Exception {
-    // A larger scale gives the value back, as in Flink, rather than padding it, which took time
-    // growing with the scale.
-    String columns = "d DECIMAL(10, 2) NOT NULL, i INT NOT NULL";
+  void aRoundScaleIsAtMost38() throws Exception {
+    // A scale over DECIMAL's 38 gives the value back, as in Flink, rather than padding it, which
+    // took time growing with the scale; the declared scale doesn't bound it, as a JSON or
+    // Protobuf value carries its own.
+    String columns = "d DECIMAL(10, 2) NOT NULL, i INT NOT NULL, ti TINYINT NOT NULL, "
+        + "bi BIGINT NOT NULL";
     assertTrue(translateCheckOver(columns, "ROUND(d, 1) > 0")
         .contains("decimals.round(this.d, 1)"));
     assertTrue(translateCheckOver(columns, "ROUND(d, 50) > 0")
-        .contains("decimals.round(this.d, 2)"));
-    assertTrue(translateCheckOver(columns, "ROUND(d * 2, i) > 0")
-        .contains("(this.i < 38 ? this.i : 38))"));
+        .contains("decimals.round(this.d, 38)"));
     String cel = translateCheckOver(columns, "ROUND(d, i) = d");
-    assertTrue(cel.contains("decimals.round(this.d, (this.i < 2 ? this.i : 2))"), cel);
-    Map<String, Object> self = Map.of("d", CelDecimal.of(new BigDecimal("1.00")),
-        "i", 100_000_000);
-    assertTimeoutPreemptively(Duration.ofSeconds(10),
-        () -> assertEquals(true, evalOver(cel, self), cel));
+    assertTrue(cel.contains("decimals.round(this.d, (this.i < 38 ? this.i : 38))"), cel);
+    assertTimeoutPreemptively(Duration.ofSeconds(10), () -> assertEquals(true,
+        evalOver(cel, Map.of("d", CelDecimal.of(new BigDecimal("1.00")), "i", 100_000_000)),
+        cel));
+    String three = translateCheckOver(columns, "ROUND(d, 3) = d");
+    assertEquals(true, evalOver(three, Map.of("d", CelDecimal.of(new BigDecimal("1.234")))),
+        three);
+    // Flink takes the scale as an INT.
+    for (String sql : List.of("ROUND(d, 3000000000) > 0", "TRUNCATE(d, -2147483649) > 0",
+        "ROUND(d, bi) > 0", "TRUNCATE(d, bi) > 0")) {
+      ValidationException e = assertThrows(ValidationException.class,
+          () -> translateCheckOver(columns, sql), sql);
+      assertTrue(e.getMessage().contains("takes an INT scale"), e.getMessage());
+    }
+    translateCheckOver(columns, "ROUND(d, ti) > 0 AND TRUNCATE(d, -2) > 0");
   }
 
   @Test
