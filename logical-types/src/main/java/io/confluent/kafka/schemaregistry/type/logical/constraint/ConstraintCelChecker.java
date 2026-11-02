@@ -96,6 +96,15 @@ final class ConstraintCelChecker {
     if (vctx == null) {
       return;
     }
+    // Checked before compiling, which would report it as a failed type check.
+    int size = cel.codePointCount(0, cel.length());
+    int limit = CelOptions.DEFAULT.maxExpressionCodePointSize();
+    if (size > limit) {
+      throw new ValidationException("CHECK constraint is too large: its CEL is " + size
+          + " code points, over CEL's limit of " + limit + ". Nested calls such as GREATEST "
+          + "and LEAST repeat their arguments at each level; use fewer of them."
+          + (sourceSql != null ? " SQL: " + sourceSql : ""));
+    }
     CelCompiler compiler = newStrictCompiler(vctx);
     try {
       compiler.compile(cel).getAst();
