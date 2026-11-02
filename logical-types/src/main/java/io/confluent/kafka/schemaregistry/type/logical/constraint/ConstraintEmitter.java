@@ -2684,7 +2684,8 @@ final class ConstraintEmitter {
       LogicalTypesParser.C_exprContext c = ConstraintResolver.leafPrimary(is.check_expr_compare());
       if (c instanceof LogicalTypesParser.CheckParenContext
           && ((LogicalTypesParser.CheckParenContext) c).indirection() == null) {
-        return emitTruth(
+        // Cached and size-checked, as nested AND and OR may repeat their operands.
+        return cachedTruth(
             ((LogicalTypesParser.CheckParenContext) c).check_expr().check_expr_or(), truth, sb);
       }
     }
@@ -2823,8 +2824,8 @@ final class ConstraintEmitter {
     return flags | (ConstraintNullTest.NEVER.equals(collectionNull) ? 0 : MAY_BE_NULL);
   }
 
-  // A quantifier body's emitTruth, once per translation, context and truth. ONE repeats it, so
-  // one over CEL's size limit is refused at once, before nesting multiplies it.
+  // A parenthesized or quantifier body's emitTruth, once per translation, context and truth.
+  // Nesting may repeat it, so one over CEL's size limit is refused at once.
   private static int cachedTruth(
       LogicalTypesParser.Check_expr_orContext body, boolean truth, StringBuilder sb) {
     EmitCache cache = EMIT_CACHE.get();
