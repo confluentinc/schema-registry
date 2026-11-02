@@ -38,6 +38,7 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -2381,7 +2382,7 @@ class CheckConstraintTest {
     String cel = translateCheck(
         "CASE ts WHEN TIMESTAMP '2020-01-01 00:00:00' THEN 1 ELSE 0 END = 1");
     org.junit.jupiter.api.Assertions.assertTrue(
-        cel.contains("timestamp(this.ts) == timestamp(\"2020-01-01T00:00:00Z\")"),
+        cel.contains("(timestamp(this.ts)) == (timestamp(\"2020-01-01T00:00:00Z\"))"),
         "expected timestamp simple-CASE; got: " + cel);
   }
 
@@ -3794,6 +3795,34 @@ class CheckConstraintTest {
       assertEquals(true, evalOver(cel, self), self + " -> " + cel);
     }
     assertEquals(false, evalOver(cel, Map.of("r", Map.of("in", 5))), cel);
+  }
+
+  @Test
+  void aCastOfANullIsNull() throws Exception {
+    // A literal NULL has no type, so isn't taken for a VARIANT: its CAST is NULL.
+    String columns = "i INT NOT NULL, t BOOLEAN NOT NULL";
+    String inCase = translateCheckOver(columns,
+        "CASE WHEN t THEN CAST(NULL AS INT) ELSE i END < 1");
+    assertEquals(true, evalOver(inCase, Map.of("t", false, "i", 0)), inCase);
+    assertEquals(true, evalOver(inCase, Map.of("t", true, "i", 5)), inCase);
+    assertEquals(false, evalOver(inCase, Map.of("t", false, "i", 5)), inCase);
+    for (String sql : List.of("COALESCE(CAST(NULL AS INT), i) = i",
+        "(CAST(NULL AS INT)) IS NULL")) {
+      String cel = translateCheckOver(columns, sql);
+      assertEquals(true, evalOver(cel, Map.of("t", false, "i", 5)), sql + " -> " + cel);
+    }
+  }
+
+  @Test
+  void aSimpleCaseOverATimestampBetweenComparesItWhole() throws Exception {
+    // The subject is grouped, as a BETWEEN's && would bind to its last comparison.
+    String cel = translateCheckOver("lt TIMESTAMP_LTZ(3) NOT NULL",
+        "(CASE lt BETWEEN TIMESTAMP '2010-01-01 00:00:00' AND lt WHEN FALSE THEN 1 ELSE 2 END)"
+            + " = 1");
+    assertTrue(cel.contains("(timestamp(\"2010-01-01T00:00:00Z\") <= timestamp(this.lt)"
+        + " && timestamp(this.lt) <= timestamp(this.lt)) == (false)"), cel);
+    assertEquals(true, evalOver(cel, Map.of("lt", Instant.parse("1999-01-01T00:00:00Z"))), cel);
+    assertEquals(false, evalOver(cel, Map.of("lt", Instant.parse("2020-01-01T00:00:00Z"))), cel);
   }
 
   @Test
