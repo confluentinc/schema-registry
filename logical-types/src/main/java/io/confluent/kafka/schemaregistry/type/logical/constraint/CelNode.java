@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.type.logical.constraint;
 
+import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -50,13 +51,32 @@ abstract class CelNode {
   static final CelNode FALSE = new Literal("false");
   static final CelNode NULL = new Literal("null");
 
-  // CEL's number, string and bytes tokens.
-  private static final Pattern LITERAL = Pattern.compile("(?:\\d+(?:\\.\\d+)?(?:[eE][+-]?\\d+)?"
-      + "|\\.\\d+(?:[eE][+-]?\\d+)?|0[xX][0-9a-fA-F]+)[uU]?"
-      + "|[bB]?(?:\"(?:[^\"\\\\]|\\\\.)*\"|'(?:[^'\\\\]|\\\\.)*')");
+  // CEL's number tokens. A string or bytes token is checked by quoted(), as a regex would
+  // overflow the stack on a long one.
+  private static final Pattern NUMBER = Pattern.compile("(?:\\d+|0[xX][0-9a-fA-F]+)[uU]?"
+      + "|(?:\\d+\\.\\d+|\\.\\d+)(?:[eE][+-]?\\d+)?|\\d+[eE][+-]?\\d+");
 
+  /**
+   * The deepest tree built: the tree's walks recurse, and cel-java refuses CEL far shallower.
+   */
+  static final int MAX_DEPTH = 1024;
+
+  private final int depth;
   private int hash;
   private int size = -1;
+
+  // Refused deeper than MAX_DEPTH, before anything walks it.
+  CelNode(List<CelNode> children) {
+    int deepest = 0;
+    for (CelNode child : children) {
+      deepest = Math.max(deepest, child.depth);
+    }
+    depth = deepest + 1;
+    if (depth > MAX_DEPTH) {
+      throw new ValidationException("CHECK expression's CEL nests deeper than " + MAX_DEPTH
+          + " — simplify or break the constraint into smaller pieces.");
+    }
+  }
 
   abstract int precedence();
 
@@ -142,18 +162,45 @@ abstract class CelNode {
    * A literal, as CEL's token for it: a number, a quoted string or bytes.
    */
   static CelNode literal(String token) {
-    if (!LITERAL.matcher(token).matches()) {
+    if (!NUMBER.matcher(token).matches() && !quoted(token)) {
       throw new IllegalArgumentException("Not a CEL literal: " + token);
     }
     return new Literal(token);
+  }
+
+  // True if token is a quoted string, or b and a quoted one: an escape takes the next character,
+  // which can't be the closing quote.
+  private static boolean quoted(String token) {
+    int open = token.startsWith("b") || token.startsWith("B") ? 1 : 0;
+    int close = token.length() - 1;
+    if (close <= open || token.charAt(open) != '"' && token.charAt(open) != '\''
+        || token.charAt(close) != token.charAt(open)) {
+      return false;
+    }
+    for (int i = open + 1; i < close; i++) {
+      if (token.charAt(i) == '\\') {
+        if (++i == close) {
+          return false;
+        }
+      } else if (token.charAt(i) == token.charAt(open)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * A number literal from its text, a negative one as - before its magnitude.
+   */
+  static CelNode number(String text) {
+    return text.startsWith("-") ? negate(literal(text.substring(1))) : literal(text);
   }
 
   /**
    * An int literal of {@code value}, a negative one as - before its magnitude.
    */
   static CelNode integer(long value) {
-    String digits = Long.toString(value);
-    return value < 0 ? negate(literal(digits.substring(1))) : literal(digits);
+    return number(Long.toString(value));
   }
 
   /**
@@ -331,6 +378,7 @@ abstract class CelNode {
     final String text;
 
     Token(String text) {
+      super(Collections.emptyList());
       this.text = text;
     }
 
@@ -389,6 +437,7 @@ abstract class CelNode {
     final String field;
 
     Select(CelNode operand, String field) {
+      super(Collections.singletonList(operand));
       this.operand = operand;
       this.field = field;
     }
@@ -431,6 +480,7 @@ abstract class CelNode {
     final CelNode index;
 
     Index(CelNode operand, CelNode index) {
+      super(Arrays.asList(operand, index));
       this.operand = operand;
       this.index = index;
     }
@@ -477,6 +527,7 @@ abstract class CelNode {
     final List<CelNode> args;
 
     Call(CelNode target, String function, List<CelNode> args) {
+      super(target == null ? args : withTarget(target, args));
       this.target = target;
       this.function = function;
       this.args = Collections.unmodifiableList(new ArrayList<>(args));
@@ -518,9 +569,10 @@ abstract class CelNode {
 
     @Override
     List<CelNode> children() {
-      if (target == null) {
-        return args;
-      }
+      return target == null ? args : withTarget(target, args);
+    }
+
+    private static List<CelNode> withTarget(CelNode target, List<CelNode> args) {
       List<CelNode> all = new ArrayList<>(args.size() + 1);
       all.add(target);
       all.addAll(args);
@@ -533,6 +585,7 @@ abstract class CelNode {
     final CelNode operand;
 
     Unary(String op, CelNode operand) {
+      super(Collections.singletonList(operand));
       this.op = op;
       this.operand = operand;
     }
@@ -584,6 +637,7 @@ abstract class CelNode {
     private final int precedence;
 
     Binary(CelNode left, String op, CelNode right) {
+      super(Arrays.asList(left, right));
       this.left = left;
       this.op = op;
       this.right = right;
@@ -662,6 +716,7 @@ abstract class CelNode {
     final List<CelNode> operands;
 
     private Junction(boolean and, List<CelNode> operands) {
+      super(operands);
       this.and = and;
       this.operands = Collections.unmodifiableList(operands);
     }
@@ -728,6 +783,7 @@ abstract class CelNode {
     final CelNode whenFalse;
 
     Ternary(CelNode condition, CelNode whenTrue, CelNode whenFalse) {
+      super(Arrays.asList(condition, whenTrue, whenFalse));
       this.condition = condition;
       this.whenTrue = whenTrue;
       this.whenFalse = whenFalse;
@@ -775,6 +831,7 @@ abstract class CelNode {
     final List<CelNode> elements;
 
     ListLit(List<CelNode> elements) {
+      super(elements);
       this.elements = Collections.unmodifiableList(new ArrayList<>(elements));
     }
 

@@ -40,6 +40,7 @@ import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -2474,6 +2475,15 @@ class CheckConstraintTest {
     String columns = "m MAP<STRING, INT NOT NULL> NOT NULL, s STRING";
     assertEquals("this.m.all(k, k != 'zz')",
         translateCheckOver(columns, "EVERY(m, k, k <> 'zz')"));
+    // A string key is never NULL, so testing it is dead code, as for a NOT NULL column.
+    for (String sql : List.of("EVERY(m, k, k IS NULL)", "ANY(m, k, k IS NOT NULL)")) {
+      ValidationException e = assertThrows(ValidationException.class,
+          () -> translateCheckOver(columns, sql), sql);
+      assertTrue(e.getMessage().contains("dead code"), e.getMessage());
+    }
+    ValidationException multiset = assertThrows(ValidationException.class,
+        () -> translateCheckOver("ms MULTISET<STRING> NOT NULL", "EVERY(ms, e, e IS NULL)"));
+    assertTrue(multiset.getMessage().contains("dead code"), multiset.getMessage());
     Map<String, Object> self = new HashMap<>();
     self.put("m", Map.of("a", 1, "b", 2));
     self.put("s", "b");
@@ -3748,6 +3758,47 @@ class CheckConstraintTest {
     Map<String, Object> negative = new HashMap<>(bad);
     negative.put("ni", -1);
     assertEquals(false, evalOver(translateCheckOver(columns, "ni > 0"), negative));
+  }
+
+  @Test
+  void aLiteralWithItsOwnSignKeepsIt() throws Exception {
+    // The grammar lets a literal carry a sign after the unary one: - -5 is 5.
+    String columns = "x INT NOT NULL, a INT";
+    assertEquals("this.x == -1", translateCheckOver(columns, "x = + -1"));
+    assertEquals("!has(this.a) || dyn(this.a) == null || this.a > -(-5)",
+        translateCheckOver(columns, "a > - -5"));
+    Object[][] rows = {
+        {"x = + -1", row("x", -1), true},
+        {"x = + -1", row("x", 1), false},
+        {"a > - -5", row("a", 6), true},
+        {"a > - -5", row("a", 4), false},
+        {"CAST(a AS DOUBLE) > - -5", row("a", 6), true},
+        {"CAST(a AS DOUBLE) > - -5", row("a", 4), false},
+        {"a > - - 5E0", row("a", 6), true},
+        {"a > - - 5E0", row("a", 4), false},
+    };
+    for (Object[] r : rows) {
+      @SuppressWarnings("unchecked")
+      Map<String, Object> self = new HashMap<>((Map<String, Object>) r[1]);
+      self.putIfAbsent("x", 0);
+      String cel = translateCheckOver(columns, (String) r[0]);
+      assertEquals(r[2], evalOver(cel, self), r[0] + " on " + self + " -> " + cel);
+    }
+  }
+
+  @Test
+  void aLongChainOrLiteralIsRefusedOrTranslatedWithoutOverflowingTheStack() {
+    // A flat SQL chain nests in CEL, so one too deep is refused before its tree is walked.
+    String columns = "i INT NOT NULL, s STRING NOT NULL";
+    for (String op : List.of(" + ", " * ", " || ")) {
+      String chain = String.join(op, Collections.nCopies(20_000, op.equals(" || ") ? "s" : "i"));
+      ValidationException e = assertThrows(ValidationException.class,
+          () -> translateCheckOver(columns, chain + (op.equals(" || ") ? " <> ''" : " > 0")));
+      assertTrue(e.getMessage().contains("nests deeper than"), e.getMessage());
+    }
+    // A long string literal is checked without a regex.
+    String text = "x".repeat(50_000);
+    assertEquals("this.s == '" + text + "'", translateCheckOver(columns, "s = '" + text + "'"));
   }
 
   @Test

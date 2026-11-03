@@ -39,6 +39,7 @@ import dev.cel.common.CelValidationResult;
 import dev.cel.common.ast.CelExpr;
 import dev.cel.parser.CelParser;
 import dev.cel.parser.CelParserFactory;
+import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -115,11 +116,27 @@ class CelNodeTest {
         "'it\\'s'", "\"a\\\"b\"", "b\"\\x00\"")) {
       assertEquals(token, literal(token).toString());
     }
-    for (String text : Arrays.asList("", "a || b", "1 + 2", "-1", "'a' + 'b'", "x", "'a")) {
+    for (String text : Arrays.asList("", "a || b", "1 + 2", "-1", "'a' + 'b'", "x", "'a", "1.5u",
+        "'a'b'", "'a\\'", "b'")) {
       assertThrows(IllegalArgumentException.class, () -> literal(text), text);
     }
+    // Checked without a regex, which would overflow the stack on a long one.
+    String text = "'" + "\\'".repeat(100_000) + "'";
+    assertEquals(text, literal(text).toString());
     assertEquals("-700000000", CelNode.integer(-700_000_000).toString());
     assertEquals("-9223372036854775808", CelNode.integer(Long.MIN_VALUE).toString());
+    assertEquals(negate(literal("2.5")), CelNode.number("-2.5"));
+  }
+
+  @Test
+  void aTreeDeeperThanTheLimitIsRefusedAsItIsBuilt() {
+    CelNode chain = A;
+    for (int i = 1; i < CelNode.MAX_DEPTH; i++) {
+      chain = binary(chain, "+", B);
+    }
+    assertEquals(4 * CelNode.MAX_DEPTH - 3, chain.size());
+    CelNode deepest = chain;
+    assertThrows(ValidationException.class, () -> binary(deepest, "+", B));
   }
 
   @Test

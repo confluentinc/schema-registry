@@ -1289,14 +1289,14 @@ final class ConstraintEmitter {
           ((LogicalTypesParser.CheckLiteralContext) ctx).literal();
       if (lit.intLiteral() != null) {
         // int literal → double literal (5 → 5.0).
-        return CelNode.literal(lit.intLiteral().getText() + ".0");
+        return CelNode.number(lit.intLiteral().getText() + ".0");
       }
       if (lit.decimalLiteral() != null) {
-        return CelNode.literal(
+        return CelNode.number(
             ConstraintPatterns.normalizeNumericLiteral(lit.decimalLiteral().getText()));
       }
       if (lit.doubleLiteral() != null) {
-        return CelNode.literal(
+        return CelNode.number(
             ConstraintPatterns.normalizeNumericLiteral(lit.doubleLiteral().getText()));
       }
       return CelNode.call("double", visitLiteral(lit));
@@ -1728,15 +1728,16 @@ final class ConstraintEmitter {
     if (ctx.boolLiteral() != null) {
       return CelNode.bool(ctx.boolLiteral().TRUE() != null);
     }
+    // The grammar lets a literal carry its own sign, as in - -5.
     if (ctx.intLiteral() != null) {
-      return CelNode.literal(ctx.intLiteral().getText());
+      return CelNode.number(ctx.intLiteral().getText());
     }
     if (ctx.decimalLiteral() != null) {
-      return CelNode.literal(
+      return CelNode.number(
           ConstraintPatterns.normalizeNumericLiteral(ctx.decimalLiteral().getText()));
     }
     if (ctx.doubleLiteral() != null) {
-      return CelNode.literal(
+      return CelNode.number(
           ConstraintPatterns.normalizeNumericLiteral(ctx.doubleLiteral().getText()));
     }
     if (ctx.TIMESTAMP() != null) {
