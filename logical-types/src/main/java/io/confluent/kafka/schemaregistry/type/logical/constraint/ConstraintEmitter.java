@@ -891,8 +891,16 @@ final class ConstraintEmitter {
       String ofValue = type != null && type.getType() == Schema.Type.BOOLEAN
           ? "(" + emitted + (negated ? " ? true : true)" : " ? false : false)")
           : negated ? ConstraintNullTest.not(value) : value;
-      sb.append('(').append(byInputs).append(negated ? " ? false : " : " ? true : ")
-          .append(ofValue).append(')');
+      if (ConstraintNullTest.NEVER.equals(byInputs)) {
+        // Never NULL: evaluated only for its errors.
+        sb.append(ofValue);
+      } else if ("true".equals(byInputs)) {
+        // Always NULL: never evaluated.
+        sb.append(!negated);
+      } else {
+        sb.append('(').append(byInputs).append(negated ? " ? false : " : " ? true : ")
+            .append(ofValue).append(')');
+      }
     }
   }
 
@@ -2767,14 +2775,14 @@ final class ConstraintEmitter {
       "IS_UUID", "VARIANT_IS_NULL");
 
   /**
-   * True if a predicate's CEL binds tighter than && and ||, by its parse tree: a comparison, IN,
-   * LIKE, column or a function whose CEL is a method call. Any other, such as a CASE or COALESCE,
-   * whose CEL may be a ternary, isn't.
+   * True if a predicate's CEL binds tighter than && and ||, by its parse tree: a comparison,
+   * IS [NOT] NULL, IN, LIKE, column or a function whose CEL is a method call. Any other, such as
+   * a CASE or COALESCE, whose CEL may be a ternary, isn't.
    */
   private static boolean bindsTight(LogicalTypesParser.Check_expr_isnullContext is) {
     LogicalTypesParser.Check_expr_compareContext compare = is.check_expr_compare();
     if (is.IS() != null || compare.check_expr_between().size() == 2) {
-      return is.IS() == null;
+      return true;
     }
     LogicalTypesParser.Check_expr_betweenContext between = compare.check_expr_between(0);
     if (between.BETWEEN() != null) {
