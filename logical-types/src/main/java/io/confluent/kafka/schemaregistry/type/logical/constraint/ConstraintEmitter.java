@@ -31,30 +31,23 @@ import java.util.Arrays;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /**
  * Cascade visitors for the CHECK→CEL translator. Each visitor walks one
- * level of the postgres-derived CHECK grammar and emits the equivalent CEL
- * fragment into the caller's {@link StringBuilder}. The cascade reflects
- * SQL operator precedence — top to bottom: OR, AND, NOT, IS NULL,
- * comparison, BETWEEN, IN, LIKE, additive, multiplicative ({@code ||}
- * concat lives here), unary sign, c_expr (column ref / literal / paren /
- * case / func).
+ * level of the postgres-derived CHECK grammar and returns the equivalent CEL
+ * as a {@link CelNode}, which brackets its operands as CEL's precedence needs
+ * when printed. The cascade reflects SQL operator precedence — top to bottom:
+ * OR, AND, NOT, IS NULL, comparison, BETWEEN, IN, LIKE, additive,
+ * multiplicative ({@code ||} concat lives here), unary sign, c_expr (column
+ * ref / literal / paren / case / func).
  *
  * <p>Visitors run after the validator suite has accepted the parse tree,
  * so they can assume well-formed input — no {@code null} guards, no
- * shape-checking past what's needed for the emit decision (e.g. wrap vs.
- * pass-through). Cross-cascade jumps (e.g. value-cascade emitters called
- * directly from {@link ConstraintFunctions}'s function-arg emit) keep
- * package-private visibility.
- *
- * <p>{@link #emitWrappedReceiver} and {@link #emitParenIn} are the two
- * defensive paren-wrappers shared by macro-call emit, BETWEEN bound emit,
- * and instance-method emit. Both check for "simple primary" shape (column
- * ref, literal, function call, paren, case) and skip the wrap when the
- * operand is already self-delimited.
+ * shape-checking past what's needed for the emit decision. Cross-cascade
+ * jumps (e.g. value-cascade emitters called directly from
+ * {@link ConstraintFunctions}'s function-arg emit) keep package-private
+ * visibility.
  */
 final class ConstraintEmitter {
 
@@ -69,9 +62,9 @@ final class ConstraintEmitter {
    */
   static final class EmitCache {
     private final String sourceSql;
-    private final Map<ConstraintValidationContext, Map<ParseTree, String[]>> emitted =
+    private final Map<ConstraintValidationContext, Map<ParseTree, CelNode[]>> emitted =
         new IdentityHashMap<>();
-    private final Map<ConstraintValidationContext, Map<ParseTree, String[]>> nullTests =
+    private final Map<ConstraintValidationContext, Map<ParseTree, CelNode[]>> nullTests =
         new IdentityHashMap<>();
     private final Map<ConstraintValidationContext, Map<ParseTree, ConstraintValidationContext>>
         bodies = new IdentityHashMap<>();
@@ -83,12 +76,14 @@ final class ConstraintEmitter {
     }
   }
 
-  // A quantifier body's emitTruth in one truth, with its flags.
-  private static final class Truth {
-    private final String cel;
-    private final int flags;
+  /**
+   * An emitTruth result: its CEL, null when nothing is emitted, and its flags.
+   */
+  static final class Truth {
+    final CelNode cel;
+    final int flags;
 
-    Truth(String cel, int flags) {
+    Truth(CelNode cel, int flags) {
       this.cel = cel;
       this.flags = flags;
     }
@@ -100,45 +95,40 @@ final class ConstraintEmitter {
 
   // ctx's CEL in a form, emitted once per translation and context. One over CEL's size limit is
   // refused at once, as nesting may multiply it further.
-  private static void emitCached(ParseTree ctx, Form form,
-      StringBuilder sb, Consumer<StringBuilder> emit) {
+  private static CelNode emitCached(ParseTree ctx, Form form, Supplier<CelNode> emit) {
     EmitCache cache = EMIT_CACHE.get();
     ConstraintValidationContext vctx = EMIT_VCTX.get();
     if (cache == null || vctx == null) {
-      emit.accept(sb);
-      return;
+      return emit.get();
     }
-    String[] forms = cache.emitted.computeIfAbsent(vctx, k -> new IdentityHashMap<>())
-        .computeIfAbsent(ctx, k -> new String[Form.values().length]);
+    CelNode[] forms = cache.emitted.computeIfAbsent(vctx, k -> new IdentityHashMap<>())
+        .computeIfAbsent(ctx, k -> new CelNode[Form.values().length]);
     if (forms[form.ordinal()] == null) {
-      StringBuilder cel = new StringBuilder();
-      emit.accept(cel);
-      forms[form.ordinal()] = cel.toString();
+      forms[form.ordinal()] = emit.get();
       ConstraintCelChecker.checkSize(forms[form.ordinal()], true, cache.sourceSql);
     }
-    sb.append(forms[form.ordinal()]);
+    return forms[form.ordinal()];
   }
 
-  static void visitCheckExpr(
-      LogicalTypesParser.Check_exprContext ctx, StringBuilder sb) {
-    emitCached(ctx, Form.NATIVE, sb, out -> visitOr(ctx.check_expr_or(), out));
+  static CelNode visitCheckExpr(LogicalTypesParser.Check_exprContext ctx) {
+    return emitCached(ctx, Form.NATIVE, () -> visitOr(ctx.check_expr_or()));
   }
 
   /**
    * A node's NULL test, computed once per translation and context, and refused at once over
    * CEL's size limit; null when it can't be told.
    */
-  static String cachedNullTest(ParseTree node, Supplier<String> test) {
+  static CelNode cachedNullTest(ParseTree node, Supplier<CelNode> test) {
     EmitCache cache = EMIT_CACHE.get();
     ConstraintValidationContext vctx = EMIT_VCTX.get();
     if (cache == null || vctx == null) {
       return test.get();
     }
-    Map<ParseTree, String[]> tests =
+    Map<ParseTree, CelNode[]> tests =
         cache.nullTests.computeIfAbsent(vctx, k -> new IdentityHashMap<>());
-    String[] held = tests.get(node);
+    CelNode[] held = tests.get(node);
     if (held == null) {
-      held = new String[] {test.get()};
+      held = new CelNode[] {test.get()};
       if (held[0] != null) {
         ConstraintCelChecker.checkSize(held[0], true, cache.sourceSql);
       }
@@ -161,26 +151,20 @@ final class ConstraintEmitter {
         .computeIfAbsent(quantifier, k -> make.get());
   }
 
-  private static void visitOr(
-      LogicalTypesParser.Check_expr_orContext ctx, StringBuilder sb) {
-    List<LogicalTypesParser.Check_expr_andContext> ands = ctx.check_expr_and();
-    for (int i = 0; i < ands.size(); i++) {
-      if (i > 0) {
-        sb.append(" || ");
-      }
-      visitAnd(ands.get(i), sb);
+  private static CelNode visitOr(LogicalTypesParser.Check_expr_orContext ctx) {
+    List<CelNode> ands = new ArrayList<>();
+    for (LogicalTypesParser.Check_expr_andContext and : ctx.check_expr_and()) {
+      ands.add(visitAnd(and));
     }
+    return CelNode.or(ands);
   }
 
-  private static void visitAnd(
-      LogicalTypesParser.Check_expr_andContext ctx, StringBuilder sb) {
-    List<LogicalTypesParser.Check_expr_unary_notContext> nots = ctx.check_expr_unary_not();
-    for (int i = 0; i < nots.size(); i++) {
-      if (i > 0) {
-        sb.append(" && ");
-      }
-      visitUnaryNot(nots.get(i), sb);
+  private static CelNode visitAnd(LogicalTypesParser.Check_expr_andContext ctx) {
+    List<CelNode> nots = new ArrayList<>();
+    for (LogicalTypesParser.Check_expr_unary_notContext not : ctx.check_expr_unary_not()) {
+      nots.add(visitUnaryNot(not));
     }
+    return CelNode.and(nots);
   }
 
   /**
@@ -193,192 +177,38 @@ final class ConstraintEmitter {
    *   <li>{@code a NOT BETWEEN SYMMETRIC b AND c} → {@code !(...)}</li>
    * </ul>
    *
-   * <p>The bounds are themselves {@code check_expr_in}, which can't contain a
-   * top-level AND — so the inner AND between bounds parses unambiguously.
+   * <p>Each {@code <=} compares its operands in their common type, as {@link #emitBetweenLe}
+   * does: {@code decimals.le} for DECIMAL, native {@code <=} on doubles for DOUBLE, on
+   * normalized timestamps for a temporal operand, else native.
    */
-  private static void visitBetween(
-      LogicalTypesParser.Check_expr_betweenContext ctx, StringBuilder sb) {
+  private static CelNode visitBetween(LogicalTypesParser.Check_expr_betweenContext ctx) {
     List<LogicalTypesParser.Check_expr_inContext> ins = ctx.check_expr_in();
     if (ins.size() == 1) {
-      visitIn(ins.get(0), sb);
-      return;
+      return visitIn(ins.get(0));
     }
     // Three operands: subject, lower, upper
-    boolean negated = ctx.NOT() != null;
-    boolean symmetric = ctx.SYMMETRIC() != null;
-    ConstraintValidationContext vctx = EMIT_VCTX.get();
-    // Numeric coercion: route by the common type over all three operands.
-    // DECIMAL → decimals.le cascade; DOUBLE → native <= with operands cast to
-    // double; INT (or non-numeric) → fall through to temporal/native below.
-    String common = (vctx != null) ? numericCommonOf(ins, vctx) : null;
-    if ("decimal".equals(common)) {
-      emitBetweenDecimal(ins, negated, symmetric, sb);
-      return;
-    }
-    if ("double".equals(common)) {
-      emitBetweenDouble(ins, negated, symmetric, sb);
-      return;
-    }
-    if (vctx != null
-        && (ConstraintResolver.subtreeHasTemporal(ins.get(0), vctx)
-            || ConstraintResolver.subtreeHasTemporal(ins.get(1), vctx)
-            || ConstraintResolver.subtreeHasTemporal(ins.get(2), vctx))) {
-      emitBetweenTimestamp(ins, negated, symmetric, sb);
-      return;
-    }
-    if (negated) {
-      sb.append("!(");
-    }
-    // Bounds and subject are individually wrapped in parens so the rewrite
-    // is precedence-safe regardless of what the user wrote inside. The
-    // grammar admits `check_expr_in` for each operand, which can descend
-    // through IS NULL / NOT / comparison / additive — without parens, e.g.
-    // `x BETWEEN y IS NULL AND z` would emit `y == null <= x && x <= z`
-    // which CEL parses as `((y == null) <= x) && ...` (a type error).
-    if (symmetric) {
-      // (lo <= hi ? (lo <= a && a <= hi) : (hi <= a && a <= lo))
-      sb.append("(");
-      emitParenIn(ins.get(1), sb);
-      sb.append(" <= ");
-      emitParenIn(ins.get(2), sb);
-      sb.append(" ? (");
-      emitParenIn(ins.get(1), sb);
-      sb.append(" <= ");
-      emitParenIn(ins.get(0), sb);
-      sb.append(" && ");
-      emitParenIn(ins.get(0), sb);
-      sb.append(" <= ");
-      emitParenIn(ins.get(2), sb);
-      sb.append(") : (");
-      emitParenIn(ins.get(2), sb);
-      sb.append(" <= ");
-      emitParenIn(ins.get(0), sb);
-      sb.append(" && ");
-      emitParenIn(ins.get(0), sb);
-      sb.append(" <= ");
-      emitParenIn(ins.get(1), sb);
-      sb.append("))");
-    } else {
-      // lo <= a && a <= hi
-      emitParenIn(ins.get(1), sb);
-      sb.append(" <= ");
-      emitParenIn(ins.get(0), sb);
-      sb.append(" && ");
-      emitParenIn(ins.get(0), sb);
-      sb.append(" <= ");
-      emitParenIn(ins.get(2), sb);
-    }
-    if (negated) {
-      sb.append(")");
-    }
-  }
-
-  /**
-   * Decimal BETWEEN: {@code lo <= a && a <= hi} becomes
-   * {@code decimals.le(lo, a) && decimals.le(a, hi)} (SYMMETRIC orders the
-   * bounds with a decimals.le test). Operands emitted via the decimal cascade.
-   */
-  private static void emitBetweenDecimal(
-      List<LogicalTypesParser.Check_expr_inContext> ins,
-      boolean negated, boolean symmetric, StringBuilder sb) {
-    if (negated) {
-      sb.append("!(");
-    }
-    if (symmetric) {
-      sb.append('(');
-      emitDecimalLe(ins.get(1), ins.get(2), sb);   // lo <= hi ?
-      sb.append(" ? (");
-      emitDecimalLe(ins.get(1), ins.get(0), sb);
-      sb.append(" && ");
-      emitDecimalLe(ins.get(0), ins.get(2), sb);
-      sb.append(") : (");
-      emitDecimalLe(ins.get(2), ins.get(0), sb);
-      sb.append(" && ");
-      emitDecimalLe(ins.get(0), ins.get(1), sb);
-      sb.append("))");
-    } else {
-      emitDecimalLe(ins.get(1), ins.get(0), sb);
-      sb.append(" && ");
-      emitDecimalLe(ins.get(0), ins.get(2), sb);
-    }
-    if (negated) {
-      sb.append(")");
-    }
+    CelNode holds = ctx.SYMMETRIC() != null
+        ? CelNode.ternary(emitBetweenLe(ins, 1, 2),
+            CelNode.and(emitBetweenLe(ins, 1, 0), emitBetweenLe(ins, 0, 2)),
+            CelNode.and(emitBetweenLe(ins, 2, 0), emitBetweenLe(ins, 0, 1)))
+        : CelNode.and(emitBetweenLe(ins, 1, 0), emitBetweenLe(ins, 0, 2));
+    return ctx.NOT() != null ? CelNode.not(holds) : holds;
   }
 
   /**
    * {@code decimals.le(a, b)} over two BETWEEN operands.
    */
-  private static void emitDecimalLe(
-      LogicalTypesParser.Check_expr_inContext a,
-      LogicalTypesParser.Check_expr_inContext b, StringBuilder sb) {
-    sb.append("decimals.le(");
-    emitInAsDecimal(a, sb);
-    sb.append(", ");
-    emitInAsDecimal(b, sb);
-    sb.append(')');
-  }
-
-  /**
-   * Double BETWEEN: {@code lo <= a && a <= hi} with native {@code <=}, each
-   * operand cast to double (int → {@code double(x)}, decimal → {@code double(x)}
-   * / plain double literal). Mirrors {@link #emitBetweenDecimal}'s structure.
-   */
-  private static void emitBetweenDouble(
-      List<LogicalTypesParser.Check_expr_inContext> ins,
-      boolean negated, boolean symmetric, StringBuilder sb) {
-    if (negated) {
-      sb.append("!(");
-    }
-    if (symmetric) {
-      sb.append('(');
-      emitDoubleLe(ins.get(1), ins.get(2), sb);   // lo <= hi ?
-      sb.append(" ? (");
-      emitDoubleLe(ins.get(1), ins.get(0), sb);
-      sb.append(" && ");
-      emitDoubleLe(ins.get(0), ins.get(2), sb);
-      sb.append(") : (");
-      emitDoubleLe(ins.get(2), ins.get(0), sb);
-      sb.append(" && ");
-      emitDoubleLe(ins.get(0), ins.get(1), sb);
-      sb.append("))");
-    } else {
-      emitDoubleLe(ins.get(1), ins.get(0), sb);
-      sb.append(" && ");
-      emitDoubleLe(ins.get(0), ins.get(2), sb);
-    }
-    if (negated) {
-      sb.append(")");
-    }
+  private static CelNode emitDecimalLe(
+      LogicalTypesParser.Check_expr_inContext a, LogicalTypesParser.Check_expr_inContext b) {
+    return CelNode.call("decimals.le", emitInAsDecimal(a), emitInAsDecimal(b));
   }
 
   /**
    * {@code a <= b} over two BETWEEN operands, both cast to double.
    */
-  private static void emitDoubleLe(
-      LogicalTypesParser.Check_expr_inContext a,
-      LogicalTypesParser.Check_expr_inContext b, StringBuilder sb) {
-    emitNumericInAs(a, "double", sb);
-    sb.append(" <= ");
-    emitNumericInAs(b, "double", sb);
-  }
-
-  /**
-   * Emit a {@code check_expr_in} wrapped in {@code (...)}. Used by
-   * {@link #visitBetween} so each BETWEEN operand is precedence-safe in the
-   * surrounding {@code <=} chain. Skips the wrap when the operand is a
-   * simple primary (column ref, literal, function call, paren, case) since
-   * those are already self-delimited and don't need defensive parens.
-   */
-  static void emitParenIn(
-      LogicalTypesParser.Check_expr_inContext ctx, StringBuilder sb) {
-    if (ConstraintResolver.isSimplePrimaryIn(ctx)) {
-      visitIn(ctx, sb);
-      return;
-    }
-    sb.append('(');
-    visitIn(ctx, sb);
-    sb.append(')');
+  private static CelNode emitDoubleLe(
+      LogicalTypesParser.Check_expr_inContext a, LogicalTypesParser.Check_expr_inContext b) {
+    return CelNode.binary(emitNumericInAs(a, "double"), "<=", emitNumericInAs(b, "double"));
   }
 
   /**
@@ -391,21 +221,17 @@ final class ConstraintEmitter {
    *       {@link #emitInMayBeNull}</li>
    * </ul>
    */
-  private static void visitIn(
-      LogicalTypesParser.Check_expr_inContext ctx, StringBuilder sb) {
+  static CelNode visitIn(LogicalTypesParser.Check_expr_inContext ctx) {
     if (ctx.IN() == null) {
-      visitLike(ctx.check_expr_like(), sb);
-      return;
+      return visitLike(ctx.check_expr_like());
     }
     boolean negated = ctx.NOT() != null;
     ConstraintValidationContext vctx = EMIT_VCTX.get();
     if (inElementMayBeNull(ctx)) {
-      emitInMayBeNull(ctx, negated, sb);
-      return;
+      return emitInMayBeNull(ctx, negated);
     }
     if (inArrayElementMayBeNull(ctx)) {
-      emitInArrayMayBeNull(ctx, negated, sb);
-      return;
+      return emitInArrayMayBeNull(ctx, negated);
     }
     if (vctx != null) {
       LogicalTypesParser.In_targetContext target = ctx.in_target();
@@ -415,60 +241,45 @@ final class ConstraintEmitter {
         // `double(lhs) in [double(e), …]`. INT/non-numeric falls through.
         String common = inListCommon(ctx, vctx);
         if ("decimal".equals(common)) {
-          emitInDecimal(ctx, negated, sb);
-          return;
+          return emitInDecimal(ctx, negated);
         }
         if ("double".equals(common)) {
-          emitInDouble(ctx, negated, sb);
-          return;
+          return emitInDouble(ctx, negated);
         }
       } else if (likeHasDecimal(ctx.check_expr_like(), vctx)) {
         // Decimal LHS against a list-typed operand: emitInDecimal raises the
         // (unsupported) located error, preserving the prior clear message.
-        emitInDecimal(ctx, negated, sb);
-        return;
+        return emitInDecimal(ctx, negated);
       }
     }
     // Timestamp: CEL's native `in` works on timestamps once the column LHS and
     // any column elements are normalized — emit the same `x in [...]` shape via
     // the timestamp-value cascade (no per-element rewrite needed, unlike decimal).
-    String guard = emptyGuard(ctx);
-    boolean wrapped = negated || !guard.isEmpty();
-    if (wrapped) {
-      sb.append(negated ? "!(" : "(");
-    }
-    sb.append(guard);
-    if (vctx != null && inTargetHasTemporal(ctx, vctx)) {
-      emitTimestampValueLike(ctx.check_expr_like(), sb);
-      sb.append(" in ");
-      emitTimestampInTarget(ctx.in_target(), sb);
-    } else {
-      visitLike(ctx.check_expr_like(), sb);
-      sb.append(" in ");
-      visitInTarget(ctx.in_target(), sb);
-    }
-    if (wrapped) {
-      sb.append(")");
-    }
+    CelNode match = vctx != null && inTargetHasTemporal(ctx, vctx)
+        ? CelNode.binary(emitTimestampValueLike(ctx.check_expr_like()), "in",
+            emitTimestampInTarget(ctx.in_target()))
+        : CelNode.binary(visitLike(ctx.check_expr_like()), "in", visitInTarget(ctx.in_target()));
+    CelNode guarded = unlessEmpty(ctx, match);
+    return negated ? CelNode.not(guarded) : guarded;
   }
 
-  // Before a match against a collection: false over an empty one, without evaluating a subject
-  // that may be NULL, or absent on JSON, as SQL's = ANY over no elements is FALSE.
-  private static String emptyGuard(LogicalTypesParser.Check_expr_inContext ctx) {
+  // A match against a collection, false over an empty one without evaluating a subject that
+  // may be NULL, or absent on JSON, as SQL's = ANY over no elements is FALSE.
+  private static CelNode unlessEmpty(LogicalTypesParser.Check_expr_inContext ctx,
+      CelNode match) {
     if (EMIT_VCTX.get() == null
         || !(ctx.in_target() instanceof LogicalTypesParser.InTargetExprContext)
         || ConstraintNullTest.NEVER.equals(ConstraintNullTest.of(ctx.check_expr_like()))) {
-      return "";
+      return match;
     }
-    return collectionSize(((LogicalTypesParser.InTargetExprContext) ctx.in_target())
-        .check_expr_like()) + " == 0 ? false : ";
+    CelNode empty = CelNode.binary(collectionSize(((LogicalTypesParser.InTargetExprContext)
+        ctx.in_target()).check_expr_like()), "==", CelNode.literal("0"));
+    return CelNode.ternary(empty, CelNode.FALSE, match);
   }
 
   // The size of the collection an IN tests.
-  static String collectionSize(LogicalTypesParser.Check_expr_likeContext target) {
-    StringBuilder cel = new StringBuilder();
-    visitLike(target, cel);
-    return "size(" + typedCollection(cel) + ")";
+  static CelNode collectionSize(LogicalTypesParser.Check_expr_likeContext target) {
+    return CelNode.call("size", typedCollection(visitLike(target), false));
   }
 
   /**
@@ -483,7 +294,7 @@ final class ConstraintEmitter {
     }
     boolean mayBeNull = false;
     for (LogicalTypesParser.Check_exprContext item : inItems(ctx)) {
-      String test = ConstraintNullTest.of(item);
+      CelNode test = ConstraintNullTest.of(item);
       if (test == null) {
         return false;
       }
@@ -497,74 +308,52 @@ final class ConstraintEmitter {
    * else TRUE on a match, else NULL when an element is NULL, else FALSE; NOT IN negates it,
    * keeping NULL. Each value is tested before it is compared or converted to the common type.
    */
-  private static void emitInMayBeNull(
-      LogicalTypesParser.Check_expr_inContext ctx, boolean negated, StringBuilder sb) {
+  private static CelNode emitInMayBeNull(
+      LogicalTypesParser.Check_expr_inContext ctx, boolean negated) {
     ConstraintValidationContext vctx = EMIT_VCTX.get();
     List<LogicalTypesParser.Check_exprContext> items = inItems(ctx);
     String common = inListCommon(ctx, vctx);
     boolean temporal = !"decimal".equals(common) && !"double".equals(common)
         && inTargetHasTemporal(ctx, vctx);
-    StringBuilder subject = new StringBuilder();
+    CelNode subject;
     if ("decimal".equals(common)) {
-      emitLikeAsDecimalValue(ctx.check_expr_like(), subject);
+      subject = emitLikeAsDecimalValue(ctx.check_expr_like());
     } else if ("double".equals(common)) {
-      emitDoubleValueLike(ctx.check_expr_like(), subject);
+      subject = emitDoubleValueLike(ctx.check_expr_like());
     } else if (temporal) {
-      emitTimestampValueLike(ctx.check_expr_like(), subject);
+      subject = emitTimestampValueLike(ctx.check_expr_like());
     } else {
-      visitLike(ctx.check_expr_like(), subject);
+      subject = visitLike(ctx.check_expr_like());
     }
-    List<String> elementNulls = new ArrayList<>();
-    StringBuilder match = new StringBuilder("(");
-    for (int i = 0; i < items.size(); i++) {
-      String elementNull = ConstraintNullTest.of(items.get(i));
+    List<CelNode> elementNulls = new ArrayList<>();
+    List<CelNode> matches = new ArrayList<>();
+    for (LogicalTypesParser.Check_exprContext item : items) {
+      CelNode elementNull = ConstraintNullTest.of(item);
       elementNulls.add(elementNull);
-      if (i > 0) {
-        match.append(" || ");
-      }
-      if (!ConstraintNullTest.NEVER.equals(elementNull)) {
-        match.append('(').append(ConstraintNullTest.not(elementNull)).append(" && ");
-      }
+      CelNode equal;
       if ("decimal".equals(common)) {
-        match.append("decimals.eq(").append(subject).append(", ");
-        emitDecimalValue(items.get(i), match);
-        match.append(')');
+        equal = CelNode.call("decimals.eq", subject, emitDecimalValue(item));
+      } else if ("double".equals(common)) {
+        equal = CelNode.binary(subject, "==", emitDoubleValueCheckExpr(item));
+      } else if (temporal) {
+        equal = CelNode.binary(subject, "==", emitTimestampValueCheckExpr(item));
       } else {
-        match.append(subject).append(" == ");
-        if ("double".equals(common)) {
-          emitDoubleValueCheckExpr(items.get(i), match);
-        } else if (temporal) {
-          emitTimestampValueCheckExpr(items.get(i), match);
-        } else {
-          emitWrappedReceiver(items.get(i), match);
-        }
+        equal = CelNode.binary(subject, "==", visitCheckExpr(item));
       }
-      if (!ConstraintNullTest.NEVER.equals(elementNull)) {
-        match.append(')');
-      }
+      matches.add(ConstraintNullTest.NEVER.equals(elementNull) ? equal
+          : CelNode.and(ConstraintNullTest.not(elementNull), equal));
     }
-    match.append(')');
-    String subjectNull = ConstraintNullTest.of(ctx.check_expr_like());
-    String anyElementNull = ConstraintNullTest.any(elementNulls);
+    CelNode match = CelNode.or(matches);
+    CelNode subjectNull = ConstraintNullTest.of(ctx.check_expr_like());
+    CelNode anyElementNull = ConstraintNullTest.any(elementNulls);
     if (vctx != null && vctx.isTypeOnly()) {
-      sb.append(negated ? "!" : "").append(match);
-      return;
+      return negated ? CelNode.not(match) : match;
     }
-    StringBuilder noMatch = new StringBuilder();
-    if (ConstraintNullTest.NEVER.equals(anyElementNull)) {
-      noMatch.append(negated ? "true" : "false");
-    } else {
-      noMatch.append('(').append(anyElementNull).append(" ? dyn(null) : ")
-          .append(negated ? "true" : "false").append(')');
-    }
-    String unlessSubjectNull = "(" + match + " ? " + (negated ? "false" : "true") + " : "
-        + noMatch + ")";
-    if (ConstraintNullTest.NEVER.equals(subjectNull)) {
-      sb.append(unlessSubjectNull);
-    } else {
-      sb.append('(').append(subjectNull).append(" ? dyn(null) : ").append(unlessSubjectNull)
-          .append(')');
-    }
+    CelNode noMatch = ConstraintNullTest.NEVER.equals(anyElementNull) ? CelNode.bool(negated)
+        : CelNode.ternary(anyElementNull, CelNode.dyn(CelNode.NULL), CelNode.bool(negated));
+    CelNode unlessSubjectNull = CelNode.ternary(match, CelNode.bool(!negated), noMatch);
+    return ConstraintNullTest.NEVER.equals(subjectNull) ? unlessSubjectNull
+        : CelNode.ternary(subjectNull, CelNode.dyn(CelNode.NULL), unlessSubjectNull);
   }
 
   /**
@@ -578,8 +367,8 @@ final class ConstraintEmitter {
         || likeHasDecimal(ctx.check_expr_like(), vctx)) {
       return false;
     }
-    String subject = ConstraintNullTest.of(ctx.check_expr_like());
-    String array = ConstraintNullTest.of(
+    CelNode subject = ConstraintNullTest.of(ctx.check_expr_like());
+    CelNode array = ConstraintNullTest.of(
         ((LogicalTypesParser.InTargetExprContext) ctx.in_target()).check_expr_like());
     Schema element = ConstraintResolver.inArrayElementType(ctx, vctx);
     return subject != null && array != null && element != null && element.isNullable();
@@ -590,38 +379,27 @@ final class ConstraintEmitter {
    * empty, else TRUE on a match, else NULL when an element is NULL, else FALSE; NOT IN negates
    * it, keeping NULL.
    */
-  private static void emitInArrayMayBeNull(
-      LogicalTypesParser.Check_expr_inContext ctx, boolean negated, StringBuilder sb) {
+  private static CelNode emitInArrayMayBeNull(
+      LogicalTypesParser.Check_expr_inContext ctx, boolean negated) {
     ConstraintValidationContext vctx = EMIT_VCTX.get();
     LogicalTypesParser.Check_expr_likeContext array =
         ((LogicalTypesParser.InTargetExprContext) ctx.in_target()).check_expr_like();
-    StringBuilder match = new StringBuilder(emptyGuard(ctx));
-    if (inTargetHasTemporal(ctx, vctx)) {
-      emitTimestampValueLike(ctx.check_expr_like(), match);
-      match.append(" in ");
-      emitTimestampInTarget(ctx.in_target(), match);
-    } else {
-      visitLike(ctx.check_expr_like(), match);
-      match.append(" in ");
-      visitInTarget(ctx.in_target(), match);
-    }
+    CelNode match = unlessEmpty(ctx, inTargetHasTemporal(ctx, vctx)
+        ? CelNode.binary(emitTimestampValueLike(ctx.check_expr_like()), "in",
+            emitTimestampInTarget(ctx.in_target()))
+        : CelNode.binary(visitLike(ctx.check_expr_like()), "in", visitInTarget(ctx.in_target())));
     if (vctx.isTypeOnly()) {
-      sb.append(negated ? "!(" : "(").append(match).append(')');
-      return;
+      return negated ? CelNode.not(match) : match;
     }
-    StringBuilder noMatch = new StringBuilder("((");
-    visitLike(array, noMatch);
-    noMatch.append(").exists(v, dyn(v) == null) ? dyn(null) : ")
-        .append(negated ? "true" : "false").append(')');
-    String unlessNull = "((" + match + ") ? " + (negated ? "false" : "true") + " : "
-        + noMatch + ")";
-    String isNull = ConstraintNullTest.ofCollectionIn(ctx,
+    CelNode v = CelNode.ident("v");
+    CelNode noMatch = CelNode.ternary(
+        CelNode.method(visitLike(array), "exists", v, CelNode.isNull(v)),
+        CelNode.dyn(CelNode.NULL), CelNode.bool(negated));
+    CelNode unlessNull = CelNode.ternary(match, CelNode.bool(!negated), noMatch);
+    CelNode isNull = ConstraintNullTest.ofCollectionIn(ctx,
         ConstraintNullTest.of(ctx.check_expr_like()));
-    if (ConstraintNullTest.NEVER.equals(isNull)) {
-      sb.append(unlessNull);
-    } else {
-      sb.append('(').append(isNull).append(" ? dyn(null) : ").append(unlessNull).append(')');
-    }
+    return ConstraintNullTest.NEVER.equals(isNull) ? unlessNull
+        : CelNode.ternary(isNull, CelNode.dyn(CelNode.NULL), unlessNull);
   }
 
   private static List<LogicalTypesParser.Check_exprContext> inItems(
@@ -642,36 +420,24 @@ final class ConstraintEmitter {
   }
 
   /** Emit an IN value list (or list-field) with each element timestamp-normalized. */
-  private static void emitTimestampInTarget(
-      LogicalTypesParser.In_targetContext ctx, StringBuilder sb) {
+  private static CelNode emitTimestampInTarget(LogicalTypesParser.In_targetContext ctx) {
     if (ctx instanceof LogicalTypesParser.InTargetParenListContext) {
-      List<LogicalTypesParser.Check_exprContext> items =
-          ((LogicalTypesParser.InTargetParenListContext) ctx).check_expr_list().check_expr();
-      sb.append('[');
-      for (int i = 0; i < items.size(); i++) {
-        if (i > 0) {
-          sb.append(", ");
-        }
-        emitTimestampValueCheckExpr(items.get(i), sb);
+      List<CelNode> elements = new ArrayList<>();
+      for (LogicalTypesParser.Check_exprContext item
+          : ((LogicalTypesParser.InTargetParenListContext) ctx).check_expr_list().check_expr()) {
+        elements.add(emitTimestampValueCheckExpr(item));
       }
-      sb.append(']');
-    } else {
-      // IN <list-field>: the field is a list of timestamps; CEL `in` handles it
-      // natively. The receiver still normalizes via the cascade (field ref).
-      StringBuilder target = new StringBuilder();
-      emitTimestampValueLike(
-          ((LogicalTypesParser.InTargetExprContext) ctx).check_expr_like(), target);
-      sb.append(typedSubscript(target));
+      return CelNode.list(elements);
     }
+    // IN <list-field>: the field is a list of timestamps; CEL `in` handles it
+    // natively. The receiver still normalizes via the cascade (field ref).
+    return typedSubscript(emitTimestampValueLike(
+        ((LogicalTypesParser.InTargetExprContext) ctx).check_expr_like()));
   }
 
-  static void emitTimestampValueLike(
-      LogicalTypesParser.Check_expr_likeContext like, StringBuilder sb) {
-    if (like.LIKE() == null) {
-      emitTimestampValueAdd(like.check_expr_add(), sb);
-    } else {
-      visitLike(like, sb);  // not a bare value (defensive); emit native
-    }
+  static CelNode emitTimestampValueLike(LogicalTypesParser.Check_expr_likeContext like) {
+    return like.LIKE() == null ? emitTimestampValueAdd(like.check_expr_add())
+        : visitLike(like);  // not a bare value (defensive); emit native
   }
 
   /**
@@ -679,35 +445,22 @@ final class ConstraintEmitter {
    * (negated wraps with {@code !}). The {@code IN <list-field>} form has no
    * Decimal-aware equivalent and is rejected.
    */
-  private static void emitInDecimal(
-      LogicalTypesParser.Check_expr_inContext ctx, boolean negated, StringBuilder sb) {
+  private static CelNode emitInDecimal(
+      LogicalTypesParser.Check_expr_inContext ctx, boolean negated) {
     LogicalTypesParser.In_targetContext target = ctx.in_target();
     if (!(target instanceof LogicalTypesParser.InTargetParenListContext)) {
       throw locatedError(ctx,
           "IN against a list-typed operand is not supported for DECIMAL; use an "
               + "explicit value list, e.g. amount IN (1.0, 2.5, 9.99).");
     }
-    final List<LogicalTypesParser.Check_exprContext> items =
-        ((LogicalTypesParser.InTargetParenListContext) target).check_expr_list().check_expr();
-    StringBuilder lhsBuf = new StringBuilder();
-    emitLikeAsDecimalValue(ctx.check_expr_like(), lhsBuf);
-    String lhs = lhsBuf.toString();
-    if (negated) {
-      sb.append("!(");
+    CelNode lhs = emitLikeAsDecimalValue(ctx.check_expr_like());
+    List<CelNode> equals = new ArrayList<>();
+    for (LogicalTypesParser.Check_exprContext item
+        : ((LogicalTypesParser.InTargetParenListContext) target).check_expr_list().check_expr()) {
+      equals.add(CelNode.call("decimals.eq", lhs, emitDecimalValue(item)));
     }
-    sb.append('(');
-    for (int i = 0; i < items.size(); i++) {
-      if (i > 0) {
-        sb.append(" || ");
-      }
-      sb.append("decimals.eq(").append(lhs).append(", ");
-      emitDecimalValue(items.get(i), sb);
-      sb.append(')');
-    }
-    sb.append(')');
-    if (negated) {
-      sb.append(")");
-    }
+    CelNode any = CelNode.or(equals);
+    return negated ? CelNode.not(any) : any;
   }
 
   /**
@@ -715,87 +468,52 @@ final class ConstraintEmitter {
    * {@code in} does element equality, which works for double once every element
    * is cast to double.
    */
-  private static void emitInDouble(
-      LogicalTypesParser.Check_expr_inContext ctx, boolean negated, StringBuilder sb) {
-    final List<LogicalTypesParser.Check_exprContext> items =
-        ((LogicalTypesParser.InTargetParenListContext) ctx.in_target())
-            .check_expr_list().check_expr();
-    if (negated) {
-      sb.append("!(");
+  private static CelNode emitInDouble(
+      LogicalTypesParser.Check_expr_inContext ctx, boolean negated) {
+    List<CelNode> elements = new ArrayList<>();
+    for (LogicalTypesParser.Check_exprContext item : inItems(ctx)) {
+      elements.add(emitDoubleValueCheckExpr(item));
     }
-    emitDoubleValueLike(ctx.check_expr_like(), sb);
-    sb.append(" in [");
-    for (int i = 0; i < items.size(); i++) {
-      if (i > 0) {
-        sb.append(", ");
-      }
-      emitDoubleValueCheckExpr(items.get(i), sb);
-    }
-    sb.append("]");
-    if (negated) {
-      sb.append(")");
-    }
+    CelNode in = CelNode.binary(emitDoubleValueLike(ctx.check_expr_like()), "in",
+        CelNode.list(elements));
+    return negated ? CelNode.not(in) : in;
   }
 
-  private static void visitInTarget(
-      LogicalTypesParser.In_targetContext ctx, StringBuilder sb) {
+  private static CelNode visitInTarget(LogicalTypesParser.In_targetContext ctx) {
     if (ctx instanceof LogicalTypesParser.InTargetParenListContext) {
-      LogicalTypesParser.Check_expr_listContext list =
-          ((LogicalTypesParser.InTargetParenListContext) ctx).check_expr_list();
-      sb.append("[");
-      List<LogicalTypesParser.Check_exprContext> items = list.check_expr();
-      for (int i = 0; i < items.size(); i++) {
-        if (i > 0) {
-          sb.append(", ");
-        }
-        visitCheckExpr(items.get(i), sb);
+      List<CelNode> elements = new ArrayList<>();
+      for (LogicalTypesParser.Check_exprContext item
+          : ((LogicalTypesParser.InTargetParenListContext) ctx).check_expr_list().check_expr()) {
+        elements.add(visitCheckExpr(item));
       }
-      sb.append("]");
-    } else if (ctx instanceof LogicalTypesParser.InTargetExprContext) {
-      StringBuilder target = new StringBuilder();
-      visitLike(((LogicalTypesParser.InTargetExprContext) ctx).check_expr_like(), target);
-      sb.append(typedSubscript(target));
-    } else {
-      throw new ValidationException(
-          "Unrecognized in_target subtype: " + ctx.getClass().getSimpleName());
+      return CelNode.list(elements);
     }
+    if (ctx instanceof LogicalTypesParser.InTargetExprContext) {
+      return typedSubscript(
+          visitLike(((LogicalTypesParser.InTargetExprContext) ctx).check_expr_like()));
+    }
+    throw new ValidationException(
+        "Unrecognized in_target subtype: " + ctx.getClass().getSimpleName());
   }
 
   /**
    * SQL {@code NOT} has lower precedence than IS/comparison/BETWEEN/IN/LIKE,
-   * so {@code NOT x > 0} means {@code NOT (x > 0)}. CEL {@code !} binds tighter
-   * than {@code >}, so we must parenthesize the operand: {@code !(x > 0)}.
-   * Emitting bare {@code !} would miscompile to {@code (!x) > 0} — a runtime
-   * type error.
+   * so {@code NOT x > 0} means {@code NOT (x > 0)}; the printed {@code !}
+   * brackets its operand where CEL's tighter {@code !} needs it.
    *
    * <p>The grammar's NOT alternative is recursive (matches real PG), so
    * {@code NOT NOT x} chains cleanly here.
    */
-  private static void visitUnaryNot(
-      LogicalTypesParser.Check_expr_unary_notContext ctx, StringBuilder sb) {
+  private static CelNode visitUnaryNot(LogicalTypesParser.Check_expr_unary_notContext ctx) {
     if (ctx instanceof LogicalTypesParser.CheckExprNotContext) {
-      // CEL `!` binds tighter than comparison/logical operators. For
-      // simple primaries (column refs, literals, function calls,
-      // already-paren'd) the operand emits without parens; compound
-      // operands need the wrap so `!a > b` doesn't parse as `(!a) > b`.
-      LogicalTypesParser.Check_expr_unary_notContext inner =
-          ((LogicalTypesParser.CheckExprNotContext) ctx).check_expr_unary_not();
-      boolean wrap = !ConstraintResolver.isSimplePrimaryUnaryNot(inner);
-      sb.append('!');
-      if (wrap) {
-        sb.append('(');
-      }
-      visitUnaryNot(inner, sb);
-      if (wrap) {
-        sb.append(')');
-      }
-    } else if (ctx instanceof LogicalTypesParser.CheckExprNotPassContext) {
-      visitIs(
-          ((LogicalTypesParser.CheckExprNotPassContext) ctx).check_expr_isnull(), sb);
-    } else {
-      throw new ValidationException(
-          "Unrecognized check_expr_unary_not subtype: " + ctx.getClass().getSimpleName());
+      return CelNode.not(
+          visitUnaryNot(((LogicalTypesParser.CheckExprNotContext) ctx).check_expr_unary_not()));
     }
+    if (ctx instanceof LogicalTypesParser.CheckExprNotPassContext) {
+      return visitIs(((LogicalTypesParser.CheckExprNotPassContext) ctx).check_expr_isnull());
+    }
+    throw new ValidationException(
+        "Unrecognized check_expr_unary_not subtype: " + ctx.getClass().getSimpleName());
   }
 
   /**
@@ -825,14 +543,6 @@ final class ConstraintEmitter {
    * comparison gets the dyn wrap. The LHS is emitted twice in the
    * has-compatible branch (CEL expressions are pure).
    *
-   * <p><b>Outer parens on the has-compatible branch are mandatory.</b>
-   * CEL's {@code &&} binds tighter than {@code ||}, so an unwrapped IS
-   * NULL rewrite ({@code !has(x) || dyn(x) == null}) ANDed with another
-   * operand mis-binds: a surrounding {@code AND} would absorb the right
-   * half. The IS NOT NULL rewrite is paren-wrapped too for symmetry. The
-   * non-has-compatible fallback ({@code dyn(<expr>) == null}) doesn't
-   * need outer parens — {@code dyn(...)} is a single tightly-bound call.
-   *
    * <p><b>Note on collection (ARRAY/MULTISET/MAP) IS NULL.</b> CEL spec:
    * {@code has(repeated_field)} returns false for non-null but EMPTY
    * collections (proto3 has no presence bit for repeated fields, so empty
@@ -844,65 +554,67 @@ final class ConstraintEmitter {
    * (NULL only, not empty) has no meaningful runtime equivalent for
    * proto3 repeated fields (which can never actually be NULL).
    */
-  private static void visitIs(
-      LogicalTypesParser.Check_expr_isnullContext ctx, StringBuilder sb) {
+  private static CelNode visitIs(LogicalTypesParser.Check_expr_isnullContext ctx) {
     if (ctx.IS() == null) {
-      visitCompare(ctx.check_expr_compare(), sb);
-      return;
+      return visitCompare(ctx.check_expr_compare());
     }
     boolean negated = ctx.NOT() != null;
     if (ConstraintResolver.isHasCompatible(ctx.check_expr_compare(), EMIT_VCTX.get())) {
-      StringBuilder emitted = new StringBuilder();
-      visitCompare(ctx.check_expr_compare(), emitted);
-      sb.append(nullTest(ConstraintResolver.selectionPathCompare(ctx.check_expr_compare()),
-          emitted.toString(), !negated));
-      return;
+      return nullTest(ConstraintResolver.selectionPathCompare(ctx.check_expr_compare()),
+          visitCompare(ctx.check_expr_compare()), !negated);
     }
     // An expression is tested by its inputs, as evaluating it on a NULL one fails, and is still
     // evaluated otherwise, so an error such as bad JSON fails as SQL's does. The strict check
     // types it in its own numeric type, as DECIMAL arithmetic has no native form.
     LogicalTypesParser.Check_expr_compareContext operand = ctx.check_expr_compare();
     ConstraintValidationContext vctx = EMIT_VCTX.get();
-    String byInputs = ConstraintNullTest.isTestedByValue(operand) ? null
+    CelNode byInputs = ConstraintNullTest.isTestedByValue(operand) ? null
         : ConstraintNullTest.told(ConstraintNullTest.of(operand), operand);
     String category = operand.check_expr_between().size() == 1 && vctx != null
         ? ConstraintResolver.coercedNumericCategory(operand.check_expr_between(0), vctx) : null;
-    StringBuilder emitted = new StringBuilder();
-    if ("decimal".equals(category) || "double".equals(category)) {
-      emitNumericBetweenAs(operand.check_expr_between(0), category, emitted);
-    } else {
-      visitCompare(operand, emitted);
-    }
-    String value = "dyn(" + emitted + ") == null";
+    CelNode emitted = "decimal".equals(category) || "double".equals(category)
+        ? emitNumericBetweenAs(operand.check_expr_between(0), category) : visitCompare(operand);
+    CelNode value = CelNode.isNull(emitted);
     if (byInputs == null || vctx != null && vctx.isTypeOnly()) {
-      sb.append(negated ? ConstraintNullTest.not(value) : value);
-    } else if (byInputs.equals(value)) {
-      sb.append(negated ? ConstraintNullTest.not(byInputs) : byInputs);
-    } else if (byInputs.contains(value)) {
+      return negated ? ConstraintNullTest.not(value) : value;
+    }
+    if (byInputs.equals(value)) {
+      return negated ? ConstraintNullTest.not(byInputs) : byInputs;
+    }
+    if (byInputs.contains(value)) {
       // The test evaluates it already, as a VARIANT_GET's or a subscript's does. Ternaries, as
       // cel-java's || and && hide an error once their result is compared.
-      sb.append('(').append(byInputs).append(negated ? " ? false : true)" : " ? true : false)");
-    } else {
-      // A predicate's CEL may be || or && itself, so its value is a ternary's condition too:
-      // its inputs tell it isn't NULL there.
-      Schema type = vctx == null ? null
-          : ConstraintResolver.tryResolveCompareValueType(operand, vctx);
-      String ofValue = type != null && type.getType() == Schema.Type.BOOLEAN
-          ? "(" + emitted + (negated ? " ? true : true)" : " ? false : false)")
-          : negated ? ConstraintNullTest.not(value) : value;
-      sb.append('(').append(byInputs).append(negated ? " ? false : " : " ? true : ")
-          .append(ofValue).append(')');
+      return CelNode.ternary(byInputs, CelNode.bool(!negated), CelNode.bool(negated));
     }
+    // A predicate's CEL may be || or && itself, so its value is a ternary's condition too:
+    // its inputs tell it isn't NULL there.
+    Schema type = vctx == null ? null
+        : ConstraintResolver.tryResolveCompareValueType(operand, vctx);
+    CelNode ofValue = type != null && type.getType() == Schema.Type.BOOLEAN
+        ? CelNode.ternary(emitted, CelNode.bool(negated), CelNode.bool(negated))
+        : negated ? ConstraintNullTest.not(value) : value;
+    if (ConstraintNullTest.NEVER.equals(byInputs)) {
+      // Never NULL: evaluated only for its errors.
+      return ofValue;
+    }
+    if (ConstraintNullTest.ALWAYS.equals(byInputs)) {
+      // Always NULL: never evaluated.
+      return CelNode.bool(!negated);
+    }
+    return CelNode.ternary(byInputs, CelNode.bool(!negated), ofValue);
   }
 
-  private static void visitCompare(
-      LogicalTypesParser.Check_expr_compareContext ctx, StringBuilder sb) {
+  private static CelNode visitCompare(LogicalTypesParser.Check_expr_compareContext ctx) {
     List<LogicalTypesParser.Check_expr_betweenContext> betweens = ctx.check_expr_between();
     if (betweens.size() == 2) {
       // The comparison operator is the second child of the rule (between the
       // two check_expr_between). Find it as the only TerminalNode child.
       String celOp = translateCompareOp(findComparisonOp(ctx));
       ConstraintValidationContext vctx = EMIT_VCTX.get();
+      CelNode literalCompare = emitBooleanLiteralCompare(betweens, celOp, vctx);
+      if (literalCompare != null) {
+        return literalCompare;
+      }
       // Numeric coercion: if both sides are pure numeric, compute the
       // common type and emit at it. common=DECIMAL → decimals.* (no native
       // overload on the opaque type); common=DOUBLE/INT → native operator with
@@ -911,30 +623,73 @@ final class ConstraintEmitter {
       // coercedNumericCategory classifies a boolean-shaped operand (BETWEEN/
       // IN/LIKE, even parenthesized) as non-numeric, so this path only sees
       // bare numeric values — the assumption emitNumericBetweenAs relies on.
-      // Boolean predicate operands fall through to the wrapped native path.
+      // Boolean predicate operands fall through to the native path.
       if (vctx != null) {
         String lc = ConstraintResolver.coercedNumericCategory(betweens.get(0), vctx);
         String rc = ConstraintResolver.coercedNumericCategory(betweens.get(1), vctx);
         if (lc != null && rc != null) {
           String common = ConstraintResolver.numericCommon(lc, rc);
           if ("decimal".equals(common)) {
-            emitDecimalCompare(betweens.get(0), celOp, betweens.get(1), sb);
-          } else {
-            emitNumericBetweenAs(betweens.get(0), common, sb);
-            sb.append(' ').append(celOp).append(' ');
-            emitNumericBetweenAs(betweens.get(1), common, sb);
+            return emitDecimalCompare(betweens.get(0), celOp, betweens.get(1));
           }
-          return;
+          return CelNode.binary(emitNumericBetweenAs(betweens.get(0), common), celOp,
+              emitNumericBetweenAs(betweens.get(1), common));
         }
       }
       // Non-numeric: timestamp normalization (instant-timestamp operands wrapped
       // in timestamp(...); CURRENT_TIMESTAMP stays `now`) or plain native.
-      emitCompareOperandWrapped(betweens.get(0), vctx, sb);
-      sb.append(' ').append(celOp).append(' ');
-      emitCompareOperandWrapped(betweens.get(1), vctx, sb);
-      return;
+      return CelNode.binary(emitCompareOperand(betweens.get(0), vctx), celOp,
+          emitCompareOperand(betweens.get(1), vctx));
     }
-    visitBetween(betweens.get(0), sb);
+    return visitBetween(betweens.get(0));
+  }
+
+  /**
+   * A BOOLEAN compared with = or <> to a TRUE or FALSE literal, as that side or its negation:
+   * {@code t = TRUE} is {@code this.t}. Null for any other comparison.
+   */
+  private static CelNode emitBooleanLiteralCompare(
+      List<LogicalTypesParser.Check_expr_betweenContext> sides, String celOp,
+      ConstraintValidationContext vctx) {
+    if (vctx == null || !"==".equals(celOp) && !"!=".equals(celOp)) {
+      return null;
+    }
+    for (int i = 0; i < 2; i++) {
+      LogicalTypesParser.BoolLiteralContext literal = boolLiteral(sides.get(i));
+      LogicalTypesParser.Check_expr_betweenContext other = sides.get(1 - i);
+      Schema type = literal == null ? null
+          : ConstraintResolver.tryResolveCompareOperandType(other, vctx);
+      if (type != null && type.getType() == Schema.Type.BOOLEAN) {
+        boolean positive = "==".equals(celOp) == (literal.TRUE() != null);
+        CelNode operand = emitCompareOperand(other, vctx);
+        return positive ? operand : CelNode.not(operand);
+      }
+    }
+    return null;
+  }
+
+  // A comparison operand's unsigned TRUE or FALSE literal, or null; a signed one, even one whose
+  // signs cancel, is left to the strict check to refuse.
+  private static LogicalTypesParser.BoolLiteralContext boolLiteral(
+      LogicalTypesParser.Check_expr_betweenContext side) {
+    if (side.BETWEEN() != null || side.check_expr_in().size() != 1) {
+      return null;
+    }
+    ConstraintResolver.LiteralMatch m = ConstraintResolver.tryAsLiteralIn(side.check_expr_in(0));
+    return m == null || hasSign(side) ? null : m.lit.boolLiteral();
+  }
+
+  // True if a parse tree holds a + or - token.
+  private static boolean hasSign(ParseTree tree) {
+    if (tree instanceof TerminalNode) {
+      return "-".equals(tree.getText()) || "+".equals(tree.getText());
+    }
+    for (int i = 0; i < tree.getChildCount(); i++) {
+      if (hasSign(tree.getChild(i))) {
+        return true;
+      }
+    }
+    return false;
   }
 
   // -------------------------------------------------------------------------
@@ -951,42 +706,8 @@ final class ConstraintEmitter {
    * wrapped in {@code timestamp(...)}, literals as {@code timestamp(...)}/
    * {@code duration(...)}, operators native); otherwise emit natively.
    */
-  /**
-   * Emit a comparison operand, parenthesizing it when it is itself a compound
-   * predicate. Since BETWEEN/IN now bind tighter than comparison, an operand
-   * like {@code x BETWEEN 0 AND 10} (emits {@code lo <= a && a <= hi}) or
-   * {@code x IN (...)} (emits {@code a in [...]}) would otherwise mis-bind
-   * under CEL, where {@code ==} binds tighter than {@code &&} and {@code in}
-   * shares precedence with {@code ==}.
-   */
-  private static void emitCompareOperandWrapped(
-      LogicalTypesParser.Check_expr_betweenContext between,
-      ConstraintValidationContext vctx, StringBuilder sb) {
-    boolean wrap = compareOperandNeedsParens(between);
-    if (wrap) {
-      sb.append('(');
-    }
-    emitCompareOperand(between, vctx, sb);
-    if (wrap) {
-      sb.append(')');
-    }
-  }
-
-  /**
-   * True if a comparison operand emits a BETWEEN ({@code &&}) or IN ({@code in}).
-   */
-  private static boolean compareOperandNeedsParens(
-      LogicalTypesParser.Check_expr_betweenContext between) {
-    if (between.BETWEEN() != null) {
-      return true;
-    }
-    return between.check_expr_in().size() == 1
-        && between.check_expr_in(0).IN() != null;
-  }
-
-  private static void emitCompareOperand(
-      LogicalTypesParser.Check_expr_betweenContext between,
-      ConstraintValidationContext vctx, StringBuilder sb) {
+  private static CelNode emitCompareOperand(
+      LogicalTypesParser.Check_expr_betweenContext between, ConstraintValidationContext vctx) {
     // Guard LIKE: the cascade descends straight to the add value root, so a LIKE
     // clause would be dropped. A LIKE operand is boolean (and invalid on a
     // timestamp), so emit it natively and let the strict checker reject the type
@@ -997,169 +718,89 @@ final class ConstraintEmitter {
             ? bareAddOfIn(between.check_expr_in(0)) : null;
     if (vctx != null && add != null
         && ConstraintResolver.subtreeHasTemporal(between, vctx)) {
-      emitTimestampValueAdd(add, sb);
-    } else {
-      visitBetween(between, sb);
+      return emitTimestampValueAdd(add);
     }
+    return visitBetween(between);
   }
 
   /**
    * Emit an EXTRACT receiver. Temporal receivers go through the timestamp-value
    * cascade (so {@code ts} → {@code timestamp(this.ts)}); {@code now} and
-   * non-temporal receivers emit natively. Compound receivers are parenthesized
-   * so the trailing {@code .getXxx()} binds to the whole receiver.
+   * non-temporal receivers emit natively.
    */
-  static void emitTimestampReceiver(
-      LogicalTypesParser.Check_exprContext receiver, StringBuilder sb) {
+  static CelNode emitTimestampReceiver(LogicalTypesParser.Check_exprContext receiver) {
     ConstraintValidationContext vctx = EMIT_VCTX.get();
-    if (vctx != null && ConstraintResolver.subtreeHasTemporal(receiver, vctx)) {
-      if (ConstraintResolver.isSimplePrimary(receiver)) {
-        emitTimestampValueCheckExpr(receiver, sb);
-      } else {
-        sb.append('(');
-        emitTimestampValueCheckExpr(receiver, sb);
-        sb.append(')');
-      }
-    } else {
-      emitWrappedReceiver(receiver, sb);
-    }
+    return vctx != null && ConstraintResolver.subtreeHasTemporal(receiver, vctx)
+        ? emitTimestampValueCheckExpr(receiver) : visitCheckExpr(receiver);
   }
 
-  /**
-   * Timestamp BETWEEN: native {@code <=} chain with each operand emitted via
-   * the timestamp-value cascade.
-   */
-  private static void emitBetweenTimestamp(
-      List<LogicalTypesParser.Check_expr_inContext> ins,
-      boolean negated, boolean symmetric, StringBuilder sb) {
-    if (negated) {
-      sb.append("!(");
-    }
-    if (symmetric) {
-      sb.append('(');
-      emitTimestampLe(ins.get(1), ins.get(2), sb);   // lo <= hi ?
-      sb.append(" ? (");
-      emitTimestampLe(ins.get(1), ins.get(0), sb);
-      sb.append(" && ");
-      emitTimestampLe(ins.get(0), ins.get(2), sb);
-      sb.append(") : (");
-      emitTimestampLe(ins.get(2), ins.get(0), sb);
-      sb.append(" && ");
-      emitTimestampLe(ins.get(0), ins.get(1), sb);
-      sb.append("))");
-    } else {
-      emitTimestampLe(ins.get(1), ins.get(0), sb);
-      sb.append(" && ");
-      emitTimestampLe(ins.get(0), ins.get(2), sb);
-    }
-    if (negated) {
-      sb.append(")");
-    }
-  }
-
-  private static void emitTimestampLe(
-      LogicalTypesParser.Check_expr_inContext a,
-      LogicalTypesParser.Check_expr_inContext b, StringBuilder sb) {
-    emitTimestampValueIn(a, sb);
-    sb.append(" <= ");
-    emitTimestampValueIn(b, sb);
+  private static CelNode emitTimestampLe(
+      LogicalTypesParser.Check_expr_inContext a, LogicalTypesParser.Check_expr_inContext b) {
+    return CelNode.binary(emitTimestampValueIn(a), "<=", emitTimestampValueIn(b));
   }
 
   // ---- timestamp-value cascade: native emit, but instant-timestamp column
   // leaves wrapped in timestamp(...). Reused by comparison, BETWEEN, EXTRACT,
   // and the Phase B constructs. ----
 
-  static void emitTimestampValueIn(
-      LogicalTypesParser.Check_expr_inContext in, StringBuilder sb) {
+  static CelNode emitTimestampValueIn(LogicalTypesParser.Check_expr_inContext in) {
     LogicalTypesParser.Check_expr_addContext add = bareAddOfIn(in);
-    if (add != null) {
-      emitTimestampValueAdd(add, sb);
-    } else {
-      visitIn(in, sb);  // not a bare value (defensive); emit native
-    }
+    return add != null ? emitTimestampValueAdd(add)
+        : visitIn(in);  // not a bare value (defensive); emit native
   }
 
-  static void emitTimestampValueCheckExpr(
-      LogicalTypesParser.Check_exprContext ctx, StringBuilder sb) {
-    emitCached(ctx, Form.TIMESTAMP, sb, out -> {
+  static CelNode emitTimestampValueCheckExpr(LogicalTypesParser.Check_exprContext ctx) {
+    return emitCached(ctx, Form.TIMESTAMP, () -> {
       LogicalTypesParser.Check_expr_addContext add = bareAddOfOr(ctx.check_expr_or());
-      if (add != null) {
-        emitTimestampValueAdd(add, out);
-      } else {
-        visitCheckExpr(ctx, out);  // not a bare value (defensive)
-      }
+      return add != null ? emitTimestampValueAdd(add)
+          : visitCheckExpr(ctx);  // not a bare value (defensive)
     });
   }
 
-  private static void emitTimestampValueAdd(
-      LogicalTypesParser.Check_expr_addContext add, StringBuilder sb) {
+  private static CelNode emitTimestampValueAdd(LogicalTypesParser.Check_expr_addContext add) {
     List<LogicalTypesParser.Check_expr_mulContext> muls = add.check_expr_mul();
-    emitTimestampValueMul(muls.get(0), sb);
-    int mulIdx = 1;
-    for (int i = 0; i < add.getChildCount(); i++) {
-      ParseTree child = add.getChild(i);
-      if (child instanceof TerminalNode) {
-        sb.append(' ').append(child.getText()).append(' ');
-        emitTimestampValueMul(muls.get(mulIdx++), sb);
-      }
+    List<String> ops = operators(add);
+    CelNode acc = emitTimestampValueMul(muls.get(0));
+    for (int i = 1; i < muls.size(); i++) {
+      acc = CelNode.binary(acc, ops.get(i - 1), emitTimestampValueMul(muls.get(i)));
     }
+    return acc;
   }
 
-  private static void emitTimestampValueMul(
-      LogicalTypesParser.Check_expr_mulContext mul, StringBuilder sb) {
+  private static CelNode emitTimestampValueMul(LogicalTypesParser.Check_expr_mulContext mul) {
     List<LogicalTypesParser.Check_expr_unary_signContext> signs = mul.check_expr_unary_sign();
-    emitTimestampValueSign(signs.get(0), sb);
-    int signIdx = 1;
-    for (int i = 0; i < mul.getChildCount(); i++) {
-      ParseTree child = mul.getChild(i);
-      if (child instanceof TerminalNode) {
-        String op = child.getText();
-        // `||` (string concat) → CEL `+`; not expected for temporal values.
-        sb.append(' ').append("||".equals(op) ? "+" : op).append(' ');
-        emitTimestampValueSign(signs.get(signIdx++), sb);
-      }
+    List<String> ops = operators(mul);
+    CelNode acc = emitTimestampValueSign(signs.get(0));
+    for (int i = 1; i < signs.size(); i++) {
+      // `||` (string concat) → CEL `+`; not expected for temporal values.
+      acc = CelNode.binary(acc, celMulOp(ops.get(i - 1)), emitTimestampValueSign(signs.get(i)));
     }
+    return acc;
   }
 
-  private static void emitTimestampValueSign(
-      LogicalTypesParser.Check_expr_unary_signContext sign, StringBuilder sb) {
-    for (int i = 0; i < sign.getChildCount(); i++) {
-      ParseTree child = sign.getChild(i);
-      if (child instanceof TerminalNode && "-".equals(child.getText())) {
-        sb.append('-');  // '+' dropped, matching native visitUnarySign
-      }
-    }
-    emitTimestampValueCExpr(sign.c_expr(), sb);
+  private static CelNode emitTimestampValueSign(
+      LogicalTypesParser.Check_expr_unary_signContext sign) {
+    // '+' dropped, matching native visitUnarySign
+    return signed(sign, emitTimestampValueCExpr(sign.c_expr()));
   }
 
-  private static void emitTimestampValueCExpr(
-      LogicalTypesParser.C_exprContext ctx, StringBuilder sb) {
+  private static CelNode emitTimestampValueCExpr(LogicalTypesParser.C_exprContext ctx) {
     if (ctx instanceof LogicalTypesParser.CheckColumnRefContext) {
       LogicalTypesParser.ColumnrefContext cr =
           ((LogicalTypesParser.CheckColumnRefContext) ctx).columnref();
-      if (ConstraintResolver.isInstantTimestamp(
-          ConstraintResolver.resolveColumnRefType(cr, EMIT_VCTX.get()))) {
-        sb.append("timestamp(");
-        visitColumnRef(cr, sb);
-        sb.append(')');
-      } else {
-        visitColumnRef(cr, sb);
-      }
-      return;
+      CelNode column = visitColumnRef(cr);
+      return ConstraintResolver.isInstantTimestamp(
+          ConstraintResolver.resolveColumnRefType(cr, EMIT_VCTX.get()))
+          ? CelNode.call("timestamp", column) : column;
     }
-    if (ctx instanceof LogicalTypesParser.CheckParenContext) {
-      LogicalTypesParser.CheckParenContext paren = (LogicalTypesParser.CheckParenContext) ctx;
-      if (paren.indirection() == null) {
-        sb.append('(');
-        emitTimestampValueCheckExpr(paren.check_expr(), sb);
-        sb.append(')');
-        return;
-      }
+    if (ctx instanceof LogicalTypesParser.CheckParenContext
+        && ((LogicalTypesParser.CheckParenContext) ctx).indirection() == null) {
+      return emitTimestampValueCheckExpr(((LogicalTypesParser.CheckParenContext) ctx).check_expr());
     }
     // Literal (TIMESTAMP/INTERVAL → timestamp(...)/duration(...)), function
     // (self-normalizing, incl. Phase B constructs), case, or paren+indirection:
     // emit natively.
-    visitCExpr(ctx, sb);
+    return visitCExpr(ctx);
   }
 
   // -------------------------------------------------------------------------
@@ -1180,17 +821,16 @@ final class ConstraintEmitter {
    * folded {@code decimals.*} calls). Used by {@link ConstraintFunctions} to
    * emit the argument of {@code decimals.abs/floor/ceil/round/trunc/sqrt/...}.
    */
-  static void emitDecimalValue(
-      LogicalTypesParser.Check_exprContext ctx, StringBuilder sb) {
-    emitCheckExprAsDecimal(ctx, sb);
+  static CelNode emitDecimalValue(LogicalTypesParser.Check_exprContext ctx) {
+    return emitCheckExprAsDecimal(ctx);
   }
 
   /**
    * {@code a <op> b} where a/b are decimal → {@code decimals.<fn>(a, b)}.
    */
-  private static void emitDecimalCompare(
+  private static CelNode emitDecimalCompare(
       LogicalTypesParser.Check_expr_betweenContext lhs, String celOp,
-      LogicalTypesParser.Check_expr_betweenContext rhs, StringBuilder sb) {
+      LogicalTypesParser.Check_expr_betweenContext rhs) {
     String fn;
     boolean negate = false;
     switch (celOp) {
@@ -1216,14 +856,8 @@ final class ConstraintEmitter {
       default:
         throw new ValidationException("Internal: unexpected decimal compare op " + celOp);
     }
-    if (negate) {
-      sb.append('!');
-    }
-    sb.append(fn).append('(');
-    emitBetweenAsDecimal(lhs, sb);
-    sb.append(", ");
-    emitBetweenAsDecimal(rhs, sb);
-    sb.append(')');
+    CelNode compare = CelNode.call(fn, emitBetweenAsDecimal(lhs), emitBetweenAsDecimal(rhs));
+    return negate ? CelNode.not(compare) : compare;
   }
 
   /**
@@ -1231,33 +865,26 @@ final class ConstraintEmitter {
    * decimal operand is a bare value (no BETWEEN/IN/LIKE), so it descends
    * between → in → like → add.
    */
-  private static void emitBetweenAsDecimal(
-      LogicalTypesParser.Check_expr_betweenContext between, StringBuilder sb) {
-    emitLikeAsDecimalValue(between.check_expr_in(0).check_expr_like(), sb);
+  private static CelNode emitBetweenAsDecimal(
+      LogicalTypesParser.Check_expr_betweenContext between) {
+    return emitLikeAsDecimalValue(between.check_expr_in(0).check_expr_like());
   }
 
   /**
    * Emit a {@code check_expr_like} (an IN left operand or comparison operand) as
    * a Decimal value. A decimal operand never carries LIKE (that yields bool);
    * detection guarantees the add value root in normal use, with a defensive
-   * {@code decimal((...))} coercion fallback if a LIKE somehow reaches here.
+   * {@code decimal(...)} coercion fallback if a LIKE somehow reaches here.
    */
-  private static void emitLikeAsDecimalValue(
-      LogicalTypesParser.Check_expr_likeContext like, StringBuilder sb) {
-    if (like.LIKE() == null) {
-      emitAddAsDecimal(like.check_expr_add(), sb);
-    } else {
-      sb.append("decimal((");
-      visitLike(like, sb);
-      sb.append("))");
-    }
+  private static CelNode emitLikeAsDecimalValue(LogicalTypesParser.Check_expr_likeContext like) {
+    return like.LIKE() == null ? emitAddAsDecimal(like.check_expr_add())
+        : CelNode.call("decimal", visitLike(like));
   }
 
   /** Fold an additive chain left-associatively into decimals.add/sub calls. */
-  private static void emitAddAsDecimal(
-      LogicalTypesParser.Check_expr_addContext add, StringBuilder sb) {
+  private static CelNode emitAddAsDecimal(LogicalTypesParser.Check_expr_addContext add) {
     List<LogicalTypesParser.Check_expr_mulContext> muls = add.check_expr_mul();
-    emitAddRangeAsDecimal(muls, operators(add), muls.size(), sb);
+    return emitAddRangeAsDecimal(muls, operators(add), muls.size());
   }
 
   /**
@@ -1265,56 +892,46 @@ final class ConstraintEmitter {
    * Leading integer operands are added natively and widened once, as SQL types each operator
    * by its own operands.
    */
-  private static void emitAddRangeAsDecimal(
-      List<LogicalTypesParser.Check_expr_mulContext> muls, List<String> ops, int count,
-      StringBuilder sb) {
-    StringBuilder acc = new StringBuilder();
+  private static CelNode emitAddRangeAsDecimal(
+      List<LogicalTypesParser.Check_expr_mulContext> muls, List<String> ops, int count) {
     int run = Math.min(narrowerRun(muls, "decimal"), count);
     int next = 1;
+    CelNode acc;
     if (run >= 2) {
-      acc.append("decimal(");
-      emitNativeRun(muls, ops, run, acc);
-      acc.append(')');
+      acc = CelNode.call("decimal", emitNativeRun(muls, ops, run));
       next = run;
     } else {
-      emitMulAsDecimal(muls.get(0), acc);
+      acc = emitMulAsDecimal(muls.get(0));
     }
     for (int i = next; i < count; i++) {
       String fn = "-".equals(ops.get(i - 1)) ? "decimals.sub" : "decimals.add";
-      StringBuilder rhs = new StringBuilder();
-      emitMulAsDecimal(muls.get(i), rhs);
-      String folded = fn + "(" + acc + ", " + rhs + ")";
-      acc.setLength(0);
-      acc.append(folded);
+      acc = CelNode.call(fn, acc, emitMulAsDecimal(muls.get(i)));
     }
-    sb.append(acc);
+    return acc;
   }
 
   /** Fold a multiplicative chain left-associatively into decimals.mul/div/mod calls. */
-  private static void emitMulAsDecimal(
-      LogicalTypesParser.Check_expr_mulContext mul, StringBuilder sb) {
+  private static CelNode emitMulAsDecimal(LogicalTypesParser.Check_expr_mulContext mul) {
     List<LogicalTypesParser.Check_expr_unary_signContext> signs = mul.check_expr_unary_sign();
-    emitMulRangeAsDecimal(mul, signs, operators(mul), signs.size(), sb);
+    return emitMulRangeAsDecimal(mul, signs, operators(mul), signs.size());
   }
 
   /**
    * Fold the first {@code count} operands of a multiplicative chain into decimals.mul/div/mod
    * calls. Leading integer operands are combined natively (so `/` truncates) and widened once.
    */
-  private static void emitMulRangeAsDecimal(
+  private static CelNode emitMulRangeAsDecimal(
       LogicalTypesParser.Check_expr_mulContext mul,
-      List<LogicalTypesParser.Check_expr_unary_signContext> signs, List<String> ops, int count,
-      StringBuilder sb) {
-    StringBuilder acc = new StringBuilder();
+      List<LogicalTypesParser.Check_expr_unary_signContext> signs, List<String> ops,
+      int count) {
     int run = Math.min(narrowerRun(signs, "decimal"), count);
     int next = 1;
+    CelNode acc;
     if (run >= 2) {
-      acc.append("decimal(");
-      emitNativeRun(signs, ops, run, acc);
-      acc.append(')');
+      acc = CelNode.call("decimal", emitNativeRun(signs, ops, run));
       next = run;
     } else {
-      emitSignAsDecimal(signs.get(0), acc);
+      acc = emitSignAsDecimal(signs.get(0));
     }
     for (int i = next; i < count; i++) {
       String op = ops.get(i - 1);
@@ -1331,43 +948,23 @@ final class ConstraintEmitter {
         throw locatedError(mul,
             "Operator '||' (string concat) is not supported on DECIMAL operands.");
       }
-      StringBuilder rhs = new StringBuilder();
-      emitSignAsDecimal(signs.get(i), rhs);
-      String folded = fn + "(" + acc + ", " + rhs + ")";
-      acc.setLength(0);
-      acc.append(folded);
+      acc = CelNode.call(fn, acc, emitSignAsDecimal(signs.get(i)));
     }
-    sb.append(acc);
+    return acc;
   }
 
-  private static void emitSignAsDecimal(
-      LogicalTypesParser.Check_expr_unary_signContext sign, StringBuilder sb) {
+  private static CelNode emitSignAsDecimal(LogicalTypesParser.Check_expr_unary_signContext sign) {
     if (sign.getChildCount() > 1 && narrowerThan(numericCategory(sign), "decimal")) {
       // A negated integer is negated natively, then widened.
-      sb.append("decimal(");
-      visitUnarySign(sign, sb);
-      sb.append(')');
-      return;
+      return CelNode.call("decimal", visitUnarySign(sign));
     }
-    boolean negate = false;
-    for (int i = 0; i < sign.getChildCount(); i++) {
-      ParseTree child = sign.getChild(i);
-      if (child instanceof TerminalNode && "-".equals(child.getText())) {
-        negate = !negate;  // parity: `--x` cancels, matching the native path; '+' dropped
-      }
-    }
-    if (negate) {
-      sb.append("decimals.neg(");
-      emitCExprAsDecimal(sign.c_expr(), sb);
-      sb.append(')');
-    } else {
-      emitCExprAsDecimal(sign.c_expr(), sb);
-    }
+    // parity: `--x` cancels, matching the native path; '+' dropped
+    CelNode value = emitCExprAsDecimal(sign.c_expr());
+    return negated(sign) ? CelNode.call("decimals.neg", value) : value;
   }
 
   /** Emit a leaf as a Decimal value, coercing non-Decimal operands. */
-  private static void emitCExprAsDecimal(
-      LogicalTypesParser.C_exprContext ctx, StringBuilder sb) {
+  private static CelNode emitCExprAsDecimal(LogicalTypesParser.C_exprContext ctx) {
     ConstraintValidationContext vctx = EMIT_VCTX.get();
     if (ctx instanceof LogicalTypesParser.CheckLiteralContext) {
       LogicalTypesParser.LiteralContext lit =
@@ -1376,82 +973,52 @@ final class ConstraintEmitter {
       // written value exactly rather than routing through a double literal,
       // which would bake in binary-float imprecision.
       if (lit.intLiteral() != null) {
-        sb.append("decimal(\"").append(lit.intLiteral().getText()).append("\")");
-        return;
+        return CelNode.call("decimal", CelNode.string(lit.intLiteral().getText()));
       }
       if (lit.decimalLiteral() != null) {
-        sb.append("decimal(\"").append(lit.decimalLiteral().getText()).append("\")");
-        return;
+        return CelNode.call("decimal", CelNode.string(lit.decimalLiteral().getText()));
       }
       if (lit.doubleLiteral() != null) {
-        sb.append("decimal(\"").append(lit.doubleLiteral().getText()).append("\")");
-        return;
+        return CelNode.call("decimal", CelNode.string(lit.doubleLiteral().getText()));
       }
       // Non-numeric literal in a decimal context — let decimal(dyn) reject it
       // at runtime / the checker reject it; emit the coercion form.
-      sb.append("decimal(");
-      visitLiteral(lit, sb);
-      sb.append(')');
-      return;
+      return CelNode.call("decimal", visitLiteral(lit));
     }
     if (ctx instanceof LogicalTypesParser.CheckColumnRefContext) {
       LogicalTypesParser.ColumnrefContext cr =
           ((LogicalTypesParser.CheckColumnRefContext) ctx).columnref();
-      if (ConstraintResolver.isDecimal(ConstraintResolver.resolveColumnRefType(cr, vctx))) {
-        visitColumnRef(cr, sb);
-      } else {
-        sb.append("decimal(");
-        visitColumnRef(cr, sb);
-        sb.append(')');
-      }
-      return;
+      CelNode column = visitColumnRef(cr);
+      return ConstraintResolver.isDecimal(ConstraintResolver.resolveColumnRefType(cr, vctx))
+          ? column : CelNode.call("decimal", column);
     }
     if (ctx instanceof LogicalTypesParser.CheckFuncContext) {
       LogicalTypesParser.Func_exprContext fe =
           ((LogicalTypesParser.CheckFuncContext) ctx).func_expr();
-      if (ConstraintResolver.isDecimal(
-          ConstraintResolver.tryResolveFuncReturnType(fe, vctx))) {
-        ConstraintFunctions.visitFuncExpr(fe, sb);
-      } else {
-        sb.append("decimal(");
-        ConstraintFunctions.visitFuncExpr(fe, sb);
-        sb.append(')');
-      }
-      return;
+      CelNode func = ConstraintFunctions.visitFuncExpr(fe);
+      return ConstraintResolver.isDecimal(ConstraintResolver.tryResolveFuncReturnType(fe, vctx))
+          ? func : CelNode.call("decimal", func);
     }
     if (ctx instanceof LogicalTypesParser.CheckParenContext) {
       LogicalTypesParser.CheckParenContext paren = (LogicalTypesParser.CheckParenContext) ctx;
       if (paren.indirection() == null
           && ConstraintResolver.isDecimal(
               ConstraintResolver.tryResolveCheckExprType(paren.check_expr(), vctx))) {
-        // Decimal sub-expression: re-enter the decimal cascade (no SQL parens
-        // needed — we're already inside a function-call argument position).
-        emitCheckExprAsDecimal(paren.check_expr(), sb);
-      } else {
-        // Non-decimal numeric (or unresolved): coerce the native emit.
-        sb.append("decimal(");
-        visitCExpr(ctx, sb);
-        sb.append(')');
+        // Decimal sub-expression: re-enter the decimal cascade.
+        return emitCheckExprAsDecimal(paren.check_expr());
       }
-      return;
+      // Non-decimal numeric (or unresolved): coerce the native emit.
+      return CelNode.call("decimal", visitCExpr(ctx));
     }
     if (ctx instanceof LogicalTypesParser.CheckCaseContext) {
       LogicalTypesParser.Case_exprContext ce =
           ((LogicalTypesParser.CheckCaseContext) ctx).case_expr();
-      if (ConstraintResolver.isDecimal(
-          ConstraintResolver.tryResolveCaseExprType(ce, vctx))) {
-        visitCase(ce, sb);
-      } else {
-        sb.append("decimal(");
-        visitCase(ce, sb);
-        sb.append(')');
-      }
-      return;
+      CelNode result = visitCase(ce);
+      return ConstraintResolver.isDecimal(ConstraintResolver.tryResolveCaseExprType(ce, vctx))
+          ? result : CelNode.call("decimal", result);
     }
     // Fallback: coerce whatever the native path emits.
-    sb.append("decimal(");
-    visitCExpr(ctx, sb);
-    sb.append(')');
+    return CelNode.call("decimal", visitCExpr(ctx));
   }
 
   /**
@@ -1460,33 +1027,19 @@ final class ConstraintEmitter {
    * cascade levels are all single-child pass-throughs for a decimal value;
    * if any branches unexpectedly, fall back to coercing the native emit.
    */
-  private static void emitCheckExprAsDecimal(
-      LogicalTypesParser.Check_exprContext ctx, StringBuilder sb) {
-    emitCached(ctx, Form.DECIMAL, sb, out -> {
+  private static CelNode emitCheckExprAsDecimal(LogicalTypesParser.Check_exprContext ctx) {
+    return emitCached(ctx, Form.DECIMAL, () -> {
       LogicalTypesParser.Check_expr_addContext add = bareAddOfOr(ctx.check_expr_or());
-      if (add != null) {
-        emitAddAsDecimal(add, out);
-      } else {
-        out.append("decimal((");
-        visitCheckExpr(ctx, out);
-        out.append("))");
-      }
+      return add != null ? emitAddAsDecimal(add) : CelNode.call("decimal", visitCheckExpr(ctx));
     });
   }
 
   /**
    * Emit a {@code check_expr_in} (a BETWEEN operand) as a Decimal value.
    */
-  private static void emitInAsDecimal(
-      LogicalTypesParser.Check_expr_inContext in, StringBuilder sb) {
+  private static CelNode emitInAsDecimal(LogicalTypesParser.Check_expr_inContext in) {
     LogicalTypesParser.Check_expr_addContext add = bareAddOfIn(in);
-    if (add != null) {
-      emitAddAsDecimal(add, sb);
-    } else {
-      sb.append("decimal((");
-      visitIn(in, sb);
-      sb.append("))");
-    }
+    return add != null ? emitAddAsDecimal(add) : CelNode.call("decimal", visitIn(in));
   }
 
   private static boolean likeHasDecimal(
@@ -1558,46 +1111,41 @@ final class ConstraintEmitter {
   /**
    * Emit a comparison/operand value cast to {@code common} ("int"/"double"/"decimal").
    */
-  static void emitNumericAs(
-      LogicalTypesParser.Check_exprContext ctx, String common, StringBuilder sb) {
+  static CelNode emitNumericAs(LogicalTypesParser.Check_exprContext ctx, String common) {
     if ("decimal".equals(common)) {
-      emitDecimalValue(ctx, sb);
-    } else if ("double".equals(common)) {
-      emitDoubleValueCheckExpr(ctx, sb);
-    } else {
-      visitCheckExpr(ctx, sb);
+      return emitDecimalValue(ctx);
     }
+    if ("double".equals(common)) {
+      return emitDoubleValueCheckExpr(ctx);
+    }
+    return visitCheckExpr(ctx);
   }
 
-  private static void emitNumericBetweenAs(
-      LogicalTypesParser.Check_expr_betweenContext between, String common, StringBuilder sb) {
+  private static CelNode emitNumericBetweenAs(
+      LogicalTypesParser.Check_expr_betweenContext between, String common) {
     // A pure-numeric comparison operand is a bare value (no BETWEEN/IN/LIKE), so
     // it descends between → in → like → add.
     LogicalTypesParser.Check_expr_likeContext like = between.check_expr_in(0).check_expr_like();
     if ("decimal".equals(common)) {
-      emitAddAsDecimal(like.check_expr_add(), sb);
-    } else if ("double".equals(common)) {
-      emitDoubleValueAdd(like.check_expr_add(), sb);
-    } else {
-      visitBetween(between, sb);
+      return emitAddAsDecimal(like.check_expr_add());
     }
+    if ("double".equals(common)) {
+      return emitDoubleValueAdd(like.check_expr_add());
+    }
+    return visitBetween(between);
   }
 
-  private static void emitNumericInAs(
-      LogicalTypesParser.Check_expr_inContext in, String common, StringBuilder sb) {
+  private static CelNode emitNumericInAs(
+      LogicalTypesParser.Check_expr_inContext in, String common) {
     LogicalTypesParser.Check_expr_addContext add = bareAddOfIn(in);
-    if (add == null) {
-      // not a bare value (defensive) — native
-      emitParenIn(in, sb);
-      return;
+    if (add != null && "decimal".equals(common)) {
+      return emitAddAsDecimal(add);
     }
-    if ("decimal".equals(common)) {
-      emitAddAsDecimal(add, sb);
-    } else if ("double".equals(common)) {
-      emitDoubleValueAdd(add, sb);
-    } else {
-      emitParenIn(in, sb);
+    if (add != null && "double".equals(common)) {
+      return emitDoubleValueAdd(add);
     }
+    // not a bare value (defensive), or an int — native
+    return visitIn(in);
   }
 
   /**
@@ -1640,10 +1188,7 @@ final class ConstraintEmitter {
     if (acc == null) {
       return null;
     }
-    List<LogicalTypesParser.Check_exprContext> items =
-        ((LogicalTypesParser.InTargetParenListContext) ctx.in_target())
-            .check_expr_list().check_expr();
-    for (LogicalTypesParser.Check_exprContext item : items) {
+    for (LogicalTypesParser.Check_exprContext item : inItems(ctx)) {
       String c = ConstraintResolver.coercedNumericCategory(item, vctx);
       if (c == null) {
         return null;
@@ -1658,74 +1203,51 @@ final class ConstraintEmitter {
   /**
    * Emit a {@code check_expr_like} (an IN left operand) as a double value.
    */
-  private static void emitDoubleValueLike(
-      LogicalTypesParser.Check_expr_likeContext like, StringBuilder sb) {
-    if (like.LIKE() == null) {
-      emitDoubleValueAdd(like.check_expr_add(), sb);
-    } else {
-      sb.append("double((");
-      visitLike(like, sb);
-      sb.append("))");
-    }
+  private static CelNode emitDoubleValueLike(LogicalTypesParser.Check_expr_likeContext like) {
+    return like.LIKE() == null ? emitDoubleValueAdd(like.check_expr_add())
+        : CelNode.call("double", visitLike(like));
   }
 
-  private static void emitDoubleValueCheckExpr(
-      LogicalTypesParser.Check_exprContext ctx, StringBuilder sb) {
-    emitCached(ctx, Form.DOUBLE, sb, out -> {
+  private static CelNode emitDoubleValueCheckExpr(LogicalTypesParser.Check_exprContext ctx) {
+    return emitCached(ctx, Form.DOUBLE, () -> {
       LogicalTypesParser.Check_expr_addContext add = bareAddOfOr(ctx.check_expr_or());
-      if (add != null) {
-        emitDoubleValueAdd(add, out);
-      } else {
-        out.append("double((");
-        visitCheckExpr(ctx, out);
-        out.append("))");
-      }
+      return add != null ? emitDoubleValueAdd(add) : CelNode.call("double", visitCheckExpr(ctx));
     });
   }
 
   // Leading integer or decimal operands are combined in their own type and converted once:
   // SQL types each operator by its own operands, so `a / 4` truncates and `0.10 + 0.20` is exact.
-  private static void emitDoubleValueAdd(
-      LogicalTypesParser.Check_expr_addContext add, StringBuilder sb) {
+  private static CelNode emitDoubleValueAdd(LogicalTypesParser.Check_expr_addContext add) {
     List<LogicalTypesParser.Check_expr_mulContext> muls = add.check_expr_mul();
     List<String> ops = operators(add);
     int run = narrowerRun(muls, "double");
     int next = 1;
+    CelNode acc;
     if (run >= 2) {
-      sb.append("double(");
-      if ("int".equals(runCategory(muls, run))) {
-        emitNativeRun(muls, ops, run, sb);
-      } else {
-        emitAddRangeAsDecimal(muls, ops, run, sb);
-      }
-      sb.append(')');
+      acc = CelNode.call("double", "int".equals(runCategory(muls, run))
+          ? emitNativeRun(muls, ops, run) : emitAddRangeAsDecimal(muls, ops, run));
       next = run;
     } else {
-      emitDoubleValueMul(muls.get(0), sb);
+      acc = emitDoubleValueMul(muls.get(0));
     }
     for (int i = next; i < muls.size(); i++) {
-      sb.append(' ').append(ops.get(i - 1)).append(' ');
-      emitDoubleValueMul(muls.get(i), sb);
+      acc = CelNode.binary(acc, ops.get(i - 1), emitDoubleValueMul(muls.get(i)));
     }
+    return acc;
   }
 
-  private static void emitDoubleValueMul(
-      LogicalTypesParser.Check_expr_mulContext mul, StringBuilder sb) {
+  private static CelNode emitDoubleValueMul(LogicalTypesParser.Check_expr_mulContext mul) {
     List<LogicalTypesParser.Check_expr_unary_signContext> signs = mul.check_expr_unary_sign();
     List<String> ops = operators(mul);
     int run = narrowerRun(signs, "double");
     int next = 1;
+    CelNode acc;
     if (run >= 2) {
-      sb.append("double(");
-      if ("int".equals(runCategory(signs, run))) {
-        emitNativeRun(signs, ops, run, sb);
-      } else {
-        emitMulRangeAsDecimal(mul, signs, ops, run, sb);
-      }
-      sb.append(')');
+      acc = CelNode.call("double", "int".equals(runCategory(signs, run))
+          ? emitNativeRun(signs, ops, run) : emitMulRangeAsDecimal(mul, signs, ops, run));
       next = run;
     } else {
-      emitDoubleValueSign(signs.get(0), sb);
+      acc = emitDoubleValueSign(signs.get(0));
     }
     for (int i = next; i < signs.size(); i++) {
       String op = ops.get(i - 1);
@@ -1737,106 +1259,67 @@ final class ConstraintEmitter {
                 + "use integer or decimal operands.");
       }
       // `||` (string concat) → `+`; not expected for double values.
-      sb.append(' ').append("||".equals(op) ? "+" : op).append(' ');
-      emitDoubleValueSign(signs.get(i), sb);
+      acc = CelNode.binary(acc, celMulOp(op), emitDoubleValueSign(signs.get(i)));
     }
+    return acc;
   }
 
-  private static void emitDoubleValueSign(
-      LogicalTypesParser.Check_expr_unary_signContext sign, StringBuilder sb) {
+  private static CelNode emitDoubleValueSign(
+      LogicalTypesParser.Check_expr_unary_signContext sign) {
     String category = numericCategory(sign);
     if (sign.getChildCount() > 1 && narrowerThan(category, "double")) {
       // A negated integer or decimal is negated in its own type, then converted.
-      sb.append("double(");
-      if ("int".equals(category)) {
-        visitUnarySign(sign, sb);
-      } else {
-        emitSignAsDecimal(sign, sb);
-      }
-      sb.append(')');
-      return;
+      return CelNode.call("double", "int".equals(category)
+          ? visitUnarySign(sign) : emitSignAsDecimal(sign));
     }
-    for (int i = 0; i < sign.getChildCount(); i++) {
-      ParseTree child = sign.getChild(i);
-      if (child instanceof TerminalNode && "-".equals(child.getText())) {
-        sb.append('-');
-      }
-    }
-    emitDoubleValueCExpr(sign.c_expr(), sb);
+    return signed(sign, emitDoubleValueCExpr(sign.c_expr()));
   }
 
-  private static void emitDoubleValueCExpr(
-      LogicalTypesParser.C_exprContext ctx, StringBuilder sb) {
+  private static CelNode emitDoubleValueCExpr(LogicalTypesParser.C_exprContext ctx) {
     ConstraintValidationContext vctx = EMIT_VCTX.get();
     if (ctx instanceof LogicalTypesParser.CheckColumnRefContext) {
       LogicalTypesParser.ColumnrefContext cr =
           ((LogicalTypesParser.CheckColumnRefContext) ctx).columnref();
-      if (isDoubleCategory(ConstraintResolver.resolveColumnRefType(cr, vctx))) {
-        visitColumnRef(cr, sb);
-      } else {
-        sb.append("double(");
-        visitColumnRef(cr, sb);
-        sb.append(')');
-      }
-      return;
+      CelNode column = visitColumnRef(cr);
+      return isDoubleCategory(ConstraintResolver.resolveColumnRefType(cr, vctx))
+          ? column : CelNode.call("double", column);
     }
     if (ctx instanceof LogicalTypesParser.CheckLiteralContext) {
       LogicalTypesParser.LiteralContext lit =
           ((LogicalTypesParser.CheckLiteralContext) ctx).literal();
       if (lit.intLiteral() != null) {
         // int literal → double literal (5 → 5.0).
-        sb.append(lit.intLiteral().getText()).append(".0");
-        return;
+        return CelNode.literal(lit.intLiteral().getText() + ".0");
       }
       if (lit.decimalLiteral() != null) {
-        sb.append(ConstraintPatterns.normalizeNumericLiteral(lit.decimalLiteral().getText()));
-        return;
+        return CelNode.literal(
+            ConstraintPatterns.normalizeNumericLiteral(lit.decimalLiteral().getText()));
       }
       if (lit.doubleLiteral() != null) {
-        sb.append(ConstraintPatterns.normalizeNumericLiteral(lit.doubleLiteral().getText()));
-        return;
+        return CelNode.literal(
+            ConstraintPatterns.normalizeNumericLiteral(lit.doubleLiteral().getText()));
       }
-      sb.append("double(");
-      visitLiteral(lit, sb);
-      sb.append(')');
-      return;
+      return CelNode.call("double", visitLiteral(lit));
     }
-    if (ctx instanceof LogicalTypesParser.CheckParenContext) {
-      LogicalTypesParser.CheckParenContext paren = (LogicalTypesParser.CheckParenContext) ctx;
-      if (paren.indirection() == null) {
-        sb.append('(');
-        emitDoubleValueCheckExpr(paren.check_expr(), sb);
-        sb.append(')');
-        return;
-      }
+    if (ctx instanceof LogicalTypesParser.CheckParenContext
+        && ((LogicalTypesParser.CheckParenContext) ctx).indirection() == null) {
+      return emitDoubleValueCheckExpr(((LogicalTypesParser.CheckParenContext) ctx).check_expr());
     }
     if (ctx instanceof LogicalTypesParser.CheckFuncContext) {
       LogicalTypesParser.Func_exprContext fe =
           ((LogicalTypesParser.CheckFuncContext) ctx).func_expr();
-      if (isDoubleCategory(ConstraintResolver.tryResolveFuncReturnType(fe, vctx))) {
-        ConstraintFunctions.visitFuncExpr(fe, sb);
-      } else {
-        sb.append("double(");
-        ConstraintFunctions.visitFuncExpr(fe, sb);
-        sb.append(')');
-      }
-      return;
+      CelNode func = ConstraintFunctions.visitFuncExpr(fe);
+      return isDoubleCategory(ConstraintResolver.tryResolveFuncReturnType(fe, vctx))
+          ? func : CelNode.call("double", func);
     }
     if (ctx instanceof LogicalTypesParser.CheckCaseContext) {
       LogicalTypesParser.Case_exprContext ce =
           ((LogicalTypesParser.CheckCaseContext) ctx).case_expr();
-      if (isDoubleCategory(ConstraintResolver.tryResolveCaseExprType(ce, vctx))) {
-        visitCase(ce, sb);
-      } else {
-        sb.append("double(");
-        visitCase(ce, sb);
-        sb.append(')');
-      }
-      return;
+      CelNode result = visitCase(ce);
+      return isDoubleCategory(ConstraintResolver.tryResolveCaseExprType(ce, vctx))
+          ? result : CelNode.call("double", result);
     }
-    sb.append("double(");
-    visitCExpr(ctx, sb);
-    sb.append(')');
+    return CelNode.call("double", visitCExpr(ctx));
   }
 
   /** The numeric category ("int"/"decimal"/"double") of a subtree, or null when not numeric. */
@@ -1889,25 +1372,28 @@ final class ConstraintEmitter {
     return ops;
   }
 
+  // A multiplicative operator's CEL: SQL's `||` (string/bytes concat) is `+`.
+  private static String celMulOp(String op) {
+    return "||".equals(op) ? "+" : op;
+  }
+
   /**
    * The first {@code count} operands of an additive or multiplicative chain, emitted natively.
    */
-  private static void emitNativeRun(
-      List<? extends ParseTree> operands, List<String> ops, int count, StringBuilder sb) {
+  private static CelNode emitNativeRun(
+      List<? extends ParseTree> operands, List<String> ops, int count) {
+    CelNode acc = null;
     for (int i = 0; i < count; i++) {
-      if (i > 0) {
-        sb.append(' ').append(ops.get(i - 1)).append(' ');
-      }
       ParseTree operand = operands.get(i);
-      if (operand instanceof LogicalTypesParser.Check_expr_mulContext) {
-        visitMul((LogicalTypesParser.Check_expr_mulContext) operand, sb);
-      } else {
-        visitUnarySign((LogicalTypesParser.Check_expr_unary_signContext) operand, sb);
-      }
+      CelNode value = operand instanceof LogicalTypesParser.Check_expr_mulContext
+          ? visitMul((LogicalTypesParser.Check_expr_mulContext) operand)
+          : visitUnarySign((LogicalTypesParser.Check_expr_unary_signContext) operand);
+      acc = acc == null ? value : CelNode.binary(acc, celMulOp(ops.get(i - 1)), value);
     }
+    return acc;
   }
 
-  private static boolean isDoubleCategory(io.confluent.kafka.schemaregistry.type.logical.Schema s) {
+  private static boolean isDoubleCategory(Schema s) {
     return s != null && "double".equals(ConstraintResolver.categoryOf(s.getType()));
   }
 
@@ -1924,30 +1410,10 @@ final class ConstraintEmitter {
    * <p>SQL LIKE is whole-string match by default; CEL {@code matches()} is
    * unanchored — we always wrap with {@code ^…$} to preserve SQL semantics.
    */
-  private static void visitLike(
-      LogicalTypesParser.Check_expr_likeContext ctx, StringBuilder sb) {
+  private static CelNode visitLike(LogicalTypesParser.Check_expr_likeContext ctx) {
     if (ctx.LIKE() == null) {
-      visitAdd(ctx.check_expr_add(), sb);
-      return;
+      return visitAdd(ctx.check_expr_add());
     }
-    boolean negated = ctx.NOT() != null;
-    if (negated) {
-      sb.append("!(");
-    }
-    // Wrap the receiver in parens only when needed. CEL `.matches()` binds
-    // tighter than any arithmetic/concat operator, so a compound receiver
-    // like `a || b` or `a + b` would mis-bind: `a + b.matches(...)` parses
-    // as `a + (b.matches(...))`. Simple primaries (column refs, literals,
-    // function calls, already-paren'd expressions) emit unwrapped.
-    boolean wrap = !ConstraintResolver.isSimplePrimaryAdd(ctx.check_expr_add());
-    if (wrap) {
-      sb.append('(');
-    }
-    visitAdd(ctx.check_expr_add(), sb);
-    if (wrap) {
-      sb.append(')');
-    }
-    sb.append(".matches('");
     String patternRaw = ConstraintPatterns.extractSqlStringContent(ctx.stringLiteral().getText());
     char escapeChar = '\\';
     if (ctx.escape_clause() != null) {
@@ -1961,11 +1427,9 @@ final class ConstraintEmitter {
       escapeChar = escRaw.charAt(0);
     }
     String regex = ConstraintPatterns.likePatternToRegex(patternRaw, escapeChar);
-    sb.append(ConstraintPatterns.escapeForCelStringLiteral(regex));
-    sb.append("')");
-    if (negated) {
-      sb.append(")");
-    }
+    CelNode matches = CelNode.method(visitAdd(ctx.check_expr_add()), "matches",
+        CelNode.literal("'" + ConstraintPatterns.escapeForCelStringLiteral(regex) + "'"));
+    return ctx.NOT() != null ? CelNode.not(matches) : matches;
   }
 
   /**
@@ -1992,20 +1456,14 @@ final class ConstraintEmitter {
         "Internal: comparison op not found in check_expr_compare");
   }
 
-  private static void visitAdd(
-      LogicalTypesParser.Check_expr_addContext ctx, StringBuilder sb) {
+  private static CelNode visitAdd(LogicalTypesParser.Check_expr_addContext ctx) {
     List<LogicalTypesParser.Check_expr_mulContext> muls = ctx.check_expr_mul();
-    visitMul(muls.get(0), sb);
-    // Operators interleave between operands as terminal children.
-    int mulIdx = 1;
-    for (int i = 0; i < ctx.getChildCount(); i++) {
-      ParseTree child = ctx.getChild(i);
-      if (child instanceof TerminalNode) {
-        String op = child.getText();
-        sb.append(' ').append(op).append(' ');
-        visitMul(muls.get(mulIdx++), sb);
-      }
+    List<String> ops = operators(ctx);
+    CelNode acc = visitMul(muls.get(0));
+    for (int i = 1; i < muls.size(); i++) {
+      acc = CelNode.binary(acc, ops.get(i - 1), visitMul(muls.get(i)));
     }
+    return acc;
   }
 
   /**
@@ -2013,86 +1471,62 @@ final class ConstraintEmitter {
    * concat). {@code ||} maps to CEL {@code +}; the others pass through
    * unchanged.
    */
-  private static void visitMul(
-      LogicalTypesParser.Check_expr_mulContext ctx, StringBuilder sb) {
+  private static CelNode visitMul(LogicalTypesParser.Check_expr_mulContext ctx) {
     List<LogicalTypesParser.Check_expr_unary_signContext> signs = ctx.check_expr_unary_sign();
-    visitUnarySign(signs.get(0), sb);
-    int signIdx = 1;
-    for (int i = 0; i < ctx.getChildCount(); i++) {
-      ParseTree child = ctx.getChild(i);
-      if (child instanceof TerminalNode) {
-        String op = child.getText();
-        // SQL `||` is string/bytes concat → CEL `+`; `* / %` emit verbatim.
-        sb.append(' ').append("||".equals(op) ? "+" : op).append(' ');
-        visitUnarySign(signs.get(signIdx++), sb);
-      }
+    List<String> ops = operators(ctx);
+    CelNode acc = visitUnarySign(signs.get(0));
+    for (int i = 1; i < signs.size(); i++) {
+      acc = CelNode.binary(acc, celMulOp(ops.get(i - 1)), visitUnarySign(signs.get(i)));
     }
+    return acc;
   }
 
-  private static void visitUnarySign(
-      LogicalTypesParser.Check_expr_unary_signContext ctx, StringBuilder sb) {
-    // Optional leading '+' or '-' shows up as a TerminalNode child.
-    for (int i = 0; i < ctx.getChildCount(); i++) {
-      ParseTree child = ctx.getChild(i);
-      if (child instanceof TerminalNode) {
-        String op = child.getText();
-        if ("-".equals(op)) {
-          sb.append('-');
-        }
-        // Drop unary '+'; CEL doesn't need it.
-      }
-    }
-    visitCExpr(ctx.c_expr(), sb);
+  private static CelNode visitUnarySign(LogicalTypesParser.Check_expr_unary_signContext ctx) {
+    return signed(ctx, visitCExpr(ctx.c_expr()));
   }
 
-  static void visitCExpr(
-      LogicalTypesParser.C_exprContext ctx, StringBuilder sb) {
+  // True if a unary sign's '-' tokens are odd in number; '+' is dropped, and CEL's parser drops
+  // a pair of '-'.
+  private static boolean negated(LogicalTypesParser.Check_expr_unary_signContext sign) {
+    boolean negate = false;
+    for (int i = 0; i < sign.getChildCount(); i++) {
+      ParseTree child = sign.getChild(i);
+      if (child instanceof TerminalNode && "-".equals(child.getText())) {
+        negate = !negate;
+      }
+    }
+    return negate;
+  }
+
+  private static CelNode signed(LogicalTypesParser.Check_expr_unary_signContext sign,
+      CelNode value) {
+    return negated(sign) ? CelNode.negate(value) : value;
+  }
+
+  static CelNode visitCExpr(LogicalTypesParser.C_exprContext ctx) {
     if (ctx instanceof LogicalTypesParser.CheckColumnRefContext) {
-      visitColumnRef(
-          ((LogicalTypesParser.CheckColumnRefContext) ctx).columnref(), sb);
-    } else if (ctx instanceof LogicalTypesParser.CheckLiteralContext) {
-      visitLiteral(
-          ((LogicalTypesParser.CheckLiteralContext) ctx).literal(), sb);
-    } else if (ctx instanceof LogicalTypesParser.CheckParenContext) {
+      return visitColumnRef(((LogicalTypesParser.CheckColumnRefContext) ctx).columnref());
+    }
+    if (ctx instanceof LogicalTypesParser.CheckLiteralContext) {
+      return visitLiteral(((LogicalTypesParser.CheckLiteralContext) ctx).literal());
+    }
+    if (ctx instanceof LogicalTypesParser.CheckParenContext) {
       LogicalTypesParser.CheckParenContext paren = (LogicalTypesParser.CheckParenContext) ctx;
-      sb.append('(');
-      visitCheckExpr(paren.check_expr(), sb);
-      sb.append(')');
-      if (paren.indirection() != null) {
-        visitIndirection(paren.indirection(), sb);
-      }
-    } else if (ctx instanceof LogicalTypesParser.CheckCaseContext) {
-      visitCase(
-          ((LogicalTypesParser.CheckCaseContext) ctx).case_expr(), sb);
-    } else if (ctx instanceof LogicalTypesParser.CheckFuncContext) {
-      ConstraintFunctions.visitFuncExpr(
-          ((LogicalTypesParser.CheckFuncContext) ctx).func_expr(), sb);
-    } else {
-      throw new ValidationException(
-          "Unrecognized c_expr subtype: " + ctx.getClass().getSimpleName());
+      CelNode inner = visitCheckExpr(paren.check_expr());
+      return paren.indirection() != null ? visitIndirection(paren.indirection(), inner) : inner;
     }
+    if (ctx instanceof LogicalTypesParser.CheckCaseContext) {
+      return visitCase(((LogicalTypesParser.CheckCaseContext) ctx).case_expr());
+    }
+    if (ctx instanceof LogicalTypesParser.CheckFuncContext) {
+      return ConstraintFunctions.visitFuncExpr(
+          ((LogicalTypesParser.CheckFuncContext) ctx).func_expr());
+    }
+    throw new ValidationException(
+        "Unrecognized c_expr subtype: " + ctx.getClass().getSimpleName());
   }
 
-  /**
-   * Emit a receiver expression wrapped in {@code (...)} so a subsequent
-   * CEL {@code .method()} or {@code [index]} binds against the whole
-   * receiver and not just its rightmost token. Used by every translator
-   * site that emits {@code <expr>.method(...)} — wrapping is uniform and
-   * always-on rather than gated by a "needs wrapping" heuristic.
-   */
-  static void emitWrappedReceiver(
-      LogicalTypesParser.Check_exprContext ctx, StringBuilder sb) {
-    if (ConstraintResolver.isSimplePrimary(ctx)) {
-      visitCheckExpr(ctx, sb);
-      return;
-    }
-    sb.append('(');
-    visitCheckExpr(ctx, sb);
-    sb.append(')');
-  }
-
-  private static void visitColumnRef(
-      LogicalTypesParser.ColumnrefContext ctx, StringBuilder sb) {
+  private static CelNode visitColumnRef(LogicalTypesParser.ColumnrefContext ctx) {
     // Apply protovalidate's `this` convention. The column root is rewritten
     // based on what kind of identifier it is (resolved via vctx) and where
     // the CHECK clause is placed:
@@ -2108,28 +1542,23 @@ final class ConstraintEmitter {
     //
     // The vctx is non-null at this point — the public translate() entry
     // requires it.
-    emitColumnRoot(colidName(ctx.colid()), sb);
-    if (ctx.indirection() != null) {
-      visitIndirection(ctx.indirection(), sb);
-    }
+    CelNode root = emitColumnRoot(colidName(ctx.colid()));
+    return ctx.indirection() != null ? visitIndirection(ctx.indirection(), root) : root;
   }
 
-  private static void emitColumnRoot(String name, StringBuilder sb) {
+  private static CelNode emitColumnRoot(String name) {
     ConstraintValidationContext vctx = EMIT_VCTX.get();
     if (vctx != null && vctx.isColumn(name)) {
+      CelNode self = CelNode.ident("this");
       if (vctx.isColumnLevel()) {
-        sb.append("this");
-      } else if (Schema.isCelReservedName(name)) {
-        // Field name collides with a CEL reserved word (e.g. `null`, `in`).
-        // Dot-syntax `this.in` would fail to parse; emit index syntax
-        // `this["in"]` so existing wire schemas with such names work.
-        sb.append("this[\"").append(name).append("\"]");
-      } else {
-        sb.append("this.").append(name);
+        return self;
       }
-    } else {
-      sb.append(name);
+      // A field name colliding with a CEL reserved word (e.g. `null`, `in`) takes index
+      // syntax, `this["in"]`, as `this.in` would fail to parse.
+      return Schema.isCelReservedName(name) ? CelNode.index(self, CelNode.string(name))
+          : CelNode.select(self, name);
     }
+    return CelNode.ident(name);
   }
 
   /**
@@ -2138,45 +1567,44 @@ final class ConstraintEmitter {
    * before anything is selected from it; a constant for a path that is never null; or a test of
    * {@code emitted}, the whole reference, when the steps can't be told.
    */
-  static String nullTest(List<String> path, String emitted, boolean isNull) {
+  static CelNode nullTest(List<String> path, CelNode emitted, boolean isNull) {
     List<Integer> steps =
         path == null ? null : ConstraintResolver.nullableSteps(path, EMIT_VCTX.get());
     if (steps == null) {
       return stepTest(emitted, isNull);
     }
     if (steps.isEmpty()) {
-      return isNull ? "false" : "true";
+      return CelNode.bool(!isNull);
     }
-    List<String> tests = new ArrayList<>();
+    List<CelNode> tests = new ArrayList<>();
     for (int step : steps) {
       tests.add(stepTest(step == path.size() ? emitted : prefix(path, step), isNull));
     }
-    return tests.size() == 1 ? tests.get(0)
-        : "(" + String.join(isNull ? " || " : " && ", tests) + ")";
+    return isNull ? CelNode.or(tests) : CelNode.and(tests);
   }
 
   // The first steps of a selection path, emitted.
-  private static String prefix(List<String> path, int steps) {
-    StringBuilder sb = new StringBuilder();
-    emitColumnRoot(path.get(0), sb);
+  private static CelNode prefix(List<String> path, int steps) {
+    CelNode prefix = emitColumnRoot(path.get(0));
     for (int i = 1; i < steps; i++) {
-      sb.append('.').append(path.get(i));
+      prefix = CelNode.select(prefix, path.get(i));
     }
-    return sb.toString();
+    return prefix;
   }
 
-  // One step's test: has() of a selection, or a null comparison of a bare iteration variable,
-  // which has() can't take.
-  private static String stepTest(String selection, boolean isNull) {
-    if (selection.indexOf('.') < 0) {
-      return "dyn(" + selection + (isNull ? ") == null" : ") != null");
+  // One step's test: has() of a selection, or a null comparison of what has() can't take, as a
+  // bare iteration variable.
+  private static CelNode stepTest(CelNode selection, boolean isNull) {
+    if (!(selection instanceof CelNode.Select)) {
+      return isNull ? CelNode.isNull(selection) : CelNode.isNotNull(selection);
     }
-    return isNull ? "(!has(" + selection + ") || dyn(" + selection + ") == null)"
-        : "(has(" + selection + ") && dyn(" + selection + ") != null)";
+    CelNode has = CelNode.call("has", selection);
+    return isNull ? CelNode.or(CelNode.not(has), CelNode.isNull(selection))
+        : CelNode.and(has, CelNode.isNotNull(selection));
   }
 
-  private static void visitIndirection(
-      LogicalTypesParser.IndirectionContext ctx, StringBuilder sb) {
+  private static CelNode visitIndirection(LogicalTypesParser.IndirectionContext ctx,
+      CelNode operand) {
     // Receiver type tracks what type each indirection element is applied to,
     // walking from the column root down. We need this to discriminate ARRAY/
     // MULTISET indexing (1-based at SQL → emit `[expr - 1]`) from MAP keying
@@ -2188,23 +1616,23 @@ final class ConstraintEmitter {
     // ({@code (expr).field}) and the no-validation translate() entry, the
     // receiver type is unknown and we fall back to the array convention.
     Schema receiver = resolveIndirectionReceiverType(ctx);
+    CelNode selected = operand;
     for (LogicalTypesParser.Indirection_elContext el : ctx.indirection_el()) {
       if (el.colid() != null) {
         String fieldName = colidName(el);
-        if (Schema.isCelReservedName(fieldName)) {
-          // CEL-reserved field name in nested access — escape via index
-          // syntax (`["in"]` instead of `.in`) so existing wire schemas
-          // with such names produce parseable CEL.
-          sb.append("[\"").append(fieldName).append("\"]");
-        } else {
-          sb.append('.').append(fieldName);
-        }
+        // CEL-reserved field name in nested access — escape via index
+        // syntax (`["in"]` instead of `.in`) so existing wire schemas
+        // with such names produce parseable CEL.
+        selected = Schema.isCelReservedName(fieldName)
+            ? CelNode.index(selected, CelNode.string(fieldName))
+            : CelNode.select(selected, fieldName);
         receiver = stepStructField(receiver, fieldName);
       } else {
-        emitBracketIndex(el, receiver, sb);
+        selected = emitBracketIndex(el, receiver, selected);
         receiver = stepBracketElement(receiver);
       }
     }
+    return selected;
   }
 
   /**
@@ -2253,24 +1681,19 @@ final class ConstraintEmitter {
    * Emit a bracket-form indirection. MAP → pass the key expression through
    * verbatim ({@code [expr]}). Otherwise — ARRAY/MULTISET, or unknown
    * receiver (paren-form, no validation context) — apply the SQL→CEL index
-   * conversion: 1-based SQL becomes 0-based CEL ({@code [(expr) - 1]}).
-   * Wrap the index in parens so the subtraction is precedence-safe
-   * regardless of what the user wrote inside.
+   * conversion: 1-based SQL becomes 0-based CEL ({@code [expr - 1]}).
    */
-  private static void emitBracketIndex(
-      LogicalTypesParser.Indirection_elContext el,
-      Schema receiver, StringBuilder sb) {
+  private static CelNode emitBracketIndex(
+      LogicalTypesParser.Indirection_elContext el, Schema receiver, CelNode operand) {
     receiver = resolveRef(receiver);
+    CelNode index = visitCheckExpr(el.check_expr());
     boolean isMap = receiver != null && receiver.getType() == Schema.Type.MAP;
-    if (isMap) {
-      sb.append('[');
-      visitCheckExpr(el.check_expr(), sb);
-      sb.append(']');
-      return;
-    }
-    sb.append("[(");
-    visitCheckExpr(el.check_expr(), sb);
-    sb.append(") - 1]");
+    return CelNode.index(operand, isMap ? index : zeroBased(index));
+  }
+
+  // A 1-based SQL index as CEL's 0-based one.
+  private static CelNode zeroBased(CelNode index) {
+    return CelNode.binary(index, "-", CelNode.literal("1"));
   }
 
   private static Schema stepStructField(Schema receiver, String fieldName) {
@@ -2298,41 +1721,45 @@ final class ConstraintEmitter {
     }
   }
 
-  private static void visitLiteral(
-      LogicalTypesParser.LiteralContext ctx, StringBuilder sb) {
+  private static CelNode visitLiteral(LogicalTypesParser.LiteralContext ctx) {
     if (ctx.NULL() != null) {
-      sb.append("null");
-    } else if (ctx.boolLiteral() != null) {
-      sb.append(ctx.boolLiteral().getText().toLowerCase(java.util.Locale.ROOT));
-    } else if (ctx.intLiteral() != null) {
-      sb.append(ctx.intLiteral().getText());
-    } else if (ctx.decimalLiteral() != null) {
-      sb.append(ConstraintPatterns.normalizeNumericLiteral(ctx.decimalLiteral().getText()));
-    } else if (ctx.doubleLiteral() != null) {
-      sb.append(ConstraintPatterns.normalizeNumericLiteral(ctx.doubleLiteral().getText()));
-    } else if (ctx.TIMESTAMP() != null) {
+      return CelNode.NULL;
+    }
+    if (ctx.boolLiteral() != null) {
+      return CelNode.bool(ctx.boolLiteral().TRUE() != null);
+    }
+    if (ctx.intLiteral() != null) {
+      return CelNode.literal(ctx.intLiteral().getText());
+    }
+    if (ctx.decimalLiteral() != null) {
+      return CelNode.literal(
+          ConstraintPatterns.normalizeNumericLiteral(ctx.decimalLiteral().getText()));
+    }
+    if (ctx.doubleLiteral() != null) {
+      return CelNode.literal(
+          ConstraintPatterns.normalizeNumericLiteral(ctx.doubleLiteral().getText()));
+    }
+    if (ctx.TIMESTAMP() != null) {
       // TIMESTAMP '2020-01-01 00:00:00' → timestamp("2020-01-01T00:00:00Z")
       // (CEL stdlib RFC-3339 constructor; zoneless literal assumed UTC).
       // Checked before stringLiteral: this literal also has a stringLiteral child.
-      sb.append("timestamp(\"")
-          .append(normalizeSqlTimestamp(ctx))
-          .append("\")");
-    } else if (ctx.INTERVAL() != null) {
+      return CelNode.call("timestamp", CelNode.string(normalizeSqlTimestamp(ctx)));
+    }
+    if (ctx.INTERVAL() != null) {
       // INTERVAL '7' DAY → duration("604800s") (CEL stdlib duration; reject
       // calendar units YEAR/MONTH which have no fixed length). Also checked
       // before stringLiteral.
-      sb.append("duration(\"")
-          .append(intervalSeconds(ctx))
-          .append("s\")");
-    } else if (ctx.stringLiteral() != null) {
-      sb.append(ConstraintPatterns.translateStringLiteral(ctx.stringLiteral().getText()));
-    } else if (ctx.bytesLiteral() != null) {
-      sb.append(ConstraintFunctions.translateBytesLiteral(
-          ctx.bytesLiteral(), ctx.bytesLiteral().getText()));
-    } else {
-      throw new ValidationException(
-          "Unrecognized literal: " + ctx.getText());
+      return CelNode.call("duration", CelNode.string(intervalSeconds(ctx) + "s"));
     }
+    if (ctx.stringLiteral() != null) {
+      return CelNode.literal(
+          ConstraintPatterns.translateStringLiteral(ctx.stringLiteral().getText()));
+    }
+    if (ctx.bytesLiteral() != null) {
+      return CelNode.literal(ConstraintFunctions.translateBytesLiteral(
+          ctx.bytesLiteral(), ctx.bytesLiteral().getText()));
+    }
+    throw new ValidationException("Unrecognized literal: " + ctx.getText());
   }
 
   /**
@@ -2421,13 +1848,11 @@ final class ConstraintEmitter {
     }
   }
 
-  private static void visitCase(
-      LogicalTypesParser.Case_exprContext ctx, StringBuilder sb) {
-    emitCached(ctx, Form.NATIVE, sb, out -> emitCase(ctx, out));
+  private static CelNode visitCase(LogicalTypesParser.Case_exprContext ctx) {
+    return emitCached(ctx, Form.NATIVE, () -> emitCase(ctx));
   }
 
-  private static void emitCase(
-      LogicalTypesParser.Case_exprContext ctx, StringBuilder sb) {
+  private static CelNode emitCase(LogicalTypesParser.Case_exprContext ctx) {
     // Two flavors:
     //   searched: CASE WHEN c1 THEN r1 WHEN c2 THEN r2 ELSE d END
     //   simple:   CASE x WHEN v1 THEN r1 WHEN v2 THEN r2 ELSE d END
@@ -2478,108 +1903,70 @@ final class ConstraintEmitter {
         && !"decimal".equals(resultCommon) && !"double".equals(resultCommon)
         && resultBranchesHaveTemporal(resultBranches, resultVctx);
 
-    sb.append("(");
-    for (int i = 0; i < whens.size(); i++) {
-      LogicalTypesParser.When_clauseContext when = whens.get(i);
+    List<CelNode> conditions = new ArrayList<>();
+    List<CelNode> results = new ArrayList<>();
+    for (LogicalTypesParser.When_clauseContext when : whens) {
       // Searched form: WHEN's first expr is the condition directly.
       // Simple form: "caseArg == WHEN's first expr" is the condition.
-      // Both sides of the implicit `==` are wrapped in parens for compound
-      // operands so a low-precedence operator inside either side
-      // (e.g. `CASE x WHEN a OR b THEN ...`) doesn't mis-bind under CEL
-      // (`==` binds tighter than `||`/`&&`). Simple primaries (column
-      // refs, literals, function calls, already-paren'd) emit unwrapped.
-      if (caseArg != null) {
-        ConstraintValidationContext vctx = EMIT_VCTX.get();
-        // SQL's `=` matches no NULL, so a subject or WHEN value that may be NULL is tested first.
-        String eitherNull = ConstraintNullTest.either(
-            ConstraintNullTest.told(ConstraintNullTest.of(caseArg), caseArg),
-            ConstraintNullTest.told(ConstraintNullTest.of(when.check_expr(0)), when.check_expr(0)));
-        boolean guarded = eitherNull != null && !ConstraintNullTest.NEVER.equals(eitherNull);
-        if (guarded) {
-          sb.append('(').append(eitherNull).append(" ? false : ");
-        }
-        // The implicit `caseArg == whenValue` comparison coerces to the
-        // common numeric type of the two operands.
-        String common = (vctx != null)
-            ? numericCommonOf(caseArg, when.check_expr(0), vctx) : null;
-        if ("decimal".equals(common)) {
-          // Opaque Decimal has no native `==`; use decimals.eq for the implicit
-          // simple-CASE subject comparison.
-          sb.append("decimals.eq(");
-          emitDecimalValue(caseArg, sb);
-          sb.append(", ");
-          emitDecimalValue(when.check_expr(0), sb);
-          sb.append(')');
-        } else if ("double".equals(common)) {
-          emitNumericAs(caseArg, "double", sb);
-          sb.append(" == ");
-          emitNumericAs(when.check_expr(0), "double", sb);
-        } else if (vctx != null
-            && (ConstraintResolver.subtreeHasTemporal(caseArg, vctx)
-                || ConstraintResolver.subtreeHasTemporal(when.check_expr(0), vctx))) {
-          // Native `==`, operands timestamp-normalized and grouped, as a BETWEEN's && would
-          // otherwise bind to the last comparison.
-          sb.append('(');
-          emitTimestampValueCheckExpr(caseArg, sb);
-          sb.append(") == (");
-          emitTimestampValueCheckExpr(when.check_expr(0), sb);
-          sb.append(')');
-        } else {
-          emitWrappedReceiver(caseArg, sb);
-          sb.append(" == ");
-          emitWrappedReceiver(when.check_expr(0), sb);
-        }
-        if (guarded) {
-          sb.append(')');
-        }
-      } else {
-        emitCondition(when.check_expr(0), sb);
-      }
-      sb.append(" ? ");
-      emitCaseResult(when.check_expr(1), resultCommon, resultTemporal, sb);
-      sb.append(" : ");
-      if (i < whens.size() - 1) {
-        sb.append("(");
-      }
+      conditions.add(caseArg != null ? emitCaseMatch(caseArg, when.check_expr(0))
+          : emitCondition(when.check_expr(0)));
+      results.add(emitCaseResult(when.check_expr(1), resultCommon, resultTemporal));
     }
-    if (elseExpr != null) {
-      emitCaseResult(elseExpr, resultCommon, resultTemporal, sb);
+    // Postgres CASE without ELSE returns NULL on no match.
+    CelNode cel = elseExpr != null ? emitCaseResult(elseExpr, resultCommon, resultTemporal)
+        : CelNode.NULL;
+    for (int i = whens.size() - 1; i >= 0; i--) {
+      cel = CelNode.ternary(conditions.get(i), results.get(i), cel);
+    }
+    return cel;
+  }
+
+  // A simple CASE's implicit `caseArg = whenValue`, taken only when SQL's is TRUE.
+  private static CelNode emitCaseMatch(LogicalTypesParser.Check_exprContext caseArg,
+      LogicalTypesParser.Check_exprContext whenValue) {
+    ConstraintValidationContext vctx = EMIT_VCTX.get();
+    // SQL's `=` matches no NULL, so a subject or WHEN value that may be NULL is tested first.
+    CelNode eitherNull = ConstraintNullTest.either(
+        ConstraintNullTest.told(ConstraintNullTest.of(caseArg), caseArg),
+        ConstraintNullTest.told(ConstraintNullTest.of(whenValue), whenValue));
+    // The comparison coerces to the common numeric type of the two operands.
+    String common = (vctx != null) ? numericCommonOf(caseArg, whenValue, vctx) : null;
+    CelNode equal;
+    if ("decimal".equals(common)) {
+      // Opaque Decimal has no native `==`.
+      equal = CelNode.call("decimals.eq", emitDecimalValue(caseArg), emitDecimalValue(whenValue));
+    } else if ("double".equals(common)) {
+      equal = CelNode.binary(emitNumericAs(caseArg, "double"), "==",
+          emitNumericAs(whenValue, "double"));
+    } else if (vctx != null
+        && (ConstraintResolver.subtreeHasTemporal(caseArg, vctx)
+            || ConstraintResolver.subtreeHasTemporal(whenValue, vctx))) {
+      // Native `==`, operands timestamp-normalized.
+      equal = CelNode.binary(emitTimestampValueCheckExpr(caseArg), "==",
+          emitTimestampValueCheckExpr(whenValue));
     } else {
-      // Postgres CASE without ELSE returns NULL on no match.
-      sb.append("null");
+      equal = CelNode.binary(visitCheckExpr(caseArg), "==", visitCheckExpr(whenValue));
     }
-    // Close one paren per nested ternary (whens.size() - 1) plus the outer one.
-    for (int i = 0; i < whens.size() - 1; i++) {
-      sb.append(")");
-    }
-    sb.append(")");
+    return eitherNull == null || ConstraintNullTest.NEVER.equals(eitherNull) ? equal
+        : CelNode.ternary(eitherNull, CelNode.FALSE, equal);
   }
 
   /**
    * A searched CASE's condition, taken only when SQL's is TRUE, not FALSE or NULL. One with
    * nothing that may be NULL is emitted as before.
    */
-  private static void emitCondition(
-      LogicalTypesParser.Check_exprContext cond, StringBuilder sb) {
-    StringBuilder whenTrue = new StringBuilder();
-    if ((emitTruth(cond.check_expr_or(), true, whenTrue) & MAY_BE_NULL) != 0) {
-      sb.append(whenTrue);
-    } else {
-      emitWrappedReceiver(cond, sb);
-    }
+  private static CelNode emitCondition(LogicalTypesParser.Check_exprContext cond) {
+    Truth whenTrue = emitTruth(cond.check_expr_or(), true);
+    return (whenTrue.flags & MAY_BE_NULL) != 0 ? whenTrue.cel : visitCheckExpr(cond);
   }
 
   /**
    * A CHECK's CEL, failing only when SQL's result is FALSE, so a NULL one passes, as in SQL.
    * One with nothing that may be NULL is emitted as is.
    */
-  static void emitCheck(LogicalTypesParser.Check_exprContext ctx, StringBuilder sb) {
-    StringBuilder whenFalse = new StringBuilder();
-    if ((emitTruth(ctx.check_expr_or(), false, whenFalse) & MAY_BE_NULL) != 0) {
-      sb.append('!').append(whenFalse);
-    } else {
-      visitCheckExpr(ctx, sb);
-    }
+  static CelNode emitCheck(LogicalTypesParser.Check_exprContext ctx) {
+    Truth notFalse = emitTruth(ctx.check_expr_or(), true, true);
+    return (notFalse.flags & MAY_BE_NULL) != 0 ? notFalse.cel : visitCheckExpr(ctx);
   }
 
   // emitTruth's result: a predicate may be NULL; a predicate's NULL can't be told.
@@ -2592,31 +1979,40 @@ final class ConstraintEmitter {
    * values. Returns {@link #MAY_BE_NULL} and {@link #UNTOLD} flags; a predicate whose inputs
    * don't tell is emitted as is, as a NULL or missing input fails it either way.
    */
-  static int emitTruth(
-      LogicalTypesParser.Check_expr_orContext or, boolean truth, StringBuilder sb) {
+  static Truth emitTruth(LogicalTypesParser.Check_expr_orContext or, boolean truth) {
+    return emitTruth(or, truth, false);
+  }
+
+  /**
+   * {@link #emitTruth}, or with {@code nullAs} its negation the other way round: true unless
+   * SQL's is FALSE (with {@code truth}), or TRUE, so a predicate that may be NULL is true then.
+   * A CHECK is "not FALSE", which reads as its NULL test or its predicate.
+   */
+  static Truth emitTruth(LogicalTypesParser.Check_expr_orContext or, boolean truth,
+      boolean nullAs) {
     List<LogicalTypesParser.Check_expr_andContext> ands = or.check_expr_and();
     if (ands.size() == 1) {
-      return emitTruth(ands.get(0), truth, sb);
+      return emitTruth(ands.get(0), truth, nullAs);
     }
-    return emitJunction(or, ands.size(), (i, t, out) -> emitTruth(ands.get(i), t, out),
-        !truth, truth, sb);
+    return emitJunction(or, ands.size(), (i, t, n) -> emitTruth(ands.get(i), t, n),
+        !truth, truth, nullAs);
   }
 
-  private static int emitTruth(
-      LogicalTypesParser.Check_expr_andContext and, boolean truth, StringBuilder sb) {
+  private static Truth emitTruth(LogicalTypesParser.Check_expr_andContext and, boolean truth,
+      boolean nullAs) {
     List<LogicalTypesParser.Check_expr_unary_notContext> nots = and.check_expr_unary_not();
     if (nots.size() == 1) {
-      return emitTruth(nots.get(0), truth, sb);
+      return emitTruth(nots.get(0), truth, nullAs);
     }
-    return emitJunction(and, nots.size(), (i, t, out) -> emitTruth(nots.get(i), t, out),
-        truth, truth, sb);
+    return emitJunction(and, nots.size(), (i, t, n) -> emitTruth(nots.get(i), t, n),
+        truth, truth, nullAs);
   }
 
-  private static int emitTruth(
-      LogicalTypesParser.Check_expr_unary_notContext not, boolean truth, StringBuilder sb) {
+  private static Truth emitTruth(LogicalTypesParser.Check_expr_unary_notContext not,
+      boolean truth, boolean nullAs) {
     if (not instanceof LogicalTypesParser.CheckExprNotContext) {
-      return emitTruth(
-          ((LogicalTypesParser.CheckExprNotContext) not).check_expr_unary_not(), !truth, sb);
+      return emitTruth(((LogicalTypesParser.CheckExprNotContext) not).check_expr_unary_not(),
+          !truth, nullAs);
     }
     LogicalTypesParser.Check_expr_isnullContext is =
         ((LogicalTypesParser.CheckExprNotPassContext) not).check_expr_isnull();
@@ -2625,39 +2021,48 @@ final class ConstraintEmitter {
       if (c instanceof LogicalTypesParser.CheckParenContext
           && ((LogicalTypesParser.CheckParenContext) c).indirection() == null) {
         // Cached and size-checked, as nested AND and OR may repeat their operands.
-        return cachedTruth(
-            ((LogicalTypesParser.CheckParenContext) c).check_expr().check_expr_or(), truth, sb);
+        return cachedTruth(((LogicalTypesParser.CheckParenContext) c).check_expr()
+            .check_expr_or(), truth, nullAs);
       }
     }
     if (is.IS() == null && is.check_expr_compare().check_expr_between().size() == 1
         && is.check_expr_compare().check_expr_between(0).BETWEEN() == null
         && givesNullAsNull(is.check_expr_compare().check_expr_between(0).check_expr_in(0))) {
       // Its CEL gives NULL as null, which equals neither true nor false.
-      sb.append("(dyn(");
-      visitIs(is, sb);
-      sb.append(") == ").append(truth).append(')');
-      return MAY_BE_NULL;
+      return new Truth(CelNode.binary(CelNode.dyn(visitIs(is)), nullAs ? "!=" : "==",
+          CelNode.bool(nullAs != truth)), MAY_BE_NULL);
     }
     if (is.IS() == null && is.check_expr_compare().check_expr_between().size() == 1
         && is.check_expr_compare().check_expr_between(0).BETWEEN() != null) {
-      return emitBetweenTruth(is.check_expr_compare().check_expr_between(0), truth, sb);
+      return emitBetweenTruth(is.check_expr_compare().check_expr_between(0), truth, nullAs);
     }
     LogicalTypesParser.C_exprContext leaf =
         is.IS() == null ? ConstraintResolver.leafPrimary(is.check_expr_compare()) : null;
     if (leaf instanceof LogicalTypesParser.CheckFuncContext
         && ConstraintNullTest.isQuantifier((LogicalTypesParser.CheckFuncContext) leaf)) {
-      return emitQuantifierTruth((LogicalTypesParser.CheckFuncContext) leaf, truth, sb);
+      return emitQuantifierTruth((LogicalTypesParser.CheckFuncContext) leaf, truth, nullAs);
     }
-    String isNull = is.IS() != null ? null : ConstraintNullTest.of(is.check_expr_compare());
+    if (is.IS() != null && !truth
+        && ConstraintResolver.isHasCompatible(is.check_expr_compare(), EMIT_VCTX.get())) {
+      // NOT of a selection's IS [NOT] NULL is the opposite test, as the generator writes it.
+      return new Truth(nullTest(ConstraintResolver.selectionPathCompare(is.check_expr_compare()),
+          visitCompare(is.check_expr_compare()), is.NOT() != null), 0);
+    }
+    CelNode isNull = is.IS() != null ? null : ConstraintNullTest.of(is.check_expr_compare());
     boolean guarded = isNull != null && !ConstraintNullTest.NEVER.equals(isNull);
-    sb.append('(');
-    if (guarded) {
-      sb.append(isNull).append(" ? false : ");
+    int flags = guarded ? MAY_BE_NULL : is.IS() == null && isNull == null ? UNTOLD : 0;
+    CelNode predicate = truth ? visitIs(is) : CelNode.not(visitIs(is));
+    if (!guarded) {
+      return new Truth(predicate, flags);
     }
-    sb.append(truth ? "(" : "!(");
-    visitIs(is, sb);
-    sb.append("))");
-    return guarded ? MAY_BE_NULL : is.IS() == null && isNull == null ? UNTOLD : 0;
+    if (nullAs) {
+      // Its NULL test first, so a runtime that only short-circuits never reads a NULL. One that
+      // may raise, as a predicate that may raise has, is a ternary's condition: || would let a
+      // true predicate, as CEL gives null == null, swallow its error.
+      return new Truth(mayRaise(is) ? CelNode.ternary(isNull, CelNode.TRUE, predicate)
+          : CelNode.or(isNull, predicate), flags);
+    }
+    return new Truth(CelNode.ternary(isNull, CelNode.FALSE, predicate), flags);
   }
 
   // True if evaluating node can raise an error SQL raises too: a division, CAST, PARSE_JSON or
@@ -2706,38 +2111,37 @@ final class ConstraintEmitter {
 
   // emitTruth of operand i in a truth.
   private interface OperandTruth {
-    int emit(int i, boolean truth, StringBuilder sb);
+    Truth emit(int i, boolean truth, boolean nullAs);
   }
 
   /**
-   * The operands' truths joined by && when {@code all}, else ||. A NULL operand is false there,
-   * which cel-java's && lets swallow another's error, so where one may raise an error they're
-   * joined only once no operand decides it the other way.
+   * The operands' truths joined by && when {@code all}, else ||. A NULL operand is false there
+   * (true with {@code nullAs}), which && (||) lets swallow another's error, so where one may
+   * raise an error they're joined only once no operand decides it the other way; with
+   * {@code nullAs}, as the negation of the other truth, which does that.
    */
-  private static int emitJunction(ParseTree node, int count, OperandTruth operand,
-      boolean all, boolean truth, StringBuilder sb) {
-    StringBuilder joined = new StringBuilder("(");
+  private static Truth emitJunction(ParseTree node, int count, OperandTruth operand,
+      boolean all, boolean truth, boolean nullAs) {
+    List<CelNode> operands = new ArrayList<>();
     int flags = 0;
     for (int i = 0; i < count; i++) {
-      if (i > 0) {
-        joined.append(all ? " && " : " || ");
-      }
-      flags |= operand.emit(i, truth, joined);
+      Truth op = operand.emit(i, truth, nullAs);
+      flags |= op.flags;
+      operands.add(op.cel);
     }
-    joined.append(')');
-    if (!all || (flags & MAY_BE_NULL) == 0 || !mayRaise(node)) {
-      sb.append(joined);
-      return flags;
+    CelNode joined = all ? CelNode.and(operands) : CelNode.or(operands);
+    if (all == nullAs || (flags & MAY_BE_NULL) == 0 || !mayRaise(node)) {
+      return new Truth(joined, flags);
     }
-    sb.append("((");
+    if (nullAs) {
+      Truth other = emitJunction(node, count, operand, !all, !truth, false);
+      return new Truth(CelNode.not(other.cel), other.flags);
+    }
+    List<CelNode> decides = new ArrayList<>();
     for (int i = 0; i < count; i++) {
-      if (i > 0) {
-        sb.append(" || ");
-      }
-      operand.emit(i, !truth, sb);
+      decides.add(operand.emit(i, !truth, false).cel);
     }
-    sb.append(") ? false : ").append(joined).append(')');
-    return flags;
+    return new Truth(CelNode.ternary(CelNode.or(decides), CelNode.FALSE, joined), flags);
   }
 
   /**
@@ -2745,15 +2149,18 @@ final class ConstraintEmitter {
    * and FALSE when it is FALSE for any, ANY the other way round, ONE TRUE for exactly one, and
    * all are NULL over a NULL collection. One with nothing that may be NULL is emitted as before.
    */
-  static int emitQuantifierTruth(
-      LogicalTypesParser.CheckFuncContext func, boolean truth, StringBuilder sb) {
-    int flags = quantifierFold(func.func_expr().func_application(), truth, sb);
-    if ((flags & NATIVE) != 0) {
-      sb.append(truth ? "(" : "!(");
-      visitCExpr(func, sb);
-      sb.append(')');
+  static Truth emitQuantifierTruth(LogicalTypesParser.CheckFuncContext func, boolean truth) {
+    return emitQuantifierTruth(func, truth, false);
+  }
+
+  private static Truth emitQuantifierTruth(LogicalTypesParser.CheckFuncContext func,
+      boolean truth, boolean nullAs) {
+    Truth fold = quantifierFold(func.func_expr().func_application(), truth, nullAs);
+    if ((fold.flags & NATIVE) == 0) {
+      return fold;
     }
-    return flags & ~NATIVE;
+    CelNode asIs = visitCExpr(func);
+    return new Truth(truth ? asIs : CelNode.not(asIs), fold.flags & ~NATIVE);
   }
 
   // quantifierFold's flag for one emitted as is: nothing may be NULL, or its NULL can't be told.
@@ -2764,106 +2171,118 @@ final class ConstraintEmitter {
    * unlike all and exists, doesn't absorb a NULL body's error once the answer is decided; as is
    * when nothing may be NULL.
    */
-  static void emitOne(
-      LogicalTypesParser.Func_applicationContext app, StringBuilder sb, Runnable asIs) {
+  static CelNode emitOne(LogicalTypesParser.Func_applicationContext app, Supplier<CelNode> asIs) {
     ConstraintValidationContext vctx = EMIT_VCTX.get();
     boolean folds = vctx != null && !vctx.isTypeOnly() && app.check_expr_list() != null
         && app.check_expr_list().check_expr().size() == 3;
-    StringBuilder whenTrue = new StringBuilder();
-    if (!folds || (quantifierFold(app, true, whenTrue) & NATIVE) != 0) {
-      asIs.run();
-      return;
+    Truth whenTrue = folds ? quantifierFold(app, true, false) : null;
+    if (whenTrue == null || (whenTrue.flags & NATIVE) != 0) {
+      return asIs.get();
     }
-    StringBuilder whenFalse = new StringBuilder();
-    quantifierFold(app, false, whenFalse);
-    sb.append('(').append(whenTrue).append(" ? true : (").append(whenFalse)
-        .append(" ? false : dyn(null)))");
+    Truth whenFalse = quantifierFold(app, false, false);
+    return CelNode.ternary(whenTrue.cel, CelNode.TRUE,
+        CelNode.ternary(whenFalse.cel, CelNode.FALSE, CelNode.dyn(CelNode.NULL)));
   }
 
   // The three-valued fold of EVERY, ANY or ONE in a truth, or NATIVE with nothing emitted.
-  private static int quantifierFold(
-      LogicalTypesParser.Func_applicationContext app, boolean truth, StringBuilder sb) {
+  private static Truth quantifierFold(LogicalTypesParser.Func_applicationContext app,
+      boolean truth, boolean nullAs) {
     List<LogicalTypesParser.Check_exprContext> args = app.check_expr_list().check_expr();
     String name = app.identifier().getText().toUpperCase(java.util.Locale.ROOT);
     ConstraintValidationContext outer = EMIT_VCTX.get();
-    String collectionNull = ConstraintNullTest.of(args.get(0));
+    CelNode collectionNull = ConstraintNullTest.of(args.get(0));
     if (outer == null || collectionNull == null) {
-      return NATIVE | UNTOLD;
+      return new Truth(null, NATIVE | UNTOLD);
     }
     String iterVar = ConstraintFunctions.extractIterationVar(args.get(1), name);
     ConstraintValidationContext body = bodyContext(app, outer, () -> outer.withBinding(iterVar,
         ConstraintResolver.resolveCollectionElementType(args.get(0), outer)));
     // ONE takes both of its body's truths.
     boolean one = "ONE".equals(name);
-    StringBuilder bodyTruth = new StringBuilder();
-    StringBuilder bodyFalse = new StringBuilder();
-    int flags;
+    // exists() with nullAs lets a NULL body, true there, swallow another's error.
+    boolean every = "EVERY".equals(name) == truth;
+    if (nullAs && (one || !every && mayRaise(args.get(2)))) {
+      Truth negated = quantifierFold(app, !truth, false);
+      return (negated.flags & NATIVE) != 0 ? negated
+          : new Truth(CelNode.not(negated.cel), negated.flags);
+    }
+    Truth bodyTruth;
+    Truth bodyFalse = null;
     EMIT_VCTX.set(body);
     try {
-      flags = cachedTruth(args.get(2).check_expr_or(), truth || one, bodyTruth);
+      bodyTruth = cachedTruth(args.get(2).check_expr_or(), truth || one, nullAs);
       if (one) {
-        flags |= cachedTruth(args.get(2).check_expr_or(), false, bodyFalse);
+        bodyFalse = cachedTruth(args.get(2).check_expr_or(), false, false);
       }
     } finally {
       EMIT_VCTX.set(outer);
     }
+    int flags = bodyTruth.flags | (bodyFalse == null ? 0 : bodyFalse.flags);
     if (flags == 0 && ConstraintNullTest.NEVER.equals(collectionNull)) {
-      return NATIVE;
+      return new Truth(null, NATIVE);
     }
-    StringBuilder coll = new StringBuilder();
-    emitWrappedReceiver(args.get(0), coll);
-    String fold;
+    CelNode coll = visitCheckExpr(args.get(0));
+    CelNode var = CelNode.ident(iterVar);
+    boolean bodyMayBeNull = (flags & MAY_BE_NULL) != 0;
+    CelNode fold;
     if (one) {
       // TRUE when exactly one body is TRUE and every other FALSE; FALSE when two or more are
       // TRUE, or all are FALSE.
       // A ternary, as && would let a NULL body, false there, swallow exists_one's error.
-      String exactlyOne = coll + ".exists_one(" + iterVar + ", " + bodyTruth + ")";
+      CelNode exactlyOne = CelNode.method(coll, "exists_one", var, bodyTruth.cel);
       fold = truth
-          ? "(" + exactlyOne + " ? " + coll + ".all(" + iterVar + ", " + bodyTruth + " || "
-              + bodyFalse + ") : false)"
-          : "((" + coll + ".exists(" + iterVar + ", " + bodyTruth + ") && !" + exactlyOne
-              + ") || " + coll + ".all(" + iterVar + ", " + bodyFalse + "))";
-    } else if ("EVERY".equals(name) == truth && (flags & MAY_BE_NULL) != 0
-        && mayRaise(args.get(2))) {
+          ? CelNode.ternary(exactlyOne,
+              CelNode.method(coll, "all", var, CelNode.or(bodyTruth.cel, bodyFalse.cel)),
+              CelNode.FALSE)
+          : CelNode.or(
+              CelNode.and(CelNode.method(coll, "exists", var, bodyTruth.cel),
+                  CelNode.not(exactlyOne)),
+              CelNode.method(coll, "all", var, bodyFalse.cel));
+    } else if (every && !nullAs && bodyMayBeNull && mayRaise(args.get(2))) {
       // all() lets a NULL element, false there, swallow another's error, so it's taken only
       // once no element decides it the other way.
-      StringBuilder decides = new StringBuilder();
+      Truth decides;
       EMIT_VCTX.set(body);
       try {
-        cachedTruth(args.get(2).check_expr_or(), !truth, decides);
+        decides = cachedTruth(args.get(2).check_expr_or(), !truth, false);
       } finally {
         EMIT_VCTX.set(outer);
       }
-      fold = "(" + coll + ".exists(" + iterVar + ", " + decides + ") ? false : " + coll
-          + ".all(" + iterVar + ", " + bodyTruth + "))";
+      fold = CelNode.ternary(CelNode.method(coll, "exists", var, decides.cel), CelNode.FALSE,
+          CelNode.method(coll, "all", var, bodyTruth.cel));
     } else {
-      fold = coll + ("EVERY".equals(name) == truth ? ".all(" : ".exists(") + iterVar + ", "
-          + bodyTruth + ")";
+      fold = CelNode.method(coll, every ? "all" : "exists", var, bodyTruth.cel);
     }
-    falseIfNull(collectionNull, fold, sb);
-    return flags | (ConstraintNullTest.NEVER.equals(collectionNull) ? 0 : MAY_BE_NULL);
+    boolean collectionMayBeNull = !ConstraintNullTest.NEVER.equals(collectionNull);
+    if (nullAs && collectionMayBeNull && mayRaise(args.get(0))) {
+      // A ternary, as || would let a true fold swallow the collection test's error.
+      return new Truth(CelNode.ternary(collectionNull, CelNode.TRUE, fold),
+          flags | MAY_BE_NULL);
+    }
+    if (nullAs && collectionMayBeNull) {
+      return new Truth(CelNode.or(collectionNull, fold), flags | MAY_BE_NULL);
+    }
+    return new Truth(falseIfNull(collectionNull, fold),
+        flags | (collectionMayBeNull ? MAY_BE_NULL : 0));
   }
 
   // A parenthesized or quantifier body's emitTruth, once per translation, context and truth.
   // Nesting may repeat it, so one over CEL's size limit is refused at once.
-  private static int cachedTruth(
-      LogicalTypesParser.Check_expr_orContext body, boolean truth, StringBuilder sb) {
+  private static Truth cachedTruth(LogicalTypesParser.Check_expr_orContext body, boolean truth,
+      boolean nullAs) {
     EmitCache cache = EMIT_CACHE.get();
     ConstraintValidationContext vctx = EMIT_VCTX.get();
     if (cache == null || vctx == null) {
-      return emitTruth(body, truth, sb);
+      return emitTruth(body, truth, nullAs);
     }
     Truth[] held = cache.truths.computeIfAbsent(vctx, k -> new IdentityHashMap<>())
-        .computeIfAbsent(body, k -> new Truth[2]);
-    int at = truth ? 0 : 1;
+        .computeIfAbsent(body, k -> new Truth[4]);
+    int at = (truth ? 0 : 1) + (nullAs ? 2 : 0);
     if (held[at] == null) {
-      StringBuilder cel = new StringBuilder();
-      int flags = emitTruth(body, truth, cel);
-      held[at] = new Truth(cel.toString(), flags);
+      held[at] = emitTruth(body, truth, nullAs);
       ConstraintCelChecker.checkSize(held[at].cel, true, cache.sourceSql);
     }
-    sb.append(held[at].cel);
-    return held[at].flags;
+    return held[at];
   }
 
   /**
@@ -2871,13 +2290,15 @@ final class ConstraintEmitter {
    * or the element is NULL, or a key or index is missing; null when a step's type doesn't
    * resolve.
    */
-  static String subscriptNullTest(LogicalTypesParser.C_exprContext c) {
+  static CelNode subscriptNullTest(LogicalTypesParser.C_exprContext c) {
     ConstraintValidationContext vctx = EMIT_VCTX.get();
     if (vctx == null) {
       return null;
     }
-    List<String> tests = new ArrayList<>();
-    StringBuilder prefix = new StringBuilder();
+    List<CelNode> tests = new ArrayList<>();
+    CelNode prefix;
+    // A parenthesized root, which typedCollection takes as a call's result.
+    boolean bracketed;
     Schema type;
     LogicalTypesParser.IndirectionContext indirection;
     if (c instanceof LogicalTypesParser.CheckColumnRefContext) {
@@ -2888,19 +2309,19 @@ final class ConstraintEmitter {
       if (rootSchema == null) {
         return null;
       }
-      emitColumnRoot(root, prefix);
+      prefix = emitColumnRoot(root);
+      bracketed = false;
       // A column-level CHECK is skipped when its column is null.
       if (rootSchema.isNullable() && !(vctx.isColumnLevel() && vctx.isColumn(root))) {
-        tests.add(stepTest(prefix.toString(), true));
+        tests.add(stepTest(prefix, true));
       }
       type = resolveRef(rootSchema);
       indirection = col.indirection();
     } else {
       LogicalTypesParser.CheckParenContext paren = (LogicalTypesParser.CheckParenContext) c;
       tests.add(ConstraintNullTest.of(paren.check_expr()));
-      prefix.append('(');
-      visitCheckExpr(paren.check_expr(), prefix);
-      prefix.append(')');
+      prefix = visitCheckExpr(paren.check_expr());
+      bracketed = true;
       type = resolveRef(ConstraintResolver.tryResolveCheckExprType(paren.check_expr(), vctx));
       indirection = paren.indirection();
     }
@@ -2918,28 +2339,32 @@ final class ConstraintEmitter {
         }
         String fieldName = colidName(el);
         selected = !Schema.isCelReservedName(fieldName);
-        prefix.append(selected ? "." + fieldName : "[\"" + fieldName + "\"]");
+        prefix = selected ? CelNode.select(prefix, fieldName)
+            : CelNode.index(prefix, CelNode.string(fieldName));
         next = f.getSchema();
       } else {
         tests.add(ConstraintNullTest.of(el.check_expr()));
-        StringBuilder index = new StringBuilder();
-        visitCheckExpr(el.check_expr(), index);
-        String collection = typedCollection(prefix);
+        CelNode index = visitCheckExpr(el.check_expr());
+        CelNode collection = typedCollection(prefix, bracketed);
         if (type.getType() == Schema.Type.MAP) {
-          tests.add("!((" + index + ") in " + collection + ")");
-          prefix.append('[').append(index).append(']');
+          tests.add(CelNode.not(CelNode.binary(index, "in", collection)));
+          prefix = CelNode.index(prefix, index);
           next = type.getValueType();
         } else if (type.getType() == Schema.Type.ARRAY) {
-          tests.add(index.toString().matches("\\d+") ? "size(" + collection + ") < " + index
-              : "((" + index + ") < 1 || (" + index + ") > size(" + collection + "))");
-          prefix.append("[(").append(index).append(") - 1]");
+          CelNode size = CelNode.call("size", collection);
+          tests.add(index instanceof CelNode.Literal && ((CelNode.Literal) index).isNatural()
+              ? CelNode.binary(size, "<", index)
+              : CelNode.or(CelNode.binary(index, "<", CelNode.literal("1")),
+                  CelNode.binary(index, ">", size)));
+          prefix = CelNode.index(prefix, zeroBased(index));
           next = type.getElementType();
         } else {
           return null;
         }
       }
+      bracketed = false;
       if (next.isNullable()) {
-        tests.add(selected ? stepTest(prefix.toString(), true) : "dyn(" + prefix + ") == null");
+        tests.add(selected ? stepTest(prefix, true) : CelNode.isNull(prefix));
       }
       type = resolveRef(next);
     }
@@ -2947,17 +2372,18 @@ final class ConstraintEmitter {
   }
 
   // A collection for size() or in: cel-java types a subscript of dyn as the first overload's
-  // argument (size(m['k']) as a string's), unless it's dyn() itself.
-  private static String typedCollection(CharSequence prefix) {
-    char last = prefix.charAt(prefix.length() - 1);
-    return last == ']' || last == ')' ? "dyn(" + prefix + ")" : prefix.toString();
+  // argument (size(m['k']) as a string's), unless it's dyn() itself. A subscript, a call's
+  // result, a ternary's or a bracketed one is taken as one that may be.
+  private static CelNode typedCollection(CelNode collection, boolean bracketed) {
+    return bracketed || collection instanceof CelNode.Index || collection instanceof CelNode.Call
+        || collection instanceof CelNode.Ternary ? CelNode.dyn(collection) : collection;
   }
 
-  // An operand of size() or in, given as typedCollection gives one, parenthesized or not;
-  // the type-only pass keeps its type for the strict check.
-  static String typedSubscript(CharSequence cel) {
+  // An operand of size() or in, given as typedCollection gives one; the type-only pass keeps its
+  // type for the strict check.
+  static CelNode typedSubscript(CelNode cel) {
     ConstraintValidationContext vctx = EMIT_VCTX.get();
-    return vctx != null && vctx.isTypeOnly() ? cel.toString() : typedCollection(cel);
+    return vctx != null && vctx.isTypeOnly() ? cel : typedCollection(cel, false);
   }
 
   // An IN whose three-valued CEL gives NULL as null.
@@ -2969,88 +2395,94 @@ final class ConstraintEmitter {
    * {@link #emitTruth} of a BETWEEN, SQL's {@code lo <= a AND a <= hi}: TRUE when both hold,
    * FALSE when either fails, whatever the other is. SYMMETRIC is NULL when any operand is.
    */
-  static int emitBetweenTruth(
-      LogicalTypesParser.Check_expr_betweenContext between, boolean truth, StringBuilder sb) {
+  static Truth emitBetweenTruth(LogicalTypesParser.Check_expr_betweenContext between,
+      boolean truth) {
+    return emitBetweenTruth(between, truth, false);
+  }
+
+  /**
+   * {@link #emitBetweenTruth}, or with {@code nullAs} its negation the other way round. With
+   * bounds that are never NULL, both comparisons share the operand's NULL test, taken once.
+   */
+  private static Truth emitBetweenTruth(LogicalTypesParser.Check_expr_betweenContext between,
+      boolean truth, boolean nullAs) {
     List<LogicalTypesParser.Check_expr_inContext> ins = between.check_expr_in();
-    String a = ConstraintNullTest.of(ins.get(0));
-    String lo = ConstraintNullTest.of(ins.get(1));
-    String hi = ConstraintNullTest.of(ins.get(2));
-    String anyNull = a == null || lo == null || hi == null ? null
+    CelNode a = ConstraintNullTest.of(ins.get(0));
+    CelNode lo = ConstraintNullTest.of(ins.get(1));
+    CelNode hi = ConstraintNullTest.of(ins.get(2));
+    CelNode anyNull = a == null || lo == null || hi == null ? null
         : ConstraintNullTest.any(Arrays.asList(a, lo, hi));
     if (anyNull == null || ConstraintNullTest.NEVER.equals(anyNull)) {
-      sb.append(truth ? "(" : "!(");
-      visitBetween(between, sb);
-      sb.append(')');
-      return anyNull == null ? UNTOLD : 0;
+      CelNode asIs = visitBetween(between);
+      return new Truth(truth ? asIs : CelNode.not(asIs), anyNull == null ? UNTOLD : 0);
     }
-    StringBuilder lower = new StringBuilder();
-    emitBetweenLe(ins, 1, 0, lower);
-    StringBuilder upper = new StringBuilder();
-    emitBetweenLe(ins, 0, 2, upper);
+    CelNode lower = emitBetweenLe(ins, 1, 0);
+    CelNode upper = emitBetweenLe(ins, 0, 2);
     boolean holds = truth != (between.NOT() != null);
+    if (nullAs && (between.SYMMETRIC() != null || mayRaise(between))) {
+      // SYMMETRIC, and one that may raise, where || would let a NULL comparison or a true one
+      // swallow an error, as the negation of the other truth.
+      Truth other = emitBetweenTruth(between, !truth, false);
+      return new Truth(CelNode.not(other.cel), other.flags);
+    }
+    if (nullAs) {
+      if (ConstraintNullTest.NEVER.equals(lo) && ConstraintNullTest.NEVER.equals(hi)) {
+        CelNode both = CelNode.and(lower, upper);
+        return new Truth(CelNode.or(a, holds ? both : CelNode.not(both)), MAY_BE_NULL);
+      }
+      CelNode l = trueIfNull(ConstraintNullTest.either(lo, a), holds ? lower : CelNode.not(lower));
+      CelNode u = trueIfNull(ConstraintNullTest.either(a, hi), holds ? upper : CelNode.not(upper));
+      return new Truth(holds ? CelNode.and(l, u) : CelNode.or(l, u), MAY_BE_NULL);
+    }
+    CelNode cel;
     if (between.SYMMETRIC() != null) {
-      StringBuilder ordered = new StringBuilder("(");
-      emitBetweenLe(ins, 1, 2, ordered);
-      ordered.append(" ? (").append(lower).append(" && ").append(upper).append(") : (");
-      emitBetweenLe(ins, 2, 0, ordered);
-      ordered.append(" && ");
-      emitBetweenLe(ins, 0, 1, ordered);
-      ordered.append("))");
-      sb.append('(').append(anyNull).append(" ? false : ").append(holds ? "" : "!")
-          .append(ordered).append(')');
+      CelNode ordered = CelNode.ternary(emitBetweenLe(ins, 1, 2), CelNode.and(lower, upper),
+          CelNode.and(emitBetweenLe(ins, 2, 0), emitBetweenLe(ins, 0, 1)));
+      cel = CelNode.ternary(anyNull, CelNode.FALSE, holds ? ordered : CelNode.not(ordered));
     } else if (holds && !mayRaise(between)) {
-      sb.append('(').append(anyNull).append(" ? false : (").append(lower).append(" && ")
-          .append(upper).append("))");
-    } else if (holds) {
+      cel = CelNode.ternary(anyNull, CelNode.FALSE, CelNode.and(lower, upper));
+    } else {
+      CelNode fails = CelNode.or(
+          falseIfNull(ConstraintNullTest.either(lo, a), CelNode.not(lower)),
+          falseIfNull(ConstraintNullTest.either(a, hi), CelNode.not(upper)));
       // TRUE when both comparisons are, taken only once neither fails, so a NULL operand
       // doesn't hide another's error.
-      sb.append("((");
-      falseIfNull(ConstraintNullTest.either(lo, a), "!(" + lower + ")", sb);
-      sb.append(" || ");
-      falseIfNull(ConstraintNullTest.either(a, hi), "!(" + upper + ")", sb);
-      sb.append(") ? false : (");
-      falseIfNull(ConstraintNullTest.either(lo, a), lower.toString(), sb);
-      sb.append(" && ");
-      falseIfNull(ConstraintNullTest.either(a, hi), upper.toString(), sb);
-      sb.append("))");
-    } else {
-      sb.append('(');
-      falseIfNull(ConstraintNullTest.either(lo, a), "!(" + lower + ")", sb);
-      sb.append(" || ");
-      falseIfNull(ConstraintNullTest.either(a, hi), "!(" + upper + ")", sb);
-      sb.append(')');
+      cel = !holds ? fails : CelNode.ternary(fails, CelNode.FALSE, CelNode.and(
+          falseIfNull(ConstraintNullTest.either(lo, a), lower),
+          falseIfNull(ConstraintNullTest.either(a, hi), upper)));
     }
-    return MAY_BE_NULL;
+    return new Truth(cel, MAY_BE_NULL);
+  }
+
+  // p, or true when isNull, which is tested first.
+  private static CelNode trueIfNull(CelNode isNull, CelNode p) {
+    return ConstraintNullTest.NEVER.equals(isNull) ? p : CelNode.or(isNull, p);
   }
 
   // p, or false when isNull.
-  private static void falseIfNull(String isNull, String p, StringBuilder sb) {
-    if (ConstraintNullTest.NEVER.equals(isNull)) {
-      sb.append(p);
-    } else {
-      sb.append('(').append(isNull).append(" ? false : ").append(p).append(')');
-    }
+  private static CelNode falseIfNull(CelNode isNull, CelNode p) {
+    return ConstraintNullTest.NEVER.equals(isNull) ? p
+        : CelNode.ternary(isNull, CelNode.FALSE, p);
   }
 
-  // ins[x] <= ins[y] for BETWEEN operands, compared in the type visitBetween compares them in.
-  private static void emitBetweenLe(
-      List<LogicalTypesParser.Check_expr_inContext> ins, int x, int y, StringBuilder sb) {
+  // ins[x] <= ins[y] for BETWEEN operands, compared in their common type.
+  private static CelNode emitBetweenLe(
+      List<LogicalTypesParser.Check_expr_inContext> ins, int x, int y) {
     ConstraintValidationContext vctx = EMIT_VCTX.get();
     String common = (vctx != null) ? numericCommonOf(ins, vctx) : null;
     if ("decimal".equals(common)) {
-      emitDecimalLe(ins.get(x), ins.get(y), sb);
-    } else if ("double".equals(common)) {
-      emitDoubleLe(ins.get(x), ins.get(y), sb);
-    } else if (vctx != null
+      return emitDecimalLe(ins.get(x), ins.get(y));
+    }
+    if ("double".equals(common)) {
+      return emitDoubleLe(ins.get(x), ins.get(y));
+    }
+    if (vctx != null
         && (ConstraintResolver.subtreeHasTemporal(ins.get(0), vctx)
             || ConstraintResolver.subtreeHasTemporal(ins.get(1), vctx)
             || ConstraintResolver.subtreeHasTemporal(ins.get(2), vctx))) {
-      emitTimestampLe(ins.get(x), ins.get(y), sb);
-    } else {
-      emitParenIn(ins.get(x), sb);
-      sb.append(" <= ");
-      emitParenIn(ins.get(y), sb);
+      return emitTimestampLe(ins.get(x), ins.get(y));
     }
+    return CelNode.binary(visitIn(ins.get(x)), "<=", visitIn(ins.get(y)));
   }
 
   /**
@@ -3059,27 +2491,22 @@ final class ConstraintEmitter {
    * coercion: DECIMAL common → Decimal value, DOUBLE common → double-cast,
    * temporal → CEL-timestamp normalization, otherwise native.
    */
-  private static void emitCaseResult(
-      LogicalTypesParser.Check_exprContext branch, String common,
-      boolean temporal, StringBuilder sb) {
-    StringBuilder nativeEmit = new StringBuilder();
-    visitCheckExpr(branch, nativeEmit);
-    StringBuilder value = new StringBuilder();
+  private static CelNode emitCaseResult(
+      LogicalTypesParser.Check_exprContext branch, String common, boolean temporal) {
+    CelNode nativeEmit = visitCheckExpr(branch);
+    CelNode value;
     if ("decimal".equals(common)) {
-      emitDecimalValue(branch, value);
+      value = emitDecimalValue(branch);
     } else if ("double".equals(common)) {
-      emitNumericAs(branch, "double", value);
+      value = emitNumericAs(branch, "double");
     } else if (temporal) {
-      emitTimestampValueCheckExpr(branch, value);
+      value = emitTimestampValueCheckExpr(branch);
     } else {
       value = nativeEmit;
     }
     // A NULL result is NULL, as a COALESCE argument is, not converted or read.
-    if (ConstraintResolver.tryAsLiteral(branch) != null) {
-      sb.append(value);
-    } else {
-      ConstraintFunctions.emitNullOrValue(branch, nativeEmit.toString(), value.toString(), sb);
-    }
+    return ConstraintResolver.tryAsLiteral(branch) != null ? value
+        : ConstraintFunctions.emitNullOrValue(branch, nativeEmit, value);
   }
 
   /** True if any of the CASE result branches has a temporal subtree. */
