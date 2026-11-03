@@ -31,6 +31,7 @@ import java.util.Arrays;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -2628,6 +2629,9 @@ final class ConstraintEmitter {
   // emitTruth's result: a predicate may be NULL; a predicate's NULL can't be told.
   static final int MAY_BE_NULL = 1;
   static final int UNTOLD = 2;
+  // A "not FALSE" or "not TRUE" form whose top is an unbracketed ||, which an && joining it
+  // brackets; || binds loosest, so it needs none elsewhere.
+  private static final int BARE_OR = 8;
 
   /**
    * A condition true only when SQL's is {@code truth} (TRUE, or with {@code truth} false,
@@ -2686,9 +2690,9 @@ final class ConstraintEmitter {
         && is.check_expr_compare().check_expr_between(0).BETWEEN() == null
         && givesNullAsNull(is.check_expr_compare().check_expr_between(0).check_expr_in(0))) {
       // Its CEL gives NULL as null, which equals neither true nor false.
-      sb.append("(dyn(");
+      sb.append(nullAs ? "dyn(" : "(dyn(");
       visitIs(is, sb);
-      sb.append(nullAs ? ") != " : ") == ").append(nullAs != truth).append(')');
+      sb.append(nullAs ? ") != " : ") == ").append(nullAs != truth).append(nullAs ? "" : ")");
       return MAY_BE_NULL;
     }
     if (is.IS() == null && is.check_expr_compare().check_expr_between().size() == 1
@@ -2703,17 +2707,77 @@ final class ConstraintEmitter {
       return emitQuantifierTruth((LogicalTypesParser.CheckFuncContext) leaf, truth, nullAs,
           sb);
     }
+    if (is.IS() != null && !truth
+        && ConstraintResolver.isHasCompatible(is.check_expr_compare(), EMIT_VCTX.get())) {
+      // NOT of a selection's IS [NOT] NULL is the opposite test, as the generator writes it.
+      StringBuilder emitted = new StringBuilder();
+      visitCompare(is.check_expr_compare(), emitted);
+      sb.append(nullTest(ConstraintResolver.selectionPathCompare(is.check_expr_compare()),
+          emitted.toString(), is.NOT() != null));
+      return 0;
+    }
     String isNull = is.IS() != null ? null : ConstraintNullTest.of(is.check_expr_compare());
     boolean guarded = isNull != null && !ConstraintNullTest.NEVER.equals(isNull);
+    int flags = guarded ? MAY_BE_NULL : is.IS() == null && isNull == null ? UNTOLD : 0;
+    if (nullAs) {
+      // Its NULL test first, so a runtime that only short-circuits never reads a NULL. One that
+      // may raise, as a predicate that may raise has, is a ternary's condition: || would let a
+      // true predicate, as CEL gives null == null, swallow its error.
+      boolean raises = guarded && mayRaise(is);
+      if (guarded) {
+        sb.append(raises ? "(" : "").append(isNull).append(raises ? " ? true : " : " || ");
+      }
+      if (truth && bindsTight(is)) {
+        visitIs(is, sb);
+      } else {
+        sb.append(truth ? "(" : "!(");
+        visitIs(is, sb);
+        sb.append(')');
+      }
+      sb.append(raises ? ")" : "");
+      return guarded && !raises ? flags | BARE_OR : flags;
+    }
     sb.append('(');
     if (guarded) {
-      // Its NULL test first, so a runtime that only short-circuits never reads a NULL.
-      sb.append(isNull).append(nullAs ? " || " : " ? false : ");
+      sb.append(isNull).append(" ? false : ");
     }
     sb.append(truth ? "(" : "!(");
     visitIs(is, sb);
     sb.append("))");
-    return guarded ? MAY_BE_NULL : is.IS() == null && isNull == null ? UNTOLD : 0;
+    return flags;
+  }
+
+  // Their CEL may be a ternary, which binds looser than ||.
+  private static final Set<String> TERNARY_FUNCS =
+      Set.of("COALESCE", "NULLIF", "GREATEST", "LEAST");
+
+  /**
+   * True if a predicate's CEL binds tighter than && and ||, by its parse tree: a comparison, IN,
+   * LIKE, column or plain function call. One whose CEL may be a ternary, as a CASE's or
+   * COALESCE's is, isn't.
+   */
+  private static boolean bindsTight(LogicalTypesParser.Check_expr_isnullContext is) {
+    LogicalTypesParser.Check_expr_compareContext compare = is.check_expr_compare();
+    if (is.IS() != null || compare.check_expr_between().size() == 2) {
+      return is.IS() == null;
+    }
+    LogicalTypesParser.Check_expr_betweenContext between = compare.check_expr_between(0);
+    if (between.BETWEEN() != null) {
+      return false;
+    }
+    LogicalTypesParser.Check_expr_inContext in = between.check_expr_in(0);
+    if (in.IN() != null || in.check_expr_like().LIKE() != null) {
+      return true;
+    }
+    LogicalTypesParser.C_exprContext c = ConstraintResolver.leafPrimary(compare);
+    if (c instanceof LogicalTypesParser.CheckColumnRefContext) {
+      return true;
+    }
+    LogicalTypesParser.Func_applicationContext app =
+        c instanceof LogicalTypesParser.CheckFuncContext
+            ? ((LogicalTypesParser.CheckFuncContext) c).func_expr().func_application() : null;
+    return app != null
+        && !TERNARY_FUNCS.contains(app.identifier().getText().toUpperCase(java.util.Locale.ROOT));
   }
 
   // True if evaluating node can raise an error SQL raises too: a division, CAST, PARSE_JSON or
@@ -2773,18 +2837,23 @@ final class ConstraintEmitter {
    */
   private static int emitJunction(ParseTree node, int count, OperandTruth operand,
       boolean all, boolean truth, boolean nullAs, StringBuilder sb) {
-    StringBuilder joined = new StringBuilder("(");
+    // With nullAs, the join is bare, an && bracketing an operand whose top is ||.
+    StringBuilder joined = new StringBuilder(nullAs ? "" : "(");
     int flags = 0;
     for (int i = 0; i < count; i++) {
       if (i > 0) {
         joined.append(all ? " && " : " || ");
       }
-      flags |= operand.emit(i, truth, nullAs, joined);
+      StringBuilder op = new StringBuilder();
+      int opFlags = operand.emit(i, truth, nullAs, op);
+      flags |= opFlags & ~BARE_OR;
+      boolean bracket = all && (opFlags & BARE_OR) != 0;
+      joined.append(bracket ? "(" : "").append(op).append(bracket ? ")" : "");
     }
-    joined.append(')');
+    joined.append(nullAs ? "" : ")");
     if (all == nullAs || (flags & MAY_BE_NULL) == 0 || !mayRaise(node)) {
       sb.append(joined);
-      return flags;
+      return nullAs && !all ? flags | BARE_OR : flags;
     }
     if (nullAs) {
       sb.append('!');
@@ -2883,11 +2952,14 @@ final class ConstraintEmitter {
     } finally {
       EMIT_VCTX.set(outer);
     }
+    // The body is a macro's argument, which needs no brackets.
+    flags &= ~BARE_OR;
     if (flags == 0 && ConstraintNullTest.NEVER.equals(collectionNull)) {
       return NATIVE;
     }
     StringBuilder coll = new StringBuilder();
     emitWrappedReceiver(args.get(0), coll);
+    boolean bodyMayBeNull = (flags & MAY_BE_NULL) != 0;
     String fold;
     if (one) {
       // TRUE when exactly one body is TRUE and every other FALSE; FALSE when two or more are
@@ -2899,7 +2971,7 @@ final class ConstraintEmitter {
               + bodyFalse + ") : false)"
           : "((" + coll + ".exists(" + iterVar + ", " + bodyTruth + ") && !" + exactlyOne
               + ") || " + coll + ".all(" + iterVar + ", " + bodyFalse + "))";
-    } else if (every && !nullAs && (flags & MAY_BE_NULL) != 0 && mayRaise(args.get(2))) {
+    } else if (every && !nullAs && bodyMayBeNull && mayRaise(args.get(2))) {
       // all() lets a NULL element, false there, swallow another's error, so it's taken only
       // once no element decides it the other way.
       StringBuilder decides = new StringBuilder();
@@ -2914,12 +2986,18 @@ final class ConstraintEmitter {
     } else {
       fold = coll + (every ? ".all(" : ".exists(") + iterVar + ", " + bodyTruth + ")";
     }
-    if (nullAs) {
-      trueIfNull(collectionNull, fold, sb);
-    } else {
-      falseIfNull(collectionNull, fold, sb);
+    boolean collectionMayBeNull = !ConstraintNullTest.NEVER.equals(collectionNull);
+    if (nullAs && collectionMayBeNull && mayRaise(args.get(0))) {
+      // A ternary, as || would let a true fold swallow the collection test's error.
+      sb.append('(').append(collectionNull).append(" ? true : ").append(fold).append(')');
+      return flags | MAY_BE_NULL;
     }
-    return flags | (ConstraintNullTest.NEVER.equals(collectionNull) ? 0 : MAY_BE_NULL);
+    if (nullAs && collectionMayBeNull) {
+      sb.append(collectionNull).append(" || ").append(fold);
+      return flags | MAY_BE_NULL | BARE_OR;
+    }
+    falseIfNull(collectionNull, fold, sb);
+    return flags | (collectionMayBeNull ? MAY_BE_NULL : 0);
   }
 
   // A parenthesized or quantifier body's emitTruth, once per translation, context and truth.
@@ -3075,28 +3153,23 @@ final class ConstraintEmitter {
     StringBuilder upper = new StringBuilder();
     emitBetweenLe(ins, 0, 2, upper);
     boolean holds = truth != (between.NOT() != null);
-    if (nullAs && (between.SYMMETRIC() != null || !holds && mayRaise(between))) {
-      // SYMMETRIC, and || that lets a NULL comparison, true there, swallow another's error, as
-      // the negation of the other truth.
+    if (nullAs && (between.SYMMETRIC() != null || mayRaise(between))) {
+      // SYMMETRIC, and one that may raise, where || would let a NULL comparison or a true one
+      // swallow an error, as the negation of the other truth.
       sb.append('!');
       return emitBetweenTruth(between, !truth, false, sb);
     }
     if (nullAs) {
-      String loNull = ConstraintNullTest.either(lo, a);
-      String hiNull = ConstraintNullTest.either(a, hi);
-      String join = holds ? " && " : " || ";
       String neg = holds ? "" : "!";
       if (ConstraintNullTest.NEVER.equals(lo) && ConstraintNullTest.NEVER.equals(hi)) {
-        sb.append('(').append(a).append(" || ").append(neg).append('(').append(lower)
-            .append(" && ").append(upper).append("))");
-      } else {
-        sb.append('(');
-        trueIfNull(loNull, neg + "(" + lower + ")", sb);
-        sb.append(join);
-        trueIfNull(hiNull, neg + "(" + upper + ")", sb);
-        sb.append(')');
+        sb.append(a).append(" || ").append(neg).append('(').append(lower).append(" && ")
+            .append(upper).append(')');
+        return MAY_BE_NULL | BARE_OR;
       }
-      return MAY_BE_NULL;
+      trueIfNull(ConstraintNullTest.either(lo, a), neg + "(" + lower + ")", sb);
+      sb.append(holds ? " && " : " || ");
+      trueIfNull(ConstraintNullTest.either(a, hi), neg + "(" + upper + ")", sb);
+      return holds ? MAY_BE_NULL : MAY_BE_NULL | BARE_OR;
     }
     if (between.SYMMETRIC() != null) {
       StringBuilder ordered = new StringBuilder("(");
