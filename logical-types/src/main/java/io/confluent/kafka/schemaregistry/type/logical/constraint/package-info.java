@@ -42,7 +42,8 @@
  *       io.confluent.kafka.schemaregistry.type.logical.constraint.ConstraintFunctions},
  *       {@link
  *       io.confluent.kafka.schemaregistry.type.logical.constraint.ConstraintPatterns})
- *       — cascade walkers turn the parse tree into CEL fragments. Type
+ *       — cascade walkers turn the parse tree into a {@code CelNode} tree, compared by
+ *       structure and printed once with the brackets CEL's precedence needs. Type
  *       resolution lives in {@link
  *       io.confluent.kafka.schemaregistry.type.logical.constraint.ConstraintResolver}
  *       and is shared between validators and emitters.</li>
