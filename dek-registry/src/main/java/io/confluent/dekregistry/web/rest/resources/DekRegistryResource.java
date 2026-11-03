@@ -393,8 +393,6 @@ public class DekRegistryResource extends SchemaRegistryResource {
       asyncResponse.resume(KmsPropsRedactor.redact(kek));
     } catch (AlreadyExistsException e) {
       throw DekRegistryErrors.alreadyExistsException(e.getMessage());
-    } catch (InvalidKeyException e) {
-      throw DekRegistryErrors.invalidOrMissingKeyInfo(e.getMessage());
     } catch (TooManyKeysException e) {
       throw DekRegistryErrors.tooManyKeysException(dekRegistry.config().maxKeys());
     } catch (InvalidKeyException e) {
