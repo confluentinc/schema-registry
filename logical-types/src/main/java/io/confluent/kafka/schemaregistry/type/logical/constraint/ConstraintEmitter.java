@@ -971,14 +971,28 @@ final class ConstraintEmitter {
     return false;
   }
 
-  // A comparison operand's TRUE or FALSE literal, or null.
+  // A comparison operand's unsigned TRUE or FALSE literal, or null; a signed one, even one whose
+  // signs cancel, is left to the strict check to refuse.
   private static LogicalTypesParser.BoolLiteralContext boolLiteral(
       LogicalTypesParser.Check_expr_betweenContext side) {
     if (side.BETWEEN() != null || side.check_expr_in().size() != 1) {
       return null;
     }
     ConstraintResolver.LiteralMatch m = ConstraintResolver.tryAsLiteralIn(side.check_expr_in(0));
-    return m == null || m.negate ? null : m.lit.boolLiteral();
+    return m == null || hasSign(side) ? null : m.lit.boolLiteral();
+  }
+
+  // True if a parse tree holds a + or - token.
+  private static boolean hasSign(ParseTree tree) {
+    if (tree instanceof TerminalNode) {
+      return "-".equals(tree.getText()) || "+".equals(tree.getText());
+    }
+    for (int i = 0; i < tree.getChildCount(); i++) {
+      if (hasSign(tree.getChild(i))) {
+        return true;
+      }
+    }
+    return false;
   }
 
   // -------------------------------------------------------------------------
@@ -2747,14 +2761,15 @@ final class ConstraintEmitter {
     return flags;
   }
 
-  // Their CEL may be a ternary, which binds looser than ||.
-  private static final Set<String> TERNARY_FUNCS =
-      Set.of("COALESCE", "NULLIF", "GREATEST", "LEAST");
+  // Boolean functions whose CEL is a method call.
+  private static final Set<String> METHOD_FUNCS = Set.of("STARTS_WITH", "ENDS_WITH", "CONTAINS",
+      "MATCHES", "IS_EMAIL", "IS_HOSTNAME", "IS_IPV4", "IS_IPV6", "IS_URI", "IS_URI_REF",
+      "IS_UUID", "VARIANT_IS_NULL");
 
   /**
    * True if a predicate's CEL binds tighter than && and ||, by its parse tree: a comparison, IN,
-   * LIKE, column or plain function call. One whose CEL may be a ternary, as a CASE's or
-   * COALESCE's is, isn't.
+   * LIKE, column or a function whose CEL is a method call. Any other, such as a CASE or COALESCE,
+   * whose CEL may be a ternary, isn't.
    */
   private static boolean bindsTight(LogicalTypesParser.Check_expr_isnullContext is) {
     LogicalTypesParser.Check_expr_compareContext compare = is.check_expr_compare();
@@ -2777,7 +2792,7 @@ final class ConstraintEmitter {
         c instanceof LogicalTypesParser.CheckFuncContext
             ? ((LogicalTypesParser.CheckFuncContext) c).func_expr().func_application() : null;
     return app != null
-        && !TERNARY_FUNCS.contains(app.identifier().getText().toUpperCase(java.util.Locale.ROOT));
+        && METHOD_FUNCS.contains(app.identifier().getText().toUpperCase(java.util.Locale.ROOT));
   }
 
   // True if evaluating node can raise an error SQL raises too: a division, CAST, PARSE_JSON or
