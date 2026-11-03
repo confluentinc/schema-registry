@@ -19,6 +19,7 @@ import com.google.common.testing.FakeTicker;
 import io.confluent.dekregistry.DekRegistryResourceExtension;
 import io.confluent.dekregistry.client.CachedDekRegistryClient;
 import io.confluent.dekregistry.client.rest.DekRegistryRestService;
+import io.confluent.dekregistry.storage.DekRegistryConfig;
 import io.confluent.kafka.schemaregistry.ClusterTestHarness;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
@@ -83,6 +84,10 @@ public class RestApiClusterTest extends RestApiTest {
     props.put(
         SchemaRegistryConfig.INTER_INSTANCE_HEADERS_WHITELIST_CONFIG,
         DekRegistryRestService.X_FORWARD_HEADER
+    );
+    props.put(
+        DekRegistryConfig.DEK_REGISTRY_KMS_ALLOWED_HOSTS_CONFIG,
+        "vault.internal,.trusted.example.com"
     );
     return props;
   }
