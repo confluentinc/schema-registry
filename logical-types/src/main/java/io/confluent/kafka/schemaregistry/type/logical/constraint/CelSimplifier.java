@@ -58,9 +58,9 @@ final class CelSimplifier {
   }
 
   private static CelNode simplify(CelNode node, Facts facts, boolean compared) {
-    Boolean known = facts.get(node);
+    CelNode known = facts.get(node);
     if (known != null) {
-      return CelNode.bool(known);
+      return known;
     }
     CelNode out;
     if (node instanceof CelNode.Junction) {
@@ -94,7 +94,7 @@ final class CelSimplifier {
       return node;
     }
     known = facts.get(out);
-    return known != null ? CelNode.bool(known) : out;
+    return known != null ? known : out;
   }
 
   private static List<CelNode> simplifyAll(List<CelNode> nodes, Facts facts, boolean compared) {
@@ -141,9 +141,9 @@ final class CelSimplifier {
           && ((CelNode.Junction) simplified).and == and
           ? ((CelNode.Junction) simplified).operands : Collections.singletonList(simplified);
       for (CelNode part : parts) {
-        Boolean value = known.get(part);
+        CelNode value = known.get(part);
         if (value != null) {
-          part = CelNode.bool(value);
+          part = value;
         }
         if (part.equals(identity) || out.contains(part)) {
           continue;
@@ -332,7 +332,7 @@ final class CelSimplifier {
     }
     return tested instanceof CelNode.Select
         && readable(((CelNode.Select) tested).operand, facts)
-        && Boolean.TRUE.equals(facts.get(CelNode.call("has", tested)));
+        && CelNode.TRUE.equals(facts.get(CelNode.call("has", tested)));
   }
 
   // f in has(f) of a field, else null.
@@ -359,12 +359,12 @@ final class CelSimplifier {
   // NULL (and a field known set).
   private static boolean readable(CelNode node, Facts facts) {
     if (node instanceof CelNode.Ident) {
-      return node.equals(THIS) || Boolean.TRUE.equals(facts.get(CelNode.isNotNull(node)));
+      return node.equals(THIS) || CelNode.TRUE.equals(facts.get(CelNode.isNotNull(node)));
     }
     return node instanceof CelNode.Select
         && readable(((CelNode.Select) node).operand, facts)
-        && Boolean.TRUE.equals(facts.get(CelNode.call("has", node)))
-        && Boolean.TRUE.equals(facts.get(CelNode.isNotNull(node)));
+        && CelNode.TRUE.equals(facts.get(CelNode.call("has", node)))
+        && CelNode.TRUE.equals(facts.get(CelNode.isNotNull(node)));
   }
 
   /**
@@ -381,11 +381,12 @@ final class CelSimplifier {
       this.known = known;
     }
 
-    Boolean get(CelNode node) {
+    // The constant node is known to be, or null if it isn't known.
+    CelNode get(CelNode node) {
       for (Facts facts = this; facts != null; facts = facts.parent) {
         Boolean value = facts.known.get(node);
         if (value != null) {
-          return value;
+          return CelNode.bool(value);
         }
       }
       return null;
