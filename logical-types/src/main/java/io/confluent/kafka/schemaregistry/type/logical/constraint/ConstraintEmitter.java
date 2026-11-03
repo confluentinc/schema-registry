@@ -31,6 +31,7 @@ import java.util.Arrays;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -903,6 +904,9 @@ final class ConstraintEmitter {
       // two check_expr_between). Find it as the only TerminalNode child.
       String celOp = translateCompareOp(findComparisonOp(ctx));
       ConstraintValidationContext vctx = EMIT_VCTX.get();
+      if (emitBooleanLiteralCompare(betweens, celOp, vctx, sb)) {
+        return;
+      }
       // Numeric coercion: if both sides are pure numeric, compute the
       // common type and emit at it. common=DECIMAL → decimals.* (no native
       // overload on the opaque type); common=DOUBLE/INT → native operator with
@@ -935,6 +939,46 @@ final class ConstraintEmitter {
       return;
     }
     visitBetween(betweens.get(0), sb);
+  }
+
+  /**
+   * A BOOLEAN compared with = or <> to a TRUE or FALSE literal, as that side or its negation:
+   * {@code t = TRUE} is {@code this.t}. False, with nothing emitted, for any other comparison.
+   */
+  private static boolean emitBooleanLiteralCompare(
+      List<LogicalTypesParser.Check_expr_betweenContext> sides, String celOp,
+      ConstraintValidationContext vctx, StringBuilder sb) {
+    if (vctx == null || !"==".equals(celOp) && !"!=".equals(celOp)) {
+      return false;
+    }
+    for (int i = 0; i < 2; i++) {
+      LogicalTypesParser.BoolLiteralContext literal = boolLiteral(sides.get(i));
+      LogicalTypesParser.Check_expr_betweenContext other = sides.get(1 - i);
+      Schema type = literal == null ? null
+          : ConstraintResolver.tryResolveCompareOperandType(other, vctx);
+      if (type != null && type.getType() == Schema.Type.BOOLEAN) {
+        boolean positive = "==".equals(celOp) == (literal.TRUE() != null);
+        if (positive) {
+          emitCompareOperandWrapped(other, vctx, sb);
+        } else {
+          sb.append("!(");
+          emitCompareOperandWrapped(other, vctx, sb);
+          sb.append(')');
+        }
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // A comparison operand's TRUE or FALSE literal, or null.
+  private static LogicalTypesParser.BoolLiteralContext boolLiteral(
+      LogicalTypesParser.Check_expr_betweenContext side) {
+    if (side.BETWEEN() != null || side.check_expr_in().size() != 1) {
+      return null;
+    }
+    ConstraintResolver.LiteralMatch m = ConstraintResolver.tryAsLiteralIn(side.check_expr_in(0));
+    return m == null || m.negate ? null : m.lit.boolLiteral();
   }
 
   // -------------------------------------------------------------------------
@@ -2574,9 +2618,9 @@ final class ConstraintEmitter {
    * One with nothing that may be NULL is emitted as is.
    */
   static void emitCheck(LogicalTypesParser.Check_exprContext ctx, StringBuilder sb) {
-    StringBuilder whenFalse = new StringBuilder();
-    if ((emitTruth(ctx.check_expr_or(), false, whenFalse) & MAY_BE_NULL) != 0) {
-      sb.append('!').append(whenFalse);
+    StringBuilder notFalse = new StringBuilder();
+    if ((emitTruth(ctx.check_expr_or(), true, true, notFalse) & MAY_BE_NULL) != 0) {
+      sb.append(notFalse);
     } else {
       visitCheckExpr(ctx, sb);
     }
@@ -2585,6 +2629,9 @@ final class ConstraintEmitter {
   // emitTruth's result: a predicate may be NULL; a predicate's NULL can't be told.
   static final int MAY_BE_NULL = 1;
   static final int UNTOLD = 2;
+  // A "not FALSE" or "not TRUE" form whose top is an unbracketed ||, which an && joining it
+  // brackets; || binds loosest, so it needs none elsewhere.
+  private static final int BARE_OR = 8;
 
   /**
    * A condition true only when SQL's is {@code truth} (TRUE, or with {@code truth} false,
@@ -2594,29 +2641,39 @@ final class ConstraintEmitter {
    */
   static int emitTruth(
       LogicalTypesParser.Check_expr_orContext or, boolean truth, StringBuilder sb) {
+    return emitTruth(or, truth, false, sb);
+  }
+
+  /**
+   * {@link #emitTruth}, or with {@code nullAs} its negation the other way round: true unless
+   * SQL's is FALSE (with {@code truth}), or TRUE, so a predicate that may be NULL is true then.
+   * A CHECK is "not FALSE", which reads as its NULL test or its predicate.
+   */
+  static int emitTruth(LogicalTypesParser.Check_expr_orContext or, boolean truth,
+      boolean nullAs, StringBuilder sb) {
     List<LogicalTypesParser.Check_expr_andContext> ands = or.check_expr_and();
     if (ands.size() == 1) {
-      return emitTruth(ands.get(0), truth, sb);
+      return emitTruth(ands.get(0), truth, nullAs, sb);
     }
-    return emitJunction(or, ands.size(), (i, t, out) -> emitTruth(ands.get(i), t, out),
-        !truth, truth, sb);
+    return emitJunction(or, ands.size(), (i, t, n, out) -> emitTruth(ands.get(i), t, n, out),
+        !truth, truth, nullAs, sb);
   }
 
-  private static int emitTruth(
-      LogicalTypesParser.Check_expr_andContext and, boolean truth, StringBuilder sb) {
+  private static int emitTruth(LogicalTypesParser.Check_expr_andContext and, boolean truth,
+      boolean nullAs, StringBuilder sb) {
     List<LogicalTypesParser.Check_expr_unary_notContext> nots = and.check_expr_unary_not();
     if (nots.size() == 1) {
-      return emitTruth(nots.get(0), truth, sb);
+      return emitTruth(nots.get(0), truth, nullAs, sb);
     }
-    return emitJunction(and, nots.size(), (i, t, out) -> emitTruth(nots.get(i), t, out),
-        truth, truth, sb);
+    return emitJunction(and, nots.size(), (i, t, n, out) -> emitTruth(nots.get(i), t, n, out),
+        truth, truth, nullAs, sb);
   }
 
-  private static int emitTruth(
-      LogicalTypesParser.Check_expr_unary_notContext not, boolean truth, StringBuilder sb) {
+  private static int emitTruth(LogicalTypesParser.Check_expr_unary_notContext not,
+      boolean truth, boolean nullAs, StringBuilder sb) {
     if (not instanceof LogicalTypesParser.CheckExprNotContext) {
-      return emitTruth(
-          ((LogicalTypesParser.CheckExprNotContext) not).check_expr_unary_not(), !truth, sb);
+      return emitTruth(((LogicalTypesParser.CheckExprNotContext) not).check_expr_unary_not(),
+          !truth, nullAs, sb);
     }
     LogicalTypesParser.Check_expr_isnullContext is =
         ((LogicalTypesParser.CheckExprNotPassContext) not).check_expr_isnull();
@@ -2625,31 +2682,61 @@ final class ConstraintEmitter {
       if (c instanceof LogicalTypesParser.CheckParenContext
           && ((LogicalTypesParser.CheckParenContext) c).indirection() == null) {
         // Cached and size-checked, as nested AND and OR may repeat their operands.
-        return cachedTruth(
-            ((LogicalTypesParser.CheckParenContext) c).check_expr().check_expr_or(), truth, sb);
+        return cachedTruth(((LogicalTypesParser.CheckParenContext) c).check_expr()
+            .check_expr_or(), truth, nullAs, sb);
       }
     }
     if (is.IS() == null && is.check_expr_compare().check_expr_between().size() == 1
         && is.check_expr_compare().check_expr_between(0).BETWEEN() == null
         && givesNullAsNull(is.check_expr_compare().check_expr_between(0).check_expr_in(0))) {
       // Its CEL gives NULL as null, which equals neither true nor false.
-      sb.append("(dyn(");
+      sb.append(nullAs ? "dyn(" : "(dyn(");
       visitIs(is, sb);
-      sb.append(") == ").append(truth).append(')');
+      sb.append(nullAs ? ") != " : ") == ").append(nullAs != truth).append(nullAs ? "" : ")");
       return MAY_BE_NULL;
     }
     if (is.IS() == null && is.check_expr_compare().check_expr_between().size() == 1
         && is.check_expr_compare().check_expr_between(0).BETWEEN() != null) {
-      return emitBetweenTruth(is.check_expr_compare().check_expr_between(0), truth, sb);
+      return emitBetweenTruth(is.check_expr_compare().check_expr_between(0), truth, nullAs,
+          sb);
     }
     LogicalTypesParser.C_exprContext leaf =
         is.IS() == null ? ConstraintResolver.leafPrimary(is.check_expr_compare()) : null;
     if (leaf instanceof LogicalTypesParser.CheckFuncContext
         && ConstraintNullTest.isQuantifier((LogicalTypesParser.CheckFuncContext) leaf)) {
-      return emitQuantifierTruth((LogicalTypesParser.CheckFuncContext) leaf, truth, sb);
+      return emitQuantifierTruth((LogicalTypesParser.CheckFuncContext) leaf, truth, nullAs,
+          sb);
+    }
+    if (is.IS() != null && !truth
+        && ConstraintResolver.isHasCompatible(is.check_expr_compare(), EMIT_VCTX.get())) {
+      // NOT of a selection's IS [NOT] NULL is the opposite test, as the generator writes it.
+      StringBuilder emitted = new StringBuilder();
+      visitCompare(is.check_expr_compare(), emitted);
+      sb.append(nullTest(ConstraintResolver.selectionPathCompare(is.check_expr_compare()),
+          emitted.toString(), is.NOT() != null));
+      return 0;
     }
     String isNull = is.IS() != null ? null : ConstraintNullTest.of(is.check_expr_compare());
     boolean guarded = isNull != null && !ConstraintNullTest.NEVER.equals(isNull);
+    int flags = guarded ? MAY_BE_NULL : is.IS() == null && isNull == null ? UNTOLD : 0;
+    if (nullAs) {
+      // Its NULL test first, so a runtime that only short-circuits never reads a NULL. One that
+      // may raise, as a predicate that may raise has, is a ternary's condition: || would let a
+      // true predicate, as CEL gives null == null, swallow its error.
+      boolean raises = guarded && mayRaise(is);
+      if (guarded) {
+        sb.append(raises ? "(" : "").append(isNull).append(raises ? " ? true : " : " || ");
+      }
+      if (truth && bindsTight(is)) {
+        visitIs(is, sb);
+      } else {
+        sb.append(truth ? "(" : "!(");
+        visitIs(is, sb);
+        sb.append(')');
+      }
+      sb.append(raises ? ")" : "");
+      return guarded && !raises ? flags | BARE_OR : flags;
+    }
     sb.append('(');
     if (guarded) {
       sb.append(isNull).append(" ? false : ");
@@ -2657,7 +2744,40 @@ final class ConstraintEmitter {
     sb.append(truth ? "(" : "!(");
     visitIs(is, sb);
     sb.append("))");
-    return guarded ? MAY_BE_NULL : is.IS() == null && isNull == null ? UNTOLD : 0;
+    return flags;
+  }
+
+  // Their CEL may be a ternary, which binds looser than ||.
+  private static final Set<String> TERNARY_FUNCS =
+      Set.of("COALESCE", "NULLIF", "GREATEST", "LEAST");
+
+  /**
+   * True if a predicate's CEL binds tighter than && and ||, by its parse tree: a comparison, IN,
+   * LIKE, column or plain function call. One whose CEL may be a ternary, as a CASE's or
+   * COALESCE's is, isn't.
+   */
+  private static boolean bindsTight(LogicalTypesParser.Check_expr_isnullContext is) {
+    LogicalTypesParser.Check_expr_compareContext compare = is.check_expr_compare();
+    if (is.IS() != null || compare.check_expr_between().size() == 2) {
+      return is.IS() == null;
+    }
+    LogicalTypesParser.Check_expr_betweenContext between = compare.check_expr_between(0);
+    if (between.BETWEEN() != null) {
+      return false;
+    }
+    LogicalTypesParser.Check_expr_inContext in = between.check_expr_in(0);
+    if (in.IN() != null || in.check_expr_like().LIKE() != null) {
+      return true;
+    }
+    LogicalTypesParser.C_exprContext c = ConstraintResolver.leafPrimary(compare);
+    if (c instanceof LogicalTypesParser.CheckColumnRefContext) {
+      return true;
+    }
+    LogicalTypesParser.Func_applicationContext app =
+        c instanceof LogicalTypesParser.CheckFuncContext
+            ? ((LogicalTypesParser.CheckFuncContext) c).func_expr().func_application() : null;
+    return app != null
+        && !TERNARY_FUNCS.contains(app.identifier().getText().toUpperCase(java.util.Locale.ROOT));
   }
 
   // True if evaluating node can raise an error SQL raises too: a division, CAST, PARSE_JSON or
@@ -2706,35 +2826,45 @@ final class ConstraintEmitter {
 
   // emitTruth of operand i in a truth.
   private interface OperandTruth {
-    int emit(int i, boolean truth, StringBuilder sb);
+    int emit(int i, boolean truth, boolean nullAs, StringBuilder sb);
   }
 
   /**
-   * The operands' truths joined by && when {@code all}, else ||. A NULL operand is false there,
-   * which cel-java's && lets swallow another's error, so where one may raise an error they're
-   * joined only once no operand decides it the other way.
+   * The operands' truths joined by && when {@code all}, else ||. A NULL operand is false there
+   * (true with {@code nullAs}), which && (||) lets swallow another's error, so where one may
+   * raise an error they're joined only once no operand decides it the other way; with
+   * {@code nullAs}, as the negation of the other truth, which does that.
    */
   private static int emitJunction(ParseTree node, int count, OperandTruth operand,
-      boolean all, boolean truth, StringBuilder sb) {
-    StringBuilder joined = new StringBuilder("(");
+      boolean all, boolean truth, boolean nullAs, StringBuilder sb) {
+    // With nullAs, the join is bare, an && bracketing an operand whose top is ||.
+    StringBuilder joined = new StringBuilder(nullAs ? "" : "(");
     int flags = 0;
     for (int i = 0; i < count; i++) {
       if (i > 0) {
         joined.append(all ? " && " : " || ");
       }
-      flags |= operand.emit(i, truth, joined);
+      StringBuilder op = new StringBuilder();
+      int opFlags = operand.emit(i, truth, nullAs, op);
+      flags |= opFlags & ~BARE_OR;
+      boolean bracket = all && (opFlags & BARE_OR) != 0;
+      joined.append(bracket ? "(" : "").append(op).append(bracket ? ")" : "");
     }
-    joined.append(')');
-    if (!all || (flags & MAY_BE_NULL) == 0 || !mayRaise(node)) {
+    joined.append(nullAs ? "" : ")");
+    if (all == nullAs || (flags & MAY_BE_NULL) == 0 || !mayRaise(node)) {
       sb.append(joined);
-      return flags;
+      return nullAs && !all ? flags | BARE_OR : flags;
+    }
+    if (nullAs) {
+      sb.append('!');
+      return emitJunction(node, count, operand, !all, !truth, false, sb);
     }
     sb.append("((");
     for (int i = 0; i < count; i++) {
       if (i > 0) {
         sb.append(" || ");
       }
-      operand.emit(i, !truth, sb);
+      operand.emit(i, !truth, false, sb);
     }
     sb.append(") ? false : ").append(joined).append(')');
     return flags;
@@ -2747,7 +2877,12 @@ final class ConstraintEmitter {
    */
   static int emitQuantifierTruth(
       LogicalTypesParser.CheckFuncContext func, boolean truth, StringBuilder sb) {
-    int flags = quantifierFold(func.func_expr().func_application(), truth, sb);
+    return emitQuantifierTruth(func, truth, false, sb);
+  }
+
+  private static int emitQuantifierTruth(LogicalTypesParser.CheckFuncContext func,
+      boolean truth, boolean nullAs, StringBuilder sb) {
+    int flags = quantifierFold(func.func_expr().func_application(), truth, nullAs, sb);
     if ((flags & NATIVE) != 0) {
       sb.append(truth ? "(" : "!(");
       visitCExpr(func, sb);
@@ -2770,19 +2905,19 @@ final class ConstraintEmitter {
     boolean folds = vctx != null && !vctx.isTypeOnly() && app.check_expr_list() != null
         && app.check_expr_list().check_expr().size() == 3;
     StringBuilder whenTrue = new StringBuilder();
-    if (!folds || (quantifierFold(app, true, whenTrue) & NATIVE) != 0) {
+    if (!folds || (quantifierFold(app, true, false, whenTrue) & NATIVE) != 0) {
       asIs.run();
       return;
     }
     StringBuilder whenFalse = new StringBuilder();
-    quantifierFold(app, false, whenFalse);
+    quantifierFold(app, false, false, whenFalse);
     sb.append('(').append(whenTrue).append(" ? true : (").append(whenFalse)
         .append(" ? false : dyn(null)))");
   }
 
   // The three-valued fold of EVERY, ANY or ONE in a truth, or NATIVE with nothing emitted.
-  private static int quantifierFold(
-      LogicalTypesParser.Func_applicationContext app, boolean truth, StringBuilder sb) {
+  private static int quantifierFold(LogicalTypesParser.Func_applicationContext app,
+      boolean truth, boolean nullAs, StringBuilder sb) {
     List<LogicalTypesParser.Check_exprContext> args = app.check_expr_list().check_expr();
     String name = app.identifier().getText().toUpperCase(java.util.Locale.ROOT);
     ConstraintValidationContext outer = EMIT_VCTX.get();
@@ -2795,23 +2930,36 @@ final class ConstraintEmitter {
         ConstraintResolver.resolveCollectionElementType(args.get(0), outer)));
     // ONE takes both of its body's truths.
     boolean one = "ONE".equals(name);
+    // exists() with nullAs lets a NULL body, true there, swallow another's error.
+    boolean every = "EVERY".equals(name) == truth;
+    if (nullAs && (one || !every && mayRaise(args.get(2)))) {
+      StringBuilder negated = new StringBuilder();
+      int flags = quantifierFold(app, !truth, false, negated);
+      if ((flags & NATIVE) == 0) {
+        sb.append('!').append(negated);
+      }
+      return flags;
+    }
     StringBuilder bodyTruth = new StringBuilder();
     StringBuilder bodyFalse = new StringBuilder();
     int flags;
     EMIT_VCTX.set(body);
     try {
-      flags = cachedTruth(args.get(2).check_expr_or(), truth || one, bodyTruth);
+      flags = cachedTruth(args.get(2).check_expr_or(), truth || one, nullAs, bodyTruth);
       if (one) {
-        flags |= cachedTruth(args.get(2).check_expr_or(), false, bodyFalse);
+        flags |= cachedTruth(args.get(2).check_expr_or(), false, false, bodyFalse);
       }
     } finally {
       EMIT_VCTX.set(outer);
     }
+    // The body is a macro's argument, which needs no brackets.
+    flags &= ~BARE_OR;
     if (flags == 0 && ConstraintNullTest.NEVER.equals(collectionNull)) {
       return NATIVE;
     }
     StringBuilder coll = new StringBuilder();
     emitWrappedReceiver(args.get(0), coll);
+    boolean bodyMayBeNull = (flags & MAY_BE_NULL) != 0;
     String fold;
     if (one) {
       // TRUE when exactly one body is TRUE and every other FALSE; FALSE when two or more are
@@ -2823,42 +2971,50 @@ final class ConstraintEmitter {
               + bodyFalse + ") : false)"
           : "((" + coll + ".exists(" + iterVar + ", " + bodyTruth + ") && !" + exactlyOne
               + ") || " + coll + ".all(" + iterVar + ", " + bodyFalse + "))";
-    } else if ("EVERY".equals(name) == truth && (flags & MAY_BE_NULL) != 0
-        && mayRaise(args.get(2))) {
+    } else if (every && !nullAs && bodyMayBeNull && mayRaise(args.get(2))) {
       // all() lets a NULL element, false there, swallow another's error, so it's taken only
       // once no element decides it the other way.
       StringBuilder decides = new StringBuilder();
       EMIT_VCTX.set(body);
       try {
-        cachedTruth(args.get(2).check_expr_or(), !truth, decides);
+        cachedTruth(args.get(2).check_expr_or(), !truth, false, decides);
       } finally {
         EMIT_VCTX.set(outer);
       }
       fold = "(" + coll + ".exists(" + iterVar + ", " + decides + ") ? false : " + coll
           + ".all(" + iterVar + ", " + bodyTruth + "))";
     } else {
-      fold = coll + ("EVERY".equals(name) == truth ? ".all(" : ".exists(") + iterVar + ", "
-          + bodyTruth + ")";
+      fold = coll + (every ? ".all(" : ".exists(") + iterVar + ", " + bodyTruth + ")";
+    }
+    boolean collectionMayBeNull = !ConstraintNullTest.NEVER.equals(collectionNull);
+    if (nullAs && collectionMayBeNull && mayRaise(args.get(0))) {
+      // A ternary, as || would let a true fold swallow the collection test's error.
+      sb.append('(').append(collectionNull).append(" ? true : ").append(fold).append(')');
+      return flags | MAY_BE_NULL;
+    }
+    if (nullAs && collectionMayBeNull) {
+      sb.append(collectionNull).append(" || ").append(fold);
+      return flags | MAY_BE_NULL | BARE_OR;
     }
     falseIfNull(collectionNull, fold, sb);
-    return flags | (ConstraintNullTest.NEVER.equals(collectionNull) ? 0 : MAY_BE_NULL);
+    return flags | (collectionMayBeNull ? MAY_BE_NULL : 0);
   }
 
   // A parenthesized or quantifier body's emitTruth, once per translation, context and truth.
   // Nesting may repeat it, so one over CEL's size limit is refused at once.
-  private static int cachedTruth(
-      LogicalTypesParser.Check_expr_orContext body, boolean truth, StringBuilder sb) {
+  private static int cachedTruth(LogicalTypesParser.Check_expr_orContext body, boolean truth,
+      boolean nullAs, StringBuilder sb) {
     EmitCache cache = EMIT_CACHE.get();
     ConstraintValidationContext vctx = EMIT_VCTX.get();
     if (cache == null || vctx == null) {
-      return emitTruth(body, truth, sb);
+      return emitTruth(body, truth, nullAs, sb);
     }
     Truth[] held = cache.truths.computeIfAbsent(vctx, k -> new IdentityHashMap<>())
-        .computeIfAbsent(body, k -> new Truth[2]);
-    int at = truth ? 0 : 1;
+        .computeIfAbsent(body, k -> new Truth[4]);
+    int at = (truth ? 0 : 1) + (nullAs ? 2 : 0);
     if (held[at] == null) {
       StringBuilder cel = new StringBuilder();
-      int flags = emitTruth(body, truth, cel);
+      int flags = emitTruth(body, truth, nullAs, cel);
       held[at] = new Truth(cel.toString(), flags);
       ConstraintCelChecker.checkSize(held[at].cel, true, cache.sourceSql);
     }
@@ -2971,6 +3127,15 @@ final class ConstraintEmitter {
    */
   static int emitBetweenTruth(
       LogicalTypesParser.Check_expr_betweenContext between, boolean truth, StringBuilder sb) {
+    return emitBetweenTruth(between, truth, false, sb);
+  }
+
+  /**
+   * {@link #emitBetweenTruth}, or with {@code nullAs} its negation the other way round. With
+   * bounds that are never NULL, both comparisons share the operand's NULL test, taken once.
+   */
+  private static int emitBetweenTruth(LogicalTypesParser.Check_expr_betweenContext between,
+      boolean truth, boolean nullAs, StringBuilder sb) {
     List<LogicalTypesParser.Check_expr_inContext> ins = between.check_expr_in();
     String a = ConstraintNullTest.of(ins.get(0));
     String lo = ConstraintNullTest.of(ins.get(1));
@@ -2988,6 +3153,24 @@ final class ConstraintEmitter {
     StringBuilder upper = new StringBuilder();
     emitBetweenLe(ins, 0, 2, upper);
     boolean holds = truth != (between.NOT() != null);
+    if (nullAs && (between.SYMMETRIC() != null || mayRaise(between))) {
+      // SYMMETRIC, and one that may raise, where || would let a NULL comparison or a true one
+      // swallow an error, as the negation of the other truth.
+      sb.append('!');
+      return emitBetweenTruth(between, !truth, false, sb);
+    }
+    if (nullAs) {
+      String neg = holds ? "" : "!";
+      if (ConstraintNullTest.NEVER.equals(lo) && ConstraintNullTest.NEVER.equals(hi)) {
+        sb.append(a).append(" || ").append(neg).append('(').append(lower).append(" && ")
+            .append(upper).append(')');
+        return MAY_BE_NULL | BARE_OR;
+      }
+      trueIfNull(ConstraintNullTest.either(lo, a), neg + "(" + lower + ")", sb);
+      sb.append(holds ? " && " : " || ");
+      trueIfNull(ConstraintNullTest.either(a, hi), neg + "(" + upper + ")", sb);
+      return holds ? MAY_BE_NULL : MAY_BE_NULL | BARE_OR;
+    }
     if (between.SYMMETRIC() != null) {
       StringBuilder ordered = new StringBuilder("(");
       emitBetweenLe(ins, 1, 2, ordered);
@@ -3021,6 +3204,15 @@ final class ConstraintEmitter {
       sb.append(')');
     }
     return MAY_BE_NULL;
+  }
+
+  // p, or true when isNull, which is tested first.
+  private static void trueIfNull(String isNull, String p, StringBuilder sb) {
+    if (ConstraintNullTest.NEVER.equals(isNull)) {
+      sb.append(p);
+    } else {
+      sb.append('(').append(isNull).append(" || ").append(p).append(')');
+    }
   }
 
   // p, or false when isNull.
