@@ -23,6 +23,7 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * A CEL expression the CHECK translator emits: a tree, compared by structure and printed once.
@@ -48,6 +49,11 @@ abstract class CelNode {
   static final CelNode TRUE = new Literal("true");
   static final CelNode FALSE = new Literal("false");
   static final CelNode NULL = new Literal("null");
+
+  // CEL's number, string and bytes tokens.
+  private static final Pattern LITERAL = Pattern.compile("(?:\\d+(?:\\.\\d+)?(?:[eE][+-]?\\d+)?"
+      + "|\\.\\d+(?:[eE][+-]?\\d+)?|0[xX][0-9a-fA-F]+)[uU]?"
+      + "|[bB]?(?:\"(?:[^\"\\\\]|\\\\.)*\"|'(?:[^'\\\\]|\\\\.)*')");
 
   private int hash;
   private int size = -1;
@@ -136,7 +142,18 @@ abstract class CelNode {
    * A literal, as CEL's token for it: a number, a quoted string or bytes.
    */
   static CelNode literal(String token) {
+    if (!LITERAL.matcher(token).matches()) {
+      throw new IllegalArgumentException("Not a CEL literal: " + token);
+    }
     return new Literal(token);
+  }
+
+  /**
+   * An int literal of {@code value}, a negative one as - before its magnitude.
+   */
+  static CelNode integer(long value) {
+    String digits = Long.toString(value);
+    return value < 0 ? negate(literal(digits.substring(1))) : literal(digits);
   }
 
   /**

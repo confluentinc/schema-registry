@@ -41,7 +41,8 @@ import io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesPars
  * unquoting helpers. Everyone in the constraint package shares those —
  * keeping them here avoids an extra utility file for three small helpers.
  *
- * <p>The translator emits a {@link CelNode} tree and prints it — no CEL evaluator is bundled or
+ * <p>The translator emits a {@link CelNode} tree, shortens it by the rules of logic
+ * ({@link CelSimplifier}) and prints it — no CEL evaluator is bundled or
  * required. The output is a well-formed CEL expression string that consumers
  * (the SR rules engine, Flink runtime, etc.) can evaluate with their own CEL
  * evaluator.
@@ -104,7 +105,7 @@ public final class ConstraintToCelTranslator {
       // Refused over CEL's size limit before it is printed.
       ConstraintCelChecker.checkSize(typed, false, ctx.getText());
       ConstraintCelChecker.checkSize(emitted, false, ctx.getText());
-      String cel = emitted.toString();
+      String cel = CelSimplifier.simplify(emitted).toString();
       // Post-emit safety net: strict cel-java type-check the result. Catches
       // type/overload mismatches the hand-coded validator passes don't cover
       // (compound expressions, function-result types, has() argument shape,

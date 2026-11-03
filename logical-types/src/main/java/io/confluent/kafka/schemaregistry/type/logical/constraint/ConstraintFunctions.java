@@ -375,7 +375,7 @@ final class ConstraintFunctions {
   private static CelNode emitRoundScale(LogicalTypesParser.Check_exprContext scale) {
     Long literal = tryLiteralIntValue(scale);
     if (literal != null) {
-      return CelNode.literal(String.valueOf(Math.min(literal, 38)));
+      return CelNode.integer(Math.min(literal, 38));
     }
     CelNode emitted = visitCheckExpr(scale);
     CelNode max = CelNode.literal("38");
@@ -875,7 +875,7 @@ final class ConstraintFunctions {
       int scale = ConstraintResolver.parseDecimalCastParams(pt.getText())[1];
       return CelNode.call("decimals.round", argDecimal ? ConstraintEmitter.emitDecimalValue(arg)
           : CelNode.call("decimal", emitCastArg(arg, nullArg)),
-          CelNode.literal(String.valueOf(scale)));
+          CelNode.integer(scale));
     }
 
     String celFn = celTypeFor(pt);

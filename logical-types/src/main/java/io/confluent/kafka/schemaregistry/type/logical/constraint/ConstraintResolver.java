@@ -62,15 +62,25 @@ final class ConstraintResolver {
     if (collType == null) {
       return null;
     }
-    if (collType.getType() == Schema.Type.ARRAY
-        || collType.getType() == Schema.Type.MULTISET) {
+    if (collType.getType() == Schema.Type.ARRAY) {
       return collType.getElementType();
     }
-    // CEL's all/exists/exists_one over a map bind its keys.
-    if (collType.getType() == Schema.Type.MAP) {
-      return collType.getKeyType();
+    // A MULTISET of strings is held as a map, whose keys CEL's all/exists/exists_one bind, as
+    // they bind a MAP's; a string key is never NULL there.
+    Schema bound = collType.getType() == Schema.Type.MULTISET ? collType.getElementType()
+        : collType.getType() == Schema.Type.MAP ? collType.getKeyType() : null;
+    return bound == null ? null : notNullIfString(bound);
+  }
+
+  private static Schema notNullIfString(Schema type) {
+    switch (type.getType()) {
+      case VARCHAR:
+        return Schema.createVarchar(type.getLength()).setNullable(false);
+      case CHAR:
+        return Schema.createChar(type.getLength()).setNullable(false);
+      default:
+        return type;
     }
-    return null;
   }
 
   /**

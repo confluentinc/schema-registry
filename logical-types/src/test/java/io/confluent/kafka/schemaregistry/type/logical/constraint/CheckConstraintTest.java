@@ -232,14 +232,14 @@ class CheckConstraintTest {
 
   @Test
   void doubleNotNests() {
-    assertEquals("!(!(this.x > 0))", translateCheckNotNull("NOT NOT x > 0"));
+    assertEquals("this.x > 0", translateCheckNotNull("NOT NOT x > 0"));
   }
 
   @Test
   void notAppliedToIsNull() {
     // `NOT x IS NULL` parses as NOT applied to (x IS NULL); the IS NULL
     // form emits the paren-wrapped has() guard, and NOT must wrap it.
-    assertEquals("!(!has(this.x) || dyn(this.x) == null)",
+    assertEquals("has(this.x) && dyn(this.x) != null",
         translateCheck("NOT x IS NULL"));
   }
 
@@ -703,8 +703,7 @@ class CheckConstraintTest {
     // Searched-form WHEN condition is now defensively wrapped in parens
     // (so a low-precedence operator inside it can't mis-bind in CEL).
     // A condition that may be NULL is false then, as SQL takes a branch only when TRUE.
-    assertEquals("((!has(this.x) || dyn(this.x) == null ? false : this.x > 0) ? 'pos' : 'neg') =="
-            + " 'pos'",
+    assertEquals("(has(this.x) && dyn(this.x) != null && this.x > 0 ? 'pos' : 'neg') == 'pos'",
         translateCheck("CASE WHEN x > 0 THEN 'pos' ELSE 'neg' END = 'pos'"));
   }
 
@@ -712,9 +711,8 @@ class CheckConstraintTest {
   void searchedCaseMultipleWhens() {
     String result = translateCheck(
         "CASE WHEN x > 100 THEN 'big' WHEN x > 0 THEN 'small' ELSE 'zero' END = 'big'");
-    assertEquals("((!has(this.x) || dyn(this.x) == null ? false : this.x > 100) ? 'big' :"
-            + " ((!has(this.x) || dyn(this.x) == null ? false : this.x > 0) ? 'small' : 'zero'))"
-            + " == 'big'", result);
+    assertEquals("(has(this.x) && dyn(this.x) != null && this.x > 100 ? 'big' : (has(this.x) &&"
+            + " dyn(this.x) != null && this.x > 0 ? 'small' : 'zero')) == 'big'", result);
   }
 
   @Test
@@ -724,9 +722,8 @@ class CheckConstraintTest {
     // Simple CASE: subject and each WHEN value are individually wrapped in
     // parens around the implicit `==`, so a low-precedence operator inside
     // either side can't mis-bind in CEL. A NULL subject matches no WHEN value.
-    assertEquals("((!has(this.x) || dyn(this.x) == null ? false : this.x == 1) ? 'one' :"
-            + " ((!has(this.x) || dyn(this.x) == null ? false : this.x == 2) ? 'two' : 'other'))"
-            + " == 'one'", result);
+    assertEquals("(has(this.x) && dyn(this.x) != null && this.x == 1 ? 'one' : (has(this.x) &&"
+            + " dyn(this.x) != null && this.x == 2 ? 'two' : 'other')) == 'one'", result);
   }
 
   @Test
@@ -760,11 +757,10 @@ class CheckConstraintTest {
     // STRING vs CHAR → same category ("string"); should NOT be rejected.
     String result = translateCheck(
         "CASE WHEN x > 0 THEN name ELSE 'default' END = 'foo'");
-    assertEquals("dyn((!has(this.x) || dyn(this.x) == null ? false : this.x > 0) ?"
-            + " (!has(this.name) || dyn(this.name) == null ? dyn(null) : this.name) : 'default')"
-            + " == null || ((!has(this.x) || dyn(this.x) == null ? false : this.x > 0) ?"
-            + " (!has(this.name) || dyn(this.name) == null ? dyn(null) : this.name) : 'default')"
-            + " == 'foo'", result);
+    assertEquals("dyn(has(this.x) && dyn(this.x) != null && this.x > 0 ? (!has(this.name) ||"
+            + " dyn(this.name) == null ? dyn(null) : this.name) : 'default') == null ||"
+            + " (has(this.x) && dyn(this.x) != null && this.x > 0 ? (!has(this.name) ||"
+            + " dyn(this.name) == null ? dyn(null) : this.name) : 'default') == 'foo'", result);
   }
 
   @Test
@@ -772,10 +768,8 @@ class CheckConstraintTest {
     // INT and DOUBLE both fall in the "numeric" category — accepted.
     String result = translateCheck(
         "CASE WHEN x > 0 THEN x ELSE 0 END > 0");
-    assertEquals("dyn((!has(this.x) || dyn(this.x) == null ? false : this.x > 0) ? (!has(this.x)"
-            + " || dyn(this.x) == null ? dyn(null) : this.x) : 0) == null || ((!has(this.x) ||"
-            + " dyn(this.x) == null ? false : this.x > 0) ? (!has(this.x) || dyn(this.x) == null"
-            + " ? dyn(null) : this.x) : 0) > 0", result);
+    assertEquals("dyn(has(this.x) && dyn(this.x) != null && this.x > 0 ? this.x : 0) == null ||"
+            + " (has(this.x) && dyn(this.x) != null && this.x > 0 ? this.x : 0) > 0", result);
   }
 
   @Test
@@ -793,9 +787,8 @@ class CheckConstraintTest {
   void simpleCaseSubjectAndWhenValuesMatchAccepted() {
     String result = translateCheck(
         "CASE x WHEN 1 THEN 'one' WHEN 2 THEN 'two' ELSE 'other' END = 'one'");
-    assertEquals("((!has(this.x) || dyn(this.x) == null ? false : this.x == 1) ? 'one' :"
-            + " ((!has(this.x) || dyn(this.x) == null ? false : this.x == 2) ? 'two' : 'other'))"
-            + " == 'one'", result);
+    assertEquals("(has(this.x) && dyn(this.x) != null && this.x == 1 ? 'one' : (has(this.x) &&"
+            + " dyn(this.x) != null && this.x == 2 ? 'two' : 'other')) == 'one'", result);
   }
 
   @Test
@@ -806,8 +799,8 @@ class CheckConstraintTest {
     String result = translateCheck(
         "(CASE WHEN x > 0 THEN (CASE WHEN x > 100 THEN 'big' ELSE 'small' END)"
             + " ELSE 'neg' END) = 'small'");
-    assertEquals("((!has(this.x) || dyn(this.x) == null ? false : this.x > 0) ? ((!has(this.x) ||"
-            + " dyn(this.x) == null ? false : this.x > 100) ? 'big' : 'small') : 'neg') == 'small'", result);
+    assertEquals("(has(this.x) && dyn(this.x) != null && this.x > 0 ? (this.x > 100 ? 'big' :"
+            + " 'small') : 'neg') == 'small'", result);
   }
 
   @Test
@@ -1090,8 +1083,7 @@ class CheckConstraintTest {
 
   @Test
   void isNullCombinedWithLogical() {
-    assertEquals("has(this.x) && dyn(this.x) != null && (!has(this.x) || dyn(this.x) == null ||"
-            + " this.x > 0)",
+    assertEquals("has(this.x) && dyn(this.x) != null && this.x > 0",
         translateCheck("x IS NOT NULL AND x > 0"));
   }
 
@@ -1239,8 +1231,7 @@ class CheckConstraintTest {
 
   @Test
   void betweenWithLogical() {
-    assertEquals("!has(this.age) || dyn(this.age) == null || (0 <= this.age && this.age <= 150)"
-            + " || !has(this.age) || dyn(this.age) == null",
+    assertEquals("!has(this.age) || dyn(this.age) == null || (0 <= this.age && this.age <= 150)",
         translateCheck("age BETWEEN 0 AND 150 OR age IS NULL"));
   }
 
@@ -1539,8 +1530,7 @@ class CheckConstraintTest {
     // NULL when either argument is, as in Flink.
     assertEquals(
         "!has(this.a) || dyn(this.a) == null || !has(this.b) || dyn(this.b) == null ||"
-            + " (!has(this.a) || dyn(this.a) == null || !has(this.b) || dyn(this.b) == null ?"
-            + " dyn(null) : math.greatest(this.a, this.b)) > 10",
+            + " math.greatest(this.a, this.b) > 10",
         translateCheck("GREATEST(a, b) > 10"));
   }
 
@@ -1548,8 +1538,7 @@ class CheckConstraintTest {
   void leastTwoArgs() {
     assertEquals(
         "!has(this.a) || dyn(this.a) == null || !has(this.b) || dyn(this.b) == null ||"
-            + " (!has(this.a) || dyn(this.a) == null || !has(this.b) || dyn(this.b) == null ?"
-            + " dyn(null) : math.least(this.a, this.b)) > 0",
+            + " math.least(this.a, this.b) > 0",
         translateCheck("LEAST(a, b) > 0"));
   }
 
@@ -2068,9 +2057,8 @@ class CheckConstraintTest {
   @Test
   void positionFrom() {
     assertEquals("!has(this.name) || dyn(this.name) == null || !has(this.qty) || dyn(this.qty) =="
-            + " null || (!has(this.name) || dyn(this.name) == null || !has(this.qty) ||"
-            + " dyn(this.qty) == null ? dyn(null) : ('@' == '' ? 1 : (this.qty > size(this.name)"
-            + " ? 0 : this.name.indexOf('@', this.qty <= 1 ? 0 : this.qty - 1) + 1))) > 0",
+            + " null || ('@' == '' ? 1 : (this.qty > size(this.name) ? 0 : this.name.indexOf('@',"
+            + " this.qty <= 1 ? 0 : this.qty - 1) + 1)) > 0",
         translateCheck("POSITION('@' IN name FROM qty) > 0"));
   }
 
@@ -2484,7 +2472,7 @@ class CheckConstraintTest {
   void aMapQuantifierBindsEachKey() throws Exception {
     // CEL's all/exists/exists_one over a map bind its keys; a value is reached by m[k].
     String columns = "m MAP<STRING, INT NOT NULL> NOT NULL, s STRING";
-    assertEquals("this.m.all(k, dyn(k) == null || k != 'zz')",
+    assertEquals("this.m.all(k, k != 'zz')",
         translateCheckOver(columns, "EVERY(m, k, k <> 'zz')"));
     Map<String, Object> self = new HashMap<>();
     self.put("m", Map.of("a", 1, "b", 2));
@@ -3102,13 +3090,12 @@ class CheckConstraintTest {
     // A NOT NULL step is present whenever its parent is, and Protobuf's has() is false for a
     // zero, so only the deepest nullable step of a path is tested.
     String columns = "a INT NOT NULL, n INT, r STRUCT(x INT NOT NULL, y INT)";
-    assertEquals("(true ? this.a : 7) == 0", translateCheckOver(columns, "COALESCE(a, 7) = 0"));
+    assertEquals("this.a == 0", translateCheckOver(columns, "COALESCE(a, 7) = 0"));
     assertEquals("(has(this.n) && dyn(this.n) != null ? this.n : 7) == 0",
         translateCheckOver(columns, "COALESCE(n, 7) = 0"));
     assertEquals("(has(this.r) && dyn(this.r) != null ? this.r.x : 7) == 0",
         translateCheckOver(columns, "COALESCE(r.x, 7) = 0"));
-    assertEquals("!has(this.n) || dyn(this.n) == null || (!has(this.n) || dyn(this.n) == null ?"
-            + " dyn(null) : math.greatest(this.a, this.n)) == 0",
+    assertEquals("!has(this.n) || dyn(this.n) == null || math.greatest(this.a, this.n) == 0",
         translateCheckOver(columns, "GREATEST(a, n) = 0"));
     assertEquals("!has(this.r) || dyn(this.r) == null",
         translateCheckOver(columns, "r.x IS NULL"));
@@ -3118,7 +3105,7 @@ class CheckConstraintTest {
         translateCheckOver(columns, "COALESCE((r).x, 7) = 0"));
     String arrays = "items STRUCT(x INT NOT NULL) NOT NULL ARRAY NOT NULL, "
         + "maybe STRUCT(x INT NOT NULL) ARRAY NOT NULL";
-    assertEquals("this.items.all(e, (true ? e.x : 7) == 0)",
+    assertEquals("this.items.all(e, e.x == 0)",
         translateCheckOver(arrays, "EVERY(items, e, COALESCE(e.x, 7) = 0)"));
     assertEquals("this.maybe.all(e, (dyn(e) != null ? e.x : 7) == 0)",
         translateCheckOver(arrays, "EVERY(maybe, e, COALESCE(e.x, 7) = 0)"));
@@ -3269,7 +3256,7 @@ class CheckConstraintTest {
     // An operator or function of a NULL is NULL, so it is tested by its inputs before it's
     // evaluated, which fails on a NULL or, as JSON leaves a NULL field out, a missing key.
     String columns = "ni INT, ns STRING, nd DECIMAL(10, 2), arr INT ARRAY NOT NULL";
-    assertEquals("!has(this.ni) || dyn(this.ni) == null ? true : dyn(this.ni + 1) == null",
+    assertEquals("!has(this.ni) || dyn(this.ni) == null || dyn(this.ni + 1) == null",
         translateCheckOver(columns, "ni + 1 IS NULL"));
     Map<String, Object> absent = new HashMap<>();
     absent.put("arr", List.of(1));
@@ -3326,8 +3313,8 @@ class CheckConstraintTest {
     // tested before it is compared, widened or, as JSON leaves a NULL field out, read.
     String columns = "x DOUBLE NOT NULL, nd DECIMAL(10, 2), i INT NOT NULL, ni INT, nx DOUBLE, "
         + "nb BIGINT, r STRUCT(a BIGINT), s STRING NOT NULL, ns STRING";
-    String niNull = "(!has(this.ni) || dyn(this.ni) == null)";
-    assertEquals("dyn(this.i == 1 || (!" + niNull + " && this.i == this.ni) ? true : ("
+    assertEquals("dyn(this.i == 1 || (has(this.ni) && dyn(this.ni) != null && this.i == this.ni)"
+        + " ? true : ("
         + "!has(this.ni) || dyn(this.ni) == null ? dyn(null) : false)) != false",
         translateCheckOver(columns, "i IN (1, ni)"));
     Map<String, Object> absent = new HashMap<>();
@@ -3393,8 +3380,8 @@ class CheckConstraintTest {
     // NULL makes one NULL only when the rest doesn't decide it.
     String columns = "i INT NOT NULL, x DOUBLE NOT NULL, s STRING NOT NULL, t BOOLEAN NOT NULL, "
         + "ni INT, nb BIGINT, nd DECIMAL(10, 2), nx DOUBLE, ns STRING";
-    assertEquals("!has(this.ni) || dyn(this.ni) == null ? true : (1 <= this.ni && this.ni <= 2 ?"
-            + " false : false)",
+    assertEquals("!has(this.ni) || dyn(this.ni) == null || (1 <= this.ni && this.ni <= 2 ? false"
+            + " : false)",
         translateCheckOver(columns, "(ni BETWEEN 1 AND 2) IS NULL"));
     Map<String, Object> absent = Map.of("i", 0, "x", 0.5, "s", "a", "t", true);
     Map<String, Object> present = new HashMap<>(absent);
@@ -3621,7 +3608,7 @@ class CheckConstraintTest {
     // missing, as SQL gives it.
     String columns = "mv MAP<STRING, INT> NOT NULL, nm MAP<STRING, INT>, na INT NOT NULL ARRAY, "
         + "an INT ARRAY NOT NULL, i INT NOT NULL, ni INT";
-    assertEquals("size(this.an) < 5 || dyn(this.an[5 - 1]) == null ? true : false",
+    assertEquals("size(this.an) < 5 || dyn(this.an[5 - 1]) == null",
         translateCheckOver(columns, "an[5] IS NULL"));
     Map<String, Object> mv = new HashMap<>();
     mv.put("k", null);
@@ -3764,6 +3751,67 @@ class CheckConstraintTest {
   }
 
   @Test
+  void aCheckIsShortenedByTheRulesOfLogic() throws Exception {
+    // A NULL test a sibling or a CASE condition has already made is left out, and adjacent
+    // operands with the same one share it.
+    String columns = "i INT NOT NULL, z INT NOT NULL, a INT, b INT, d DECIMAL(10, 2), t BOOLEAN";
+    String aNull = "!has(this.a) || dyn(this.a) == null";
+    String bNull = "!has(this.b) || dyn(this.b) == null";
+    String aSet = "has(this.a) && dyn(this.a) != null";
+    assertEquals(aNull + " || (this.a > 0 && this.a < 10)",
+        translateCheckOver(columns, "a > 0 AND a < 10"));
+    assertEquals("!has(this.d) || dyn(this.d) == null || (decimals.ge(this.d, decimal(\"0\"))"
+            + " && decimals.le(this.d, decimal(\"100\")))",
+        translateCheckOver(columns, "d >= 0 AND d <= 100"));
+    assertEquals(aNull + " || (this.a > 0 && (" + bNull + " || this.a + this.b > 0))",
+        translateCheckOver(columns, "a > 0 AND a + b > 0"));
+    assertEquals(aNull + " || this.a > 0 || this.a < -10",
+        translateCheckOver(columns, "a > 0 OR a < -10"));
+    assertEquals(aNull + " || this.a > 0", translateCheckOver(columns, "a IS NULL OR a > 0"));
+    assertEquals(aSet + " && this.a > 0", translateCheckOver(columns, "a IS NOT NULL AND a > 0"));
+    assertEquals(aNull + " || (this.a > 0 && (" + bNull + " || this.b > 0))",
+        translateCheckOver(columns, "a IS NULL OR (a > 0 AND b > 0)"));
+    assertEquals(aNull + " || " + bNull + " || math.greatest(this.a, this.b) > 0",
+        translateCheckOver(columns, "GREATEST(a, b) > 0"));
+    assertEquals("(" + aSet + " && this.a > 0 ? 1 : 2) == 1",
+        translateCheckOver(columns, "CASE WHEN a > 0 THEN 1 ELSE 2 END = 1"));
+    String caseValue = translateCheckOver(columns, "CASE WHEN a > 0 THEN a ELSE 0 END >= 0");
+    assertEquals("dyn(" + aSet + " && this.a > 0 ? this.a : 0) == null || (" + aSet
+        + " && this.a > 0 ? this.a : 0) >= 0", caseValue);
+    Object[][] rows = {
+        {"a > 0 AND a < 10", row("a", null), true},
+        {"a > 0 AND a < 10", row(), true},
+        {"a > 0 AND a < 10", row("a", 5), true},
+        {"a > 0 AND a < 10", row("a", 20), false},
+        {"a IS NOT NULL AND a > 0", row("a", null), false},
+        {"a IS NOT NULL AND a > 0", row(), false},
+        {"a IS NOT NULL AND a > 0", row("a", 1), true},
+        {"GREATEST(a, b) > 0", row("a", null, "b", -1), true},
+        {"GREATEST(a, b) > 0", row("a", 1, "b", -1), true},
+        {"GREATEST(a, b) > 0", row("a", -1, "b", -2), false},
+        {"CASE WHEN a > 0 THEN a ELSE 0 END >= 0", row("a", null), true},
+        {"CASE WHEN a > 0 THEN a ELSE 0 END >= 0", row("a", -3), true},
+    };
+    for (Object[] r : rows) {
+      @SuppressWarnings("unchecked")
+      Map<String, Object> self = new HashMap<>((Map<String, Object>) r[1]);
+      self.putIfAbsent("i", 1);
+      self.putIfAbsent("z", 1);
+      String cel = translateCheckOver(columns, (String) r[0]);
+      assertEquals(r[2], evalOver(cel, self), r[0] + " on " + self + " -> " + cel);
+    }
+    // Compared, a CASE's ternary stays one, so its branch's error still raises.
+    String compared = translateCheckOver(columns,
+        "(CASE WHEN a > 0 THEN i / z > 0 ELSE FALSE END) <> t");
+    assertEquals("!has(this.t) || dyn(this.t) == null || (" + aSet
+        + " && this.a > 0 ? this.i / this.z > 0 : false) != this.t", compared);
+    for (boolean t : new boolean[] {true, false}) {
+      assertThrows(Exception.class,
+          () -> evalOver(compared, Map.of("i", 1, "z", 0, "a", 5, "t", t)), compared);
+    }
+  }
+
+  @Test
   void aCheckReadsAsItsNullTestOrItsPredicate() throws Exception {
     // A CHECK that may be NULL passes unless it's FALSE, so it's its NULL test or its predicate;
     // one with a raising operand beside a NULL keeps the form that tests a deciding one first.
@@ -3793,7 +3841,8 @@ class CheckConstraintTest {
     assertEquals("!has(this.s) || dyn(this.s) == null || this.s.startsWith('a')",
         translateCheckOver(columns, "STARTS_WITH(s, 'a')"));
     assertTrue(translateCheckOver(columns, "a > 0 OR 1 / z > 0").startsWith("!("));
-    assertTrue(translateCheckOver(columns, "a BETWEEN 1 AND 10 / z").startsWith("!("));
+    assertEquals(aNull + " || (1 <= this.a && this.a <= 10 / this.z)",
+        translateCheckOver(columns, "a BETWEEN 1 AND 10 / z"));
     Object[][] rows = {
         {"amount >= 0", row("amount", null), true},
         {"amount >= 0", row("amount", CelDecimal.of(new BigDecimal("5.00"))), true},
@@ -4017,7 +4066,7 @@ class CheckConstraintTest {
     assertEquals(true, evalOver(inCase, Map.of("t", false, "i", 0)), inCase);
     assertEquals(true, evalOver(inCase, Map.of("t", true, "i", 5)), inCase);
     assertEquals(false, evalOver(inCase, Map.of("t", false, "i", 5)), inCase);
-    assertTrue(inCase.contains("(this.t ? (true ? dyn(null) : dyn(null)) : this.i)"), inCase);
+    assertTrue(inCase.contains("(this.t ? dyn(null) : this.i)"), inCase);
     for (String sql : List.of("COALESCE(CAST(NULL AS INT), i) = i",
         "(CAST(NULL AS INT)) IS NULL", "CAST(NULL AS BOOLEAN) OR t",
         "COALESCE(CAST(NULL AS BOOLEAN), t) = t", "CAST(NULL AS BYTES) IS NULL")) {
@@ -4133,8 +4182,7 @@ class CheckConstraintTest {
     // IS NULL of an expression tells its NULL from its inputs but still evaluates it, so a value
     // SQL fails on, such as bad JSON or a division by zero, fails here too.
     String columns = "v STRING, ni INT, b INT NOT NULL";
-    assertEquals("!has(this.v) || dyn(this.v) == null ? false : dyn(variants.parseJson(this.v))"
-            + " != null",
+    assertEquals("has(this.v) && dyn(this.v) != null && dyn(variants.parseJson(this.v)) != null",
         translateCheckOver(columns, "PARSE_JSON(v) IS NOT NULL"));
     Map<String, Object> bad = Map.of("v", "not-json", "ni", 5, "b", 0);
     Map<String, Object> good = Map.of("v", "{}", "ni", 4, "b", 2);
@@ -4416,7 +4464,7 @@ class CheckConstraintTest {
   @Test
   void variantParseJson() {
     // NULL exactly when its input is, and parsed otherwise, so bad JSON fails.
-    assertEquals("!has(this.value) || dyn(this.value) == null ? false :"
+    assertEquals("has(this.value) && dyn(this.value) != null &&"
             + " dyn(variants.parseJson(this.value)) != null",
         translateCheck("PARSE_JSON(value) IS NOT NULL"));
   }
@@ -4424,16 +4472,16 @@ class CheckConstraintTest {
   @Test
   void variantTryParseJson() {
     // NULL when its input is, or for invalid JSON, which its CEL gives as null.
-    assertEquals("!has(this.value) || dyn(this.value) == null ||"
-            + " dyn(variants.tryParseJson(this.value)) == null ? false : true",
+    assertEquals("has(this.value) && dyn(this.value) != null &&"
+            + " dyn(variants.tryParseJson(this.value)) != null",
         translateCheck("TRY_PARSE_JSON(value) IS NOT NULL"));
   }
 
   @Test
   void variantGetUntyped() {
     // 2-arg VARIANT_GET returns a sub-variant; IS NOT NULL is the existence test.
-    assertEquals("!has(this.data) || dyn(this.data) == null || dyn(variants.path(this.data,"
-            + " '$.addr')) == null ? false : true",
+    assertEquals("has(this.data) && dyn(this.data) != null && dyn(variants.path(this.data,"
+            + " '$.addr')) != null",
         translateCheck("VARIANT_GET(data, '$.addr') IS NOT NULL"));
   }
 
@@ -6184,13 +6232,12 @@ class CheckConstraintTest {
     // coerces its branches AND resolves to the common numeric type, so the
     // surrounding comparison coerces too.
     assertEquals(
-        "dyn((!has(this.x) || dyn(this.x) == null ? false : this.x > 0) ? (!has(this.amount) ||"
+        "dyn(has(this.x) && dyn(this.x) != null && this.x > 0 ? (!has(this.amount) ||"
             + " dyn(this.amount) == null ? dyn(null) : this.amount) : (!has(this.x) ||"
             + " dyn(this.x) == null ? dyn(null) : decimal(this.x))) == null ||"
-            + " decimals.eq((!has(this.x) || dyn(this.x) == null ? false : this.x > 0) ?"
-            + " (!has(this.amount) || dyn(this.amount) == null ? dyn(null) : this.amount) :"
-            + " (!has(this.x) || dyn(this.x) == null ? dyn(null) : decimal(this.x)),"
-            + " decimal(\"1\"))",
+            + " decimals.eq(has(this.x) && dyn(this.x) != null && this.x > 0 ? (!has(this.amount)"
+            + " || dyn(this.amount) == null ? dyn(null) : this.amount) : (!has(this.x) ||"
+            + " dyn(this.x) == null ? dyn(null) : decimal(this.x)), decimal(\"1\"))",
         translateCheck("CASE WHEN x > 0 THEN amount ELSE x END = 1"));
   }
 
@@ -6305,11 +6352,10 @@ class CheckConstraintTest {
         translateCheck("x IN (1, 2.5)"));
     // INT subject, DECIMAL + DOUBLE elements → common double, each element widened only after
     // its NULL test.
-    String amountNull = "(!has(this.amount) || dyn(this.amount) == null)";
-    String ratioNull = "(!has(this.ratio) || dyn(this.ratio) == null)";
-    assertEquals("dyn(!has(this.x) || dyn(this.x) == null ? dyn(null) : ((!" + amountNull
-        + " && double(this.x) == double(this.amount)) || (!" + ratioNull
-        + " && double(this.x) == this.ratio) ? true : (!has(this.amount) || dyn(this.amount)"
+    assertEquals("dyn(!has(this.x) || dyn(this.x) == null ? dyn(null) : ((has(this.amount)"
+        + " && dyn(this.amount) != null && double(this.x) == double(this.amount))"
+        + " || (has(this.ratio) && dyn(this.ratio) != null && double(this.x) == this.ratio)"
+        + " ? true : (!has(this.amount) || dyn(this.amount)"
         + " == null || !has(this.ratio) || dyn(this.ratio) == null ? dyn(null) : false)))"
         + " != false",
         translateCheck("x IN (amount, ratio)"));

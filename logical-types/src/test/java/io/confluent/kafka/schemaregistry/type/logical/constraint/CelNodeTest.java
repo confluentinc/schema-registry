@@ -32,6 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.cel.common.CelValidationResult;
@@ -101,11 +102,24 @@ class CelNodeTest {
     assertEquals(or(A, B, C), nested);
     assertEquals(or(A, B, C).hashCode(), nested.hashCode());
     assertNotEquals(or(A, B, C), and(A, B, C));
-    assertNotEquals(literal("a"), A);
+    assertNotEquals(new CelNode.Literal("a"), A);
     assertTrue(nested.contains(B));
     assertFalse(nested.contains(or(A, B)));
     assertEquals(B, CelNode.isNullOf(CelNode.isNull(B)));
     assertNull(CelNode.isNullOf(binary(B, "==", CelNode.NULL)));
+  }
+
+  @Test
+  void aLiteralIsOneOfCelsLiteralTokens() {
+    for (String token : Arrays.asList("0", "38", "2.5", "1e-3", ".5", "0x1F", "7u", "''",
+        "'it\\'s'", "\"a\\\"b\"", "b\"\\x00\"")) {
+      assertEquals(token, literal(token).toString());
+    }
+    for (String text : Arrays.asList("", "a || b", "1 + 2", "-1", "'a' + 'b'", "x", "'a")) {
+      assertThrows(IllegalArgumentException.class, () -> literal(text), text);
+    }
+    assertEquals("-700000000", CelNode.integer(-700_000_000).toString());
+    assertEquals("-9223372036854775808", CelNode.integer(Long.MIN_VALUE).toString());
   }
 
   @Test
