@@ -28,6 +28,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.testing.FakeTicker;
 import com.google.crypto.tink.Aead;
 import io.confluent.dekregistry.client.CachedDekRegistryClient;
+import io.confluent.dekregistry.client.rest.DekRegistryRestService;
 import io.confluent.dekregistry.client.rest.entities.Dek;
 import io.confluent.dekregistry.client.rest.entities.Kek;
 import io.confluent.dekregistry.web.rest.exceptions.DekRegistryErrors;
