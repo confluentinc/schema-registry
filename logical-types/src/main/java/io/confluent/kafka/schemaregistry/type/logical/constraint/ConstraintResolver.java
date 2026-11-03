@@ -62,15 +62,25 @@ final class ConstraintResolver {
     if (collType == null) {
       return null;
     }
-    if (collType.getType() == Schema.Type.ARRAY
-        || collType.getType() == Schema.Type.MULTISET) {
+    if (collType.getType() == Schema.Type.ARRAY) {
       return collType.getElementType();
     }
-    // CEL's all/exists/exists_one over a map bind its keys.
-    if (collType.getType() == Schema.Type.MAP) {
-      return collType.getKeyType();
+    // A MULTISET of strings is held as a map, whose keys CEL's all/exists/exists_one bind, as
+    // they bind a MAP's; a string key is never NULL there.
+    Schema bound = collType.getType() == Schema.Type.MULTISET ? collType.getElementType()
+        : collType.getType() == Schema.Type.MAP ? collType.getKeyType() : null;
+    return bound == null ? null : notNullIfString(bound);
+  }
+
+  private static Schema notNullIfString(Schema type) {
+    switch (type.getType()) {
+      case VARCHAR:
+        return Schema.createVarchar(type.getLength()).setNullable(false);
+      case CHAR:
+        return Schema.createChar(type.getLength()).setNullable(false);
+      default:
+        return type;
     }
-    return null;
   }
 
   /**
@@ -1122,43 +1132,6 @@ final class ConstraintResolver {
   // ---------------------------------------------------------------------
 
   /**
-   * True if {@code c} is a self-delimited c_expr alternative — column ref,
-   * literal, function call, paren expression, or CASE block. These all emit
-   * as a single tightly-bound token sequence that doesn't need defensive
-   * paren wrapping.
-   */
-  static boolean isPrimaryCExpr(LogicalTypesParser.C_exprContext c) {
-    if (c instanceof LogicalTypesParser.CheckColumnRefContext) {
-      return true;
-    }
-    if (c instanceof LogicalTypesParser.CheckLiteralContext) {
-      return true;
-    }
-    if (c instanceof LogicalTypesParser.CheckFuncContext) {
-      return true;
-    }
-    if (c instanceof LogicalTypesParser.CheckParenContext) {
-      return true;
-    }
-    return c instanceof LogicalTypesParser.CheckCaseContext;
-  }
-
-  /**
-   * {@link #isSimplePrimary} starting from a {@code check_expr_in} level.
-   */
-  static boolean isSimplePrimaryIn(
-      LogicalTypesParser.Check_expr_inContext ctx) {
-    if (ctx.IN() != null) {
-      return false;
-    }
-    LogicalTypesParser.Check_expr_likeContext like = ctx.check_expr_like();
-    if (like.LIKE() != null) {
-      return false;
-    }
-    return isSimplePrimaryAdd(like.check_expr_add());
-  }
-
-  /**
    * If {@code ctx} is a pass-through cascade ending at a single literal
    * (descending through paren wrappers and unary {@code -}/{@code +} signs),
    * return the literal context plus the cumulative negation. Returns null
@@ -1252,102 +1225,6 @@ final class ConstraintResolver {
     }
     return new LiteralMatch(
         ((LogicalTypesParser.CheckLiteralContext) c).literal(), negate);
-  }
-
-  /**
-   * True if {@code ctx} emits a single tightly-bound primary that doesn't
-   * need defensive paren-wrapping when used as a BETWEEN operand, as a
-   * receiver before a CEL {@code .method()} / {@code [index]}, as the
-   * operand of {@code !}, or as either side of CASE simple-form's implicit
-   * {@code ==}. A primary is a column ref, literal, function call (already
-   * parenthesized), CASE block (self-delimited by END), or already-
-   * parenthesized expression. Compound expressions (any operator at any
-   * cascade level, including unary sign) need wrapping because the
-   * surrounding CEL operator could pull them apart by precedence.
-   *
-   * <p>Each cascade level has a dedicated entry point used when the
-   * caller already holds a sub-context: {@link #isSimplePrimaryUnaryNot}
-   * (NOT operand), {@link #isSimplePrimaryIn} (BETWEEN bound),
-   * {@link #isSimplePrimaryAdd} (LIKE/method receiver). Each one delegates
-   * down to the next level so the cascade descent isn't duplicated across
-   * helpers.
-   */
-  static boolean isSimplePrimary(
-      LogicalTypesParser.Check_exprContext ctx) {
-    LogicalTypesParser.Check_expr_orContext or = ctx.check_expr_or();
-    if (or.check_expr_and().size() > 1) {
-      return false;
-    }
-    LogicalTypesParser.Check_expr_andContext and = or.check_expr_and(0);
-    if (and.check_expr_unary_not().size() > 1) {
-      return false;
-    }
-    return isSimplePrimaryUnaryNot(and.check_expr_unary_not(0));
-  }
-
-  /**
-   * {@link #isSimplePrimary} starting from a {@code check_expr_unary_not}
-   * level — used by NOT emit, which inspects its inner operand.
-   *
-   * <p>Chained NOT (e.g. {@code NOT NOT x}) recurses through the inner
-   * NOT, so {@code !!x} can emit unwrapped if the leaf is a primary.
-   */
-  static boolean isSimplePrimaryUnaryNot(
-      LogicalTypesParser.Check_expr_unary_notContext ctx) {
-    if (ctx instanceof LogicalTypesParser.CheckExprNotContext) {
-      return isSimplePrimaryUnaryNot(
-          ((LogicalTypesParser.CheckExprNotContext) ctx).check_expr_unary_not());
-    }
-    return isSimplePrimaryIsnull(
-        ((LogicalTypesParser.CheckExprNotPassContext) ctx).check_expr_isnull());
-  }
-
-  /**
-   * {@link #isSimplePrimary} starting from a {@code check_expr_isnull}
-   * level — descends isnull → compare → between → in → like → add.
-   */
-  private static boolean isSimplePrimaryIsnull(
-      LogicalTypesParser.Check_expr_isnullContext is) {
-    if (is.IS() != null) {
-      return false;
-    }
-    LogicalTypesParser.Check_expr_compareContext compare = is.check_expr_compare();
-    if (compare.check_expr_between().size() > 1) {
-      return false;
-    }
-    LogicalTypesParser.Check_expr_betweenContext between = compare.check_expr_between(0);
-    if (between.BETWEEN() != null) {
-      return false;
-    }
-    return isSimplePrimaryIn(between.check_expr_in(0));
-  }
-
-  /**
-   * {@link #isSimplePrimary} starting from a {@code check_expr_add}
-   * level — used by emit sites whose receiver is exposed at the additive
-   * value-root level (LIKE → matches).
-   */
-  static boolean isSimplePrimaryAdd(
-      LogicalTypesParser.Check_expr_addContext add) {
-    if (add.check_expr_mul().size() > 1) {
-      return false;
-    }
-    LogicalTypesParser.Check_expr_mulContext mul = add.check_expr_mul(0);
-    if (mul.check_expr_unary_sign().size() > 1) {
-      return false;
-    }
-    LogicalTypesParser.Check_expr_unary_signContext sign = mul.check_expr_unary_sign(0);
-    // A unary sign on the receiver would be wrong (e.g. `-x.method()` parses
-    // as `-(x.method())` in CEL). For BETWEEN it'd be safe but rare; keep
-    // the check conservative so one helper covers all call sites.
-    for (int i = 0; i < sign.getChildCount(); i++) {
-      ParseTree child = sign.getChild(i);
-      if (child instanceof TerminalNode
-          && ("-".equals(child.getText()) || "+".equals(child.getText()))) {
-        return false;
-      }
-    }
-    return isPrimaryCExpr(sign.c_expr());
   }
 
   /**
