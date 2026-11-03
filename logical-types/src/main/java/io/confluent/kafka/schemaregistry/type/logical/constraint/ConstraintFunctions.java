@@ -21,9 +21,9 @@ import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 import io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesParser;
 
+import java.util.ArrayList;
 import java.util.List;
 
-import static io.confluent.kafka.schemaregistry.type.logical.constraint.ConstraintEmitter.emitWrappedReceiver;
 import static io.confluent.kafka.schemaregistry.type.logical.constraint.ConstraintEmitter.visitCExpr;
 import static io.confluent.kafka.schemaregistry.type.logical.constraint.ConstraintEmitter.visitCheckExpr;
 import static io.confluent.kafka.schemaregistry.type.logical.constraint.ConstraintResolver.resolveCollectionElementType;
@@ -48,9 +48,10 @@ import static io.confluent.kafka.schemaregistry.type.logical.constraint.Constrai
  *       {@link #visitFuncCommonSubexpr} dispatches by parse-tree alternative.</li>
  * </ul>
  *
- * <p>This class delegates back to {@link ConstraintToCelTranslator} for the
- * cross-cutting helpers ({@code visitCheckExpr}, {@code emitWrappedReceiver},
- * {@code locatedError}) and ThreadLocal state ({@code EMIT_VCTX}).
+ * <p>This class delegates back to {@link ConstraintEmitter} and
+ * {@link ConstraintToCelTranslator} for the cross-cutting helpers
+ * ({@code visitCheckExpr}, {@code locatedError}) and ThreadLocal state
+ * ({@code EMIT_VCTX}).
  */
 final class ConstraintFunctions {
 
@@ -58,23 +59,21 @@ final class ConstraintFunctions {
     // static utility
   }
 
-  static void visitFuncExpr(
-      LogicalTypesParser.Func_exprContext ctx, StringBuilder sb) {
+  static CelNode visitFuncExpr(LogicalTypesParser.Func_exprContext ctx) {
     if (ctx.func_application() != null) {
-      visitFuncApplication(ctx.func_application(), sb);
-    } else if (ctx.func_expr_common_subexpr() != null) {
-      visitFuncCommonSubexpr(ctx.func_expr_common_subexpr(), sb);
-    } else {
-      throw new ValidationException("Internal: empty func_expr");
+      return visitFuncApplication(ctx.func_application());
     }
+    if (ctx.func_expr_common_subexpr() != null) {
+      return visitFuncCommonSubexpr(ctx.func_expr_common_subexpr());
+    }
+    throw new ValidationException("Internal: empty func_expr");
   }
 
   // -------------------------------------------------------------------------
   // Regular form: func_application
   // -------------------------------------------------------------------------
 
-  private static void visitFuncApplication(
-      LogicalTypesParser.Func_applicationContext ctx, StringBuilder sb) {
+  private static CelNode visitFuncApplication(LogicalTypesParser.Func_applicationContext ctx) {
     String name = ctx.identifier().getText().toUpperCase(java.util.Locale.ROOT);
     List<LogicalTypesParser.Check_exprContext> args = ctx.check_expr_list() != null
         ? ctx.check_expr_list().check_expr()
@@ -83,130 +82,94 @@ final class ConstraintFunctions {
       // size() — polymorphic over strings, lists, maps, bytes
       case "LENGTH":
         if (args.size() == 1) {
-          StringBuilder arg = new StringBuilder();
-          visitCheckExpr(args.get(0), arg);
-          sb.append("size(").append(ConstraintEmitter.typedSubscript(arg)).append(')');
-        } else {
-          emitMethodCall(ctx, args, "size", -1, sb, name);
+          return CelNode.call("size",
+              ConstraintEmitter.typedSubscript(visitCheckExpr(args.get(0))));
         }
-        break;
+        return emitMethodCall(ctx, args, "size", -1, name);
 
       // String predicates → CEL string methods
       case "UPPER":
-        emitInstanceMethod(ctx, args, "upperAscii", 0, 1, sb, name);
-        break;
+        return emitInstanceMethod(ctx, args, "upperAscii", 0, 1, name);
       case "LOWER":
-        emitInstanceMethod(ctx, args, "lowerAscii", 0, 1, sb, name);
-        break;
+        return emitInstanceMethod(ctx, args, "lowerAscii", 0, 1, name);
       case "STARTS_WITH":
-        emitInstanceMethod(ctx, args, "startsWith", 0, 2, sb, name);
-        break;
+        return emitInstanceMethod(ctx, args, "startsWith", 0, 2, name);
       case "ENDS_WITH":
-        emitInstanceMethod(ctx, args, "endsWith", 0, 2, sb, name);
-        break;
+        return emitInstanceMethod(ctx, args, "endsWith", 0, 2, name);
       case "CONTAINS":
-        emitInstanceMethod(ctx, args, "contains", 0, 2, sb, name);
-        break;
+        return emitInstanceMethod(ctx, args, "contains", 0, 2, name);
       case "REPLACE":
-        emitInstanceMethod(ctx, args, "replace", 0, 3, sb, name);
-        break;
+        return emitInstanceMethod(ctx, args, "replace", 0, 3, name);
       case "MATCHES":
         validateMatchesPattern(ctx, args);
-        emitInstanceMethod(ctx, args, "matches", 0, 2, sb, name);
-        break;
+        return emitInstanceMethod(ctx, args, "matches", 0, 2, name);
 
       // Format validators (require SR BuiltinOverload extension at runtime)
       case "IS_EMAIL":
-        emitInstanceMethod(ctx, args, "isEmail", 0, 1, sb, name);
-        break;
+        return emitInstanceMethod(ctx, args, "isEmail", 0, 1, name);
       case "IS_HOSTNAME":
-        emitInstanceMethod(ctx, args, "isHostname", 0, 1, sb, name);
-        break;
+        return emitInstanceMethod(ctx, args, "isHostname", 0, 1, name);
       case "IS_IPV4":
-        emitInstanceMethod(ctx, args, "isIpv4", 0, 1, sb, name);
-        break;
+        return emitInstanceMethod(ctx, args, "isIpv4", 0, 1, name);
       case "IS_IPV6":
-        emitInstanceMethod(ctx, args, "isIpv6", 0, 1, sb, name);
-        break;
+        return emitInstanceMethod(ctx, args, "isIpv6", 0, 1, name);
       case "IS_URI":
-        emitInstanceMethod(ctx, args, "isUri", 0, 1, sb, name);
-        break;
+        return emitInstanceMethod(ctx, args, "isUri", 0, 1, name);
       case "IS_URI_REF":
-        emitInstanceMethod(ctx, args, "isUriRef", 0, 1, sb, name);
-        break;
+        return emitInstanceMethod(ctx, args, "isUriRef", 0, 1, name);
       case "IS_UUID":
-        emitInstanceMethod(ctx, args, "isUuid", 0, 1, sb, name);
-        break;
+        return emitInstanceMethod(ctx, args, "isUuid", 0, 1, name);
 
       // Conditional helpers — n-ary or fixed
       case "COALESCE":
-        emitCoalesce(ctx, args, sb);
-        break;
+        return emitCoalesce(ctx, args);
       case "NULLIF":
-        emitNullIf(ctx, args, sb);
-        break;
+        return emitNullIf(ctx, args);
       case "GREATEST":
-        emitGreatestLeast(ctx, args, ">", sb, name);
-        break;
+        return emitGreatestLeast(ctx, args, ">", name);
       case "LEAST":
-        emitGreatestLeast(ctx, args, "<", sb, name);
-        break;
+        return emitGreatestLeast(ctx, args, "<", name);
 
       // Numeric math — dispatch on argument type: DECIMAL operands route to the
       // opaque-Decimal decimals.* surface (exact), all other numerics to the
       // CEL math.* extension. All single-arg except ROUND/TRUNCATE, which also
       // accept a 2-arg scale form on DECIMAL only.
       case "ABS":
-        emitNumericFunc(ctx, args, "abs", sb, name);
-        break;
+        return emitNumericFunc(ctx, args, "abs", name);
       case "SIGN":
-        emitNumericFunc(ctx, args, "sign", sb, name);
-        break;
+        return emitNumericFunc(ctx, args, "sign", name);
       case "FLOOR":
-        emitNumericFunc(ctx, args, "floor", sb, name);
-        break;
+        return emitNumericFunc(ctx, args, "floor", name);
       case "CEIL":
       case "CEILING":
-        emitNumericFunc(ctx, args, "ceil", sb, name);
-        break;
+        return emitNumericFunc(ctx, args, "ceil", name);
       case "SQRT":
-        emitNumericFunc(ctx, args, "sqrt", sb, name);
-        break;
+        return emitNumericFunc(ctx, args, "sqrt", name);
       case "ROUND":
-        emitRoundTrunc(ctx, args, "round", sb, name);
-        break;
+        return emitRoundTrunc(ctx, args, "round", name);
       case "TRUNCATE":
-        emitRoundTrunc(ctx, args, "trunc", sb, name);
-        break;
+        return emitRoundTrunc(ctx, args, "trunc", name);
 
       // Variant: parse / serialize / inspect. (Navigation+extraction is the
       // VARIANT_GET / TRY_VARIANT_GET special form, see visitFuncCommonSubexpr.)
       case "PARSE_JSON":
-        emitVariantUnary(ctx, args, "variants.parseJson", sb, name);
-        break;
+        return emitVariantUnary(ctx, args, "variants.parseJson", name);
       case "TRY_PARSE_JSON":
-        emitVariantUnary(ctx, args, "variants.tryParseJson", sb, name);
-        break;
+        return emitVariantUnary(ctx, args, "variants.tryParseJson", name);
       case "TO_JSON":
-        emitVariantUnary(ctx, args, "variants.toJson", sb, name);
-        break;
+        return emitVariantUnary(ctx, args, "variants.toJson", name);
       case "TYPE_OF_VARIANT":
-        emitVariantUnary(ctx, args, "variants.type", sb, name);
-        break;
+        return emitVariantUnary(ctx, args, "variants.type", name);
       case "VARIANT_IS_NULL":
-        emitVariantUnary(ctx, args, "variants.isNull", sb, name);
-        break;
+        return emitVariantUnary(ctx, args, "variants.isNull", name);
 
       // CEL macros (sugar)
       case "EVERY":
-        emitMacro(ctx, args, "all", sb, name);
-        break;
+        return emitMacro(ctx, args, "all", name);
       case "ANY":
-        emitMacro(ctx, args, "exists", sb, name);
-        break;
+        return emitMacro(ctx, args, "exists", name);
       case "ONE":
-        ConstraintEmitter.emitOne(ctx, sb, () -> emitMacro(ctx, args, "exists_one", sb, name));
-        break;
+        return ConstraintEmitter.emitOne(ctx, () -> emitMacro(ctx, args, "exists_one", name));
 
       default:
         throw locatedError(ctx,
@@ -259,18 +222,16 @@ final class ConstraintFunctions {
    * {@code arr.all(x, predicate)} / {@code .exists(x, predicate)} /
    * {@code .exists_one(x, predicate)}.
    */
-  private static void emitMacro(
+  private static CelNode emitMacro(
       LogicalTypesParser.Func_applicationContext fctx,
-      List<LogicalTypesParser.Check_exprContext> args, String celMacro,
-      StringBuilder sb, String sqlName) {
+      List<LogicalTypesParser.Check_exprContext> args, String celMacro, String sqlName) {
     if (args.size() != 3) {
       throw locatedError(fctx,
           sqlName + "() expects 3 arguments (list, iteration variable, predicate), "
               + "got " + args.size());
     }
     String iterVar = extractIterationVar(args.get(1), sqlName);
-    emitWrappedReceiver(args.get(0), sb);
-    sb.append('.').append(celMacro).append('(').append(iterVar).append(", ");
+    CelNode collection = visitCheckExpr(args.get(0));
     // Push the iter-var binding onto EMIT_VCTX so visitColumnRef and
     // visitIndirection see it during the body emit.
     ConstraintValidationContext outer = EMIT_VCTX.get();
@@ -279,11 +240,11 @@ final class ConstraintFunctions {
             resolveCollectionElementType(args.get(0), outer)));
     EMIT_VCTX.set(bodyCtx);
     try {
-      visitCheckExpr(args.get(2), sb);
+      return CelNode.method(collection, celMacro, CelNode.ident(iterVar),
+          visitCheckExpr(args.get(2)));
     } finally {
       EMIT_VCTX.set(outer);
     }
-    sb.append(')');
   }
 
   /**
@@ -323,10 +284,10 @@ final class ConstraintFunctions {
   /**
    * Emit {@code methodName(arg)} (CEL function-style).
    */
-  private static void emitMethodCall(
+  private static CelNode emitMethodCall(
       LogicalTypesParser.Func_applicationContext fctx,
       List<LogicalTypesParser.Check_exprContext> args, String methodName,
-      int expectedArity, StringBuilder sb, String sqlName) {
+      int expectedArity, String sqlName) {
     if (expectedArity != -1 && args.size() != expectedArity) {
       throw locatedError(fctx,
           sqlName + "() expects " + expectedArity + " argument(s), got " + args.size());
@@ -335,14 +296,11 @@ final class ConstraintFunctions {
       throw locatedError(fctx,
           sqlName + "() expects exactly 1 argument, got " + args.size());
     }
-    sb.append(methodName).append('(');
-    for (int i = 0; i < args.size(); i++) {
-      if (i > 0) {
-        sb.append(", ");
-      }
-      visitCheckExpr(args.get(i), sb);
+    List<CelNode> emitted = new ArrayList<>();
+    for (LogicalTypesParser.Check_exprContext arg : args) {
+      emitted.add(visitCheckExpr(arg));
     }
-    sb.append(')');
+    return CelNode.call(methodName, emitted);
   }
 
   /**
@@ -356,10 +314,9 @@ final class ConstraintFunctions {
    * column surfaces as a "no matching overload" error from the strict checker
    * (rather than a silent no-op), which is the intended signal.
    */
-  private static void emitNumericFunc(
+  private static CelNode emitNumericFunc(
       LogicalTypesParser.Func_applicationContext fctx,
-      List<LogicalTypesParser.Check_exprContext> args, String shortName,
-      StringBuilder sb, String sqlName) {
+      List<LogicalTypesParser.Check_exprContext> args, String shortName, String sqlName) {
     if (args.size() != 1) {
       throw locatedError(fctx,
           sqlName + "() expects exactly 1 argument, got " + args.size());
@@ -367,15 +324,9 @@ final class ConstraintFunctions {
     ConstraintValidationContext vctx = EMIT_VCTX.get();
     Schema t = vctx == null ? null
         : ConstraintResolver.tryResolveCheckExprType(args.get(0), vctx);
-    if (ConstraintResolver.isDecimal(t)) {
-      sb.append("decimals.").append(shortName).append('(');
-      ConstraintEmitter.emitDecimalValue(args.get(0), sb);
-      sb.append(')');
-    } else {
-      sb.append("math.").append(shortName).append('(');
-      visitCheckExpr(args.get(0), sb);
-      sb.append(')');
-    }
+    return ConstraintResolver.isDecimal(t)
+        ? CelNode.call("decimals." + shortName, ConstraintEmitter.emitDecimalValue(args.get(0)))
+        : CelNode.call("math." + shortName, visitCheckExpr(args.get(0)));
   }
 
   /**
@@ -385,10 +336,9 @@ final class ConstraintFunctions {
    * {@code decimals.trunc(d, n)}) — CEL {@code math.round}/{@code math.trunc}
    * have no scale parameter, so 2-arg on a non-decimal operand is rejected.
    */
-  private static void emitRoundTrunc(
+  private static CelNode emitRoundTrunc(
       LogicalTypesParser.Func_applicationContext fctx,
-      List<LogicalTypesParser.Check_exprContext> args, String shortName,
-      StringBuilder sb, String sqlName) {
+      List<LogicalTypesParser.Check_exprContext> args, String shortName, String sqlName) {
     if (args.size() != 1 && args.size() != 2) {
       throw locatedError(fctx,
           sqlName + "() expects 1 or 2 arguments, got " + args.size());
@@ -406,23 +356,15 @@ final class ConstraintFunctions {
     if (args.size() == 2) {
       refuseNonIntScale(args.get(1), vctx, sqlName);
     }
-    if (decimal) {
-      sb.append("decimals.").append(shortName).append('(');
-      ConstraintEmitter.emitDecimalValue(args.get(0), sb);
-      if (args.size() == 2) {
-        sb.append(", ");
-        if ("round".equals(shortName)) {
-          emitRoundScale(args.get(1), sb);
-        } else {
-          visitCheckExpr(args.get(1), sb);
-        }
-      }
-      sb.append(')');
-    } else {
-      sb.append("math.").append(shortName).append('(');
-      visitCheckExpr(args.get(0), sb);
-      sb.append(')');
+    if (!decimal) {
+      return CelNode.call("math." + shortName, visitCheckExpr(args.get(0)));
     }
+    CelNode value = ConstraintEmitter.emitDecimalValue(args.get(0));
+    if (args.size() == 1) {
+      return CelNode.call("decimals." + shortName, value);
+    }
+    return CelNode.call("decimals." + shortName, value, "round".equals(shortName)
+        ? emitRoundScale(args.get(1)) : visitCheckExpr(args.get(1)));
   }
 
   /**
@@ -430,16 +372,14 @@ final class ConstraintFunctions {
    * decimals.round would pad it, taking time that grows with the scale. The declared scale
    * doesn't bound it, as a JSON or Protobuf value carries its own, which may be larger.
    */
-  private static void emitRoundScale(
-      LogicalTypesParser.Check_exprContext scale, StringBuilder sb) {
+  private static CelNode emitRoundScale(LogicalTypesParser.Check_exprContext scale) {
     Long literal = tryLiteralIntValue(scale);
     if (literal != null) {
-      sb.append(Math.min(literal, 38));
-      return;
+      return CelNode.literal(String.valueOf(Math.min(literal, 38)));
     }
-    StringBuilder emitted = new StringBuilder();
-    visitCheckExpr(scale, emitted);
-    sb.append('(').append(emitted).append(" < 38 ? ").append(emitted).append(" : 38)");
+    CelNode emitted = visitCheckExpr(scale);
+    CelNode max = CelNode.literal("38");
+    return CelNode.ternary(CelNode.binary(emitted, "<", max), emitted, max);
   }
 
   // A column, field, variable or subscript of one, parenthesized or not, whose declared type is
@@ -470,35 +410,23 @@ final class ConstraintFunctions {
   }
 
   /**
-   * Emit CEL receiver-style call: arg[receiverIdx].method(other args). Wraps
-   * the receiver in parens only when needed — compound receivers like
-   * {@code a || b} or {@code -x} would otherwise mis-bind under CEL's tight
-   * {@code .method()} precedence, but simple primaries (column refs,
-   * literals, function calls, already-parenthesized expressions) emit
-   * unwrapped. Delegates to {@link ConstraintEmitter#emitWrappedReceiver}.
+   * Emit CEL receiver-style call: arg[receiverIdx].method(other args).
    */
-  private static void emitInstanceMethod(
+  private static CelNode emitInstanceMethod(
       LogicalTypesParser.Func_applicationContext fctx,
       List<LogicalTypesParser.Check_exprContext> args, String methodName,
-      int receiverIdx, int expectedArity, StringBuilder sb, String sqlName) {
+      int receiverIdx, int expectedArity, String sqlName) {
     if (args.size() != expectedArity) {
       throw locatedError(fctx,
           sqlName + "() expects " + expectedArity + " argument(s), got " + args.size());
     }
-    emitWrappedReceiver(args.get(receiverIdx), sb);
-    sb.append('.').append(methodName).append('(');
-    boolean first = true;
+    List<CelNode> rest = new ArrayList<>();
     for (int i = 0; i < args.size(); i++) {
-      if (i == receiverIdx) {
-        continue;
+      if (i != receiverIdx) {
+        rest.add(visitCheckExpr(args.get(i)));
       }
-      if (!first) {
-        sb.append(", ");
-      }
-      visitCheckExpr(args.get(i), sb);
-      first = false;
     }
-    sb.append(')');
+    return CelNode.method(visitCheckExpr(args.get(receiverIdx)), methodName, rest);
   }
 
   /**
@@ -506,9 +434,9 @@ final class ConstraintFunctions {
    * Each per-arg null check uses {@link #notNullTestOf}, a {@code has()} guard
    * when the arg is a CEL field-selection chain.
    */
-  private static void emitCoalesce(
+  private static CelNode emitCoalesce(
       LogicalTypesParser.Func_applicationContext fctx,
-      List<LogicalTypesParser.Check_exprContext> args, StringBuilder sb) {
+      List<LogicalTypesParser.Check_exprContext> args) {
     if (args.size() < 2) {
       throw locatedError(fctx,
           "COALESCE() expects at least 2 arguments, got " + args.size());
@@ -524,46 +452,33 @@ final class ConstraintFunctions {
     boolean decimal = "decimal".equals(common);
     boolean dbl = "double".equals(common);
     boolean temporal = !decimal && !dbl && argsHaveTemporal(args);
-    String[] nativeEmit = new String[n];
-    String[] valueEmit = new String[n];
+    CelNode[] nativeEmit = new CelNode[n];
+    CelNode[] valueEmit = new CelNode[n];
     for (int i = 0; i < n; i++) {
-      StringBuilder buf = new StringBuilder();
-      visitCheckExpr(args.get(i), buf);
-      nativeEmit[i] = buf.toString();
+      nativeEmit[i] = visitCheckExpr(args.get(i));
       if (decimal) {
-        StringBuilder dec = new StringBuilder();
-        ConstraintEmitter.emitDecimalValue(args.get(i), dec);
-        valueEmit[i] = dec.toString();
+        valueEmit[i] = ConstraintEmitter.emitDecimalValue(args.get(i));
       } else if (dbl) {
-        StringBuilder d = new StringBuilder();
-        ConstraintEmitter.emitNumericAs(args.get(i), "double", d);
-        valueEmit[i] = d.toString();
+        valueEmit[i] = ConstraintEmitter.emitNumericAs(args.get(i), "double");
       } else if (temporal) {
         // Normalize each branch so the COALESCE result is a CEL timestamp.
-        StringBuilder ts = new StringBuilder();
-        ConstraintEmitter.emitTimestampValueCheckExpr(args.get(i), ts);
-        valueEmit[i] = ts.toString();
+        valueEmit[i] = ConstraintEmitter.emitTimestampValueCheckExpr(args.get(i));
       } else {
         valueEmit[i] = nativeEmit[i];
       }
-    }
-    for (int i = 0; i < n - 1; i++) {
-      sb.append('(').append(notNullTestOf(args.get(i), nativeEmit[i], valueEmit[i]))
-          .append(" ? ").append(valueEmit[i]).append(" : ");
     }
     // A last argument that may be NULL gives NULL, not a widened NULL or, on
     // JSON, which leaves a NULL field out, a missing key. (The validator checks
     // the arguments share a category, as the dyn branch no longer makes the
     // strict check unify them.)
     LogicalTypesParser.Check_exprContext last = args.get(n - 1);
-    if (tryAsLiteral(last) != null) {
-      sb.append(valueEmit[n - 1]);
-    } else {
-      emitNullOrValue(last, nativeEmit[n - 1], valueEmit[n - 1], sb);
+    CelNode cel = tryAsLiteral(last) != null ? valueEmit[n - 1]
+        : emitNullOrValue(last, nativeEmit[n - 1], valueEmit[n - 1]);
+    for (int i = n - 2; i >= 0; i--) {
+      cel = CelNode.ternary(notNullTestOf(args.get(i), nativeEmit[i], valueEmit[i]),
+          valueEmit[i], cel);
     }
-    for (int i = 0; i < n - 1; i++) {
-      sb.append(')');
-    }
+    return cel;
   }
 
   /**
@@ -571,19 +486,11 @@ final class ConstraintFunctions {
    * tested before the conversion, in its own type or by has(), as converting a NULL fails and
    * JSON leaves a NULL field out.
    */
-  static void emitNullOrValue(LogicalTypesParser.Check_exprContext arg, String nativeEmit,
-      String value, StringBuilder sb) {
-    emitNullOrValue(arg, nativeEmit, value, nullTestOf(arg, nativeEmit, value), sb);
-  }
-
-  private static void emitNullOrValue(LogicalTypesParser.Check_exprContext arg,
-      String nativeEmit, String value, String nullTest, StringBuilder sb) {
+  static CelNode emitNullOrValue(LogicalTypesParser.Check_exprContext arg, CelNode nativeEmit,
+      CelNode value) {
     // COALESCE, GREATEST and LEAST give NULL as null, so one not converted is not tested again.
-    if (value.equals(nativeEmit) && ConstraintNullTest.givesNullAsNull(arg)) {
-      sb.append(value);
-    } else {
-      emitNullOr(nullTest, true, value, sb);
-    }
+    return value.equals(nativeEmit) && ConstraintNullTest.givesNullAsNull(arg) ? value
+        : emitNullOr(nullTestOf(arg, nativeEmit, value), true, value);
   }
 
   /**
@@ -591,31 +498,31 @@ final class ConstraintFunctions {
    * for a selection, by its inputs ({@link ConstraintNullTest}) if they tell, else of its value in
    * its own type; {@code false} when it is never NULL.
    */
-  private static String nullTestOf(LogicalTypesParser.Check_exprContext arg, String nativeEmit,
-      String value) {
+  private static CelNode nullTestOf(LogicalTypesParser.Check_exprContext arg,
+      CelNode nativeEmit, CelNode value) {
     ConstraintValidationContext vctx = EMIT_VCTX.get();
     if (ConstraintResolver.isHasCompatible(arg, vctx)) {
       return ConstraintEmitter.nullTest(ConstraintResolver.selectionPath(arg), nativeEmit, true);
     }
-    String byInputs = ConstraintNullTest.isTestedByValue(arg) ? null
+    CelNode byInputs = ConstraintNullTest.isTestedByValue(arg) ? null
         : ConstraintNullTest.told(ConstraintNullTest.of(arg), arg);
     return byInputs != null ? byInputs
-        : "dyn(" + ownTypeValue(arg, nativeEmit, value, vctx) + ") == null";
+        : CelNode.isNull(ownTypeValue(arg, nativeEmit, value, vctx));
   }
 
   /**
    * The test that {@code arg} is not NULL, as {@link #nullTestOf} tells it.
    */
-  private static String notNullTestOf(LogicalTypesParser.Check_exprContext arg,
-      String nativeEmit, String value) {
+  private static CelNode notNullTestOf(LogicalTypesParser.Check_exprContext arg,
+      CelNode nativeEmit, CelNode value) {
     ConstraintValidationContext vctx = EMIT_VCTX.get();
     if (ConstraintResolver.isHasCompatible(arg, vctx)) {
       return ConstraintEmitter.nullTest(ConstraintResolver.selectionPath(arg), nativeEmit, false);
     }
-    String byInputs = ConstraintNullTest.isTestedByValue(arg) ? null
+    CelNode byInputs = ConstraintNullTest.isTestedByValue(arg) ? null
         : ConstraintNullTest.told(ConstraintNullTest.of(arg), arg);
     return byInputs != null ? ConstraintNullTest.not(byInputs)
-        : "dyn(" + ownTypeValue(arg, nativeEmit, value, vctx) + ") != null";
+        : CelNode.isNotNull(ownTypeValue(arg, nativeEmit, value, vctx));
   }
 
   /**
@@ -623,17 +530,14 @@ final class ConstraintFunctions {
    * asks whether it is null. The strict check, which the dyn branch would pass, types
    * {@code (nullTest ? value : value)}, or just {@code value} when the test reads nothing else.
    */
-  private static void emitNullOr(String nullTest, boolean testsOnlyValue, String value,
-      StringBuilder sb) {
+  private static CelNode emitNullOr(CelNode nullTest, boolean testsOnlyValue, CelNode value) {
     ConstraintValidationContext vctx = EMIT_VCTX.get();
     boolean typeOnly = vctx != null && vctx.isTypeOnly();
-    if (nullTest.equals("false") || nullTest.equals("dyn(" + value + ") == null")
+    if (ConstraintNullTest.NEVER.equals(nullTest) || nullTest.equals(CelNode.isNull(value))
         || typeOnly && testsOnlyValue) {
-      sb.append(value);
-    } else {
-      sb.append('(').append(nullTest).append(" ? ").append(typeOnly ? value : "dyn(null)")
-          .append(" : ").append(value).append(')');
+      return value;
     }
+    return CelNode.ternary(nullTest, typeOnly ? value : CelNode.dyn(CelNode.NULL), value);
   }
 
   /**
@@ -644,9 +548,9 @@ final class ConstraintFunctions {
    * overload for '_?_:_' applied to '(bool, null, type)'" because CEL
    * ternary requires both branches to share a type.
    */
-  private static void emitNullIf(
+  private static CelNode emitNullIf(
       LogicalTypesParser.Func_applicationContext fctx,
-      List<LogicalTypesParser.Check_exprContext> args, StringBuilder sb) {
+      List<LogicalTypesParser.Check_exprContext> args) {
     if (args.size() != 2) {
       throw locatedError(fctx,
           "NULLIF() expects 2 arguments, got " + args.size());
@@ -656,54 +560,33 @@ final class ConstraintFunctions {
         ? ConstraintEmitter.numericCommonOf(args.get(0), args.get(1), vctx) : null;
     boolean temporal = !ConstraintResolver.isNumericCategory(common)
         && (argIsTemporal(args.get(0)) || argIsTemporal(args.get(1)));
-    StringBuilder equal = new StringBuilder();
+    CelNode equal;
     if ("decimal".equals(common)) {
       // Opaque Decimal has no native `==`.
-      equal.append("decimals.eq(");
-      ConstraintEmitter.emitDecimalValue(args.get(0), equal);
-      equal.append(", ");
-      ConstraintEmitter.emitDecimalValue(args.get(1), equal);
-      equal.append(')');
-    } else {
+      equal = CelNode.call("decimals.eq", ConstraintEmitter.emitDecimalValue(args.get(0)),
+          ConstraintEmitter.emitDecimalValue(args.get(1)));
+    } else if ("double".equals(common)) {
       // Native `==`, operands cast to double or timestamp-normalized when they need it.
-      StringBuilder a = new StringBuilder();
-      StringBuilder b = new StringBuilder();
-      if ("double".equals(common)) {
-        ConstraintEmitter.emitNumericAs(args.get(0), "double", a);
-        ConstraintEmitter.emitNumericAs(args.get(1), "double", b);
-      } else if (temporal) {
-        ConstraintEmitter.emitTimestampValueCheckExpr(args.get(0), a);
-        ConstraintEmitter.emitTimestampValueCheckExpr(args.get(1), b);
-      } else {
-        visitCheckExpr(args.get(0), a);
-        visitCheckExpr(args.get(1), b);
-      }
-      equal.append(operand(args.get(0), a)).append(" == ").append(operand(args.get(1), b));
+      equal = CelNode.binary(ConstraintEmitter.emitNumericAs(args.get(0), "double"), "==",
+          ConstraintEmitter.emitNumericAs(args.get(1), "double"));
+    } else if (temporal) {
+      equal = CelNode.binary(ConstraintEmitter.emitTimestampValueCheckExpr(args.get(0)), "==",
+          ConstraintEmitter.emitTimestampValueCheckExpr(args.get(1)));
+    } else {
+      equal = CelNode.binary(visitCheckExpr(args.get(0)), "==", visitCheckExpr(args.get(1)));
     }
     // Normalize the returned value too (so a temporal NULLIF result is a CEL
     // timestamp), keeping the decimal/native paths unchanged.
-    StringBuilder value = new StringBuilder();
-    if (temporal) {
-      ConstraintEmitter.emitTimestampValueCheckExpr(args.get(0), value);
-    } else {
-      visitCheckExpr(args.get(0), value);
-    }
+    CelNode value = temporal ? ConstraintEmitter.emitTimestampValueCheckExpr(args.get(0))
+        : visitCheckExpr(args.get(0));
     // Each argument is tested before it is compared or converted.
-    StringBuilder nativeA = new StringBuilder();
-    visitCheckExpr(args.get(0), nativeA);
-    StringBuilder nativeB = new StringBuilder();
-    visitCheckExpr(args.get(1), nativeB);
-    String nullB = nullTestOf(args.get(1), nativeB.toString(), nativeB.toString());
-    StringBuilder unlessNullA = new StringBuilder();
-    if (!"false".equals(nullB)) {
-      unlessNullA.append('(').append(nullB).append(" ? ").append(value).append(" : ");
-    }
-    emitNullOr(equal.toString(), false, value.toString(), unlessNullA);
-    if (!"false".equals(nullB)) {
-      unlessNullA.append(')');
-    }
-    emitNullOr(nullTestOf(args.get(0), nativeA.toString(), value.toString()), true,
-        unlessNullA.toString(), sb);
+    CelNode nativeA = visitCheckExpr(args.get(0));
+    CelNode nativeB = visitCheckExpr(args.get(1));
+    CelNode nullB = nullTestOf(args.get(1), nativeB, nativeB);
+    CelNode unlessEqual = emitNullOr(equal, false, value);
+    CelNode unlessNullA = ConstraintNullTest.NEVER.equals(nullB) ? unlessEqual
+        : CelNode.ternary(nullB, value, unlessEqual);
+    return emitNullOr(nullTestOf(args.get(0), nativeA, value), true, unlessNullA);
   }
 
   /**
@@ -741,10 +624,9 @@ final class ConstraintFunctions {
    * {@link #nullTestOf}, a {@code has()} guard when the arg is a CEL
    * field-selection chain.
    */
-  private static void emitGreatestLeast(
+  private static CelNode emitGreatestLeast(
       LogicalTypesParser.Func_applicationContext fctx,
-      List<LogicalTypesParser.Check_exprContext> args, String op,
-      StringBuilder sb, String sqlName) {
+      List<LogicalTypesParser.Check_exprContext> args, String op, String sqlName) {
     if (args.size() != 2) {
       throw locatedError(fctx,
           sqlName + "() supports exactly 2 arguments in v1, got " + args.size()
@@ -763,60 +645,33 @@ final class ConstraintFunctions {
     boolean dbl = "double".equals(common);
     boolean temporal = !decimal && !dbl
         && (argIsTemporal(args.get(0)) || argIsTemporal(args.get(1)));
-    StringBuilder bufA = new StringBuilder();
-    StringBuilder bufB = new StringBuilder();
-    visitCheckExpr(args.get(0), bufA);
-    visitCheckExpr(args.get(1), bufB);
-    String nativeA = bufA.toString();
-    String nativeB = bufB.toString();
-    String a = nativeA;
-    String b = nativeB;
+    CelNode nativeA = visitCheckExpr(args.get(0));
+    CelNode nativeB = visitCheckExpr(args.get(1));
+    CelNode a = nativeA;
+    CelNode b = nativeB;
     if (decimal) {
-      StringBuilder decA = new StringBuilder();
-      StringBuilder decB = new StringBuilder();
-      ConstraintEmitter.emitDecimalValue(args.get(0), decA);
-      ConstraintEmitter.emitDecimalValue(args.get(1), decB);
-      a = decA.toString();
-      b = decB.toString();
+      a = ConstraintEmitter.emitDecimalValue(args.get(0));
+      b = ConstraintEmitter.emitDecimalValue(args.get(1));
     } else if (dbl) {
-      StringBuilder dblA = new StringBuilder();
-      StringBuilder dblB = new StringBuilder();
-      ConstraintEmitter.emitNumericAs(args.get(0), "double", dblA);
-      ConstraintEmitter.emitNumericAs(args.get(1), "double", dblB);
-      a = dblA.toString();
-      b = dblB.toString();
+      a = ConstraintEmitter.emitNumericAs(args.get(0), "double");
+      b = ConstraintEmitter.emitNumericAs(args.get(1), "double");
     } else if (temporal) {
       // Native >/< on timestamps; operands and returned values normalized.
-      StringBuilder tsA = new StringBuilder();
-      StringBuilder tsB = new StringBuilder();
-      ConstraintEmitter.emitTimestampValueCheckExpr(args.get(0), tsA);
-      ConstraintEmitter.emitTimestampValueCheckExpr(args.get(1), tsB);
-      a = tsA.toString();
-      b = tsB.toString();
+      a = ConstraintEmitter.emitTimestampValueCheckExpr(args.get(0));
+      b = ConstraintEmitter.emitTimestampValueCheckExpr(args.get(1));
     }
-    StringBuilder pick = new StringBuilder();
+    CelNode pick;
     if (decimal) {
-      pick.append(">".equals(op) ? "decimals.greatest" : "decimals.least")
-          .append('(').append(a).append(", ").append(b).append(')');
+      pick = CelNode.call(">".equals(op) ? "decimals.greatest" : "decimals.least", a, b);
     } else if (dbl || "int".equals(common)) {
-      pick.append(">".equals(op) ? "math.greatest" : "math.least")
-          .append('(').append(a).append(", ").append(b).append(')');
+      pick = CelNode.call(">".equals(op) ? "math.greatest" : "math.least", a, b);
     } else {
       // Temporal / string / other comparable — native min/max via ternary.
-      pick.append('(').append(operand(args.get(0), a)).append(' ').append(op).append(' ')
-          .append(operand(args.get(1), b)).append(" ? ").append(a).append(" : ").append(b)
-          .append(')');
+      pick = CelNode.ternary(CelNode.binary(a, op, b), a, b);
     }
     // Each operand is tested before it is converted or, as JSON leaves a NULL field out, read.
-    emitNullOr(ConstraintNullTest.either(nullTestOf(args.get(0), nativeA, a),
-        nullTestOf(args.get(1), nativeB, b)), true, pick.toString(), sb);
-  }
-
-  // An operand of a comparison, parenthesized unless arithmetic or a primary, which bind tighter.
-  private static CharSequence operand(
-      LogicalTypesParser.Check_exprContext arg, CharSequence emitted) {
-    return ConstraintEmitter.bareAddOfOr(arg.check_expr_or()) != null ? emitted
-        : "(" + emitted + ")";
+    return emitNullOr(ConstraintNullTest.either(nullTestOf(args.get(0), nativeA, a),
+        nullTestOf(args.get(1), nativeB, b)), true, pick);
   }
 
   /**
@@ -824,69 +679,71 @@ final class ConstraintFunctions {
    * converted to the common type: INT natively, DOUBLE and DECIMAL by their
    * cascades. Any other operand is tested as {@code converted}.
    */
-  private static String ownTypeValue(
-      LogicalTypesParser.Check_exprContext arg, String nativeEmit, String converted,
+  private static CelNode ownTypeValue(
+      LogicalTypesParser.Check_exprContext arg, CelNode nativeEmit, CelNode converted,
       ConstraintValidationContext vctx) {
     Schema t = vctx == null ? null : ConstraintResolver.tryResolveCheckExprType(arg, vctx);
     String cat = t == null ? null : ConstraintResolver.categoryOf(t.getType());
     if ("int".equals(cat)) {
       return nativeEmit;
     }
-    StringBuilder own = new StringBuilder();
     if ("double".equals(cat)) {
-      ConstraintEmitter.emitNumericAs(arg, "double", own);
-    } else if ("decimal".equals(cat)) {
-      ConstraintEmitter.emitDecimalValue(arg, own);
-    } else {
-      return converted;
+      return ConstraintEmitter.emitNumericAs(arg, "double");
     }
-    return own.toString();
+    if ("decimal".equals(cat)) {
+      return ConstraintEmitter.emitDecimalValue(arg);
+    }
+    return converted;
   }
 
   // -------------------------------------------------------------------------
   // Special-syntax forms: func_expr_common_subexpr
   // -------------------------------------------------------------------------
 
-  private static void visitFuncCommonSubexpr(
-      LogicalTypesParser.Func_expr_common_subexprContext ctx, StringBuilder sb) {
+  private static CelNode visitFuncCommonSubexpr(
+      LogicalTypesParser.Func_expr_common_subexprContext ctx) {
     if (ctx instanceof LogicalTypesParser.FuncCastContext) {
-      visitCast((LogicalTypesParser.FuncCastContext) ctx, sb);
-    } else if (ctx instanceof LogicalTypesParser.FuncExtractContext) {
-      visitExtract((LogicalTypesParser.FuncExtractContext) ctx, sb);
-    } else if (ctx instanceof LogicalTypesParser.FuncSubstringFromForContext) {
-      visitSubstringFromFor((LogicalTypesParser.FuncSubstringFromForContext) ctx, sb);
-    } else if (ctx instanceof LogicalTypesParser.FuncSubstringCommasContext) {
-      visitSubstringCommas((LogicalTypesParser.FuncSubstringCommasContext) ctx, sb);
-    } else if (ctx instanceof LogicalTypesParser.FuncPositionContext) {
-      visitPosition((LogicalTypesParser.FuncPositionContext) ctx, sb);
-    } else if (ctx instanceof LogicalTypesParser.FuncTrimContext) {
-      visitTrim((LogicalTypesParser.FuncTrimContext) ctx, sb);
-    } else if (ctx instanceof LogicalTypesParser.FuncCurrentTimestampContext) {
-      sb.append("now");
-    } else if (ctx instanceof LogicalTypesParser.FuncVariantGetContext) {
-      visitVariantGet((LogicalTypesParser.FuncVariantGetContext) ctx, sb);
-    } else if (ctx instanceof LogicalTypesParser.FuncTryVariantGetContext) {
-      visitTryVariantGet((LogicalTypesParser.FuncTryVariantGetContext) ctx, sb);
-    } else {
-      throw new ValidationException(
-          "Unrecognized func_expr_common_subexpr subtype: "
-              + ctx.getClass().getSimpleName());
+      return visitCast((LogicalTypesParser.FuncCastContext) ctx);
     }
+    if (ctx instanceof LogicalTypesParser.FuncExtractContext) {
+      return visitExtract((LogicalTypesParser.FuncExtractContext) ctx);
+    }
+    if (ctx instanceof LogicalTypesParser.FuncSubstringFromForContext) {
+      return visitSubstringFromFor((LogicalTypesParser.FuncSubstringFromForContext) ctx);
+    }
+    if (ctx instanceof LogicalTypesParser.FuncSubstringCommasContext) {
+      return visitSubstringCommas((LogicalTypesParser.FuncSubstringCommasContext) ctx);
+    }
+    if (ctx instanceof LogicalTypesParser.FuncPositionContext) {
+      return visitPosition((LogicalTypesParser.FuncPositionContext) ctx);
+    }
+    if (ctx instanceof LogicalTypesParser.FuncTrimContext) {
+      return visitTrim((LogicalTypesParser.FuncTrimContext) ctx);
+    }
+    if (ctx instanceof LogicalTypesParser.FuncCurrentTimestampContext) {
+      return CelNode.ident("now");
+    }
+    if (ctx instanceof LogicalTypesParser.FuncVariantGetContext) {
+      return visitVariantGet((LogicalTypesParser.FuncVariantGetContext) ctx);
+    }
+    if (ctx instanceof LogicalTypesParser.FuncTryVariantGetContext) {
+      return visitTryVariantGet((LogicalTypesParser.FuncTryVariantGetContext) ctx);
+    }
+    throw new ValidationException(
+        "Unrecognized func_expr_common_subexpr subtype: "
+            + ctx.getClass().getSimpleName());
   }
 
   /**
    * Single-arg variant function: {@code celFn(<arg>)}.
    */
-  private static void emitVariantUnary(
+  private static CelNode emitVariantUnary(
       LogicalTypesParser.Func_applicationContext ctx,
-      List<LogicalTypesParser.Check_exprContext> args, String celFn,
-      StringBuilder sb, String sqlName) {
+      List<LogicalTypesParser.Check_exprContext> args, String celFn, String sqlName) {
     if (args.size() != 1) {
       throw locatedError(ctx, sqlName + "() expects 1 argument, got " + args.size());
     }
-    sb.append(celFn).append('(');
-    visitCheckExpr(args.get(0), sb);
-    sb.append(')');
+    return CelNode.call(celFn, visitCheckExpr(args.get(0)));
   }
 
   /**
@@ -894,19 +751,10 @@ final class ConstraintFunctions {
    * the sub-variant) when no RETURNING; {@code variants.as(variants.path(v,
    * path), "label")} (extract + cast) when a return type is given.
    */
-  private static void visitVariantGet(
-      LogicalTypesParser.FuncVariantGetContext ctx, StringBuilder sb) {
+  private static CelNode visitVariantGet(LogicalTypesParser.FuncVariantGetContext ctx) {
     checkLiteralPath(ctx.check_expr(1));
-    if (ctx.castType() == null) {
-      sb.append("variants.path(");
-      visitCheckExpr(ctx.check_expr(0), sb);
-      sb.append(", ");
-      visitCheckExpr(ctx.check_expr(1), sb);
-      sb.append(')');
-    } else {
-      emitVariantPathAs("variants.as", ctx.check_expr(0), ctx.check_expr(1),
-          ctx.castType(), sb);
-    }
+    return ctx.castType() == null ? variantPath(ctx.check_expr(0), ctx.check_expr(1))
+        : emitVariantPathAs("variants.as", ctx.check_expr(0), ctx.check_expr(1), ctx.castType());
   }
 
   /**
@@ -914,11 +762,10 @@ final class ConstraintFunctions {
    * {@code variants.tryAs(variants.path(v, path), "label")} (null on type
    * mismatch).
    */
-  private static void visitTryVariantGet(
-      LogicalTypesParser.FuncTryVariantGetContext ctx, StringBuilder sb) {
+  private static CelNode visitTryVariantGet(LogicalTypesParser.FuncTryVariantGetContext ctx) {
     checkLiteralPath(ctx.check_expr(1));
-    emitVariantPathAs("variants.tryAs", ctx.check_expr(0), ctx.check_expr(1),
-        ctx.castType(), sb);
+    return emitVariantPathAs("variants.tryAs", ctx.check_expr(0), ctx.check_expr(1),
+        ctx.castType());
   }
 
   // A literal path is parsed as the variants functions parse it, so a malformed one is refused
@@ -936,16 +783,17 @@ final class ConstraintFunctions {
     }
   }
 
-  private static void emitVariantPathAs(
+  private static CelNode emitVariantPathAs(
       String asFn, LogicalTypesParser.Check_exprContext v,
       LogicalTypesParser.Check_exprContext path,
-      LogicalTypesParser.CastTypeContext castType, StringBuilder sb) {
-    final String label = variantTypeLabel(castType.primitiveType());
-    sb.append(asFn).append("(variants.path(");
-    visitCheckExpr(v, sb);
-    sb.append(", ");
-    visitCheckExpr(path, sb);
-    sb.append("), \"").append(label).append("\")");
+      LogicalTypesParser.CastTypeContext castType) {
+    return CelNode.call(asFn, variantPath(v, path),
+        CelNode.string(variantTypeLabel(castType.primitiveType())));
+  }
+
+  private static CelNode variantPath(LogicalTypesParser.Check_exprContext v,
+      LogicalTypesParser.Check_exprContext path) {
+    return CelNode.call("variants.path", visitCheckExpr(v), visitCheckExpr(path));
   }
 
   /**
@@ -1012,68 +860,46 @@ final class ConstraintFunctions {
    *       and are rejected.</li>
    * </ul>
    */
-  private static void visitCast(
-      LogicalTypesParser.FuncCastContext ctx, StringBuilder sb) {
+  private static CelNode visitCast(LogicalTypesParser.FuncCastContext ctx) {
     LogicalTypesParser.PrimitiveTypeContext pt = ctx.castType().primitiveType();
     LogicalTypesParser.Check_exprContext arg = ctx.check_expr();
     // A NULL's CAST is null, as int(null) would fail; the strict check still types it.
     ConstraintValidationContext vctx = EMIT_VCTX.get();
     boolean nullArg = ConstraintResolver.isLiteralNull(arg);
     if (nullArg && vctx != null && !vctx.isTypeOnly()) {
-      sb.append("dyn(null)");
-      return;
+      return CelNode.dyn(CelNode.NULL);
     }
     boolean argDecimal = argIsDecimal(arg);
 
     if (isDecimalCastTarget(pt)) {
       int scale = ConstraintResolver.parseDecimalCastParams(pt.getText())[1];
-      sb.append("decimals.round(");
-      if (argDecimal) {
-        ConstraintEmitter.emitDecimalValue(arg, sb);
-      } else {
-        sb.append("decimal(");
-        emitCastArg(arg, nullArg, sb);
-        sb.append(')');
-      }
-      sb.append(", ").append(scale).append(')');
-      return;
+      return CelNode.call("decimals.round", argDecimal ? ConstraintEmitter.emitDecimalValue(arg)
+          : CelNode.call("decimal", emitCastArg(arg, nullArg)),
+          CelNode.literal(String.valueOf(scale)));
     }
 
     String celFn = celTypeFor(pt);
     if (argDecimal) {
       if ("string".equals(celFn)) {
         // (Decimal) -> string overload; the arg must be emitted as a Decimal.
-        sb.append("string(");
-        ConstraintEmitter.emitDecimalValue(arg, sb);
-        sb.append(')');
-        return;
+        return CelNode.call("string", ConstraintEmitter.emitDecimalValue(arg));
       }
       if ("double".equals(celFn)) {
         // (Decimal) -> double overload (FLOAT/REAL/DOUBLE target); narrowing,
         // may lose precision (out-of-range magnitudes become ±Infinity).
-        sb.append("double(");
-        ConstraintEmitter.emitDecimalValue(arg, sb);
-        sb.append(')');
-        return;
+        return CelNode.call("double", ConstraintEmitter.emitDecimalValue(arg));
       }
       throw locatedError(ctx,
           "CAST from DECIMAL to " + pt.getText().toUpperCase(java.util.Locale.ROOT)
               + " is not supported. From a DECIMAL source only CAST(... AS STRING), "
               + "CAST(... AS DOUBLE), and CAST(... AS DECIMAL(p,s)) are available.");
     }
-    sb.append(celFn).append('(');
-    emitCastArg(arg, nullArg, sb);
-    sb.append(')');
+    return CelNode.call(celFn, emitCastArg(arg, nullArg));
   }
 
   // A NULL as dyn, as bool(null) and bytes(null) have no overload, while the cast types it.
-  private static void emitCastArg(
-      LogicalTypesParser.Check_exprContext arg, boolean nullArg, StringBuilder sb) {
-    if (nullArg) {
-      sb.append("dyn(null)");
-    } else {
-      visitCheckExpr(arg, sb);
-    }
+  private static CelNode emitCastArg(LogicalTypesParser.Check_exprContext arg, boolean nullArg) {
+    return nullArg ? CelNode.dyn(CelNode.NULL) : visitCheckExpr(arg);
   }
 
   /** True if the CAST target type is DECIMAL / DEC / NUMERIC. */
@@ -1135,40 +961,30 @@ final class ConstraintFunctions {
    * runtime value (Instant / RFC-3339 string) coerces to a CEL timestamp;
    * {@code now} (CURRENT_TIMESTAMP) is left unwrapped.
    */
-  private static void visitExtract(
-      LogicalTypesParser.FuncExtractContext ctx, StringBuilder sb) {
+  private static CelNode visitExtract(LogicalTypesParser.FuncExtractContext ctx) {
     String field = ctx.identifier().getText().toUpperCase(java.util.Locale.ROOT);
     switch (field) {
       case "YEAR":
-        ConstraintEmitter.emitTimestampReceiver(ctx.check_expr(), sb);
-        sb.append(".getFullYear()");
-        break;
+        return CelNode.method(ConstraintEmitter.emitTimestampReceiver(ctx.check_expr()),
+            "getFullYear");
       case "MONTH":
-        sb.append('(');
-        ConstraintEmitter.emitTimestampReceiver(ctx.check_expr(), sb);
-        sb.append(".getMonth() + 1)");
-        break;
+        return CelNode.binary(CelNode.method(
+            ConstraintEmitter.emitTimestampReceiver(ctx.check_expr()), "getMonth"), "+",
+            CelNode.literal("1"));
       case "DAY":
-        ConstraintEmitter.emitTimestampReceiver(ctx.check_expr(), sb);
-        sb.append(".getDate()");
-        break;
+        return CelNode.method(ConstraintEmitter.emitTimestampReceiver(ctx.check_expr()),
+            "getDate");
       case "HOUR":
-        ConstraintEmitter.emitTimestampReceiver(ctx.check_expr(), sb);
-        sb.append(".getHours()");
-        break;
+        return CelNode.method(ConstraintEmitter.emitTimestampReceiver(ctx.check_expr()),
+            "getHours");
       case "MINUTE":
-        ConstraintEmitter.emitTimestampReceiver(ctx.check_expr(), sb);
-        sb.append(".getMinutes()");
-        break;
+        return CelNode.method(ConstraintEmitter.emitTimestampReceiver(ctx.check_expr()),
+            "getMinutes");
       case "SECOND":
-        ConstraintEmitter.emitTimestampReceiver(ctx.check_expr(), sb);
-        sb.append(".getSeconds()");
-        break;
+        return CelNode.method(ConstraintEmitter.emitTimestampReceiver(ctx.check_expr()),
+            "getSeconds");
       case "EPOCH":
-        sb.append("int(");
-        ConstraintEmitter.emitTimestampReceiver(ctx.check_expr(), sb);
-        sb.append(')');
-        break;
+        return CelNode.call("int", ConstraintEmitter.emitTimestampReceiver(ctx.check_expr()));
       default:
         throw locatedError(ctx,
             "EXTRACT field '" + ctx.identifier().getText() + "' is not supported. "
@@ -1177,41 +993,34 @@ final class ConstraintFunctions {
   }
 
   /** SUBSTRING(s FROM i FOR n) → s.substring(i-1, i-1+n). */
-  private static void visitSubstringFromFor(
-      LogicalTypesParser.FuncSubstringFromForContext ctx, StringBuilder sb) {
+  private static CelNode visitSubstringFromFor(
+      LogicalTypesParser.FuncSubstringFromForContext ctx) {
     List<LogicalTypesParser.Check_exprContext> exprs = ctx.check_expr();
     rejectNonPositiveSubstringStart(exprs.get(1));
     if (exprs.size() > 2) {
       rejectNonPositiveSubstringLength(exprs.get(2));
     }
-    emitSubstring(exprs, sb);
+    return emitSubstring(exprs);
   }
 
   /** SUBSTRING(s, i, n) (comma form) — same translation as the FROM/FOR form. */
-  private static void visitSubstringCommas(
-      LogicalTypesParser.FuncSubstringCommasContext ctx, StringBuilder sb) {
+  private static CelNode visitSubstringCommas(
+      LogicalTypesParser.FuncSubstringCommasContext ctx) {
     List<LogicalTypesParser.Check_exprContext> exprs = ctx.check_expr();
     rejectNonPositiveSubstringStart(exprs.get(1));
     if (exprs.size() > 2) {
       rejectNonPositiveSubstringLength(exprs.get(2));
     }
-    emitSubstring(exprs, sb);
+    return emitSubstring(exprs);
   }
 
-  private static void emitSubstring(
-      List<LogicalTypesParser.Check_exprContext> exprs, StringBuilder sb) {
-    emitWrappedReceiver(exprs.get(0), sb);
-    sb.append(".substring((");
-    visitCheckExpr(exprs.get(1), sb);
-    sb.append(") - 1");
-    if (exprs.size() > 2) {
-      sb.append(", (");
-      visitCheckExpr(exprs.get(1), sb);
-      sb.append(") - 1 + (");
-      visitCheckExpr(exprs.get(2), sb);
-      sb.append(')');
-    }
-    sb.append(')');
+  private static CelNode emitSubstring(List<LogicalTypesParser.Check_exprContext> exprs) {
+    CelNode start = CelNode.binary(visitCheckExpr(exprs.get(1)), "-", CelNode.literal("1"));
+    CelNode receiver = visitCheckExpr(exprs.get(0));
+    return exprs.size() > 2
+        ? CelNode.method(receiver, "substring", start,
+            CelNode.binary(start, "+", visitCheckExpr(exprs.get(2))))
+        : CelNode.method(receiver, "substring", start);
   }
 
   /** Reject SUBSTRING(... FROM i ...) when i is a literal value ≤ 0. */
@@ -1245,41 +1054,28 @@ final class ConstraintFunctions {
    * guards give Flink's answers (an empty needle is 1, a start past the end 0) and
    * never pass indexOf an offset out of range, where the CEL runtimes disagree.
    */
-  private static void visitPosition(
-      LogicalTypesParser.FuncPositionContext ctx, StringBuilder sb) {
-    LogicalTypesParser.Check_exprContext haystack = ctx.check_expr(0);
+  private static CelNode visitPosition(LogicalTypesParser.FuncPositionContext ctx) {
+    CelNode haystack = visitCheckExpr(ctx.check_expr(0));
+    CelNode needle = visitCExpr(ctx.c_expr());
+    CelNode one = CelNode.literal("1");
     if (ctx.FROM() == null) {
-      sb.append('(');
-      emitWrappedReceiver(haystack, sb);
-      sb.append(".indexOf(");
-      visitCExpr(ctx.c_expr(), sb);
-      sb.append(") + 1)");
-      return;
+      return CelNode.binary(CelNode.method(haystack, "indexOf", needle), "+", one);
     }
-    StringBuilder start = new StringBuilder();
-    emitWrappedReceiver(ctx.check_expr(1), start);
-    StringBuilder value = new StringBuilder("(");
-    visitCExpr(ctx.c_expr(), value);
-    value.append(" == '' ? 1 : (").append(start).append(" > size(");
-    visitCheckExpr(haystack, value);
-    value.append(") ? 0 : ");
-    emitWrappedReceiver(haystack, value);
-    value.append(".indexOf(");
-    visitCExpr(ctx.c_expr(), value);
-    value.append(", ").append(start).append(" <= 1 ? 0 : ").append(start).append(" - 1) + 1))");
+    CelNode start = visitCheckExpr(ctx.check_expr(1));
+    CelNode zero = CelNode.literal("0");
+    CelNode offset = CelNode.ternary(CelNode.binary(start, "<=", one), zero,
+        CelNode.binary(start, "-", one));
+    CelNode value = CelNode.ternary(CelNode.binary(needle, "==", CelNode.literal("''")), one,
+        CelNode.ternary(CelNode.binary(start, ">", CelNode.call("size", haystack)), zero,
+            CelNode.binary(CelNode.method(haystack, "indexOf", needle, offset), "+", one)));
     // NULL when an operand is: an empty needle or a start past the end skips the others.
-    String isNull = ConstraintNullTest.of(ctx);
-    if (isNull == null) {
-      sb.append(value);
-    } else {
-      emitNullOr(isNull, true, value.toString(), sb);
-    }
+    CelNode isNull = ConstraintNullTest.of(ctx);
+    return isNull == null ? value : emitNullOr(isNull, true, value);
   }
 
 
   /** TRIM(x) → x.trim() (whitespace, both ends). */
-  private static void visitTrim(
-      LogicalTypesParser.FuncTrimContext ctx, StringBuilder sb) {
+  private static CelNode visitTrim(LogicalTypesParser.FuncTrimContext ctx) {
     if (ctx.LEADING() != null || ctx.TRAILING() != null) {
       String mode = ctx.LEADING() != null ? "LEADING" : "TRAILING";
       throw locatedError(ctx,
@@ -1294,8 +1090,7 @@ final class ConstraintFunctions {
               + "Use TRIM(x) (whitespace, both ends), or for character-set "
               + "trimming, use MATCHES(x, '<regex>') with an anchored pattern.");
     }
-    emitWrappedReceiver(exprs.get(0), sb);
-    sb.append(".trim()");
+    return CelNode.method(visitCheckExpr(exprs.get(0)), "trim");
   }
 
   // -------------------------------------------------------------------------
