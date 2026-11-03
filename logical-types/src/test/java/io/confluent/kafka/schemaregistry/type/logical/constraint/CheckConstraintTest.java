@@ -569,6 +569,16 @@ class CheckConstraintTest {
   }
 
   @Test
+  void aSignedBoolLiteralIsStillRefused() {
+    // Signs that cancel don't make a BOOLEAN literal unsigned.
+    for (String sql : List.of("active = -(-TRUE)", "-(-TRUE) = active", "active <> -(-FALSE)")) {
+      ValidationException e = assertThrows(ValidationException.class,
+          () -> translateCheckNotNull(sql), sql);
+      assertTrue(e.getMessage().contains("strict type-check"), e.getMessage());
+    }
+  }
+
+  @Test
   void eqNullRejected() {
     // SQL `=` against NULL is always UNKNOWN (CHECK passes), but CEL `==`
     // is a real boolean — emitting `this.x == null` would silently fail
@@ -3758,7 +3768,7 @@ class CheckConstraintTest {
     // A CHECK that may be NULL passes unless it's FALSE, so it's its NULL test or its predicate;
     // one with a raising operand beside a NULL keeps the form that tests a deciding one first.
     String columns = "i INT NOT NULL, a INT, b INT, amount DECIMAL(10, 2), t BOOLEAN, "
-        + "arr INT NOT NULL ARRAY, an INT ARRAY NOT NULL, z INT NOT NULL";
+        + "arr INT NOT NULL ARRAY, an INT ARRAY NOT NULL, z INT NOT NULL, s STRING";
     String aNull = "(!has(this.a) || dyn(this.a) == null)";
     String bNull = "(!has(this.b) || dyn(this.b) == null)";
     assertEquals("(!has(this.amount) || dyn(this.amount) == null)"
@@ -3780,6 +3790,8 @@ class CheckConstraintTest {
         translateCheckOver(columns, "EVERY(an, e, e > 0)"));
     assertEquals("(!has(this.t) || dyn(this.t) == null) || this.t",
         translateCheckOver(columns, "t = TRUE"));
+    assertEquals("(!has(this.s) || dyn(this.s) == null) || this.s.startsWith('a')",
+        translateCheckOver(columns, "STARTS_WITH(s, 'a')"));
     assertTrue(translateCheckOver(columns, "a > 0 OR 1 / z > 0").startsWith("!("));
     assertTrue(translateCheckOver(columns, "a BETWEEN 1 AND 10 / z").startsWith("!("));
     Object[][] rows = {
