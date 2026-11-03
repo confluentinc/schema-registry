@@ -233,6 +233,12 @@ public class VariantBuilder {
       throw new IllegalArgumentException(
           "decimal scale must be non-negative, got " + d.scale());
     }
+    // DECIMAL16 holds 38 digits; a wider value would wrap into a different number.
+    if (d.precision() > VariantFormat.MAX_DECIMAL16_PRECISION
+        || d.scale() > VariantFormat.MAX_DECIMAL16_PRECISION) {
+      throw new IllegalArgumentException("decimal precision and scale must be at most "
+          + VariantFormat.MAX_DECIMAL16_PRECISION + ", got " + d.precision() + " and " + d.scale());
+    }
     BigInteger unscaled = d.unscaledValue();
     if (d.precision() <= VariantFormat.MAX_DECIMAL4_PRECISION) {
       checkCapacity(2 /* header and scale size */ + 4);
@@ -247,8 +253,6 @@ public class VariantBuilder {
       VariantFormat.writeLong(writeBuffer, writePos + 2, unscaled.longValueExact(), 8);
       writePos += 10;
     } else {
-      assert d.scale() <= VariantFormat.MAX_DECIMAL16_PRECISION
-          && d.precision() <= VariantFormat.MAX_DECIMAL16_PRECISION;
       checkCapacity(2 /* header and scale size */ + 16);
       writeBuffer[writePos] = VariantFormat.HEADER_DECIMAL16;
       writeBuffer[writePos + 1] = (byte) d.scale();
