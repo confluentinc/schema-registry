@@ -620,6 +620,58 @@ public abstract class RestApiTest {
   }
 
   @Test
+  public void testKmsHostAllowlist() throws Exception {
+    client.createKek("allowed", "hcvault", "https://vault.internal:8200/transit/keys/x",
+        null, null, false);
+    client.createKek("subdomain", "hcvault", "https://a.trusted.example.com/transit/keys/x",
+        null, null, false);
+
+    assertInvalidKek(() -> client.createKek("blocked", "hcvault",
+        "https://attacker.example.com/transit/keys/x", null, null, true));
+    client.createKek("schemeless", "hcvault", "https://vault.internal/transit/keys/x",
+        Collections.singletonMap("encrypt.alternate.kms.key.ids",
+            "vault.internal/transit/keys/y"), null, false);
+
+    assertInvalidKek(() -> client.createKek("blocked", "hcvault://https",
+        "attacker.example.com/transit/keys/x", null, null, false));
+    assertInvalidKek(() -> client.createKek("blocked", "azure-kms://https",
+        "attacker.example.com/keys/x", null, null, false));
+    assertInvalidKek(() -> client.createKek("blocked", "HCVAULT",
+        "https://attacker.example.com/transit/keys/x", null, null, false));
+    assertInvalidKek(() -> client.createKek("blocked", "azure-kms",
+        "https://attacker.example.com/keys/x", null, null, false));
+    assertInvalidKek(() -> client.createKek("blocked", "hcvault",
+        "https://vault.internal/transit/keys/x",
+        Collections.singletonMap("encrypt.alternate.kms.key.ids",
+            "https://attacker.example.com/transit/keys/x"), null, false));
+    assertInvalidKek(() -> client.updateKek("allowed",
+        Collections.singletonMap("encrypt.alternate.kms.key.ids",
+            "https://attacker.example.com/transit/keys/x"), null, false));
+  }
+
+  @Test
+  public void testHcVaultKmsPropsAllowlist() throws Exception {
+    client.createKek("shared", "hcvault", "https://vault.internal/transit/keys/x",
+        Collections.singletonMap("namespace", "ns"), null, true);
+    assertInvalidKek(() -> client.createKek("blocked", "hcvault",
+        "https://vault.internal/transit/keys/x",
+        Collections.singletonMap("test.client", "x"), null, true));
+    assertInvalidKek(() -> client.updateKek("shared",
+        Collections.singletonMap("test.client", "x"), null, true));
+
+    // Non-shared KEK props only reach clients, so they are not allowlisted until shared.
+    client.createKek("unshared", "hcvault", "https://vault.internal/transit/keys/x",
+        Collections.singletonMap("test.client", "x"), null, false);
+    client.updateKek("unshared", null, "doc", false);
+    assertInvalidKek(() -> client.updateKek("unshared", null, null, true));
+  }
+
+  private static void assertInvalidKek(Executable r) {
+    RestClientException e = assertThrows(RestClientException.class, r);
+    assertEquals(422, e.getStatus());
+  }
+
+  @Test
   public void testUnknownKmsType() throws Exception {
     String kekName = "kek1";
     String kmsType = "unknown-kms";

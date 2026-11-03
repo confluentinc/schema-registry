@@ -34,11 +34,19 @@ import java.util.TreeMap;
  */
 public final class KmsPropsRedactor {
 
+  static final String HCVAULT_TOKEN_ID = "token.id";
+  static final String HCVAULT_NAMESPACE = "namespace";
+  static final String HCVAULT_APPROLE_ROLE_ID = "approle.role.id";
+  static final String HCVAULT_APPROLE_SECRET_ID = "approle.secret.id";
+  static final String HCVAULT_SSL_KEYSTORE_LOCATION = "ssl.keystore.location";
+  static final String HCVAULT_SSL_KEYSTORE_PASSWORD = "ssl.keystore.password";
+  static final String HCVAULT_SSL_TRUSTSTORE_LOCATION = "ssl.truststore.location";
+
   // Secret-bearing kmsProps keys across the supported KMS drivers.
   private static final Set<String> SENSITIVE_KEYS = ImmutableSet.of(
-      "token.id",              // hcvault: Vault auth token
-      "approle.secret.id",     // hcvault: Vault AppRole secret id
-      "ssl.keystore.password", // hcvault: keystore password for mTLS to Vault
+      HCVAULT_TOKEN_ID,              // hcvault: Vault auth token
+      HCVAULT_APPROLE_SECRET_ID,     // hcvault: Vault AppRole secret id
+      HCVAULT_SSL_KEYSTORE_PASSWORD, // hcvault: keystore password for mTLS to Vault
       "secret.access.key",     // aws: IAM secret access key
       "client.secret",         // azure: service principal secret
       "private.key",           // gcp: service account private key
