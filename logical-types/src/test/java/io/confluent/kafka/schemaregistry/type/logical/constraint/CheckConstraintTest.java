@@ -1086,8 +1086,8 @@ class CheckConstraintTest {
 
   @Test
   void isNullCombinedWithLogical() {
-    assertEquals("((has(this.x) && dyn(this.x) != null)) && ((!has(this.x) || dyn(this.x) =="
-            + " null) || this.x > 0)",
+    assertEquals("(has(this.x) && dyn(this.x) != null) && ((!has(this.x) || dyn(this.x) == null)"
+            + " || this.x > 0)",
         translateCheck("x IS NOT NULL AND x > 0"));
   }
 
@@ -1229,14 +1229,14 @@ class CheckConstraintTest {
   @Test
   void inWithLogical() {
     assertEquals("((!has(this.status) || dyn(this.status) == null) || this.status in ['A', 'B'])"
-            + " && ((has(this.active) && dyn(this.active) != null))",
+            + " && (has(this.active) && dyn(this.active) != null)",
         translateCheck("status IN ('A', 'B') AND active IS NOT NULL"));
   }
 
   @Test
   void betweenWithLogical() {
     assertEquals("(!has(this.age) || dyn(this.age) == null) || (0 <= this.age && this.age <= 150)"
-            + " || ((!has(this.age) || dyn(this.age) == null))",
+            + " || (!has(this.age) || dyn(this.age) == null)",
         translateCheck("age BETWEEN 0 AND 150 OR age IS NULL"));
   }
 
@@ -1247,7 +1247,7 @@ class CheckConstraintTest {
     assertEquals(
         "((!has(this.status) || dyn(this.status) == null) || this.status in ['ACTIVE',"
             + " 'PENDING']) && ((!has(this.age) || dyn(this.age) == null) || (18 <= this.age &&"
-            + " this.age <= 65)) && ((has(this.email) && dyn(this.email) != null))",
+            + " this.age <= 65)) && (has(this.email) && dyn(this.email) != null)",
         result);
   }
 
@@ -1357,7 +1357,7 @@ class CheckConstraintTest {
   @Test
   void likeWithLogicalCombination() {
     assertEquals("((!has(this.name) || dyn(this.name) == null) || this.name.matches('^.*foo.*$'))"
-            + " && ((has(this.id) && dyn(this.id) != null))",
+            + " && (has(this.id) && dyn(this.id) != null)",
         translateCheck("name LIKE '%foo%' AND id IS NOT NULL"));
   }
 
@@ -3919,6 +3919,30 @@ class CheckConstraintTest {
   }
 
   @Test
+  void anIsNullOfInputsNeverOrAlwaysNullIsNoTernary() throws Exception {
+    // Over inputs never NULL, the operand is only evaluated, so an error still fails; over a
+    // literal NULL, the result is a constant.
+    String columns = "s STRING NOT NULL, i INT NOT NULL, z INT NOT NULL";
+    assertEquals("dyn(variants.parseJson(this.s)) != null",
+        translateCheckOver(columns, "PARSE_JSON(s) IS NOT NULL"));
+    assertEquals("dyn(this.i / this.z) != null", translateCheckOver(columns, "i / z IS NOT NULL"));
+    assertEquals("((this.i / this.z > 0) ? true : true)",
+        translateCheckOver(columns, "(i / z > 0) IS NOT NULL"));
+    assertEquals("true", translateCheckOver(columns, "CAST(NULL AS INT) IS NULL"));
+    assertEquals("false", translateCheckOver(columns, "CAST(NULL AS INT) IS NOT NULL"));
+    Map<String, Object> good = row("s", "5", "i", 1, "z", 1);
+    Map<String, Object> bad = row("s", "{x", "i", 1, "z", 0);
+    assertEquals(true, evalOver(translateCheckOver(columns, "PARSE_JSON(s) IS NOT NULL"), good));
+    assertEquals(true, evalOver(translateCheckOver(columns, "i / z IS NOT NULL"), good));
+    assertEquals(true, evalOver(translateCheckOver(columns, "(i / z > 0) IS NOT NULL"), good));
+    for (String sql : List.of("PARSE_JSON(s) IS NOT NULL", "i / z IS NOT NULL",
+        "(i / z > 0) IS NOT NULL")) {
+      String cel = translateCheckOver(columns, sql);
+      assertThrows(CelEvaluationException.class, () -> evalOver(cel, bad), sql + " -> " + cel);
+    }
+  }
+
+  @Test
   void aMalformedLiteralVariantPathIsRefused() {
     // A literal path is parsed as the variants functions parse it, so it fails here, not on
     // every record.
@@ -4943,14 +4967,14 @@ class CheckConstraintTest {
     // the `... == null` half: `!has(a) || dyn(a) == null && b > 0` would parse
     // as `!has(a) || (a == null && b > 0)` — wrong (returns true for absent
     // a with b <= 0). Wrapping yields `(!has(a) || dyn(a) == null) && b > 0`.
-    assertEquals("((!has(this.a) || dyn(this.a) == null)) && ((!has(this.b) || dyn(this.b) =="
-            + " null) || this.b > 0)",
+    assertEquals("(!has(this.a) || dyn(this.a) == null) && ((!has(this.b) || dyn(this.b) == null)"
+            + " || this.b > 0)",
         translateCheck("a IS NULL AND b > 0"));
-    assertEquals("((!has(this.b) || dyn(this.b) == null) || this.b > 0) && ((!has(this.a) ||"
-            + " dyn(this.a) == null))",
+    assertEquals("((!has(this.b) || dyn(this.b) == null) || this.b > 0) && (!has(this.a) ||"
+            + " dyn(this.a) == null)",
         translateCheck("b > 0 AND a IS NULL"));
-    assertEquals("((!has(this.a) || dyn(this.a) == null) || this.a in [1, 2]) && ((!has(this.b)"
-            + " || dyn(this.b) == null))",
+    assertEquals("((!has(this.a) || dyn(this.a) == null) || this.a in [1, 2]) && (!has(this.b) ||"
+            + " dyn(this.b) == null)",
         translateCheck("a IN (1, 2) AND b IS NULL"));
   }
 
