@@ -39,11 +39,13 @@ import java.util.List;
  * <ol>
  *   <li>{@link #enforceMaxParseDepth} — guard recursive walkers from stack
  *       overflow on pathological inputs.</li>
- *   <li>{@link #validateBooleanRoot} — top-level expression must yield bool.</li>
  *   <li>{@link #validateColumnRefs} — every column ref resolves to a known
  *       binding, with indirection chains type-checked.</li>
- *   <li>Type-aware passes: comparisons, concat, casts, CASE branches, BETWEEN
- *       bounds, IN list/target, function args, macro bodies, modulo.</li>
+ *   <li>Literal, LIKE pattern and type-aware passes: comparisons, concat,
+ *       arithmetic, CASE branches, BETWEEN bounds, IN list/target, function
+ *       args, IS NULL operands, macro bodies.</li>
+ *   <li>{@link #validateBooleanRoot} — top-level expression must yield bool;
+ *       last, so a part's own error is the one reported.</li>
  * </ol>
  *
  * <p>All passes are best-effort: when a node's type can't be resolved at our
@@ -164,8 +166,8 @@ final class ConstraintValidator {
       return true;
     }
     // Below the LIKE level we're in non-boolean territory — additive,
-    // multiplicative (incl. ||), unary, c_expr. The exception: bool literal,
-    // boolean column ref, or call to a boolean-returning function/macro.
+    // multiplicative (incl. ||), unary, c_expr. The exception: a bool literal, a
+    // BOOLEAN read, a CASE of boolean results, or a boolean-returning function/macro.
     LogicalTypesParser.Check_expr_addContext add = like.check_expr_add();
     if (add.check_expr_mul().size() > 1) {
       return false;
@@ -190,13 +192,17 @@ final class ConstraintValidator {
     }
     if (c instanceof LogicalTypesParser.CheckParenContext) {
       LogicalTypesParser.CheckParenContext paren = (LogicalTypesParser.CheckParenContext) c;
-      return paren.indirection() == null && isBooleanShaped(paren.check_expr(), vctx);
+      if (paren.indirection() == null) {
+        return isBooleanShaped(paren.check_expr(), vctx);
+      }
+      // A field or element of a bracketed value, such as (r).b, is a BOOLEAN read too.
+      Schema resolved = ConstraintResolver.resolveParenType(paren, vctx);
+      return resolved != null && resolved.getType() == Schema.Type.BOOLEAN;
     }
     if (c instanceof LogicalTypesParser.CheckCaseContext) {
-      // One whose branches' type doesn't resolve is accepted, as before.
-      Schema type = ConstraintResolver.tryResolveCaseExprType(
-          ((LogicalTypesParser.CheckCaseContext) c).case_expr(), vctx);
-      return type == null || type.getType() == Schema.Type.BOOLEAN;
+      // Each result boolean-shaped too.
+      return ConstraintResolver.caseResults(((LogicalTypesParser.CheckCaseContext) c).case_expr())
+          .stream().allMatch(r -> isBooleanShaped(r, vctx));
     }
     if (c instanceof LogicalTypesParser.CheckFuncContext) {
       return isBooleanFunc(((LogicalTypesParser.CheckFuncContext) c).func_expr(), vctx);
@@ -216,8 +222,7 @@ final class ConstraintValidator {
 
   /**
    * True if a function call returns boolean. Conservative — known boolean
-   * functions only; everything else assumed non-boolean (CASE handled
-   * separately via "assume true" above).
+   * functions only; everything else assumed non-boolean.
    */
   private static boolean isBooleanFunc(
       LogicalTypesParser.Func_exprContext fctx, ConstraintValidationContext vctx) {
@@ -332,7 +337,7 @@ final class ConstraintValidator {
           // predicate body (arg 2) in a context that includes the binding,
           // typed as the collection's element type if we can resolve it.
           String iterVar = args.get(1).getText();
-          if (iterVar.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+          if (ConstraintFunctions.isSimpleIdentifier(iterVar)) {
             Schema elemType = ConstraintResolver.resolveCollectionElementType(args.get(0), vctx);
             validateColumnRefs(args.get(2), vctx.withBinding(iterVar, elemType));
           }
@@ -534,7 +539,7 @@ final class ConstraintValidator {
     }
     pass.run(args.get(0), vctx);
     String iterVar = args.get(1).getText();
-    if (iterVar.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+    if (ConstraintFunctions.isSimpleIdentifier(iterVar)) {
       Schema elemType = ConstraintResolver.resolveCollectionElementType(args.get(0), vctx);
       pass.run(args.get(2), vctx.withBinding(iterVar, elemType));
     }
@@ -618,13 +623,15 @@ final class ConstraintValidator {
     // Same for ENUM/STRUCT/ARRAY/MAP/UNION/VARIANT — CEL `==` accepts
     // them but ordering operators are SQL-meaningless.
     if (!isEquality) {
-      if (lhsType != null && !ConstraintResolver.isOrderable(lhsType.getType())) {
+      if (!ConstraintResolver.unknownType(lhsType)
+          && !ConstraintResolver.isOrderable(lhsType.getType())) {
         throw locatedError(cmp,
             "Cannot use relational operator " + op + " on " + lhsType.getType()
                 + " — only numeric, string, bytes, and date/time types are "
                 + "ordered. Use = / <> for equality.");
       }
-      if (rhsType != null && !ConstraintResolver.isOrderable(rhsType.getType())) {
+      if (!ConstraintResolver.unknownType(rhsType)
+          && !ConstraintResolver.isOrderable(rhsType.getType())) {
         throw locatedError(cmp,
             "Cannot use relational operator " + op + " on " + rhsType.getType()
                 + " — only numeric, string, bytes, and date/time types are "
@@ -701,7 +708,7 @@ final class ConstraintValidator {
       LogicalTypesParser.Check_expr_mulContext mul,
       ConstraintValidationContext vctx, String opLabel) {
     Schema t = ConstraintResolver.tryResolveMulType(mul, vctx);
-    if (t == null) {
+    if (ConstraintResolver.unknownType(t)) {
       return;
     }
     String cat = ConstraintResolver.categoryOf(t.getType());
@@ -739,7 +746,7 @@ final class ConstraintValidator {
       LogicalTypesParser.Check_expr_unary_signContext sign,
       ConstraintValidationContext vctx) {
     Schema t = ConstraintResolver.tryResolveUnarySignType(sign, vctx);
-    if (t == null) {
+    if (ConstraintResolver.unknownType(t)) {
       return;
     }
     String cat = ConstraintResolver.categoryOf(t.getType());
@@ -808,7 +815,7 @@ final class ConstraintValidator {
     // resolver returns the unified leaf type when resolvable, null otherwise
     // (deferred — strict-check catches the resulting emit if types don't unify).
     Schema type = ConstraintResolver.tryResolveUnarySignType(sign, vctx);
-    if (type == null) {
+    if (ConstraintResolver.unknownType(type)) {
       return;
     }
     if (!ConstraintResolver.isStringOrBytes(type.getType())) {
@@ -1306,7 +1313,7 @@ final class ConstraintValidator {
         if (funcName != null
             && ConstraintResolver.NEVER_NULL_FUNCS.contains(funcName)) {
           // One whose NULL can't be told is refused when emitted if an input may be NULL.
-          String byInputs = ConstraintNullTest.of(is.check_expr_compare(), vctx);
+          CelNode byInputs = ConstraintNullTest.of(is.check_expr_compare(), vctx);
           if (ConstraintNullTest.NEVER.equals(byInputs) || byInputs == null
               && !ConstraintNullTest.mayBeNullByInput(is.check_expr_compare(), vctx)) {
             throw locatedError(is,
@@ -1381,11 +1388,13 @@ final class ConstraintValidator {
             fctx.check_expr_list().check_expr();
         if (args.size() == 3) {
           String iterVar = args.get(1).getText();
-          ConstraintValidationContext bodyCtx = vctx;
-          if (iterVar.matches("[A-Za-z_][A-Za-z0-9_]*")) {
-            Schema elemType = ConstraintResolver.resolveCollectionElementType(args.get(0), vctx);
-            bodyCtx = vctx.withBinding(iterVar, elemType);
+          // A variable that isn't an identifier is refused when the macro is emitted.
+          if (!ConstraintFunctions.isSimpleIdentifier(iterVar)) {
+            validateMacroBodies(args.get(0), vctx);
+            return;
           }
+          Schema elemType = ConstraintResolver.resolveCollectionElementType(args.get(0), vctx);
+          ConstraintValidationContext bodyCtx = vctx.withBinding(iterVar, elemType);
           if (!isBooleanShaped(args.get(2), bodyCtx)) {
             throw locatedError(args.get(2),
                 name + "() predicate body must yield a boolean, got: '"
