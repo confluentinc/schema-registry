@@ -623,13 +623,15 @@ final class ConstraintValidator {
     // Same for ENUM/STRUCT/ARRAY/MAP/UNION/VARIANT — CEL `==` accepts
     // them but ordering operators are SQL-meaningless.
     if (!isEquality) {
-      if (lhsType != null && !ConstraintResolver.isOrderable(lhsType.getType())) {
+      if (!ConstraintResolver.unknownType(lhsType)
+          && !ConstraintResolver.isOrderable(lhsType.getType())) {
         throw locatedError(cmp,
             "Cannot use relational operator " + op + " on " + lhsType.getType()
                 + " — only numeric, string, bytes, and date/time types are "
                 + "ordered. Use = / <> for equality.");
       }
-      if (rhsType != null && !ConstraintResolver.isOrderable(rhsType.getType())) {
+      if (!ConstraintResolver.unknownType(rhsType)
+          && !ConstraintResolver.isOrderable(rhsType.getType())) {
         throw locatedError(cmp,
             "Cannot use relational operator " + op + " on " + rhsType.getType()
                 + " — only numeric, string, bytes, and date/time types are "
@@ -706,7 +708,7 @@ final class ConstraintValidator {
       LogicalTypesParser.Check_expr_mulContext mul,
       ConstraintValidationContext vctx, String opLabel) {
     Schema t = ConstraintResolver.tryResolveMulType(mul, vctx);
-    if (t == null) {
+    if (ConstraintResolver.unknownType(t)) {
       return;
     }
     String cat = ConstraintResolver.categoryOf(t.getType());
@@ -744,7 +746,7 @@ final class ConstraintValidator {
       LogicalTypesParser.Check_expr_unary_signContext sign,
       ConstraintValidationContext vctx) {
     Schema t = ConstraintResolver.tryResolveUnarySignType(sign, vctx);
-    if (t == null) {
+    if (ConstraintResolver.unknownType(t)) {
       return;
     }
     String cat = ConstraintResolver.categoryOf(t.getType());
@@ -813,7 +815,7 @@ final class ConstraintValidator {
     // resolver returns the unified leaf type when resolvable, null otherwise
     // (deferred — strict-check catches the resulting emit if types don't unify).
     Schema type = ConstraintResolver.tryResolveUnarySignType(sign, vctx);
-    if (type == null) {
+    if (ConstraintResolver.unknownType(type)) {
       return;
     }
     if (!ConstraintResolver.isStringOrBytes(type.getType())) {

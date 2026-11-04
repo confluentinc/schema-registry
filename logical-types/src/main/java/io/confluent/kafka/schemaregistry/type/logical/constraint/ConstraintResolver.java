@@ -995,7 +995,8 @@ final class ConstraintResolver {
    * Resolve the type of {@code col}, walking through any indirection: a field,
    * an element or a map value, through named types. Returns null if the root
    * name isn't a known column (validation will catch that separately) or if a
-   * step doesn't resolve, as into a named type declared outside the script.
+   * step doesn't resolve; an element or value of a named type declared outside
+   * the script is its reference.
    */
   static Schema resolveColumnRefType(
       LogicalTypesParser.ColumnrefContext col, ConstraintValidationContext vctx) {
@@ -1096,13 +1097,22 @@ final class ConstraintResolver {
   }
 
   /**
+   * True if a resolved type says nothing here: null, or a named type declared outside the
+   * script, whose type the strict check alone has.
+   */
+  static boolean unknownType(Schema type) {
+    return type == null || type.getType() == Schema.Type.NAMED_TYPE_REF;
+  }
+
+  /**
    * True if two LT types are CEL-comparable. Categories must match exactly:
    * CEL has no implicit int↔double promotion in {@code _>_}/{@code _==_}
    * etc. (cel-java's strict checker rejects {@code int > double}). Same for
    * decimal, which isn't a built-in CEL type and rides in its own category.
    */
   static boolean areComparable(Schema.Type a, Schema.Type b) {
-    if (a == b) {
+    // A named type from outside the script isn't known here (unknownType).
+    if (a == b || a == Schema.Type.NAMED_TYPE_REF || b == Schema.Type.NAMED_TYPE_REF) {
       return true;
     }
     String ca = categoryOf(a);

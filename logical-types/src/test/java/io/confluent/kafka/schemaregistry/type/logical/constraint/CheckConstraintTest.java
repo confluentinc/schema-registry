@@ -672,7 +672,8 @@ class CheckConstraintTest {
     // fields get a column's handling: BOOLEAN reads, timestamp() and decimals.*, NULL tests.
     String script = "USING TYPE Ext FOR REF 'http://example.com/ext.json'; "
         + "STRUCT P (b BOOLEAN NOT NULL, i INT NOT NULL, t TIMESTAMP_LTZ(3) NOT NULL, "
-        + "d DECIMAL(10, 2) NOT NULL, xs INT NOT NULL ARRAY NOT NULL, nxs INT ARRAY NOT NULL); "
+        + "d DECIMAL(10, 2) NOT NULL, xs INT NOT NULL ARRAY NOT NULL, nxs INT ARRAY NOT NULL, "
+        + "ye Ext NOT NULL ARRAY NOT NULL); "
         + "ENUM E ('A', 'B'); STRUCT T (ps P NOT NULL ARRAY NOT NULL, "
         + "mp MAP<STRING, P NOT NULL> NOT NULL, es E NOT NULL ARRAY NOT NULL, k INT NOT NULL, "
         + "tt TIMESTAMP_LTZ(3) NOT NULL, dd DECIMAL(10, 2) NOT NULL, "
@@ -725,9 +726,15 @@ class CheckConstraintTest {
       assertEquals(true, evalOver(cel, set), c[0] + " -> " + cel);
       assertEquals(true, evalOver(cel, empty), c[0] + " on empty -> " + cel);
     }
-    // A field of one from outside the script doesn't resolve, so it's read untyped.
-    for (String[] c : new String[][] {{"xe[1].i > 0", "this.xe[0].i > 0"},
-        {"re.x.i > 0", "this.re.x.i > 0"}}) {
+    // One from outside the script is unknown to the type checks, as a root column of one is,
+    // and a field of it doesn't resolve, so it's read untyped.
+    String ye = "size(this.ps) < 1 || size(this.ps[0].ye) < 1 || this.ps[0].ye[0]";
+    for (String[] c : new String[][] {{"ps[1].ye[1] = 'A'", ye + " == 'A'"},
+        {"ps[1].ye[1] || 'x' = 'Ax'", ye + " + 'x' == 'Ax'"},
+        {"ps[1].ye[1] + 1 > 0", ye + " + 1 > 0"}, {"ps[1].ye[1] < 'A'", ye + " < 'A'"},
+        {"xe[1] = 'A'", "size(this.xe) < 1 || this.xe[0] == 'A'"},
+        {"COALESCE(xe[1], 'A') = 'A'", "!(size(this.xe) < 1) ? this.xe[0] == 'A' : true"},
+        {"xe[1].i > 0", "this.xe[0].i > 0"}, {"re.x.i > 0", "this.re.x.i > 0"}}) {
       assertEquals(c[1], parseScript(String.format(script, c[0])).getRootSchema().getRules()
           .get(0).getExpr(), c[0]);
     }
