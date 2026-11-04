@@ -4470,6 +4470,34 @@ class CheckConstraintTest {
   }
 
   @Test
+  void aCheckReadsANamedTypeDeclaredAfterIt() {
+    // A CHECK is translated once every named type is built, so it reads the fields of one
+    // declared after it, or of its own, and the DDL written root first parses back.
+    String addrZip = "!has(this.addr) || dyn(this.addr) == null || !has(this.addr.zip) "
+        + "|| dyn(this.addr.zip) == null || this.addr.zip > 0";
+    for (String[] c : new String[][] {
+        {"STRUCT Person (addr Address, CHECK (addr.zip > 0)); STRUCT Address (zip INT); "
+            + "TYPE Person;", addrZip},
+        {"STRUCT T (q Q NOT NULL, CHECK (q.a > 0)); STRUCT Q (a INT NOT NULL); TYPE T;",
+            "this.q.a > 0"},
+        {"STRUCT T (ps P NOT NULL ARRAY NOT NULL, CHECK (ps[1].q.b)); STRUCT P (q Q NOT NULL); "
+            + "STRUCT Q (b BOOLEAN NOT NULL); TYPE T;", "size(this.ps) < 1 || this.ps[0].q.b"}}) {
+      assertEquals(c[1], parseScript(c[0]).getRootSchema().getRules().get(0).getExpr(), c[0]);
+    }
+    Schema column = parseScript("STRUCT Person (addr Address CHECK (addr.zip > 0)); "
+        + "STRUCT Address (zip INT); TYPE Person;").getRootSchema();
+    assertEquals("!has(this.zip) || dyn(this.zip) == null || this.zip > 0",
+        column.getField("addr").getRules().get(0).getExpr());
+    Schema node = parseScript("STRUCT Node (v INT, next Node, CHECK (next.v > 0)); TYPE Node;")
+        .getNamedTypes().get("Node");
+    assertEquals("!has(this.next) || dyn(this.next) == null || !has(this.next.v) "
+        + "|| dyn(this.next.v) == null || this.next.v > 0", node.getRules().get(0).getExpr());
+    LogicalType after = ddlRoundTrip("STRUCT Address (zip INT); "
+        + "STRUCT Person (addr Address, CHECK (addr.zip > 0)); TYPE Person;");
+    assertEquals(addrZip, after.getRootSchema().getRules().get(0).getExpr());
+  }
+
+  @Test
   void ddlRoundTripPreservesAllRuleFields() {
     String script = "STRUCT T ("
         + "x INT CONSTRAINT positive_x CHECK (x > 0) MESSAGE 'must be positive'"
