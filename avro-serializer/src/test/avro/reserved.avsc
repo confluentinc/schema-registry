@@ -1,0 +1,14 @@
+{
+  "namespace": "io.confluent.kafka.example.reserved",
+  "type": "record",
+  "name": "record",
+  "fields": [
+    {
+      "name": "path",
+      "type": {
+        "type": "string",
+        "java-class": "java.io.File"
+      }
+    }
+  ]
+}
