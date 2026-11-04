@@ -36,8 +36,8 @@ import java.util.regex.Pattern;
  * junction of those. Walking a junction left to right, each safe operand passed is a fact for
  * those after it, and a ternary's condition is one in its branches; a node equal to a fact is
  * that constant. Operands are never reordered, so a NULL test still comes before what it guards.
- * Nor can an equality of what can be read, as CEL's {@code ==} holds between any two values; a
- * known junction with all but one operand known decides that one.
+ * An equality of what can be read is safe too, as CEL's {@code ==} holds between any two values.
+ * A known junction whose operands but one are known and don't decide it decides that one.
  *
  * <p>A node that always evaluates a ternary's condition is split on it, {@code c ? node : node}
  * with {@code c} a fact in each, when that is shorter: what the condition raises, the node raises
@@ -56,10 +56,14 @@ final class CelSimplifier {
   private static final Set<String> TRUTH_MACROS = Set.of("all", "exists", "exists_one");
   private static final CelNode THIS = CelNode.ident("this");
   private static final Set<String> ARITHMETIC = Set.of("+", "-", "*");
-  // Splits simplify their node again: in all, up to this many times the CHECK's code points, and
-  // at most MAX_SPLIT_WORK, as simplifying a long junction again takes more than its length.
+  // Splits simplify their node again, each charged its code points times the facts' depth, as
+  // each fact looked up walks them: in all, up to this many times the CHECK's code points, and at
+  // most MAX_SPLIT_WORK.
   private static final int SPLIT_WORK = 64;
   private static final long MAX_SPLIT_WORK = 250_000;
+  // A known junction with more operands than this isn't watched: deciding each of its operands
+  // in turn would look each one up again.
+  private static final int MAX_CLAUSE = 32;
   private static final Pattern DOUBLE =
       Pattern.compile("(?:\\d+\\.\\d+|\\.\\d+)(?:[eE][+-]?\\d+)?|\\d+[eE][+-]?\\d+");
 
@@ -425,12 +429,13 @@ final class CelSimplifier {
   // condition ? node : node, each simplified with condition a fact, if shorter.
   private static CelNode splitOn(CelNode node, CelNode condition, Facts facts,
       boolean compared) {
-    if (!facts.spend(node.size())) {
+    long cost = node.size() * (facts.depth + 1);
+    if (!facts.spend(cost)) {
       return null;
     }
     CelNode whenTrue = simplify(node, facts.with(condition, true), compared);
-    // Not shorter however its other side comes out.
-    if (whenTrue.size() >= node.size() || !facts.spend(node.size())) {
+    // Not shorter however its other side comes out, else its other side is charged too.
+    if (whenTrue.size() >= node.size() || !facts.spend(cost)) {
       return null;
     }
     CelNode whenFalse = simplify(node, facts.with(condition, false), compared);
@@ -772,13 +777,19 @@ final class CelSimplifier {
     private final List<CelNode> learned = new ArrayList<>();
     // Known junctions one operand decides, a true || or a false &&, by each of their operands.
     private final Map<CelNode, List<CelNode.Junction>> clauses = new HashMap<>();
+    // Those watched here, each once, in order.
     private final List<CelNode.Junction> added = new ArrayList<>();
-    // The work left for splits, in code points simplified again, shared by one simplification.
+    // The nearest of these facts and their parents that watches a junction, or null.
+    private Facts watching;
+    private final int depth;
+    // The work left for splits, shared by one simplification.
     private final long[] work;
 
     private Facts(Facts parent, long[] work) {
       this.parent = parent;
       this.work = work;
+      this.watching = parent == null ? null : parent.watching;
+      this.depth = parent == null ? 0 : parent.depth + 1;
     }
 
     static Facts root(long work) {
@@ -825,11 +836,9 @@ final class CelSimplifier {
             out.learn(fact.getKey(), fact.getValue());
           }
         }
-        for (List<CelNode.Junction> each : facts.clauses.values()) {
-          for (CelNode.Junction clause : each) {
-            if (!clause.contains(variable) && kept.add(clause)) {
-              out.watch(clause);
-            }
+        for (CelNode.Junction clause : facts.added) {
+          if (kept.add(clause) && !clause.contains(variable)) {
+            out.watch(clause);
           }
         }
       }
@@ -846,6 +855,10 @@ final class CelSimplifier {
     }
 
     private void watch(CelNode.Junction clause) {
+      if (clause.operands.size() > MAX_CLAUSE) {
+        return;
+      }
+      watching = this;
       added.add(clause);
       for (CelNode operand : clause.operands) {
         clauses.computeIfAbsent(operand, k -> new ArrayList<>()).add(clause);
@@ -901,7 +914,8 @@ final class CelSimplifier {
           pending.add(added.get(clausesSeen));
         }
         for (; nodesSeen < learned.size(); nodesSeen++) {
-          for (Facts facts = this; facts != null; facts = facts.parent) {
+          for (Facts facts = watching; facts != null;
+              facts = facts.parent == null ? null : facts.parent.watching) {
             pending.addAll(facts.clauses.getOrDefault(learned.get(nodesSeen),
                 Collections.emptyList()));
           }

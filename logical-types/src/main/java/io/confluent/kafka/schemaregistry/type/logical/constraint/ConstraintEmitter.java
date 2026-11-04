@@ -153,7 +153,7 @@ final class ConstraintEmitter {
 
   /**
    * The context a quantifier's body sees: its variable bound to the collection's element, and to
-   * a map's keys, each of which is in it.
+   * a map's keys, each of which is in it, unless the map's CEL names the variable.
    */
   static ConstraintValidationContext iteration(ConstraintValidationContext outer, String var,
       LogicalTypesParser.Check_exprContext collection) {

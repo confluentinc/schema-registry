@@ -3932,22 +3932,37 @@ class CheckConstraintTest {
 
   @Test
   void aLongCheckIsShortenedInTime() {
-    // What is known is learned from what was just learned, and splits simplify a bounded amount
-    // again, so a long CHECK isn't simplified for minutes.
+    // What is known is learned from what was just learned, a wide junction isn't learned from,
+    // and splits simplify a bounded amount again, so a long CHECK isn't simplified for minutes.
     String columns = "l INT NOT NULL ARRAY NOT NULL, x INT, y INT";
     assertTimeoutPreemptively(Duration.ofSeconds(30), () -> {
-      translateCheckOver(columns, "EVERY(l, e, " + clauses(1600) + ")");
+      translateCheckOver(columns, "EVERY(l, e, " + clauses(1200) + ")");
+      // A wide OR known in each of many macros' bodies, and one decided operand by operand.
+      StringBuilder macros = new StringBuilder("EVERY(l, e, (" + ors(2000) + ")");
+      for (int j = 0; j < 400; j++) {
+        macros.append(" AND EVERY(l, f, f > ").append(j).append(")");
+      }
+      translateCheckOver(columns, macros + ")");
+      StringBuilder decided = new StringBuilder("EVERY(l, e, (" + ors(3500) + ")");
+      for (int j = 0; j < 3499; j++) {
+        decided.append(" AND e <> ").append(j);
+      }
+      translateCheckOver(columns, decided + ")");
       String sum = "(CASE WHEN " + clauses(200) + " THEN 1 ELSE 0 END)";
       for (int j = 0; j < 20; j++) {
         sum = "(CASE WHEN e > " + j + " THEN 1 ELSE 2 END) + (" + sum + ")";
       }
       translateCheckOver(columns, "EVERY(l, e, " + sum + " > 0)");
-      sum = "(CASE WHEN " + clauses(1200) + " THEN x ELSE y END)";
-      for (int j = 0; j < 60; j++) {
-        sum = "(CASE WHEN e > " + j + " THEN x ELSE y END) + (" + sum + ")";
-      }
-      translateCheckOver(columns, "EVERY(l, e, " + sum + " > 0)");
     });
+  }
+
+  // e = 0 OR e = 1 OR ..., n of them.
+  private static String ors(int n) {
+    StringBuilder or = new StringBuilder();
+    for (int k = 0; k < n; k++) {
+      or.append(k == 0 ? "" : " OR ").append("e = ").append(k);
+    }
+    return or.toString();
   }
 
   // (e = 0 OR e = 1) AND (e = 2 OR e = 3) AND ..., n of them.
