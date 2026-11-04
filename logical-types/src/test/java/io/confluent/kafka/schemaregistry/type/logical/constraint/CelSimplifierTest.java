@@ -24,7 +24,10 @@ import static io.confluent.kafka.schemaregistry.type.logical.constraint.CelNode.
 import static io.confluent.kafka.schemaregistry.type.logical.constraint.CelNode.call;
 import static io.confluent.kafka.schemaregistry.type.logical.constraint.CelNode.dyn;
 import static io.confluent.kafka.schemaregistry.type.logical.constraint.CelNode.ident;
+import static io.confluent.kafka.schemaregistry.type.logical.constraint.CelNode.index;
+import static io.confluent.kafka.schemaregistry.type.logical.constraint.CelNode.integer;
 import static io.confluent.kafka.schemaregistry.type.logical.constraint.CelNode.isNull;
+import static io.confluent.kafka.schemaregistry.type.logical.constraint.CelNode.list;
 import static io.confluent.kafka.schemaregistry.type.logical.constraint.CelNode.literal;
 import static io.confluent.kafka.schemaregistry.type.logical.constraint.CelNode.method;
 import static io.confluent.kafka.schemaregistry.type.logical.constraint.CelNode.not;
@@ -34,6 +37,7 @@ import static io.confluent.kafka.schemaregistry.type.logical.constraint.CelNode.
 import static io.confluent.kafka.schemaregistry.type.logical.constraint.CelSimplifier.simplify;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class CelSimplifierTest {
@@ -41,6 +45,7 @@ class CelSimplifierTest {
   private static final CelNode A = field("a");
   private static final CelNode B = field("b");
   private static final CelNode A_NULL = nullTest(A);
+  private static final CelNode A_SET = CelSimplifier.negated(nullTest(A), false);
   private static final CelNode B_NULL = nullTest(B);
   private static final CelNode A_POSITIVE = binary(A, ">", literal("0"));
   private static final CelNode B_POSITIVE = binary(B, ">", literal("0"));
@@ -142,5 +147,76 @@ class CelSimplifierTest {
     CelNode compared = binary(dyn(or(A_NULL, RAISES)), "==", NULL);
     CelNode check = or(A_NULL, compared);
     assertEquals(check.toString(), simplified(check));
+  }
+
+  @Test
+  void aConstantIsWorkedOut() {
+    CelNode first = binary(literal("1"), "-", literal("1"));
+    assertEquals("this.l[0] > 0", simplified(binary(index(field("l"), first), ">", literal("0"))));
+    assertEquals("has(this.l[0].x)", simplified(call("has", select(index(field("l"), first), "x"))));
+    assertEquals("-1.0 < this.x", simplified(binary(call("double", integer(-1)), "<", field("x"))));
+    // Doubles by value; an int and a double, and an overflow, are left to CEL.
+    assertEquals("true", simplified(binary(literal("1.0"), "==", literal("1e0"))));
+    CelNode mixed = binary(literal("1"), "==", literal("1.0"));
+    assertEquals(mixed.toString(), simplified(mixed));
+    CelNode overflow = binary(literal("9223372036854775807"), "+", literal("1"));
+    assertEquals(overflow.toString(), simplified(overflow));
+    assertEquals("false", simplified(binary(dyn(literal("'a'")), "==", NULL)));
+  }
+
+  @Test
+  void anOperandImpliedByAnotherIsAbsorbed() {
+    assertEquals("this.a > 0", simplified(or(and(A_POSITIVE, B_POSITIVE), A_POSITIVE)));
+    // c ? false : false only raises, as an operand raising with c does.
+    assertEquals("1 / this.z > 0", simplified(or(ternary(RAISES, FALSE, FALSE), RAISES)));
+    CelNode alone = or(ternary(RAISES, FALSE, FALSE), A_POSITIVE);
+    assertEquals(alone.toString(), simplified(alone));
+  }
+
+  @Test
+  void adjacentOperandsOfAnOrWithTheSameGuardShareIt() {
+    assertEquals("has(this.a) && dyn(this.a) != null && (this.a > 0 || this.a < -10)",
+        simplified(or(and(A_SET, A_POSITIVE), and(A_SET, binary(A, "<", integer(-10))))));
+  }
+
+  @Test
+  void aNodeIsSplitOnAConditionItAlwaysEvaluates() {
+    CelNode value = ternary(A_POSITIVE, literal("1"), literal("2"));
+    assertEquals("this.a > 0", simplified(binary(value, "==", literal("1"))));
+    CelNode nullable = ternary(A_POSITIVE, dyn(NULL), B);
+    assertEquals("this.a > 0 ? true : dyn(this.b) == null || this.b > 1",
+        simplified(or(isNull(nullable), binary(nullable, ">", literal("1")))));
+    // Compared, a junction's error is unequal where the condition's raises, so only its
+    // operands are split.
+    CelNode raising = ternary(RAISES, dyn(NULL), B);
+    CelNode compared = binary(or(isNull(raising), binary(raising, ">", literal("1"))), "==",
+        field("t"));
+    assertEquals("((1 / this.z > 0 ? true : dyn(this.b) == null) || (1 / this.z > 0 ? dyn(null)"
+        + " : this.b) > 1) == this.t", simplified(compared));
+  }
+
+  @Test
+  void anEqualityOfWhatCanBeReadIsAFact() {
+    CelNode one = binary(A, "==", literal("1"));
+    assertEquals("!has(this.a) || dyn(this.a) == null || this.a == 1 || this.b > 0",
+        simplified(or(A_NULL, one, ternary(one, FALSE, B_POSITIVE))));
+    CelNode in = binary(A, "in", list(List.of(literal("1"), literal("2"))));
+    assertEquals("!has(this.a) || dyn(this.a) == null",
+        simplified(or(A_NULL, ternary(in, FALSE, FALSE))));
+  }
+
+  @Test
+  void aKnownJunctionDecidesItsOneOpenOperand() {
+    // COALESCE(a, b) > 0: both NULL is ruled out, so b is set when a isn't.
+    CelNode value = ternary(A_SET, A, ternary(B_NULL, dyn(NULL), B));
+    assertEquals("((!has(this.a) || dyn(this.a) == null) && (!has(this.b) || dyn(this.b) =="
+            + " null)) || (has(this.a) && dyn(this.a) != null ? this.a : this.b) > 0",
+        simplified(or(and(A_NULL, B_NULL), binary(value, ">", literal("0")))));
+  }
+
+  @Test
+  void nestedTernariesWithASharedBranchAreOne() {
+    assertEquals("!has(this.a) || dyn(this.a) == null || this.a > 0 ? this.b : 1",
+        simplified(ternary(A_NULL, B, ternary(A_POSITIVE, B, literal("1")))));
   }
 }

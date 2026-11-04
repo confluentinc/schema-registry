@@ -22,6 +22,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * Shortens a CHECK's CEL by the rules of logic, keeping every verdict, errors included.
@@ -32,10 +33,16 @@ import java.util.Set;
  * junction of those. Walking a junction left to right, each safe operand passed is a fact for
  * those after it, and a ternary's condition is one in its branches; a node equal to a fact is
  * that constant. Operands are never reordered, so a NULL test still comes before what it guards.
+ * An equality can't raise either, as CEL's {@code ==} holds between any two values, and a known
+ * junction with all but one operand known decides that one.
+ *
+ * <p>A node that always evaluates a ternary's condition is split on it, {@code c ? node : node}
+ * with {@code c} a fact in each, when that is shorter: what the condition raises, the node raises
+ * too. Constants are worked out, and operands sharing a prefix factored.
  *
  * <p>Compared, as an operand of anything but a truth, cel-java gives an error out of {@code &&}
  * or {@code ||} as unequal instead of raising it. There a ternary isn't made a junction, nor a
- * junction a single operand, unless what would raise can't.
+ * junction a single operand or split, unless what would raise can't.
  */
 final class CelSimplifier {
 
@@ -45,6 +52,11 @@ final class CelSimplifier {
   // Those whose body is a truth.
   private static final Set<String> TRUTH_MACROS = Set.of("all", "exists", "exists_one");
   private static final CelNode THIS = CelNode.ident("this");
+  private static final Set<String> ARITHMETIC = Set.of("+", "-", "*");
+  // The splits one simplification may make, as each simplifies its node again.
+  private static final int SPLITS = 256;
+  private static final Pattern DOUBLE =
+      Pattern.compile("(?:\\d+\\.\\d+|\\.\\d+)(?:[eE][+-]?\\d+)?|\\d+[eE][+-]?\\d+");
 
   private CelSimplifier() {
   }
@@ -53,7 +65,7 @@ final class CelSimplifier {
    * {@code check} simplified, or as it is if that wouldn't be shorter.
    */
   static CelNode simplify(CelNode check) {
-    CelNode simplified = simplify(check, Facts.NONE, false);
+    CelNode simplified = simplify(check, Facts.root(), false);
     return simplified.size() <= check.size() ? simplified : check;
   }
 
@@ -77,8 +89,10 @@ final class CelSimplifier {
       }
     } else if (node instanceof CelNode.Binary) {
       CelNode.Binary binary = (CelNode.Binary) node;
-      out = CelNode.binary(simplify(binary.left, facts, true), binary.op,
-          simplify(binary.right, facts, true));
+      CelNode left = simplify(binary.left, facts, true);
+      CelNode right = simplify(binary.right, facts, true);
+      CelNode folded = folded(left, binary.op, right);
+      out = folded != null ? folded : CelNode.binary(left, binary.op, right);
     } else if (node instanceof CelNode.Call) {
       out = call((CelNode.Call) node, facts);
     } else if (node instanceof CelNode.Select) {
@@ -92,6 +106,12 @@ final class CelSimplifier {
       out = CelNode.list(simplifyAll(((CelNode.ListLit) node).elements, facts, true));
     } else {
       return node;
+    }
+    if (!(out instanceof CelNode.Junction) && !out.children().isEmpty()) {
+      CelNode split = split(out, facts, compared);
+      if (split != null) {
+        out = split;
+      }
     }
     known = facts.get(out);
     return known != null ? known : out;
@@ -107,11 +127,14 @@ final class CelSimplifier {
 
   private static CelNode call(CelNode.Call call, Facts facts) {
     if (call.target == null && call.function.equals("has")) {
-      // Its argument names a field; it isn't read.
-      return call;
+      // Its argument names a field, which isn't read; a subscript's constant is still worked out.
+      return call.args.size() == 1 ? CelNode.call("has", subscriptsFolded(call.args.get(0))) : call;
     }
     if (call.target == null) {
-      return CelNode.call(call.function, simplifyAll(call.args, facts, true));
+      List<CelNode> args = simplifyAll(call.args, facts, true);
+      Long value = call.function.equals("double") && args.size() == 1 ? longValue(args.get(0))
+          : null;
+      return value != null ? CelNode.number(value + ".0") : CelNode.call(call.function, args);
     }
     CelNode target = simplify(call.target, facts, true);
     if (!MACROS.contains(call.function) || call.args.size() < 2
@@ -167,45 +190,91 @@ final class CelSimplifier {
     if (out.isEmpty()) {
       return identity;
     }
+    out = absorbed(out, and);
+    if (out.size() > 1) {
+      out = splitRuns(out, and, facts, compared);
+    }
     if (out.size() == 1 && compared && !(out.get(0) instanceof CelNode.Junction)
         && !safe(out.get(0), facts)) {
       return junction;
     }
-    return and ? factor(out) : CelNode.or(out);
+    return factor(out, and);
   }
 
-  // Adjacent || operands that start with the same operands S are S || (rest && rest ...).
-  private static CelNode factor(List<CelNode> operands) {
+  // a || (a && b) is a, as is a && (a || b): an operand of the other kind goes when all of one of
+  // its operands' own operands are among the others. So does c ? false : false in an ||, which
+  // only raises, where another operand raises when c does.
+  private static List<CelNode> absorbed(List<CelNode> operands, boolean and) {
+    List<CelNode> out = new ArrayList<>(operands);
+    for (int i = out.size() - 1; i >= 0; i--) {
+      List<CelNode> others = new ArrayList<>(out);
+      others.remove(i);
+      if (absorbs(others, out.get(i), and)) {
+        out.remove(i);
+      }
+    }
+    return out;
+  }
+
+  private static boolean absorbs(List<CelNode> others, CelNode operand, boolean and) {
+    if (operand instanceof CelNode.Ternary) {
+      CelNode.Ternary ternary = (CelNode.Ternary) operand;
+      CelNode identity = CelNode.bool(and);
+      if (!ternary.whenTrue.equals(identity) || !ternary.whenFalse.equals(identity)) {
+        return false;
+      }
+      for (CelNode other : others) {
+        if (other.equals(ternary.condition) || strictlyEvaluates(other, ternary.condition)) {
+          return true;
+        }
+      }
+      return false;
+    }
+    if (!(operand instanceof CelNode.Junction) || ((CelNode.Junction) operand).and == and) {
+      return false;
+    }
+    for (CelNode part : ((CelNode.Junction) operand).operands) {
+      if (others.containsAll(parts(part, and))) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // Adjacent operands of an && that start with the same operands S of an || are
+  // S || (rest && rest ...), and the other way round for an ||.
+  private static CelNode factor(List<CelNode> operands, boolean and) {
     List<CelNode> out = new ArrayList<>();
     int i = 0;
     while (i < operands.size()) {
-      List<CelNode> first = disjuncts(operands.get(i));
+      List<CelNode> first = parts(operands.get(i), !and);
       int j = i + 1;
-      int k = j < operands.size() ? commonPrefix(first, disjuncts(operands.get(j))) : 0;
+      int k = j < operands.size() ? commonPrefix(first, parts(operands.get(j), !and)) : 0;
       if (k == 0) {
         out.add(operands.get(i++));
         continue;
       }
       List<CelNode> prefix = first.subList(0, k);
       List<CelNode> rests = new ArrayList<>();
-      rests.add(CelNode.or(first.subList(k, first.size())));
+      rests.add(CelNode.Junction.of(!and, first.subList(k, first.size())));
       for (; j < operands.size(); j++) {
-        List<CelNode> next = disjuncts(operands.get(j));
+        List<CelNode> next = parts(operands.get(j), !and);
         if (next.size() <= k || !next.subList(0, k).equals(prefix)) {
           break;
         }
-        rests.add(CelNode.or(next.subList(k, next.size())));
+        rests.add(CelNode.Junction.of(!and, next.subList(k, next.size())));
       }
       List<CelNode> joined = new ArrayList<>(prefix);
-      joined.add(CelNode.and(rests));
-      out.add(CelNode.or(joined));
+      joined.add(CelNode.Junction.of(and, rests));
+      out.add(CelNode.Junction.of(!and, joined));
       i = j;
     }
-    return CelNode.and(out);
+    return CelNode.Junction.of(and, out);
   }
 
-  private static List<CelNode> disjuncts(CelNode node) {
-    return node instanceof CelNode.Junction && !((CelNode.Junction) node).and
+  // The operands of node if it's an && (or an ||), else node.
+  private static List<CelNode> parts(CelNode node, boolean and) {
+    return node instanceof CelNode.Junction && ((CelNode.Junction) node).and == and
         ? ((CelNode.Junction) node).operands : Collections.singletonList(node);
   }
 
@@ -229,6 +298,12 @@ final class CelSimplifier {
     // The condition raises before either branch is taken, so its value is a fact in each.
     CelNode whenTrue = simplify(ternary.whenTrue, facts.with(condition, true), compared);
     CelNode whenFalse = simplify(ternary.whenFalse, facts.with(condition, false), compared);
+    return joined(condition, whenTrue, whenFalse, facts, compared);
+  }
+
+  // condition ? whenTrue : whenFalse, its branches simplified.
+  private static CelNode joined(CelNode condition, CelNode whenTrue, CelNode whenFalse,
+      Facts facts, boolean compared) {
     boolean safe = safe(condition, facts);
     if (safe && whenTrue.equals(whenFalse)) {
       return whenTrue;
@@ -254,7 +329,291 @@ final class CelSimplifier {
         return CelNode.or(negated(condition, false), whenTrue);
       }
     }
+    if (safe) {
+      CelNode shared = shared(condition, whenTrue, whenFalse, facts, compared);
+      if (shared != null) {
+        return shared;
+      }
+    }
     return CelNode.ternary(condition, whenTrue, whenFalse);
+  }
+
+  // c ? x : (d ? x : y) as c || d ? x : y and so on, where c can't raise: each branch was
+  // simplified where it's taken.
+  private static CelNode shared(CelNode condition, CelNode whenTrue, CelNode whenFalse,
+      Facts facts, boolean compared) {
+    if (whenFalse instanceof CelNode.Ternary) {
+      CelNode.Ternary inner = (CelNode.Ternary) whenFalse;
+      if (inner.whenTrue.equals(whenTrue)) {
+        return joined(CelNode.or(condition, inner.condition), whenTrue, inner.whenFalse, facts,
+            compared);
+      }
+      if (inner.whenFalse.equals(whenTrue)) {
+        return joined(CelNode.or(condition, negated(inner.condition, false)), whenTrue,
+            inner.whenTrue, facts, compared);
+      }
+    }
+    if (whenTrue instanceof CelNode.Ternary) {
+      CelNode.Ternary inner = (CelNode.Ternary) whenTrue;
+      if (inner.whenFalse.equals(whenFalse)) {
+        return joined(CelNode.and(condition, inner.condition), inner.whenTrue, whenFalse, facts,
+            compared);
+      }
+      if (inner.whenTrue.equals(whenFalse)) {
+        return joined(CelNode.and(condition, negated(inner.condition, false)), inner.whenFalse,
+            whenFalse, facts, compared);
+      }
+    }
+    return null;
+  }
+
+  // The conditions of the ternaries node always evaluates, each raising what it raises: a
+  // junction and a ternary's branches aren't always evaluated, nor a macro's body.
+  private static void strictConditions(CelNode node, List<CelNode> out) {
+    if (node instanceof CelNode.Ternary) {
+      out.add(((CelNode.Ternary) node).condition);
+      strictConditions(((CelNode.Ternary) node).condition, out);
+      return;
+    }
+    if (node instanceof CelNode.Junction) {
+      return;
+    }
+    if (node instanceof CelNode.Call) {
+      CelNode.Call call = (CelNode.Call) node;
+      if (call.target == null && call.function.equals("has")) {
+        return;
+      }
+      if (call.target != null) {
+        strictConditions(call.target, out);
+        if (MACROS.contains(call.function) && call.args.size() >= 2
+            && call.args.get(0) instanceof CelNode.Ident) {
+          return;
+        }
+      }
+      for (CelNode arg : call.args) {
+        strictConditions(arg, out);
+      }
+      return;
+    }
+    for (CelNode child : node.children()) {
+      strictConditions(child, out);
+    }
+  }
+
+  private static CelNode split(CelNode node, Facts facts, boolean compared) {
+    List<CelNode> conditions = new ArrayList<>();
+    strictConditions(node instanceof CelNode.Ternary ? ((CelNode.Ternary) node).condition : node,
+        conditions);
+    for (CelNode condition : conditions) {
+      if (facts.get(condition) == null) {
+        return splitOn(node, condition, facts, compared);
+      }
+    }
+    return null;
+  }
+
+  // condition ? node : node, each simplified with condition a fact, if shorter.
+  private static CelNode splitOn(CelNode node, CelNode condition, Facts facts,
+      boolean compared) {
+    if (!facts.spend()) {
+      return null;
+    }
+    CelNode whenTrue = simplify(node, facts.with(condition, true), compared);
+    if (whenTrue.size() >= node.size()) {
+      return null;
+    }
+    CelNode whenFalse = simplify(node, facts.with(condition, false), compared);
+    CelNode out = joined(condition, whenTrue, whenFalse, facts, compared);
+    return out.size() < node.size() ? out : null;
+  }
+
+  // Adjacent operands that always evaluate the same condition, split on it. A junction's error
+  // is told apart from the one the condition raises only where it's compared.
+  private static List<CelNode> splitRuns(List<CelNode> operands, boolean and, Facts facts,
+      boolean compared) {
+    List<CelNode> out = new ArrayList<>();
+    Facts known = facts;
+    int i = 0;
+    while (i < operands.size()) {
+      List<CelNode> conditions = new ArrayList<>();
+      strictConditions(operands.get(i), conditions);
+      CelNode split = null;
+      int end = i + 1;
+      for (CelNode condition : conditions) {
+        int j = i + 1;
+        while (j < operands.size() && strictlyEvaluates(operands.get(j), condition)) {
+          j++;
+        }
+        boolean whole = i == 0 && j == operands.size();
+        boolean told = whole && compared && !safe(condition, known);
+        if (j - i < 2 || known.get(condition) != null || told) {
+          continue;
+        }
+        split = splitOn(CelNode.Junction.of(and, operands.subList(i, j)), condition, known,
+            whole && compared);
+        if (split != null) {
+          end = j;
+          break;
+        }
+      }
+      for (int k = i; k < end; k++) {
+        if (safe(operands.get(k), known)) {
+          known = known.with(operands.get(k), and);
+        }
+      }
+      out.add(split != null ? split : operands.get(i));
+      i = end;
+    }
+    return out;
+  }
+
+  private static boolean strictlyEvaluates(CelNode node, CelNode condition) {
+    List<CelNode> conditions = new ArrayList<>();
+    strictConditions(node, conditions);
+    return conditions.contains(condition);
+  }
+
+  // left op right worked out where both are constants, else null; arithmetic that would
+  // overflow is left to raise.
+  private static CelNode folded(CelNode left, String op, CelNode right) {
+    Long a = longValue(left);
+    Long b = longValue(right);
+    if (a != null && b != null && ARITHMETIC.contains(op)) {
+      try {
+        long value = op.equals("+") ? Math.addExact(a, b)
+            : op.equals("-") ? Math.subtractExact(a, b) : Math.multiplyExact(a, b);
+        return value == Long.MIN_VALUE ? null : CelNode.integer(value);
+      } catch (ArithmeticException e) {
+        return null;
+      }
+    }
+    CelNode l = undyn(left);
+    CelNode r = undyn(right);
+    a = longValue(l);
+    b = longValue(r);
+    if (a != null && b != null) {
+      return compared(Long.compare(a, b), op);
+    }
+    Double x = doubleValue(l);
+    Double y = doubleValue(r);
+    if (x != null && y != null) {
+      // By value, as 1.0 and 1e0 are one double; no literal is NaN.
+      return compared(x < y ? -1 : x > y ? 1 : 0, op);
+    }
+    return equalConstants(l, op, r);
+  }
+
+  // A comparison whose operands compared as order.
+  private static CelNode compared(int order, String op) {
+    switch (op) {
+      case "==": return CelNode.bool(order == 0);
+      case "!=": return CelNode.bool(order != 0);
+      case "<": return CelNode.bool(order < 0);
+      case "<=": return CelNode.bool(order <= 0);
+      case ">": return CelNode.bool(order > 0);
+      case ">=": return CelNode.bool(order >= 0);
+      default: return null;
+    }
+  }
+
+  // l == r or l != r of null, a bool or a plain string, where they're one kind or one is null;
+  // an int and a double are compared by CEL's numeric equality.
+  private static CelNode equalConstants(CelNode l, String op, CelNode r) {
+    if (!op.equals("==") && !op.equals("!=")) {
+      return null;
+    }
+    int kind = kind(l);
+    int other = kind(r);
+    boolean comparable = kind == other ? kind != 3 : kind == 0 || other == 0;
+    if (kind < 0 || other < 0 || !comparable) {
+      return null;
+    }
+    boolean equal = kind == 2 ? text(l).equals(text(r)) : l.equals(r);
+    return CelNode.bool(equal == op.equals("=="));
+  }
+
+  // 0 for null, 1 a bool, 2 a plain string, 3 an int or a double, else -1.
+  private static int kind(CelNode node) {
+    if (node.equals(CelNode.NULL)) {
+      return 0;
+    }
+    if (node.equals(CelNode.TRUE) || node.equals(CelNode.FALSE)) {
+      return 1;
+    }
+    if (text(node) != null) {
+      return 2;
+    }
+    return longValue(node) != null || doubleValue(node) != null ? 3 : -1;
+  }
+
+  // The text of a quoted string literal without escapes, else null.
+  private static String text(CelNode node) {
+    if (!(node instanceof CelNode.Literal)) {
+      return null;
+    }
+    String token = node.toString();
+    char quote = token.charAt(0);
+    boolean quoted = quote == '\'' || quote == '"';
+    boolean plain = quoted && token.length() >= 2
+        && token.indexOf(quote, 1) == token.length() - 1 && token.indexOf('\\') < 0;
+    return plain ? token.substring(1, token.length() - 1) : null;
+  }
+
+  // An int literal's value, its sign included, else null.
+  private static Long longValue(CelNode node) {
+    boolean negative = node instanceof CelNode.Unary && ((CelNode.Unary) node).op.equals("-");
+    CelNode operand = negative ? ((CelNode.Unary) node).operand : node;
+    if (!(operand instanceof CelNode.Literal) || !((CelNode.Literal) operand).isNatural()) {
+      return null;
+    }
+    try {
+      return Long.parseLong((negative ? "-" : "") + operand);
+    } catch (NumberFormatException e) {
+      return null;
+    }
+  }
+
+  // A double literal's value, its sign included, else null.
+  private static Double doubleValue(CelNode node) {
+    boolean negative = node instanceof CelNode.Unary && ((CelNode.Unary) node).op.equals("-");
+    CelNode operand = negative ? ((CelNode.Unary) node).operand : node;
+    if (!(operand instanceof CelNode.Literal) || !DOUBLE.matcher(operand.toString()).matches()) {
+      return null;
+    }
+    double value = Double.parseDouble(operand.toString());
+    return negative ? -value : value;
+  }
+
+  private static CelNode undyn(CelNode node) {
+    while (node instanceof CelNode.Call && ((CelNode.Call) node).function.equals("dyn")
+        && ((CelNode.Call) node).target == null && ((CelNode.Call) node).args.size() == 1) {
+      node = ((CelNode.Call) node).args.get(0);
+    }
+    return node;
+  }
+
+  // A field selection with each subscript's constant worked out.
+  private static CelNode subscriptsFolded(CelNode node) {
+    if (node instanceof CelNode.Select) {
+      CelNode.Select select = (CelNode.Select) node;
+      return CelNode.select(subscriptsFolded(select.operand), select.field);
+    }
+    if (node instanceof CelNode.Index) {
+      CelNode.Index index = (CelNode.Index) node;
+      return CelNode.index(subscriptsFolded(index.operand), constantFolded(index.index));
+    }
+    return node;
+  }
+
+  private static CelNode constantFolded(CelNode node) {
+    if (!(node instanceof CelNode.Binary)) {
+      return node;
+    }
+    CelNode.Binary binary = (CelNode.Binary) node;
+    CelNode left = constantFolded(binary.left);
+    CelNode right = constantFolded(binary.right);
+    CelNode folded = folded(left, binary.op, right);
+    return folded != null ? folded : CelNode.binary(left, binary.op, right);
   }
 
   /**
@@ -288,7 +647,7 @@ final class CelSimplifier {
     for (CelNode operand : junction.operands) {
       operands.add(negated(operand, false));
     }
-    return junction.and ? CelNode.or(operands) : factor(operands);
+    return factor(operands, !junction.and);
   }
 
   // a != b for a == b and the other way round, else null.
@@ -322,17 +681,46 @@ final class CelSimplifier {
       }
       return true;
     }
-    CelNode field = hasField(node);
-    if (field != null) {
-      return readable(((CelNode.Select) field).operand, facts);
+    if (node instanceof CelNode.Binary && equality((CelNode.Binary) node)) {
+      // CEL's == holds between any two values.
+      return value(((CelNode.Binary) node).left, facts)
+          && value(((CelNode.Binary) node).right, facts);
     }
-    CelNode tested = nullTested(node);
-    if (tested instanceof CelNode.Ident) {
+    CelNode field = hasField(node);
+    return field != null && readable(((CelNode.Select) field).operand, facts);
+  }
+
+  // ==, != or in a list.
+  private static boolean equality(CelNode.Binary binary) {
+    return binary.op.equals("==") || binary.op.equals("!=")
+        || binary.op.equals("in") && binary.right instanceof CelNode.ListLit;
+  }
+
+  // True if node can be read without raising: a literal, a variable, a field known set of what
+  // can be read, or dyn() or a list of those.
+  private static boolean value(CelNode node, Facts facts) {
+    if (node instanceof CelNode.Literal || node instanceof CelNode.Ident) {
       return true;
     }
-    return tested instanceof CelNode.Select
-        && readable(((CelNode.Select) tested).operand, facts)
-        && CelNode.TRUE.equals(facts.get(CelNode.call("has", tested)));
+    if (node instanceof CelNode.Unary) {
+      return longValue(node) != null || doubleValue(node) != null;
+    }
+    if (node instanceof CelNode.Select) {
+      return readable(((CelNode.Select) node).operand, facts)
+          && CelNode.TRUE.equals(facts.get(CelNode.call("has", node)));
+    }
+    if (node instanceof CelNode.Call) {
+      return undyn(node) != node && value(undyn(node), facts);
+    }
+    if (node instanceof CelNode.ListLit) {
+      for (CelNode element : ((CelNode.ListLit) node).elements) {
+        if (!value(element, facts)) {
+          return false;
+        }
+      }
+      return true;
+    }
+    return false;
   }
 
   // f in has(f) of a field, else null.
@@ -343,16 +731,6 @@ final class CelSimplifier {
     CelNode.Call call = (CelNode.Call) node;
     boolean has = call.target == null && call.function.equals("has") && call.args.size() == 1;
     return has && call.args.get(0) instanceof CelNode.Select ? call.args.get(0) : null;
-  }
-
-  // x in dyn(x) == null or dyn(x) != null, else null.
-  private static CelNode nullTested(CelNode node) {
-    CelNode tested = CelNode.isNullOf(node);
-    if (tested == null) {
-      CelNode flipped = flipped(node);
-      tested = flipped == null ? null : CelNode.isNullOf(flipped);
-    }
-    return tested;
   }
 
   // True if a field of node can be read without raising: this, or a variable or field known not
@@ -371,14 +749,25 @@ final class CelSimplifier {
    * What is known true or false, each fact with what it decides.
    */
   static final class Facts {
-    static final Facts NONE = new Facts(null, Collections.emptyMap());
-
     private final Facts parent;
-    private final Map<CelNode, Boolean> known;
+    private final Map<CelNode, Boolean> known = new HashMap<>();
+    // Known junctions one operand decides: a true || or a false &&.
+    private final List<CelNode.Junction> clauses = new ArrayList<>();
+    // The splits left, shared by one simplification's facts.
+    private final int[] splits;
 
-    private Facts(Facts parent, Map<CelNode, Boolean> known) {
+    private Facts(Facts parent, int[] splits) {
       this.parent = parent;
-      this.known = known;
+      this.splits = splits;
+    }
+
+    static Facts root() {
+      return new Facts(null, new int[] {SPLITS});
+    }
+
+    // True, using it, if a split is left.
+    boolean spend() {
+      return splits[0]-- > 0;
     }
 
     // The constant node is known to be, or null if it isn't known.
@@ -393,59 +782,102 @@ final class CelSimplifier {
     }
 
     Facts with(CelNode node, boolean value) {
-      Map<CelNode, Boolean> added = new HashMap<>();
-      add(added, node, value);
-      return new Facts(this, added);
+      Facts out = new Facts(this, splits);
+      out.add(node, value);
+      out.propagate();
+      return out;
     }
 
     // These facts but those that mention variable.
     Facts without(CelNode variable) {
-      Map<CelNode, Boolean> kept = new HashMap<>();
+      Facts out = new Facts(null, splits);
       for (Facts facts = this; facts != null; facts = facts.parent) {
         for (Map.Entry<CelNode, Boolean> fact : facts.known.entrySet()) {
           if (!fact.getKey().contains(variable)) {
-            kept.putIfAbsent(fact.getKey(), fact.getValue());
+            out.known.putIfAbsent(fact.getKey(), fact.getValue());
+          }
+        }
+        for (CelNode.Junction clause : facts.clauses) {
+          if (!clause.contains(variable)) {
+            out.clauses.add(clause);
           }
         }
       }
-      return new Facts(null, kept);
+      return out;
     }
 
-    private static void add(Map<CelNode, Boolean> facts, CelNode node, boolean value) {
+    private void add(CelNode node, boolean value) {
       if (node.equals(CelNode.TRUE) || node.equals(CelNode.FALSE)
-          || facts.putIfAbsent(node, value) != null) {
+          || known.putIfAbsent(node, value) != null) {
         return;
       }
       if (node instanceof CelNode.Unary && ((CelNode.Unary) node).op.equals("!")) {
-        add(facts, ((CelNode.Unary) node).operand, !value);
+        add(((CelNode.Unary) node).operand, !value);
       } else {
-        facts.putIfAbsent(CelNode.not(node), !value);
+        known.putIfAbsent(CelNode.not(node), !value);
       }
       CelNode flipped = flipped(node);
       if (flipped != null) {
-        facts.putIfAbsent(flipped, !value);
+        known.putIfAbsent(flipped, !value);
       }
       if (node instanceof CelNode.Junction) {
         CelNode.Junction junction = (CelNode.Junction) node;
         // A true && has each operand true, a false || each false.
         if (junction.and == value) {
           for (CelNode operand : junction.operands) {
-            add(facts, operand, value);
+            add(operand, value);
           }
+        } else {
+          clauses.add(junction);
         }
-        facts.putIfAbsent(pushed(junction), !value);
+        known.putIfAbsent(pushed(junction), !value);
       }
       if (node instanceof CelNode.Ternary) {
         // c ? x : y is decided by c when a branch is the other constant.
         CelNode.Ternary ternary = (CelNode.Ternary) node;
         if (ternary.whenTrue.equals(CelNode.bool(!value))) {
-          add(facts, ternary.condition, false);
-          add(facts, ternary.whenFalse, value);
+          add(ternary.condition, false);
+          add(ternary.whenFalse, value);
         } else if (ternary.whenFalse.equals(CelNode.bool(!value))) {
-          add(facts, ternary.condition, true);
-          add(facts, ternary.whenTrue, value);
+          add(ternary.condition, true);
+          add(ternary.whenTrue, value);
         }
       }
+    }
+
+    // A known || with all its operands but one false has that one true, and a known && the other
+    // way round, until nothing more is learned.
+    private void propagate() {
+      for (boolean learned = true; learned; ) {
+        learned = false;
+        for (Facts facts = this; facts != null; facts = facts.parent) {
+          for (int i = 0; i < facts.clauses.size(); i++) {
+            CelNode.Junction clause = facts.clauses.get(i);
+            CelNode open = open(clause);
+            if (open != null) {
+              add(open, !clause.and);
+              learned = true;
+            }
+          }
+        }
+      }
+    }
+
+    // The one operand of clause not yet known, if no other decides it.
+    private CelNode open(CelNode.Junction clause) {
+      CelNode open = null;
+      for (CelNode operand : clause.operands) {
+        CelNode value = get(operand);
+        if (value == null) {
+          if (open != null) {
+            return null;
+          }
+          open = operand;
+        } else if (value.equals(CelNode.bool(!clause.and))) {
+          return null;
+        }
+      }
+      return open;
     }
   }
 }

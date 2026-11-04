@@ -151,6 +151,19 @@ final class ConstraintEmitter {
         .computeIfAbsent(quantifier, k -> make.get());
   }
 
+  /**
+   * The context a quantifier's body sees: its variable bound to the collection's element, and to
+   * a map's keys, each of which is in it.
+   */
+  static ConstraintValidationContext iteration(ConstraintValidationContext outer, String var,
+      LogicalTypesParser.Check_exprContext collection) {
+    ConstraintValidationContext body = outer.withBinding(var,
+        ConstraintResolver.resolveCollectionElementType(collection, outer));
+    Schema type = resolveRef(ConstraintResolver.tryResolveCheckExprType(collection, outer));
+    return type != null && type.getType() == Schema.Type.MAP
+        ? body.withKeysOf(var, visitCheckExpr(collection)) : body;
+  }
+
   private static CelNode visitOr(LogicalTypesParser.Check_expr_orContext ctx) {
     List<CelNode> ands = new ArrayList<>();
     for (LogicalTypesParser.Check_expr_andContext and : ctx.check_expr_and()) {
@@ -2196,8 +2209,8 @@ final class ConstraintEmitter {
       return new Truth(null, NATIVE | UNTOLD);
     }
     String iterVar = ConstraintFunctions.extractIterationVar(args.get(1), name);
-    ConstraintValidationContext body = bodyContext(app, outer, () -> outer.withBinding(iterVar,
-        ConstraintResolver.resolveCollectionElementType(args.get(0), outer)));
+    ConstraintValidationContext body = bodyContext(app, outer,
+        () -> iteration(outer, iterVar, args.get(0)));
     // ONE takes both of its body's truths.
     boolean one = "ONE".equals(name);
     // exists() with nullAs lets a NULL body, true there, swallow another's error.
@@ -2348,7 +2361,10 @@ final class ConstraintEmitter {
         CelNode index = visitCheckExpr(el.check_expr());
         CelNode collection = typedCollection(prefix, bracketed);
         if (type.getType() == Schema.Type.MAP) {
-          tests.add(CelNode.not(CelNode.binary(index, "in", collection)));
+          // A quantifier's own key is in the map it ranges over.
+          if (!vctx.isKeyOf(index, prefix)) {
+            tests.add(CelNode.not(CelNode.binary(index, "in", collection)));
+          }
           prefix = CelNode.index(prefix, index);
           next = type.getValueType();
         } else if (type.getType() == Schema.Type.ARRAY) {

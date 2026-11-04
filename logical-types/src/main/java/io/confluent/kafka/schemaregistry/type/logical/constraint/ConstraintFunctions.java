@@ -26,7 +26,6 @@ import java.util.List;
 
 import static io.confluent.kafka.schemaregistry.type.logical.constraint.ConstraintEmitter.visitCExpr;
 import static io.confluent.kafka.schemaregistry.type.logical.constraint.ConstraintEmitter.visitCheckExpr;
-import static io.confluent.kafka.schemaregistry.type.logical.constraint.ConstraintResolver.resolveCollectionElementType;
 import static io.confluent.kafka.schemaregistry.type.logical.constraint.ConstraintResolver.tryAsLiteral;
 import static io.confluent.kafka.schemaregistry.type.logical.constraint.ConstraintResolver.tryLiteralIntValue;
 import static io.confluent.kafka.schemaregistry.type.logical.constraint.ConstraintToCelTranslator.EMIT_VCTX;
@@ -236,8 +235,7 @@ final class ConstraintFunctions {
     // visitIndirection see it during the body emit.
     ConstraintValidationContext outer = EMIT_VCTX.get();
     ConstraintValidationContext bodyCtx = outer == null ? null : ConstraintEmitter.bodyContext(
-        fctx, outer, () -> outer.withBinding(iterVar,
-            resolveCollectionElementType(args.get(0), outer)));
+        fctx, outer, () -> ConstraintEmitter.iteration(outer, iterVar, args.get(0)));
     EMIT_VCTX.set(bodyCtx);
     try {
       return CelNode.method(collection, celMacro, CelNode.ident(iterVar),
