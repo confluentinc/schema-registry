@@ -1046,15 +1046,16 @@ final class ConstraintResolver {
 
   /**
    * True if what {@code col} reads may be a VARIANT: one is on its path, or a step's type isn't
-   * known. A value of a named type declared outside the script isn't one, but its fields, which
-   * don't resolve, may be.
+   * known. A value of a named type declared outside the script is taken not to be one, but its
+   * fields, which don't resolve, may be.
    */
   static boolean mayReadVariant(
       LogicalTypesParser.ColumnrefContext col, ConstraintValidationContext vctx) {
     Schema current = resolvedOrRef(vctx.schemaOf(colidName(col.colid())), vctx);
     if (col.indirection() != null) {
       for (LogicalTypesParser.Indirection_elContext el : col.indirection().indirection_el()) {
-        if (current == null || current.getType() == Schema.Type.VARIANT) {
+        // A step off a VARIANT doesn't resolve either.
+        if (current == null) {
           return true;
         }
         current = step(current, el, vctx, true);

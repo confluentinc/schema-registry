@@ -752,7 +752,7 @@ class CheckConstraintTest {
   @Test
   void aCastIsTestedForNullUnlessItsOperandMayBeAVariant() throws Exception {
     // A VARIANT's CAST can be NULL where the VARIANT isn't. Another's is NULL just when its
-    // operand is, an outside named type's value or one whose type isn't known included.
+    // operand is, an outside named type's value included.
     String script = "USING TYPE Ext FOR REF 'http://example.com/ext.json'; "
         + "STRUCT P (yx Ext NOT NULL); STRUCT T (x Ext, xe Ext NOT NULL ARRAY NOT NULL, "
         + "xen Ext ARRAY NOT NULL, re STRUCT(x Ext) NOT NULL, ps P NOT NULL ARRAY NOT NULL, "
@@ -772,7 +772,8 @@ class CheckConstraintTest {
         "CAST(COALESCE(xe[1], xe[2]) AS STRING) = 'A'",
         // A condition, whatever it reads, doesn't flow out.
         "CAST(CASE WHEN EVERY(xs, e, e > 0) THEN x ELSE x END AS STRING) = 'A'",
-        "CAST(CASE WHEN v IS NULL THEN x ELSE x END AS STRING) IS NULL")) {
+        "CAST(CASE WHEN v IS NULL THEN x ELSE x END AS STRING) IS NULL",
+        "CAST(NULLIF(x, v) AS STRING) = 'A'")) {
       String cel = parseScript(String.format(script, sql)).getRootSchema().getRules().get(0)
           .getExpr();
       assertEquals(true, evalOver(cel, empty), sql + " -> " + cel);
@@ -784,7 +785,9 @@ class CheckConstraintTest {
     for (String sql : List.of("CAST(v AS INT) IS NULL", "CAST(COALESCE(v, v) AS INT) IS NULL",
         "CAST(COALESCE(PARSE_JSON(ns), PARSE_JSON(ns)) AS INT) IS NULL",
         "CAST(NULLIF(v, 'A') AS INT) IS NULL",
-        "CAST(xe[1].i AS STRING) IS NULL")) {
+        "CAST(xe[1].i AS STRING) IS NULL", "CAST(NULLIF(x.f, 'A') AS STRING) IS NULL",
+        "CAST(NULLIF((x).f, v) AS STRING) IS NULL",
+        "CAST(CASE WHEN s = 'a' THEN (x).f ELSE (x).f END AS STRING) IS NULL")) {
       ValidationException e = assertThrows(ValidationException.class,
           () -> parseScript(String.format(script, sql)), sql);
       assertTrue(e.getMessage().contains("can't tell"), sql + ": " + e.getMessage());

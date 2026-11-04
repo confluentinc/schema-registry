@@ -164,11 +164,6 @@ final class ConstraintNullTest {
     if (sub instanceof LogicalTypesParser.FuncCurrentTimestampContext) {
       return NEVER;
     }
-    // A literal NULL has no type, so isn't taken for a VARIANT: its CAST is always NULL.
-    if (sub instanceof LogicalTypesParser.FuncCastContext && ConstraintResolver.isLiteralNull(
-        ((LogicalTypesParser.FuncCastContext) sub).check_expr())) {
-      return ALWAYS;
-    }
     if (sub instanceof LogicalTypesParser.FuncVariantGetContext
         || sub instanceof LogicalTypesParser.FuncTryVariantGetContext
         || sub instanceof LogicalTypesParser.FuncCastContext && mayBeVariant(
@@ -510,6 +505,13 @@ final class ConstraintNullTest {
     }
     if (node instanceof LogicalTypesParser.ColumnrefContext) {
       return ConstraintResolver.mayReadVariant((LogicalTypesParser.ColumnrefContext) node, vctx);
+    }
+    // A step off a bracketed value, as a path's, may reach one where its type doesn't resolve.
+    if (node instanceof LogicalTypesParser.CheckParenContext
+        && ((LogicalTypesParser.CheckParenContext) node).indirection() != null) {
+      Schema read = ConstraintResolver.resolveParenType(
+          (LogicalTypesParser.CheckParenContext) node, vctx);
+      return read == null || read.getType() == Schema.Type.VARIANT;
     }
     for (int i = 0; i < node.getChildCount(); i++) {
       if (readsVariant(node.getChild(i), vctx)) {
