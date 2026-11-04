@@ -723,7 +723,7 @@ public abstract class Schema {
     private final String doc;
     private final List<String> tags;
     private final Map<String, Object> params;
-    private final List<Rule> rules;
+    private List<Rule> rules;
     // Recorded by the converter; never part of equality.
     private List<String> nativeNames;
 
@@ -853,6 +853,11 @@ public abstract class Schema {
      */
     public List<Rule> getRules() {
       return rules;
+    }
+
+    // A column's CHECKs, which the visitor translates once every named type is built.
+    void setRules(List<Rule> rules) {
+      this.rules = Collections.unmodifiableList(new ArrayList<>(rules));
     }
 
     @Override
