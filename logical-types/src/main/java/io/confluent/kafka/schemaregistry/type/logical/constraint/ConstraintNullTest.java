@@ -171,7 +171,7 @@ final class ConstraintNullTest {
     }
     if (sub instanceof LogicalTypesParser.FuncVariantGetContext
         || sub instanceof LogicalTypesParser.FuncTryVariantGetContext
-        || sub instanceof LogicalTypesParser.FuncCastContext && isVariant(
+        || sub instanceof LogicalTypesParser.FuncCastContext && mayBeVariant(
             ((LogicalTypesParser.FuncCastContext) sub).check_expr())) {
       return null;
     }
@@ -466,9 +466,51 @@ final class ConstraintNullTest {
     return false;
   }
 
-  private static boolean isVariant(LogicalTypesParser.Check_exprContext operand) {
-    Schema type = ConstraintResolver.tryResolveCheckExprType(operand, EMIT_VCTX.get());
-    return type == null || type.getType() == Schema.Type.VARIANT;
+  // True if operand may be a VARIANT, whose CAST can be NULL though it isn't: its type is one, or,
+  // its type not known, a VARIANT is read or made in it.
+  private static boolean mayBeVariant(LogicalTypesParser.Check_exprContext operand) {
+    // NULLIF's value is its first argument, whatever the second's type.
+    if ("NULLIF".equals(ConstraintResolver.tryExtractLeafFuncName(operand))) {
+      LogicalTypesParser.Func_applicationContext call = outermostCall(operand);
+      if (call != null && call.check_expr_list() != null) {
+        return mayBeVariant(call.check_expr_list().check_expr(0));
+      }
+    }
+    ConstraintValidationContext vctx = EMIT_VCTX.get();
+    Schema type = ConstraintResolver.tryResolveCheckExprType(operand, vctx);
+    return type != null ? type.getType() == Schema.Type.VARIANT : readsVariant(operand, vctx);
+  }
+
+  private static LogicalTypesParser.Func_applicationContext outermostCall(ParseTree node) {
+    if (node instanceof LogicalTypesParser.Func_applicationContext) {
+      return (LogicalTypesParser.Func_applicationContext) node;
+    }
+    for (int i = 0; i < node.getChildCount(); i++) {
+      LogicalTypesParser.Func_applicationContext call = outermostCall(node.getChild(i));
+      if (call != null) {
+        return call;
+      }
+    }
+    return null;
+  }
+
+  private static boolean readsVariant(ParseTree node, ConstraintValidationContext vctx) {
+    if (node instanceof LogicalTypesParser.ColumnrefContext) {
+      return ConstraintResolver.mayReadVariant((LogicalTypesParser.ColumnrefContext) node, vctx);
+    }
+    if (node instanceof LogicalTypesParser.Func_exprContext) {
+      Schema type = ConstraintResolver.tryResolveFuncReturnType(
+          (LogicalTypesParser.Func_exprContext) node, vctx);
+      if (type != null && type.getType() == Schema.Type.VARIANT) {
+        return true;
+      }
+    }
+    for (int i = 0; i < node.getChildCount(); i++) {
+      if (readsVariant(node.getChild(i), vctx)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   // SYMMETRIC, or with bounds never NULL, NULL exactly when an operand is; else by Kleene's AND.

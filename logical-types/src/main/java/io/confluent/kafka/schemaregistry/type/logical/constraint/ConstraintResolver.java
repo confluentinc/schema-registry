@@ -1017,23 +1017,50 @@ final class ConstraintResolver {
       if (current == null) {
         return null;
       }
-      if (el.colid() != null && current.getType() == Schema.Type.STRUCT) {
-        Schema.Field nested = current.getField(colidName(el));
-        if (nested == null) {
-          return null;
-        }
-        current = resolveIfNamedRef(nested.getSchema(), vctx);
-      } else if (el.check_expr() != null
-          && (current.getType() == Schema.Type.ARRAY
-              || current.getType() == Schema.Type.MULTISET)) {
-        current = resolvedOrRef(current.getElementType(), vctx);
-      } else if (el.check_expr() != null && current.getType() == Schema.Type.MAP) {
-        current = resolvedOrRef(current.getValueType(), vctx);
-      } else {
-        return null;
-      }
+      current = step(current, el, vctx, false);
     }
     return current;
+  }
+
+  // The type one step gives, or null; a field of a named type declared outside the script is
+  // its reference only with keepFieldRef, as an element or value of one always is.
+  private static Schema step(Schema current, LogicalTypesParser.Indirection_elContext el,
+      ConstraintValidationContext vctx, boolean keepFieldRef) {
+    if (el.colid() != null && current.getType() == Schema.Type.STRUCT) {
+      Schema.Field nested = current.getField(colidName(el));
+      if (nested == null) {
+        return null;
+      }
+      return keepFieldRef ? resolvedOrRef(nested.getSchema(), vctx)
+          : resolveIfNamedRef(nested.getSchema(), vctx);
+    }
+    if (el.check_expr() != null && (current.getType() == Schema.Type.ARRAY
+        || current.getType() == Schema.Type.MULTISET)) {
+      return resolvedOrRef(current.getElementType(), vctx);
+    }
+    if (el.check_expr() != null && current.getType() == Schema.Type.MAP) {
+      return resolvedOrRef(current.getValueType(), vctx);
+    }
+    return null;
+  }
+
+  /**
+   * True if what {@code col} reads may be a VARIANT: one is on its path, or a step's type isn't
+   * known. A value of a named type declared outside the script isn't one, but its fields, which
+   * don't resolve, may be.
+   */
+  static boolean mayReadVariant(
+      LogicalTypesParser.ColumnrefContext col, ConstraintValidationContext vctx) {
+    Schema current = resolvedOrRef(vctx.schemaOf(colidName(col.colid())), vctx);
+    if (col.indirection() != null) {
+      for (LogicalTypesParser.Indirection_elContext el : col.indirection().indirection_el()) {
+        if (current == null || current.getType() == Schema.Type.VARIANT) {
+          return true;
+        }
+        current = step(current, el, vctx, true);
+      }
+    }
+    return current == null || current.getType() == Schema.Type.VARIANT;
   }
 
   // A named type resolved, or kept as its reference when it's declared outside the script.
