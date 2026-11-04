@@ -224,13 +224,7 @@ final class ConstraintResolver {
       return null;
     }
     if (c instanceof LogicalTypesParser.CheckParenContext) {
-      LogicalTypesParser.CheckParenContext paren = (LogicalTypesParser.CheckParenContext) c;
-      Schema inner = tryResolveCheckExprType(paren.check_expr(), vctx);
-      if (paren.indirection() == null) {
-        return inner;
-      }
-      inner = resolveIfNamedRef(inner, vctx);
-      return inner == null ? null : resolveIndirection(inner, paren.indirection(), vctx);
+      return resolveParenType((LogicalTypesParser.CheckParenContext) c, vctx);
     }
     if (c instanceof LogicalTypesParser.CheckFuncContext) {
       return tryResolveFuncReturnType(
@@ -241,6 +235,20 @@ final class ConstraintResolver {
           ((LogicalTypesParser.CheckCaseContext) c).case_expr(), vctx);
     }
     return null;
+  }
+
+  /**
+   * The type of a bracketed expression, or of the field or element its indirection selects
+   * ({@code (r).b}, {@code (xs)[1]}); null if it doesn't resolve.
+   */
+  static Schema resolveParenType(
+      LogicalTypesParser.CheckParenContext paren, ConstraintValidationContext vctx) {
+    Schema inner = tryResolveCheckExprType(paren.check_expr(), vctx);
+    if (paren.indirection() == null) {
+      return inner;
+    }
+    inner = resolveIfNamedRef(inner, vctx);
+    return inner == null ? null : resolveIndirection(inner, paren.indirection(), vctx);
   }
 
   /**

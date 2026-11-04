@@ -39,11 +39,12 @@ import java.util.List;
  * <ol>
  *   <li>{@link #enforceMaxParseDepth} — guard recursive walkers from stack
  *       overflow on pathological inputs.</li>
- *   <li>{@link #validateBooleanRoot} — top-level expression must yield bool.</li>
  *   <li>{@link #validateColumnRefs} — every column ref resolves to a known
  *       binding, with indirection chains type-checked.</li>
  *   <li>Type-aware passes: comparisons, concat, casts, CASE branches, BETWEEN
  *       bounds, IN list/target, function args, macro bodies, modulo.</li>
+ *   <li>{@link #validateBooleanRoot} — top-level expression must yield bool;
+ *       last, so a part's own error is the one reported.</li>
  * </ol>
  *
  * <p>All passes are best-effort: when a node's type can't be resolved at our
@@ -164,8 +165,8 @@ final class ConstraintValidator {
       return true;
     }
     // Below the LIKE level we're in non-boolean territory — additive,
-    // multiplicative (incl. ||), unary, c_expr. The exception: bool literal,
-    // boolean column ref, or call to a boolean-returning function/macro.
+    // multiplicative (incl. ||), unary, c_expr. The exception: a bool literal, a
+    // BOOLEAN read, a CASE of boolean results, or a boolean-returning function/macro.
     LogicalTypesParser.Check_expr_addContext add = like.check_expr_add();
     if (add.check_expr_mul().size() > 1) {
       return false;
@@ -190,7 +191,12 @@ final class ConstraintValidator {
     }
     if (c instanceof LogicalTypesParser.CheckParenContext) {
       LogicalTypesParser.CheckParenContext paren = (LogicalTypesParser.CheckParenContext) c;
-      return paren.indirection() == null && isBooleanShaped(paren.check_expr(), vctx);
+      if (paren.indirection() == null) {
+        return isBooleanShaped(paren.check_expr(), vctx);
+      }
+      // A field or element of a bracketed value, such as (r).b, is a BOOLEAN read too.
+      Schema resolved = ConstraintResolver.resolveParenType(paren, vctx);
+      return resolved != null && resolved.getType() == Schema.Type.BOOLEAN;
     }
     if (c instanceof LogicalTypesParser.CheckCaseContext) {
       // Each result boolean-shaped too; a NULL one is left to validateCaseBranches to refuse.
@@ -215,8 +221,7 @@ final class ConstraintValidator {
 
   /**
    * True if a function call returns boolean. Conservative — known boolean
-   * functions only; everything else assumed non-boolean (CASE handled
-   * separately via "assume true" above).
+   * functions only; everything else assumed non-boolean.
    */
   private static boolean isBooleanFunc(
       LogicalTypesParser.Func_exprContext fctx, ConstraintValidationContext vctx) {

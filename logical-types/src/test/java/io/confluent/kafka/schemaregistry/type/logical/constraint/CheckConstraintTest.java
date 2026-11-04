@@ -39,6 +39,7 @@ import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -603,25 +604,39 @@ class CheckConstraintTest {
 
   @Test
   void aCaseIsACheckOnlyIfEachResultIsBoolean() {
-    // As a bare column must be BOOLEAN, so must each result a CASE gives, or NULL.
+    // As a bare column must be BOOLEAN, so must each result a CASE gives; a NULL one, and a
+    // part that fails on its own, keep their own errors.
     String columns = "u BOOLEAN NOT NULL, s STRING NOT NULL, bs BOOLEAN NOT NULL ARRAY NOT NULL, "
         + "ms BOOLEAN NOT NULL MULTISET NOT NULL, m MAP<STRING, BOOLEAN NOT NULL> NOT NULL, "
         + "r STRUCT(b BOOLEAN NOT NULL) NOT NULL, v VARIANT NOT NULL, "
-        + "un UNION<b BOOLEAN, s STRING> NOT NULL";
+        + "un UNION<b BOOLEAN, s STRING> NOT NULL, nt BOOLEAN";
+    List<String> refused = new ArrayList<>(List.of("CASE WHEN u THEN TRUE ELSE v END",
+        "CASE WHEN u THEN v ELSE TRUE END", "CASE WHEN u THEN TRUE WHEN NOT u THEN v ELSE u END",
+        "CASE WHEN u THEN TRUE ELSE s END"));
     for (String result : List.of("bs", "ms", "m", "r", "v", "un", "PARSE_JSON(s)")) {
-      String sql = "CASE WHEN u THEN " + result + " ELSE " + result + " END";
+      refused.add("CASE WHEN u THEN " + result + " ELSE " + result + " END");
+    }
+    for (String sql : refused) {
       ValidationException e = assertThrows(ValidationException.class,
           () -> translateCheckOver(columns, sql), sql);
-      assertTrue(e.getMessage().contains("must yield a boolean"), e.getMessage());
+      assertTrue(e.getMessage().contains("must yield a boolean"), sql + ": " + e.getMessage());
     }
-    assertThrows(ValidationException.class,
-        () -> translateCheckOver(columns, "CASE WHEN u THEN TRUE ELSE s END"));
-    ValidationException nullResult = assertThrows(ValidationException.class,
-        () -> translateCheckOver(columns, "CASE WHEN u THEN NULL ELSE u END"));
-    assertTrue(nullResult.getMessage().contains("literal NULL"), nullResult.getMessage());
-    for (String sql : List.of("CASE WHEN u THEN r.b ELSE u END",
-        "CASE WHEN u THEN CASE WHEN u THEN u ELSE FALSE END ELSE r.b END")) {
-      translateCheckOver(columns, sql);
+    for (String[] c : new String[][] {{"CASE WHEN u THEN NULL ELSE u END", "literal NULL"},
+        {"CASE WHEN u THEN nosuch ELSE u END", "Unknown column"},
+        {"CASE WHEN u THEN COALESCE(nt, NULL) ELSE u END", "literal NULL"}}) {
+      ValidationException e = assertThrows(ValidationException.class,
+          () -> translateCheckOver(columns, c[0]), c[0]);
+      assertTrue(e.getMessage().contains(c[1]), c[0] + ": " + e.getMessage());
+    }
+    for (String[] c : new String[][] {{"(r).b", "this.r.b == true"},
+        {"(bs)[1]", "size(dyn(this.bs)) < 1 || this.bs[0]"},
+        {"CASE WHEN u THEN (r).b ELSE FALSE END", "this.u ? this.r.b == true : false"},
+        {"CASE WHEN u THEN TRUE ELSE (bs)[1] END",
+            "this.u ? true "
+                + ": (size(dyn(this.bs)) < 1 ? true : dyn(this.bs[0]) == null || this.bs[0])"},
+        {"CASE WHEN u THEN CASE WHEN u THEN u ELSE FALSE END ELSE r.b END",
+            "this.u ? true : this.r.b == true"}}) {
+      assertEquals(c[1], translateCheckOver(columns, c[0]), c[0]);
     }
   }
 

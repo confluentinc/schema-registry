@@ -85,7 +85,6 @@ public final class ConstraintToCelTranslator {
     // Installed first, as the IS NULL lint's NULL analysis emits too.
     ConstraintEmitter.EMIT_CACHE.set(new ConstraintEmitter.EmitCache(ctx.getText()));
     try {
-      ConstraintValidator.validateBooleanRoot(ctx, validationContext);
       ConstraintValidator.validateColumnRefs(ctx, validationContext);
       ConstraintValidator.validateLiterals(ctx);
       ConstraintValidator.validateLikePatterns(ctx, validationContext);
@@ -98,6 +97,8 @@ public final class ConstraintToCelTranslator {
       ConstraintValidator.validateFunctionArgs(ctx, validationContext);
       ConstraintValidator.validateIsNullOperand(ctx, validationContext);
       ConstraintValidator.validateMacroBodies(ctx, validationContext);
+      // Last, so a part's own error, such as an unknown column, is the one reported.
+      ConstraintValidator.validateBooleanRoot(ctx, validationContext);
       EMIT_VCTX.set(validationContext.forTypeCheck());
       CelNode typed = ConstraintEmitter.visitCheckExpr(ctx);
       EMIT_VCTX.set(validationContext);
