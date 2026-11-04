@@ -43,10 +43,11 @@ import java.util.regex.Pattern;
  * or {@code ||} as unequal instead of raising it. There a ternary isn't made a junction, nor a
  * junction a single operand or split, unless what would raise can't.
  *
- * <p>Every rule also keeps the verdict, true, false or raising, of a runtime that takes
- * {@code &&} and {@code ||} left to right and raises the first error, though not always the same
+ * <p>Every rule also keeps the verdict (true, false or raising, though not always the same
+ * error) of a runtime that takes {@code &&} and {@code ||} left to right and raises the first
  * error: what raised before a deciding operand still raises, and an operand goes only for what
- * comes before it, unless it can't raise or raises only where the next one does.
+ * comes before it, unless it can't raise, or it is otherwise the identity and raises only where
+ * the next one does.
  */
 final class CelSimplifier {
 
