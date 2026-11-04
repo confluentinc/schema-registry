@@ -337,7 +337,7 @@ final class ConstraintValidator {
           // predicate body (arg 2) in a context that includes the binding,
           // typed as the collection's element type if we can resolve it.
           String iterVar = args.get(1).getText();
-          if (iterVar.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+          if (ConstraintFunctions.isSimpleIdentifier(iterVar)) {
             Schema elemType = ConstraintResolver.resolveCollectionElementType(args.get(0), vctx);
             validateColumnRefs(args.get(2), vctx.withBinding(iterVar, elemType));
           }
@@ -539,7 +539,7 @@ final class ConstraintValidator {
     }
     pass.run(args.get(0), vctx);
     String iterVar = args.get(1).getText();
-    if (iterVar.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+    if (ConstraintFunctions.isSimpleIdentifier(iterVar)) {
       Schema elemType = ConstraintResolver.resolveCollectionElementType(args.get(0), vctx);
       pass.run(args.get(2), vctx.withBinding(iterVar, elemType));
     }
@@ -1389,7 +1389,7 @@ final class ConstraintValidator {
         if (args.size() == 3) {
           String iterVar = args.get(1).getText();
           // A variable that isn't an identifier is refused when the macro is emitted.
-          if (!iterVar.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+          if (!ConstraintFunctions.isSimpleIdentifier(iterVar)) {
             validateMacroBodies(args.get(0), vctx);
             return;
           }

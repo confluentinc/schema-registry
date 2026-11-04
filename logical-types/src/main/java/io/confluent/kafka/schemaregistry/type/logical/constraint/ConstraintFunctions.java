@@ -23,6 +23,7 @@ import io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesPars
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Pattern;
 
 import static io.confluent.kafka.schemaregistry.type.logical.constraint.ConstraintEmitter.visitCExpr;
 import static io.confluent.kafka.schemaregistry.type.logical.constraint.ConstraintEmitter.visitCheckExpr;
@@ -245,6 +246,13 @@ final class ConstraintFunctions {
     }
   }
 
+  private static final Pattern SIMPLE_IDENTIFIER = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
+
+  // True if text is a bare identifier, as a macro's iteration variable must be.
+  static boolean isSimpleIdentifier(String text) {
+    return SIMPLE_IDENTIFIER.matcher(text).matches();
+  }
+
   /**
    * Validate that the iter-var arg is a bare identifier and not a reserved
    * word.
@@ -252,7 +260,7 @@ final class ConstraintFunctions {
   static String extractIterationVar(
       LogicalTypesParser.Check_exprContext ctx, String sqlName) {
     String text = ctx.getText();
-    if (!text.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+    if (!isSimpleIdentifier(text)) {
       throw locatedError(ctx,
           "Second argument to " + sqlName + "() must be a simple identifier "
               + "naming the iteration variable, got: '" + text + "'. "
