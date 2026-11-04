@@ -1025,14 +1025,20 @@ final class ConstraintResolver {
       } else if (el.check_expr() != null
           && (current.getType() == Schema.Type.ARRAY
               || current.getType() == Schema.Type.MULTISET)) {
-        current = resolveIfNamedRef(current.getElementType(), vctx);
+        current = resolvedOrRef(current.getElementType(), vctx);
       } else if (el.check_expr() != null && current.getType() == Schema.Type.MAP) {
-        current = resolveIfNamedRef(current.getValueType(), vctx);
+        current = resolvedOrRef(current.getValueType(), vctx);
       } else {
         return null;
       }
     }
     return current;
+  }
+
+  // A named type resolved, or kept as its reference when it's declared outside the script.
+  private static Schema resolvedOrRef(Schema s, ConstraintValidationContext vctx) {
+    Schema resolved = resolveIfNamedRef(s, vctx);
+    return resolved != null ? resolved : s;
   }
 
   // ---------------------------------------------------------------------

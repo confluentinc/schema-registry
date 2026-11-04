@@ -668,24 +668,37 @@ class CheckConstraintTest {
 
   @Test
   void aFieldOfANamedElementOrValueIsTypedAsAColumnIs() throws Exception {
-    // A subscript into a collection of a named type gives that type, so its fields get a
-    // column's handling: BOOLEAN reads, timestamp() and decimals.*, and NULL tests.
+    // A subscript into a collection of a named type gives that type, so the element and its
+    // fields get a column's handling: BOOLEAN reads, timestamp() and decimals.*, NULL tests.
     String script = "USING TYPE Ext FOR REF 'http://example.com/ext.json'; "
         + "STRUCT P (b BOOLEAN NOT NULL, i INT NOT NULL, t TIMESTAMP_LTZ(3) NOT NULL, "
         + "d DECIMAL(10, 2) NOT NULL, xs INT NOT NULL ARRAY NOT NULL, nxs INT ARRAY NOT NULL); "
         + "ENUM E ('A', 'B'); STRUCT T (ps P NOT NULL ARRAY NOT NULL, "
         + "mp MAP<STRING, P NOT NULL> NOT NULL, es E NOT NULL ARRAY NOT NULL, k INT NOT NULL, "
         + "tt TIMESTAMP_LTZ(3) NOT NULL, dd DECIMAL(10, 2) NOT NULL, "
-        + "xe Ext NOT NULL ARRAY NOT NULL, re STRUCT(x Ext NOT NULL) NOT NULL, CHECK (%s)); TYPE T";
+        + "xe Ext NOT NULL ARRAY NOT NULL, xen Ext ARRAY NOT NULL, "
+        + "xm MAP<STRING, Ext NOT NULL> NOT NULL, re STRUCT(x Ext NOT NULL) NOT NULL, "
+        + "CHECK (%s)); TYPE T";
     Map<String, Object> p = new HashMap<>();
     p.put("b", true);
-    p.put("i", 1);
+    p.put("i", 1L);
     p.put("t", "2020-01-01T00:00:00Z");
     p.put("d", CelDecimal.of(new BigDecimal("1.5")));
+    p.put("xs", List.of(1L));
     p.put("nxs", Arrays.asList((Object) null));
-    Map<String, Object> self = Map.of("ps", List.of(p), "mp", Map.of("k", p),
-        "tt", "2020-01-01T00:00:00Z", "dd", CelDecimal.of(new BigDecimal("1.50")), "k", 1,
-        "es", List.of("A"));
+    // tt is p's instant written another way, so only timestamp() reads them as equal.
+    Map<String, Object> set = new HashMap<>(Map.of("ps", List.of(p), "mp", Map.of("k", p),
+        "tt", "2020-01-01T01:00:00+01:00", "dd", CelDecimal.of(new BigDecimal("1.50")),
+        "k", 1L, "es", List.of("A"), "xe", List.of("A")));
+    set.put("xen", Arrays.asList((Object) null));
+    // Left empty, as cel-java can't convert a value indexed out of a dyn map.
+    set.put("xm", Map.of());
+    // Each subscript out of range, so each NULL guard is what passes the CHECK.
+    Map<String, Object> empty = new HashMap<>(set);
+    for (String collection : List.of("ps", "es", "xe", "xen")) {
+      empty.put(collection, List.of());
+    }
+    empty.put("mp", Map.of());
     for (String[] c : new String[][] {{"ps[1].b", "size(this.ps) < 1 || this.ps[0].b"},
         {"(ps)[1].b", "size(dyn(this.ps)) < 1 || this.ps[0].b"},
         {"(ps[1]).b", "size(this.ps) < 1 || this.ps[0].b"},
@@ -694,21 +707,25 @@ class CheckConstraintTest {
             "size(this.ps) < 1 ? true : string(this.ps[0].i) == '1'"},
         {"ps[1].t = tt", "size(this.ps) < 1 || timestamp(this.ps[0].t) == timestamp(this.tt)"},
         {"ps[1].d = dd", "size(this.ps) < 1 || decimals.eq(this.ps[0].d, this.dd)"},
+        {"k IN ps[1].xs", "size(this.ps) < 1 || this.k in this.ps[0].xs"},
         {"EVERY(ps[1].nxs, x, x > 0)",
             "size(this.ps) < 1 || this.ps[0].nxs.all(x, dyn(x) == null || x > 0)"},
         {"k IN ps[1].nxs", "size(this.ps) < 1 ? true "
             + ": (this.k in this.ps[0].nxs ? true : this.ps[0].nxs.exists(v, dyn(v) == null))"},
-        {"es[1] = 'A'", "size(this.es) < 1 || this.es[0] == 'A'"}}) {
+        {"es[1] = 'A'", "size(this.es) < 1 || this.es[0] == 'A'"},
+        // One from outside the script stays a reference, which a CAST tests for NULL.
+        {"CAST(xe[1] AS STRING) = 'A'", "size(this.xe) < 1 ? true : string(this.xe[0]) == 'A'"},
+        {"CAST(xen[1] AS STRING) = 'A'", "size(this.xen) < 1 || dyn(this.xen[0]) == null ? true "
+            + ": string(this.xen[0]) == 'A'"},
+        {"CAST(xm['k'] AS STRING) = 'A'",
+            "!('k' in this.xm) ? true : string(this.xm['k']) == 'A'"}}) {
       String cel = parseScript(String.format(script, c[0])).getRootSchema().getRules().get(0)
           .getExpr();
       assertEquals(c[1], cel, c[0]);
-      assertEquals(true, evalOver(cel, self), c[0] + " -> " + cel);
+      assertEquals(true, evalOver(cel, set), c[0] + " -> " + cel);
+      assertEquals(true, evalOver(cel, empty), c[0] + " on empty -> " + cel);
     }
-    String in = parseScript(String.format(script, "k IN ps[1].xs")).getRootSchema().getRules()
-        .get(0).getExpr();
-    assertEquals("size(this.ps) < 1 || this.k in this.ps[0].xs", in);
-    assertEquals(true, evalOver(in, Map.of("ps", List.of(), "k", 1)), in);
-    // A named type from outside the script doesn't resolve, and is read as before.
+    // A field of one from outside the script doesn't resolve, so it's read untyped.
     for (String[] c : new String[][] {{"xe[1].i > 0", "this.xe[0].i > 0"},
         {"re.x.i > 0", "this.re.x.i > 0"}}) {
       assertEquals(c[1], parseScript(String.format(script, c[0])).getRootSchema().getRules()
