@@ -204,10 +204,11 @@ final class CelSimplifier {
     return factor(out, and);
   }
 
-  // a || (a && b) is a, as is a && (a || b): an operand of the other kind goes when all of one of
-  // its operands' own operands come before it. So does c ? false : false in an ||, or
-  // c ? true : true in an &&, which only raises, where an operand before it or the next one
-  // raises when c does. Taken left to right, what raises first still does.
+  // a || (a && b) is a, as is a && (a || b): an operand of the other kind goes when all of its
+  // first operand's own operands come before it, which decides it before anything after is
+  // taken. So does c ? false : false in an ||, or c ? true : true in an &&, which only raises,
+  // where an operand before it or the next one raises when c does: left to right, what raised
+  // still does, if not always first.
   private static List<CelNode> absorbed(List<CelNode> operands, boolean and) {
     List<CelNode> out = new ArrayList<>(operands);
     for (int i = out.size() - 1; i >= 0; i--) {
@@ -221,7 +222,6 @@ final class CelSimplifier {
   // True if operands' i-th is absorbed by those before it, or a raise-only one by the next.
   private static boolean absorbed(List<CelNode> operands, int i, boolean and) {
     CelNode operand = operands.get(i);
-    List<CelNode> before = operands.subList(0, i);
     if (operand instanceof CelNode.Ternary) {
       CelNode.Ternary ternary = (CelNode.Ternary) operand;
       CelNode identity = CelNode.bool(and);
@@ -240,12 +240,8 @@ final class CelSimplifier {
     if (!(operand instanceof CelNode.Junction) || ((CelNode.Junction) operand).and == and) {
       return false;
     }
-    for (CelNode part : ((CelNode.Junction) operand).operands) {
-      if (before.containsAll(parts(part, and))) {
-        return true;
-      }
-    }
-    return false;
+    CelNode first = ((CelNode.Junction) operand).operands.get(0);
+    return operands.subList(0, i).containsAll(parts(first, and));
   }
 
   // Adjacent operands of an && that start with the same operands S of an || are

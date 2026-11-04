@@ -167,9 +167,12 @@ class CelSimplifierTest {
   @Test
   void anOperandImpliedByAnotherIsAbsorbed() {
     assertEquals("this.a > 0", simplified(or(A_POSITIVE, and(A_POSITIVE, B_POSITIVE))));
-    // Not by one after it, as taken left to right what it raises would raise first.
+    // Not by one after it, nor by one before it implying an operand but its first: taken left to
+    // right, what it raises would raise first.
     CelNode later = or(and(A_POSITIVE, RAISES), A_POSITIVE);
     assertEquals(later.toString(), simplified(later));
+    CelNode second = or(A_POSITIVE, and(RAISES, A_POSITIVE));
+    assertEquals(second.toString(), simplified(second));
     // c ? false : false only raises, as an operand raising with c next does.
     assertEquals("1 / this.z > 0", simplified(or(ternary(RAISES, FALSE, FALSE), RAISES)));
     CelNode alone = or(ternary(RAISES, FALSE, FALSE), A_POSITIVE);

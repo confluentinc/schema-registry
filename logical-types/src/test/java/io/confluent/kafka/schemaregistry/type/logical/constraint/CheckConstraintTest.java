@@ -3827,6 +3827,9 @@ class CheckConstraintTest {
     assertEquals(aNull + " || this.a > 0 || this.a < -10",
         translateCheckOver(columns, "a > 0 OR a < -10"));
     assertEquals(aNull + " || this.a > 0", translateCheckOver(columns, "a IS NULL OR a > 0"));
+    // An AND whose raising first operand would raise first left to right isn't absorbed.
+    assertEquals("this.a > 0 || (this.i / this.z > 0 && this.a > 0)", translateCheckOver(
+        "a INT NOT NULL, i INT NOT NULL, z INT NOT NULL", "a > 0 OR (i / z > 0 AND a > 0)"));
     assertEquals(aSet + " && this.a > 0", translateCheckOver(columns, "a IS NOT NULL AND a > 0"));
     assertEquals(aNull + " || (this.a > 0 && (" + bNull + " || this.b > 0))",
         translateCheckOver(columns, "a IS NULL OR (a > 0 AND b > 0)"));
