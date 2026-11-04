@@ -42,6 +42,10 @@ import java.util.regex.Pattern;
  * <p>Compared, as an operand of anything but a truth, cel-java gives an error out of {@code &&}
  * or {@code ||} as unequal instead of raising it. There a ternary isn't made a junction, nor a
  * junction a single operand or split, unless what would raise can't.
+ *
+ * <p>Every rule also keeps the verdict of a runtime that takes {@code &&} and {@code ||} left to
+ * right and raises the first error: what raised before a deciding operand still raises, and an
+ * operand goes only for what comes before it.
  */
 final class CelSimplifier {
 
@@ -204,11 +208,11 @@ final class CelSimplifier {
     return factor(out, and);
   }
 
-  // a || (a && b) is a, as is a && (a || b): an operand of the other kind goes when all of its
-  // first operand's own operands come before it, which decides it before anything after is
-  // taken. So does c ? false : false in an ||, or c ? true : true in an &&, which only raises,
-  // where an operand before it or the next one raises when c does: left to right, what raised
-  // still does, if not always first.
+  // a || (a && b) is a, as is a && (a || b): an operand of the other kind goes when its first
+  // operand, or each of that one's own operands if it is of this kind, comes before it, which
+  // decides it before the rest of it is taken. So does c ? false : false in an ||, or
+  // c ? true : true in an &&, which only raises, where an operand before it or the next one
+  // raises when c does: left to right, what raised still does, if not always first.
   private static List<CelNode> absorbed(List<CelNode> operands, boolean and) {
     List<CelNode> out = new ArrayList<>(operands);
     for (int i = out.size() - 1; i >= 0; i--) {
