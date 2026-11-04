@@ -1419,7 +1419,8 @@ class CheckConstraintTest {
     // leaves a NULL field out.
     assertEquals(
         "((!has(this.a) || dyn(this.a) == null) && (!has(this.b) || dyn(this.b) == null)) ||"
-            + " (has(this.a) && dyn(this.a) != null ? this.a : this.b) > 0",
+            + " (has(this.a) && dyn(this.a) != null ? this.a : (!has(this.b) || dyn(this.b) =="
+            + " null ? dyn(null) : this.b)) > 0",
         translateCheck("COALESCE(a, b) > 0"));
   }
 
@@ -1428,7 +1429,8 @@ class CheckConstraintTest {
     assertEquals(
         "((!has(this.a) || dyn(this.a) == null) && (!has(this.b) || dyn(this.b) == null) &&"
             + " (!has(this.c) || dyn(this.c) == null)) || (has(this.a) && dyn(this.a) != null ?"
-            + " this.a : (has(this.b) && dyn(this.b) != null ? this.b : this.c)) > 0",
+            + " this.a : (has(this.b) && dyn(this.b) != null ? this.b : (!has(this.c) ||"
+            + " dyn(this.c) == null ? dyn(null) : this.c))) > 0",
         translateCheck("COALESCE(a, b, c) > 0"));
   }
 
@@ -1515,7 +1517,8 @@ class CheckConstraintTest {
   @Test
   void nullif() {
     assertEquals("!has(this.a) || dyn(this.a) == null || (has(this.b) && dyn(this.b) != null"
-            + " && this.a == this.b) || this.a == 0",
+            + " && this.a == this.b) || (!has(this.b) || dyn(this.b) == null || this.a != this.b"
+            + " ? this.a : dyn(null)) == 0",
         translateCheck("NULLIF(a, b) = 0"));
   }
 
@@ -3883,9 +3886,6 @@ class CheckConstraintTest {
     // An equality can't raise, so its value is a fact.
     assertEquals(aNull + " || this.a == 5", translateCheckOver(columns, "NULLIF(a, 5) IS NULL"));
     assertEquals(aNull, translateCheckOver(columns, "(a IN (0, 1)) IS NULL"));
-    // Both NULL is ruled out before the last argument is read.
-    assertEquals("((" + aNull + ") && (" + bNull + ")) || (" + aSet + " ? this.a : this.b) > 0",
-        translateCheckOver(columns, "COALESCE(a, b) > 0"));
     // What the condition raises, the CHECK still does.
     String raising = translateCheckOver(columns,
         "(CASE WHEN i / z > 0 THEN a ELSE b END > 0) = t");
@@ -3932,8 +3932,8 @@ class CheckConstraintTest {
 
   @Test
   void aLongCheckIsShortenedInTime() {
-    // What is known is learned from what was just learned, a wide junction isn't learned from,
-    // and splits simplify a bounded amount again, so a long CHECK isn't simplified for minutes.
+    // Splits simplify a bounded amount again, and a macro's body is given each known fact once,
+    // so a long CHECK isn't simplified for minutes.
     String columns = "l INT NOT NULL ARRAY NOT NULL, x INT, y INT";
     assertTimeoutPreemptively(Duration.ofSeconds(30), () -> {
       translateCheckOver(columns, "EVERY(l, e, " + clauses(1200) + ")");
@@ -3951,6 +3951,11 @@ class CheckConstraintTest {
       String sum = "(CASE WHEN " + clauses(200) + " THEN 1 ELSE 0 END)";
       for (int j = 0; j < 20; j++) {
         sum = "(CASE WHEN e > " + j + " THEN 1 ELSE 2 END) + (" + sum + ")";
+      }
+      translateCheckOver(columns, "EVERY(l, e, " + sum + " > 0)");
+      sum = "(CASE WHEN " + clauses(1200) + " THEN x ELSE y END)";
+      for (int j = 0; j < 60; j++) {
+        sum = "(CASE WHEN e > " + j + " THEN x ELSE y END) + (" + sum + ")";
       }
       translateCheckOver(columns, "EVERY(l, e, " + sum + " > 0)");
     });
@@ -4005,7 +4010,7 @@ class CheckConstraintTest {
     assertEquals("!has(this.s) || dyn(this.s) == null || this.s.startsWith('a')",
         translateCheckOver(columns, "STARTS_WITH(s, 'a')"));
     assertEquals("(has(this.a) && dyn(this.a) != null && this.a > 0) || 1 / this.z > 0 ? true : "
-        + aNull, translateCheckOver(columns, "a > 0 OR 1 / z > 0"));
+        + aNull + " || this.a > 0", translateCheckOver(columns, "a > 0 OR 1 / z > 0"));
     assertEquals(aNull + " || (1 <= this.a && this.a <= 10 / this.z)",
         translateCheckOver(columns, "a BETWEEN 1 AND 10 / z"));
     Object[][] rows = {
@@ -6452,7 +6457,8 @@ class CheckConstraintTest {
     // int-first with a double later arg resolves to double (was int → wrong).
     assertEquals(
         "((!has(this.x) || dyn(this.x) == null) && (!has(this.ratio) || dyn(this.ratio) == null))"
-            + " || (has(this.x) && dyn(this.x) != null ? double(this.x) : this.ratio) > 1.0",
+            + " || (has(this.x) && dyn(this.x) != null ? double(this.x) : (!has(this.ratio) ||"
+            + " dyn(this.ratio) == null ? dyn(null) : this.ratio)) > 1.0",
         translateCheck("COALESCE(x, ratio) > 1.0"));
   }
 

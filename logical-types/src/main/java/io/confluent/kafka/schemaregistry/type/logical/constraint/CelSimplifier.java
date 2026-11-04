@@ -16,12 +16,9 @@
 
 package io.confluent.kafka.schemaregistry.type.logical.constraint;
 
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Deque;
 import java.util.HashMap;
-import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -37,7 +34,6 @@ import java.util.regex.Pattern;
  * those after it, and a ternary's condition is one in its branches; a node equal to a fact is
  * that constant. Operands are never reordered, so a NULL test still comes before what it guards.
  * An equality of what can be read is safe too, as CEL's {@code ==} holds between any two values.
- * A known junction whose operands but one are known and don't decide it decides that one.
  *
  * <p>A node that always evaluates a ternary's condition is split on it, {@code c ? node : node}
  * with {@code c} a fact in each, when that is shorter: what the condition raises, the node raises
@@ -56,14 +52,11 @@ final class CelSimplifier {
   private static final Set<String> TRUTH_MACROS = Set.of("all", "exists", "exists_one");
   private static final CelNode THIS = CelNode.ident("this");
   private static final Set<String> ARITHMETIC = Set.of("+", "-", "*");
-  // Splits simplify their node again, each charged its code points times the facts' depth, as
-  // each fact looked up walks them: in all, up to this many times the CHECK's code points, and at
-  // most MAX_SPLIT_WORK.
+  // Splits simplify their node again, each charged its code points times one more than the depth
+  // of the facts, as looking a fact up walks their levels: in all, up to this many times the
+  // CHECK's code points, and at most MAX_SPLIT_WORK.
   private static final int SPLIT_WORK = 64;
   private static final long MAX_SPLIT_WORK = 250_000;
-  // A known junction with more operands than this isn't watched: deciding each of its operands
-  // in turn would look each one up again.
-  private static final int MAX_CLAUSE = 32;
   private static final Pattern DOUBLE =
       Pattern.compile("(?:\\d+\\.\\d+|\\.\\d+)(?:[eE][+-]?\\d+)?|\\d+[eE][+-]?\\d+");
 
@@ -773,14 +766,6 @@ final class CelSimplifier {
   static final class Facts {
     private final Facts parent;
     private final Map<CelNode, Boolean> known = new HashMap<>();
-    // The nodes known here, in the order learned.
-    private final List<CelNode> learned = new ArrayList<>();
-    // Known junctions one operand decides, a true || or a false &&, by each of their operands.
-    private final Map<CelNode, List<CelNode.Junction>> clauses = new HashMap<>();
-    // Those watched here, each once, in order.
-    private final List<CelNode.Junction> added = new ArrayList<>();
-    // The nearest of these facts and their parents that watches a junction, or null.
-    private Facts watching;
     private final int depth;
     // The work left for splits, shared by one simplification.
     private final long[] work;
@@ -788,7 +773,6 @@ final class CelSimplifier {
     private Facts(Facts parent, long[] work) {
       this.parent = parent;
       this.work = work;
-      this.watching = parent == null ? null : parent.watching;
       this.depth = parent == null ? 0 : parent.depth + 1;
     }
 
@@ -822,61 +806,35 @@ final class CelSimplifier {
     Facts with(CelNode node, boolean value) {
       Facts out = new Facts(this, work);
       out.add(node, value);
-      out.propagate();
       return out;
     }
 
     // These facts but those that mention variable.
     Facts without(CelNode variable) {
       Facts out = new Facts(null, work);
-      Set<CelNode.Junction> kept = Collections.newSetFromMap(new IdentityHashMap<>());
       for (Facts facts = this; facts != null; facts = facts.parent) {
         for (Map.Entry<CelNode, Boolean> fact : facts.known.entrySet()) {
           if (!fact.getKey().contains(variable)) {
-            out.learn(fact.getKey(), fact.getValue());
-          }
-        }
-        for (CelNode.Junction clause : facts.added) {
-          if (kept.add(clause) && !clause.contains(variable)) {
-            out.watch(clause);
+            out.known.putIfAbsent(fact.getKey(), fact.getValue());
           }
         }
       }
       return out;
     }
 
-    // True if node wasn't known here yet.
-    private boolean learn(CelNode node, boolean value) {
-      if (known.putIfAbsent(node, value) != null) {
-        return false;
-      }
-      learned.add(node);
-      return true;
-    }
-
-    private void watch(CelNode.Junction clause) {
-      if (clause.operands.size() > MAX_CLAUSE) {
-        return;
-      }
-      watching = this;
-      added.add(clause);
-      for (CelNode operand : clause.operands) {
-        clauses.computeIfAbsent(operand, k -> new ArrayList<>()).add(clause);
-      }
-    }
-
     private void add(CelNode node, boolean value) {
-      if (node.equals(CelNode.TRUE) || node.equals(CelNode.FALSE) || !learn(node, value)) {
+      if (node.equals(CelNode.TRUE) || node.equals(CelNode.FALSE)
+          || known.putIfAbsent(node, value) != null) {
         return;
       }
       if (node instanceof CelNode.Unary && ((CelNode.Unary) node).op.equals("!")) {
         add(((CelNode.Unary) node).operand, !value);
       } else {
-        learn(CelNode.not(node), !value);
+        known.putIfAbsent(CelNode.not(node), !value);
       }
       CelNode flipped = flipped(node);
       if (flipped != null) {
-        learn(flipped, !value);
+        known.putIfAbsent(flipped, !value);
       }
       if (node instanceof CelNode.Junction) {
         CelNode.Junction junction = (CelNode.Junction) node;
@@ -885,10 +843,8 @@ final class CelSimplifier {
           for (CelNode operand : junction.operands) {
             add(operand, value);
           }
-        } else {
-          watch(junction);
         }
-        learn(pushed(junction), !value);
+        known.putIfAbsent(pushed(junction), !value);
       }
       if (node instanceof CelNode.Ternary) {
         // c ? x : y is decided by c when a branch is the other constant.
@@ -901,51 +857,6 @@ final class CelSimplifier {
           add(ternary.whenTrue, value);
         }
       }
-    }
-
-    // A known || with all its operands but one false has that one true, and a known && the other
-    // way round: each clause known here, and each with an operand learned here, is checked.
-    private void propagate() {
-      Deque<CelNode.Junction> pending = new ArrayDeque<>();
-      int clausesSeen = 0;
-      int nodesSeen = 0;
-      while (true) {
-        for (; clausesSeen < added.size(); clausesSeen++) {
-          pending.add(added.get(clausesSeen));
-        }
-        for (; nodesSeen < learned.size(); nodesSeen++) {
-          for (Facts facts = watching; facts != null;
-              facts = facts.parent == null ? null : facts.parent.watching) {
-            pending.addAll(facts.clauses.getOrDefault(learned.get(nodesSeen),
-                Collections.emptyList()));
-          }
-        }
-        if (pending.isEmpty()) {
-          return;
-        }
-        CelNode.Junction clause = pending.poll();
-        CelNode open = open(clause);
-        if (open != null) {
-          add(open, !clause.and);
-        }
-      }
-    }
-
-    // The one operand of clause not yet known, if no other decides it.
-    private CelNode open(CelNode.Junction clause) {
-      CelNode open = null;
-      for (CelNode operand : clause.operands) {
-        CelNode value = get(operand);
-        if (value == null) {
-          if (open != null) {
-            return null;
-          }
-          open = operand;
-        } else if (value.equals(CelNode.bool(!clause.and))) {
-          return null;
-        }
-      }
-      return open;
     }
   }
 }
