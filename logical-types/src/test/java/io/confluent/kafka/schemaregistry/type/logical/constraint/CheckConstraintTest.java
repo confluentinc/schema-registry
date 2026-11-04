@@ -623,7 +623,8 @@ class CheckConstraintTest {
     }
     for (String[] c : new String[][] {{"CASE WHEN u THEN NULL ELSE u END", "literal NULL"},
         {"CASE WHEN u THEN nosuch ELSE u END", "Unknown column"},
-        {"CASE WHEN u THEN COALESCE(nt, NULL) ELSE u END", "literal NULL"}}) {
+        {"CASE WHEN u THEN COALESCE(nt, NULL) ELSE u END", "literal NULL"},
+        {"EVERY(bs, `e`, CASE WHEN u THEN NULL ELSE u END)", "simple identifier"}}) {
       ValidationException e = assertThrows(ValidationException.class,
           () -> translateCheckOver(columns, c[0]), c[0]);
       assertTrue(e.getMessage().contains(c[1]), c[0] + ": " + e.getMessage());
@@ -663,19 +664,55 @@ class CheckConstraintTest {
           () -> translateCheckOver(columns, sql), sql);
       assertTrue(e.getMessage().contains("must yield a boolean"), sql + ": " + e.getMessage());
     }
-    // An element or value of a named type is resolved too, however it's bracketed.
+  }
+
+  @Test
+  void aFieldOfANamedElementOrValueIsTypedAsAColumnIs() throws Exception {
+    // A subscript into a collection of a named type gives that type, so its fields get a
+    // column's handling: BOOLEAN reads, timestamp() and decimals.*, and NULL tests.
+    String script = "USING TYPE Ext FOR REF 'http://example.com/ext.json'; "
+        + "STRUCT P (b BOOLEAN NOT NULL, i INT NOT NULL, t TIMESTAMP_LTZ(3) NOT NULL, "
+        + "d DECIMAL(10, 2) NOT NULL, xs INT NOT NULL ARRAY NOT NULL, nxs INT ARRAY NOT NULL); "
+        + "ENUM E ('A', 'B'); STRUCT T (ps P NOT NULL ARRAY NOT NULL, "
+        + "mp MAP<STRING, P NOT NULL> NOT NULL, es E NOT NULL ARRAY NOT NULL, k INT NOT NULL, "
+        + "tt TIMESTAMP_LTZ(3) NOT NULL, dd DECIMAL(10, 2) NOT NULL, "
+        + "xe Ext NOT NULL ARRAY NOT NULL, re STRUCT(x Ext NOT NULL) NOT NULL, CHECK (%s)); TYPE T";
+    Map<String, Object> p = new HashMap<>();
+    p.put("b", true);
+    p.put("i", 1);
+    p.put("t", "2020-01-01T00:00:00Z");
+    p.put("d", CelDecimal.of(new BigDecimal("1.5")));
+    p.put("nxs", Arrays.asList((Object) null));
+    Map<String, Object> self = Map.of("ps", List.of(p), "mp", Map.of("k", p),
+        "tt", "2020-01-01T00:00:00Z", "dd", CelDecimal.of(new BigDecimal("1.50")), "k", 1,
+        "es", List.of("A"));
     for (String[] c : new String[][] {{"ps[1].b", "size(this.ps) < 1 || this.ps[0].b"},
         {"(ps)[1].b", "size(dyn(this.ps)) < 1 || this.ps[0].b"},
         {"(ps[1]).b", "size(this.ps) < 1 || this.ps[0].b"},
         {"mp['k'].b", "!('k' in this.mp) || this.mp['k'].b"},
         {"CAST(ps[1].i AS STRING) = '1'",
-            "size(this.ps) < 1 ? true : string(this.ps[0].i) == '1'"}}) {
-      Schema schema = parseScript("STRUCT P (b BOOLEAN NOT NULL, i INT NOT NULL); STRUCT T ("
-          + "ps P NOT NULL ARRAY NOT NULL, mp MAP<STRING, P NOT NULL> NOT NULL, CHECK (" + c[0]
-          + ")); TYPE T").getRootSchema();
-      String cel = schema.getRules().get(0).getExpr();
-      CelValidator.assertValidStrict(cel, schema);
+            "size(this.ps) < 1 ? true : string(this.ps[0].i) == '1'"},
+        {"ps[1].t = tt", "size(this.ps) < 1 || timestamp(this.ps[0].t) == timestamp(this.tt)"},
+        {"ps[1].d = dd", "size(this.ps) < 1 || decimals.eq(this.ps[0].d, this.dd)"},
+        {"EVERY(ps[1].nxs, x, x > 0)",
+            "size(this.ps) < 1 || this.ps[0].nxs.all(x, dyn(x) == null || x > 0)"},
+        {"k IN ps[1].nxs", "size(this.ps) < 1 ? true "
+            + ": (this.k in this.ps[0].nxs ? true : this.ps[0].nxs.exists(v, dyn(v) == null))"},
+        {"es[1] = 'A'", "size(this.es) < 1 || this.es[0] == 'A'"}}) {
+      String cel = parseScript(String.format(script, c[0])).getRootSchema().getRules().get(0)
+          .getExpr();
       assertEquals(c[1], cel, c[0]);
+      assertEquals(true, evalOver(cel, self), c[0] + " -> " + cel);
+    }
+    String in = parseScript(String.format(script, "k IN ps[1].xs")).getRootSchema().getRules()
+        .get(0).getExpr();
+    assertEquals("size(this.ps) < 1 || this.k in this.ps[0].xs", in);
+    assertEquals(true, evalOver(in, Map.of("ps", List.of(), "k", 1)), in);
+    // A named type from outside the script doesn't resolve, and is read as before.
+    for (String[] c : new String[][] {{"xe[1].i > 0", "this.xe[0].i > 0"},
+        {"re.x.i > 0", "this.re.x.i > 0"}}) {
+      assertEquals(c[1], parseScript(String.format(script, c[0])).getRootSchema().getRules()
+          .get(0).getExpr(), c[0]);
     }
   }
 

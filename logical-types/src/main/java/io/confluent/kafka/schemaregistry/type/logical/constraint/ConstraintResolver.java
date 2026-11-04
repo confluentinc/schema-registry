@@ -992,11 +992,10 @@ final class ConstraintResolver {
   }
 
   /**
-   * Resolve the type of {@code col}, walking through any indirection. Returns
-   * null if the root name isn't a known column (validation will catch that
-   * separately) or if the indirection can't be resolved at our coarse
-   * granularity (we follow {@code .field} into structs but stop at array/map
-   * indexing where the type changes per element).
+   * Resolve the type of {@code col}, walking through any indirection: a field,
+   * an element or a map value, through named types. Returns null if the root
+   * name isn't a known column (validation will catch that separately) or if a
+   * step doesn't resolve, as into a named type declared outside the script.
    */
   static Schema resolveColumnRefType(
       LogicalTypesParser.ColumnrefContext col, ConstraintValidationContext vctx) {
@@ -1013,6 +1012,10 @@ final class ConstraintResolver {
   private static Schema resolveIndirection(Schema current,
       LogicalTypesParser.IndirectionContext indirection, ConstraintValidationContext vctx) {
     for (LogicalTypesParser.Indirection_elContext el : indirection.indirection_el()) {
+      // A named type declared outside the script doesn't resolve.
+      if (current == null) {
+        return null;
+      }
       if (el.colid() != null && current.getType() == Schema.Type.STRUCT) {
         Schema.Field nested = current.getField(colidName(el));
         if (nested == null) {

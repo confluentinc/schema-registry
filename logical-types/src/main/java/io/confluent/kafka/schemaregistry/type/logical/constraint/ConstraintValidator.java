@@ -1386,11 +1386,13 @@ final class ConstraintValidator {
             fctx.check_expr_list().check_expr();
         if (args.size() == 3) {
           String iterVar = args.get(1).getText();
-          ConstraintValidationContext bodyCtx = vctx;
-          if (iterVar.matches("[A-Za-z_][A-Za-z0-9_]*")) {
-            Schema elemType = ConstraintResolver.resolveCollectionElementType(args.get(0), vctx);
-            bodyCtx = vctx.withBinding(iterVar, elemType);
+          // A variable that isn't an identifier is refused when the macro is emitted.
+          if (!iterVar.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+            validateMacroBodies(args.get(0), vctx);
+            return;
           }
+          Schema elemType = ConstraintResolver.resolveCollectionElementType(args.get(0), vctx);
+          ConstraintValidationContext bodyCtx = vctx.withBinding(iterVar, elemType);
           if (!isBooleanShaped(args.get(2), bodyCtx)) {
             throw locatedError(args.get(2),
                 name + "() predicate body must yield a boolean, got: '"
