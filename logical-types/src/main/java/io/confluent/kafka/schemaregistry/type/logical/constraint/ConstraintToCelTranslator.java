@@ -41,7 +41,8 @@ import io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesPars
  * unquoting helpers. Everyone in the constraint package shares those —
  * keeping them here avoids an extra utility file for three small helpers.
  *
- * <p>The translator is purely text-emitting — no CEL evaluator is bundled or
+ * <p>The translator emits a {@link CelNode} tree, shortens it by the rules of logic
+ * ({@link CelSimplifier}) and prints it — no CEL evaluator is bundled or
  * required. The output is a well-formed CEL expression string that consumers
  * (the SR rules engine, Flink runtime, etc.) can evaluate with their own CEL
  * evaluator.
@@ -84,7 +85,6 @@ public final class ConstraintToCelTranslator {
     // Installed first, as the IS NULL lint's NULL analysis emits too.
     ConstraintEmitter.EMIT_CACHE.set(new ConstraintEmitter.EmitCache(ctx.getText()));
     try {
-      ConstraintValidator.validateBooleanRoot(ctx, validationContext);
       ConstraintValidator.validateColumnRefs(ctx, validationContext);
       ConstraintValidator.validateLiterals(ctx);
       ConstraintValidator.validateLikePatterns(ctx, validationContext);
@@ -97,13 +97,18 @@ public final class ConstraintToCelTranslator {
       ConstraintValidator.validateFunctionArgs(ctx, validationContext);
       ConstraintValidator.validateIsNullOperand(ctx, validationContext);
       ConstraintValidator.validateMacroBodies(ctx, validationContext);
+      // Last, so a part's own error, such as an unknown column, is the one reported.
+      ConstraintValidator.validateBooleanRoot(ctx, validationContext);
       EMIT_VCTX.set(validationContext.forTypeCheck());
-      StringBuilder typed = new StringBuilder();
-      ConstraintEmitter.visitCheckExpr(ctx, typed);
+      CelNode typed = ConstraintEmitter.visitCheckExpr(ctx);
       EMIT_VCTX.set(validationContext);
-      StringBuilder sb = new StringBuilder();
-      ConstraintEmitter.emitCheck(ctx, sb);
-      String cel = sb.toString();
+      CelNode emitted = ConstraintEmitter.emitCheck(ctx);
+      // Refused over CEL's size limit before it is printed.
+      ConstraintCelChecker.checkSize(typed, false, ctx.getText());
+      ConstraintCelChecker.checkSize(emitted, false, ctx.getText());
+      CelNode result = ConstraintEmitter.booleanResult(CelSimplifier.simplify(emitted));
+      ConstraintCelChecker.checkSize(result, false, ctx.getText());
+      String cel = result.toString();
       // Post-emit safety net: strict cel-java type-check the result. Catches
       // type/overload mismatches the hand-coded validator passes don't cover
       // (compound expressions, function-result types, has() argument shape,
