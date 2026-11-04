@@ -383,7 +383,7 @@ final class ConstraintResolver {
         }
         for (LogicalTypesParser.Check_exprContext arg : args) {
           Schema t = tryResolveCheckExprType(arg, vctx);
-          if (t != null) {
+          if (!isUnknownType(t)) {
             return t;
           }
         }
@@ -1098,9 +1098,9 @@ final class ConstraintResolver {
 
   /**
    * True if a resolved type says nothing here: null, or a named type declared outside the
-   * script, whose type the strict check alone has.
+   * script, which is read untyped, as a root column of one is.
    */
-  static boolean unknownType(Schema type) {
+  static boolean isUnknownType(Schema type) {
     return type == null || type.getType() == Schema.Type.NAMED_TYPE_REF;
   }
 
@@ -1111,7 +1111,7 @@ final class ConstraintResolver {
    * decimal, which isn't a built-in CEL type and rides in its own category.
    */
   static boolean areComparable(Schema.Type a, Schema.Type b) {
-    // A named type from outside the script isn't known here (unknownType).
+    // A named type from outside the script isn't known here (isUnknownType).
     if (a == b || a == Schema.Type.NAMED_TYPE_REF || b == Schema.Type.NAMED_TYPE_REF) {
       return true;
     }

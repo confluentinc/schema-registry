@@ -731,12 +731,21 @@ class CheckConstraintTest {
     String ye = "size(this.ps) < 1 || size(this.ps[0].ye) < 1 || this.ps[0].ye[0]";
     for (String[] c : new String[][] {{"ps[1].ye[1] = 'A'", ye + " == 'A'"},
         {"ps[1].ye[1] || 'x' = 'Ax'", ye + " + 'x' == 'Ax'"},
-        {"ps[1].ye[1] + 1 > 0", ye + " + 1 > 0"}, {"ps[1].ye[1] < 'A'", ye + " < 'A'"},
+        {"ps[1].ye[1] + 1 > 0", ye + " + 1 > 0"}, {"ps[1].ye[1] * 2 > 0", ye + " * 2 > 0"},
+        {"ps[1].ye[1] < 'A'", ye + " < 'A'"}, {"0 < xe[1]", "size(this.xe) < 1 || 0 < this.xe[0]"},
         {"xe[1] = 'A'", "size(this.xe) < 1 || this.xe[0] == 'A'"},
         {"COALESCE(xe[1], 'A') = 'A'", "!(size(this.xe) < 1) ? this.xe[0] == 'A' : true"},
         {"xe[1].i > 0", "this.xe[0].i > 0"}, {"re.x.i > 0", "this.re.x.i > 0"}}) {
       assertEquals(c[1], parseScript(String.format(script, c[0])).getRootSchema().getRules()
           .get(0).getExpr(), c[0]);
+    }
+    // Where an argument's type is taken, it's passed over, as an unknown one is.
+    for (String[] c : new String[][] {{"NULLIF(xe[1], 'A') + 1 > 0", "must be numeric"},
+        {"NULLIF(xe[1], 'A') = 1", "Cannot compare VARCHAR with BIGINT"},
+        {"COALESCE(xe[1], k, es[1]) = 1", "not comparable"}}) {
+      ValidationException e = assertThrows(ValidationException.class,
+          () -> parseScript(String.format(script, c[0])), c[0]);
+      assertTrue(e.getMessage().contains(c[1]), c[0] + ": " + e.getMessage());
     }
   }
 

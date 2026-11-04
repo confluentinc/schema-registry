@@ -623,14 +623,14 @@ final class ConstraintValidator {
     // Same for ENUM/STRUCT/ARRAY/MAP/UNION/VARIANT — CEL `==` accepts
     // them but ordering operators are SQL-meaningless.
     if (!isEquality) {
-      if (!ConstraintResolver.unknownType(lhsType)
+      if (!ConstraintResolver.isUnknownType(lhsType)
           && !ConstraintResolver.isOrderable(lhsType.getType())) {
         throw locatedError(cmp,
             "Cannot use relational operator " + op + " on " + lhsType.getType()
                 + " — only numeric, string, bytes, and date/time types are "
                 + "ordered. Use = / <> for equality.");
       }
-      if (!ConstraintResolver.unknownType(rhsType)
+      if (!ConstraintResolver.isUnknownType(rhsType)
           && !ConstraintResolver.isOrderable(rhsType.getType())) {
         throw locatedError(cmp,
             "Cannot use relational operator " + op + " on " + rhsType.getType()
@@ -708,7 +708,7 @@ final class ConstraintValidator {
       LogicalTypesParser.Check_expr_mulContext mul,
       ConstraintValidationContext vctx, String opLabel) {
     Schema t = ConstraintResolver.tryResolveMulType(mul, vctx);
-    if (ConstraintResolver.unknownType(t)) {
+    if (ConstraintResolver.isUnknownType(t)) {
       return;
     }
     String cat = ConstraintResolver.categoryOf(t.getType());
@@ -746,7 +746,7 @@ final class ConstraintValidator {
       LogicalTypesParser.Check_expr_unary_signContext sign,
       ConstraintValidationContext vctx) {
     Schema t = ConstraintResolver.tryResolveUnarySignType(sign, vctx);
-    if (ConstraintResolver.unknownType(t)) {
+    if (ConstraintResolver.isUnknownType(t)) {
       return;
     }
     String cat = ConstraintResolver.categoryOf(t.getType());
@@ -815,7 +815,7 @@ final class ConstraintValidator {
     // resolver returns the unified leaf type when resolvable, null otherwise
     // (deferred — strict-check catches the resulting emit if types don't unify).
     Schema type = ConstraintResolver.tryResolveUnarySignType(sign, vctx);
-    if (ConstraintResolver.unknownType(type)) {
+    if (ConstraintResolver.isUnknownType(type)) {
       return;
     }
     if (!ConstraintResolver.isStringOrBytes(type.getType())) {
@@ -1228,7 +1228,7 @@ final class ConstraintValidator {
     Schema first = null;
     for (LogicalTypesParser.Check_exprContext arg : args) {
       Schema t = ConstraintResolver.tryResolveCheckExprType(arg, vctx);
-      if (t == null) {
+      if (ConstraintResolver.isUnknownType(t)) {
         continue;
       }
       if (first == null) {
