@@ -1987,6 +1987,24 @@ final class ConstraintEmitter {
     return (notFalse.flags & MAY_BE_NULL) != 0 ? notFalse.cel : visitCheckExpr(ctx);
   }
 
+  /**
+   * A CHECK's CEL with each value it returns as read compared with {@code true}, so a wrongly
+   * typed one fails: the clients take a string result as a failure message, and pass an empty one.
+   */
+  static CelNode booleanResult(CelNode result) {
+    if (result instanceof CelNode.Ternary) {
+      CelNode.Ternary ternary = (CelNode.Ternary) result;
+      CelNode whenTrue = booleanResult(ternary.whenTrue);
+      CelNode whenFalse = booleanResult(ternary.whenFalse);
+      return whenTrue == ternary.whenTrue && whenFalse == ternary.whenFalse ? result
+          : CelNode.ternary(ternary.condition, whenTrue, whenFalse);
+    }
+    // A field, element or variable; a call, operator or literal gives a boolean or raises.
+    boolean read = result instanceof CelNode.Ident || result instanceof CelNode.Select
+        || result instanceof CelNode.Index;
+    return read ? CelNode.binary(result, "==", CelNode.TRUE) : result;
+  }
+
   // emitTruth's result: a predicate may be NULL; a predicate's NULL can't be told.
   static final int MAY_BE_NULL = 1;
   static final int UNTOLD = 2;

@@ -562,12 +562,35 @@ class CheckConstraintTest {
 
   @Test
   void boolLiteralTrue() {
-    assertEquals("this.active", translateCheckNotNull("active = TRUE"));
+    assertEquals("this.active == true", translateCheckNotNull("active = TRUE"));
   }
 
   @Test
   void boolLiteralFalse() {
     assertEquals("!this.active", translateCheckNotNull("active = FALSE"));
+  }
+
+  @Test
+  void aCheckReturningWhatItReadsComparesItWithTrue() throws Exception {
+    // The clients take a string result as the failure message and pass an empty one, so a
+    // wrongly typed BOOLEAN returned as read would pass on "".
+    String columns = "t BOOLEAN NOT NULL, u BOOLEAN NOT NULL, nt BOOLEAN";
+    for (String[] c : new String[][] {{"t", "this.t == true"}, {"t = TRUE", "this.t == true"},
+        {"t <> FALSE", "this.t == true"},
+        {"CASE WHEN u THEN t ELSE FALSE END", "this.u ? this.t == true : false"},
+        {"COALESCE(nt, t)",
+            "has(this.nt) && dyn(this.nt) != null ? this.nt == true : this.t == true"}}) {
+      String cel = translateCheckOver(columns, c[0]);
+      assertEquals(c[1], cel, c[0]);
+      for (Object t : new Object[] {"", true}) {
+        Map<String, Object> self = Map.of("t", t, "u", true);
+        assertEquals(t.equals(true), evalOver(cel, self), c[0] + " on " + self + " -> " + cel);
+      }
+    }
+    assertEquals("this == true", translateColumnCheck("t BOOLEAN NOT NULL", "t"));
+    // A NULL test or a predicate gives a boolean or raises.
+    assertEquals("!has(this.nt) || dyn(this.nt) == null || this.nt",
+        translateCheckOver(columns, "nt"));
   }
 
   @Test

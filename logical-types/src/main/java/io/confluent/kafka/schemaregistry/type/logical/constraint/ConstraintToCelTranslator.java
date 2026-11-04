@@ -105,7 +105,9 @@ public final class ConstraintToCelTranslator {
       // Refused over CEL's size limit before it is printed.
       ConstraintCelChecker.checkSize(typed, false, ctx.getText());
       ConstraintCelChecker.checkSize(emitted, false, ctx.getText());
-      String cel = CelSimplifier.simplify(emitted).toString();
+      CelNode result = ConstraintEmitter.booleanResult(CelSimplifier.simplify(emitted));
+      ConstraintCelChecker.checkSize(result, false, ctx.getText());
+      String cel = result.toString();
       // Post-emit safety net: strict cel-java type-check the result. Catches
       // type/overload mismatches the hand-coded validator passes don't cover
       // (compound expressions, function-result types, has() argument shape,
