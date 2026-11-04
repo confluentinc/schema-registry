@@ -193,10 +193,9 @@ final class ConstraintValidator {
       return paren.indirection() == null && isBooleanShaped(paren.check_expr(), vctx);
     }
     if (c instanceof LogicalTypesParser.CheckCaseContext) {
-      // One whose branches' type doesn't resolve is accepted, as before.
-      Schema type = ConstraintResolver.tryResolveCaseExprType(
-          ((LogicalTypesParser.CheckCaseContext) c).case_expr(), vctx);
-      return type == null || type.getType() == Schema.Type.BOOLEAN;
+      // Each result boolean-shaped too; a NULL one is left to validateCaseBranches to refuse.
+      return ConstraintResolver.caseResults(((LogicalTypesParser.CheckCaseContext) c).case_expr())
+          .stream().allMatch(r -> ConstraintResolver.isLiteralNull(r) || isBooleanShaped(r, vctx));
     }
     if (c instanceof LogicalTypesParser.CheckFuncContext) {
       return isBooleanFunc(((LogicalTypesParser.CheckFuncContext) c).func_expr(), vctx);
@@ -1306,7 +1305,7 @@ final class ConstraintValidator {
         if (funcName != null
             && ConstraintResolver.NEVER_NULL_FUNCS.contains(funcName)) {
           // One whose NULL can't be told is refused when emitted if an input may be NULL.
-          String byInputs = ConstraintNullTest.of(is.check_expr_compare(), vctx);
+          CelNode byInputs = ConstraintNullTest.of(is.check_expr_compare(), vctx);
           if (ConstraintNullTest.NEVER.equals(byInputs) || byInputs == null
               && !ConstraintNullTest.mayBeNullByInput(is.check_expr_compare(), vctx)) {
             throw locatedError(is,

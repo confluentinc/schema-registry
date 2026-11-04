@@ -114,10 +114,20 @@ final class ConstraintCelChecker {
    */
   static void checkSize(String cel, boolean part, String sourceSql) {
     int limit = CelOptions.DEFAULT.maxExpressionCodePointSize();
-    if (cel.length() <= limit) {
-      return;
+    if (cel.length() > limit) {
+      checkSize(cel.codePointCount(0, cel.length()), part, sourceSql);
     }
-    int size = cel.codePointCount(0, cel.length());
+  }
+
+  /**
+   * {@link #checkSize(String, boolean, String)} of a tree's text, without printing it.
+   */
+  static void checkSize(CelNode cel, boolean part, String sourceSql) {
+    checkSize(cel.size(), part, sourceSql);
+  }
+
+  private static void checkSize(long size, boolean part, String sourceSql) {
+    int limit = CelOptions.DEFAULT.maxExpressionCodePointSize();
     if (size > limit) {
       throw new ValidationException("CHECK constraint is too large: its CEL is "
           + (part ? "at least " : "") + size + " code points, over CEL's limit of " + limit
