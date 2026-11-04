@@ -43,9 +43,10 @@ import java.util.regex.Pattern;
  * or {@code ||} as unequal instead of raising it. There a ternary isn't made a junction, nor a
  * junction a single operand or split, unless what would raise can't.
  *
- * <p>Every rule also keeps the verdict of a runtime that takes {@code &&} and {@code ||} left to
- * right and raises the first error: what raised before a deciding operand still raises, and an
- * operand goes only for what comes before it.
+ * <p>Every rule also keeps the verdict, true, false or raising, of a runtime that takes
+ * {@code &&} and {@code ||} left to right and raises the first error, though not always the same
+ * error: what raised before a deciding operand still raises, and an operand goes only for what
+ * comes before it, unless it can't raise or raises only where the next one does.
  */
 final class CelSimplifier {
 
@@ -208,9 +209,9 @@ final class CelSimplifier {
     return factor(out, and);
   }
 
-  // a || (a && b) is a, as is a && (a || b): an operand of the other kind goes when its first
-  // operand, or each of that one's own operands if it is of this kind, comes before it, which
-  // decides it before the rest of it is taken. So does c ? false : false in an ||, or
+  // a || (a && b) is a, as is a && (a || b): a junction of the other kind goes when its first
+  // operand comes before it, or each operand of that first one if it's of this kind; that
+  // decides the junction before the rest of it is taken. So does c ? false : false in an ||, or
   // c ? true : true in an &&, which only raises, where an operand before it or the next one
   // raises when c does: left to right, what raised still does, if not always first.
   private static List<CelNode> absorbed(List<CelNode> operands, boolean and) {

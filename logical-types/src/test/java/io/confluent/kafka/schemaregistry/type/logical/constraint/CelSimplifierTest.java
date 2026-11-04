@@ -173,11 +173,16 @@ class CelSimplifierTest {
     assertEquals(later.toString(), simplified(later));
     CelNode second = or(A_POSITIVE, and(RAISES, A_POSITIVE));
     assertEquals(second.toString(), simplified(second));
-    // A first operand of the outer kind goes by its own operands, in an || or an &&.
+    // A junction whose first operand is of the outer kind goes by that one's operands, each of
+    // them, in an || or an &&.
     assertEquals("this.a > 0 || this.b > 0",
         simplified(or(A_POSITIVE, B_POSITIVE, and(or(A_POSITIVE, B_POSITIVE), RAISES))));
     assertEquals("this.a > 0 && this.b > 0",
         simplified(and(A_POSITIVE, B_POSITIVE, or(and(A_POSITIVE, B_POSITIVE), RAISES))));
+    CelNode partial = or(A_POSITIVE, and(or(A_POSITIVE, B_POSITIVE), RAISES));
+    assertEquals(partial.toString(), simplified(partial));
+    CelNode partialAnd = and(A_POSITIVE, or(and(A_POSITIVE, B_POSITIVE), RAISES));
+    assertEquals(partialAnd.toString(), simplified(partialAnd));
     // c ? false : false only raises, as an operand raising with c next does.
     assertEquals("1 / this.z > 0", simplified(or(ternary(RAISES, FALSE, FALSE), RAISES)));
     CelNode alone = or(ternary(RAISES, FALSE, FALSE), A_POSITIVE);
