@@ -1517,8 +1517,7 @@ class CheckConstraintTest {
   @Test
   void nullif() {
     assertEquals("!has(this.a) || dyn(this.a) == null || (has(this.b) && dyn(this.b) != null"
-            + " && this.a == this.b) || (!has(this.b) || dyn(this.b) == null || this.a != this.b"
-            + " ? this.a : dyn(null)) == 0",
+            + " && this.a == this.b) || this.a == 0",
         translateCheck("NULLIF(a, b) = 0"));
   }
 
@@ -3893,7 +3892,7 @@ class CheckConstraintTest {
         + " || (this.b > 0) == this.t", raising);
     assertThrows(Exception.class,
         () -> evalOver(raising, Map.of("i", 1, "z", 0, "a", 5, "t", true)), raising);
-    // A condition kept as R OR TRUE, as R may raise, is no clause to learn TRUE from.
+    // A condition kept as R OR TRUE, as R may raise, still raises R's error.
     String kept = assertTimeoutPreemptively(Duration.ofSeconds(30), () -> translateCheckOver(
         columns, "CASE WHEN i / z > 0 OR TRUE THEN (CASE WHEN i / z > 0 THEN 1 ELSE 2 END)"
             + " ELSE 3 END = 1"));
@@ -3937,7 +3936,7 @@ class CheckConstraintTest {
     String columns = "l INT NOT NULL ARRAY NOT NULL, x INT, y INT";
     assertTimeoutPreemptively(Duration.ofSeconds(30), () -> {
       translateCheckOver(columns, "EVERY(l, e, " + clauses(1200) + ")");
-      // A wide OR known in each of many macros' bodies, and one decided operand by operand.
+      // A wide OR known in each of many macros' bodies, and a long chain of facts.
       StringBuilder macros = new StringBuilder("EVERY(l, e, (" + ors(2000) + ")");
       for (int j = 0; j < 400; j++) {
         macros.append(" AND EVERY(l, f, f > ").append(j).append(")");

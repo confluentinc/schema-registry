@@ -310,6 +310,11 @@ final class CelSimplifier {
   // condition ? whenTrue : whenFalse, its branches simplified.
   private static CelNode joined(CelNode condition, CelNode whenTrue, CelNode whenFalse,
       Facts facts, boolean compared) {
+    // As a merged condition may be.
+    CelNode known = facts.get(condition);
+    if (known != null) {
+      return known.equals(CelNode.TRUE) ? whenTrue : whenFalse;
+    }
     boolean safe = safe(condition, facts);
     if (safe && whenTrue.equals(whenFalse)) {
       return whenTrue;

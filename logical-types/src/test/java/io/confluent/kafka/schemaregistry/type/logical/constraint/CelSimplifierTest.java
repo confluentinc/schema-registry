@@ -209,5 +209,11 @@ class CelSimplifierTest {
   void nestedTernariesWithASharedBranchAreOne() {
     assertEquals("!has(this.a) || dyn(this.a) == null || this.a > 0 ? this.b : 1",
         simplified(ternary(A_NULL, B, ternary(A_POSITIVE, B, literal("1")))));
+    // Merged, the condition is one already known.
+    CelNode one = binary(A, "==", literal("1"));
+    CelNode check = or(and(A_SET, binary(A, "!=", literal("1"))),
+        ternary(A_NULL, B_POSITIVE, ternary(one, B_POSITIVE, binary(B, ">", literal("1")))));
+    assertEquals("(has(this.a) && dyn(this.a) != null && this.a != 1) || this.b > 0",
+        simplified(check));
   }
 }
