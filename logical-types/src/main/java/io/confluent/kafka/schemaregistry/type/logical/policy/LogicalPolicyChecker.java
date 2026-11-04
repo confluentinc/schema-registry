@@ -13,7 +13,7 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.storage;
+package io.confluent.kafka.schemaregistry.type.logical.policy;
 
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
@@ -28,10 +28,7 @@ import io.confluent.kafka.schemaregistry.type.logical.avro.AvroToLogicalTypeConv
 import io.confluent.kafka.schemaregistry.type.logical.common.LogicalTypeVersion;
 import io.confluent.kafka.schemaregistry.type.logical.common.ToLogicalContext;
 import io.confluent.kafka.schemaregistry.type.logical.json.JsonToLogicalTypeConverter;
-import io.confluent.kafka.schemaregistry.type.logical.policy.Incompatibility;
 import io.confluent.kafka.schemaregistry.type.logical.policy.Incompatibility.Rule;
-import io.confluent.kafka.schemaregistry.type.logical.policy.Invalidity;
-import io.confluent.kafka.schemaregistry.type.logical.policy.LogicalTypeChecker;
 import io.confluent.kafka.schemaregistry.type.logical.policy.LogicalTypeChecker.Mode;
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTypeConverter;
 import java.util.ArrayList;
@@ -67,6 +64,11 @@ public final class LogicalPolicyChecker {
   private static final Mode[] MODES = {Mode.FLINK, Mode.ICEBERG_V2};
 
   private LogicalPolicyChecker() {
+  }
+
+  /** The modes the checks run in, in the order findings name them; a copy. */
+  public static Mode[] modes() {
+    return MODES.clone();
   }
 
   /**
@@ -106,7 +108,7 @@ public final class LogicalPolicyChecker {
    * @throws TypeTooDeepException if it nests more than {@link ToLogicalContext#MAX_TYPE_DEPTH} deep
    *     with its named types inlined
    */
-  static LogicalType toPolicyLogicalType(ParsedSchema parsedSchema) {
+  public static LogicalType toPolicyLogicalType(ParsedSchema parsedSchema) {
     LogicalType logicalType = ProtobufSchema.TYPE.equalsIgnoreCase(parsedSchema.schemaType())
         ? protobufLogicalType((ProtobufSchema) parsedSchema)
         : toLogicalType(parsedSchema, LogicalTypeVersion.V1);
@@ -159,7 +161,7 @@ public final class LogicalPolicyChecker {
    * @param previousSchemas prior versions, ascending (oldest first, latest last)
    * @param level           the configured compatibility level, or {@code null} (treated as NONE)
    */
-  static List<String> check(
+  public static List<String> check(
       ParsedSchema newSchema,
       List<ParsedSchemaHolder> previousSchemas,
       CompatibilityLevel level) {
@@ -170,7 +172,7 @@ public final class LogicalPolicyChecker {
    * As {@link #check(ParsedSchema, List, CompatibilityLevel)}, comparing with only
    * {@code enabledRules}, as {@link #parseChecks} resolves them.
    */
-  static List<String> check(
+  public static List<String> check(
       ParsedSchema newSchema,
       List<ParsedSchemaHolder> previousSchemas,
       CompatibilityLevel level,
@@ -216,7 +218,10 @@ public final class LogicalPolicyChecker {
     return errors;
   }
 
-  private static List<String> describeValidity(LogicalType newLogical) {
+  /**
+   * The validity findings for {@code newLogical} in every mode, one per rule and path.
+   */
+  public static List<String> describeValidity(LogicalType newLogical) {
     Map<FindingKey, Map<Mode, String>> byFinding = new LinkedHashMap<>();
     for (Mode mode : MODES) {
       for (Invalidity invalidity
@@ -235,7 +240,11 @@ public final class LogicalPolicyChecker {
     return errors;
   }
 
-  private static void addCompareErrors(List<String> errors, LogicalType original,
+  /**
+   * Adds to {@code errors} the findings of {@code update} reading data written with
+   * {@code original} in every mode, one per rule and path.
+   */
+  public static void addCompareErrors(List<String> errors, LogicalType original,
       LogicalType update, Set<Rule> enabledRules, SchemaType schemaType) {
     Map<FindingKey, Map<Mode, String>> byFinding = new LinkedHashMap<>();
     for (Mode mode : MODES) {
@@ -272,7 +281,7 @@ public final class LogicalPolicyChecker {
    * text, which was never written to be customer-facing and is the one message in this package
    * not fully conformed to that spec.
    */
-  private static String describeUnconvertible(RuntimeException e) {
+  public static String describeUnconvertible(RuntimeException e) {
     String description = e instanceof TypeTooDeepException
         ? "The schema nesting exceeds '" + ToLogicalContext.MAX_TYPE_DEPTH + "' levels. Flatten "
             + "it to '" + ToLogicalContext.MAX_TYPE_DEPTH + "' levels or fewer."
@@ -397,20 +406,29 @@ public final class LogicalPolicyChecker {
     return List.of(previousSchemas.get(previousSchemas.size() - 1));
   }
 
-  private static boolean isTransitive(CompatibilityLevel level) {
+  /**
+   * Whether {@code level} compares against every previous version rather than the latest.
+   */
+  public static boolean isTransitive(CompatibilityLevel level) {
     return level == CompatibilityLevel.BACKWARD_TRANSITIVE
         || level == CompatibilityLevel.FORWARD_TRANSITIVE
         || level == CompatibilityLevel.FULL_TRANSITIVE;
   }
 
-  private static boolean checksBackward(CompatibilityLevel level) {
+  /**
+   * Whether {@code level} requires the new schema to read data written with the previous.
+   */
+  public static boolean checksBackward(CompatibilityLevel level) {
     return level == CompatibilityLevel.BACKWARD
         || level == CompatibilityLevel.BACKWARD_TRANSITIVE
         || level == CompatibilityLevel.FULL
         || level == CompatibilityLevel.FULL_TRANSITIVE;
   }
 
-  private static boolean checksForward(CompatibilityLevel level) {
+  /**
+   * Whether {@code level} requires the previous schema to read data written with the new.
+   */
+  public static boolean checksForward(CompatibilityLevel level) {
     return level == CompatibilityLevel.FORWARD
         || level == CompatibilityLevel.FORWARD_TRANSITIVE
         || level == CompatibilityLevel.FULL
