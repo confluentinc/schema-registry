@@ -756,18 +756,23 @@ class CheckConstraintTest {
     String script = "USING TYPE Ext FOR REF 'http://example.com/ext.json'; "
         + "STRUCT P (yx Ext NOT NULL); STRUCT T (x Ext, xe Ext NOT NULL ARRAY NOT NULL, "
         + "xen Ext ARRAY NOT NULL, re STRUCT(x Ext) NOT NULL, ps P NOT NULL ARRAY NOT NULL, "
-        + "v VARIANT, s STRING NOT NULL, ns STRING, CHECK (%s)); TYPE T";
+        + "v VARIANT, s STRING NOT NULL, ns STRING, xs INT NOT NULL ARRAY NOT NULL, CHECK (%s)); "
+        + "TYPE T";
     Map<String, Object> empty = new HashMap<>();
     empty.put("xe", List.of());
     empty.put("xen", Arrays.asList((Object) null));
     empty.put("re", Map.of());
     empty.put("ps", List.of());
     empty.put("s", "1");
+    empty.put("xs", List.of());
     for (String sql : List.of("CAST(NULLIF(xe[1], xe[2]) AS INT) = 1",
         "CAST(NULLIF(xe[1], v) AS STRING) = 'A'", "CAST(x AS STRING) = 'A'",
         "CAST(x AS STRING) IS NULL", "CAST(re.x AS STRING) = 'A'",
         "CAST(ps[1].yx AS STRING) = 'A'", "EVERY(xen, e, CAST(e AS STRING) = 'A')",
-        "CAST(COALESCE(xe[1], xe[2]) AS STRING) = 'A'")) {
+        "CAST(COALESCE(xe[1], xe[2]) AS STRING) = 'A'",
+        // A condition, whatever it reads, doesn't flow out.
+        "CAST(CASE WHEN EVERY(xs, e, e > 0) THEN x ELSE x END AS STRING) = 'A'",
+        "CAST(CASE WHEN v IS NULL THEN x ELSE x END AS STRING) IS NULL")) {
       String cel = parseScript(String.format(script, sql)).getRootSchema().getRules().get(0)
           .getExpr();
       assertEquals(true, evalOver(cel, empty), sql + " -> " + cel);

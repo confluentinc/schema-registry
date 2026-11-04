@@ -494,16 +494,22 @@ final class ConstraintNullTest {
     return null;
   }
 
+  // A part whose type is known is a VARIANT just when that type is one, so a condition, a
+  // macro or a comparison in it, whose value doesn't flow out, isn't entered.
   private static boolean readsVariant(ParseTree node, ConstraintValidationContext vctx) {
+    Schema type = null;
+    if (node instanceof LogicalTypesParser.Check_exprContext) {
+      type = ConstraintResolver.tryResolveCheckExprType(
+          (LogicalTypesParser.Check_exprContext) node, vctx);
+    } else if (node instanceof LogicalTypesParser.Func_exprContext) {
+      type = ConstraintResolver.tryResolveFuncReturnType(
+          (LogicalTypesParser.Func_exprContext) node, vctx);
+    }
+    if (type != null) {
+      return type.getType() == Schema.Type.VARIANT;
+    }
     if (node instanceof LogicalTypesParser.ColumnrefContext) {
       return ConstraintResolver.mayReadVariant((LogicalTypesParser.ColumnrefContext) node, vctx);
-    }
-    if (node instanceof LogicalTypesParser.Func_exprContext) {
-      Schema type = ConstraintResolver.tryResolveFuncReturnType(
-          (LogicalTypesParser.Func_exprContext) node, vctx);
-      if (type != null && type.getType() == Schema.Type.VARIANT) {
-        return true;
-      }
     }
     for (int i = 0; i < node.getChildCount(); i++) {
       if (readsVariant(node.getChild(i), vctx)) {
