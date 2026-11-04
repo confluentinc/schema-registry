@@ -3892,7 +3892,7 @@ class CheckConstraintTest {
         + " || (this.b > 0) == this.t", raising);
     assertThrows(Exception.class,
         () -> evalOver(raising, Map.of("i", 1, "z", 0, "a", 5, "t", true)), raising);
-    // A condition kept as R OR TRUE, as R may raise, still raises R's error.
+    // With the condition kept as R OR TRUE, the inner CASE still raises R's error.
     String kept = assertTimeoutPreemptively(Duration.ofSeconds(30), () -> translateCheckOver(
         columns, "CASE WHEN i / z > 0 OR TRUE THEN (CASE WHEN i / z > 0 THEN 1 ELSE 2 END)"
             + " ELSE 3 END = 1"));

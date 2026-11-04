@@ -166,11 +166,16 @@ class CelSimplifierTest {
 
   @Test
   void anOperandImpliedByAnotherIsAbsorbed() {
-    assertEquals("this.a > 0", simplified(or(and(A_POSITIVE, B_POSITIVE), A_POSITIVE)));
-    // c ? false : false only raises, as an operand raising with c does.
+    assertEquals("this.a > 0", simplified(or(A_POSITIVE, and(A_POSITIVE, B_POSITIVE))));
+    // Not by one after it, as taken left to right what it raises would raise first.
+    CelNode later = or(and(A_POSITIVE, RAISES), A_POSITIVE);
+    assertEquals(later.toString(), simplified(later));
+    // c ? false : false only raises, as an operand raising with c next does.
     assertEquals("1 / this.z > 0", simplified(or(ternary(RAISES, FALSE, FALSE), RAISES)));
     CelNode alone = or(ternary(RAISES, FALSE, FALSE), A_POSITIVE);
     assertEquals(alone.toString(), simplified(alone));
+    CelNode apart = or(ternary(RAISES, FALSE, FALSE), A_POSITIVE, RAISES);
+    assertEquals(apart.toString(), simplified(apart));
   }
 
   @Test
@@ -215,5 +220,15 @@ class CelSimplifierTest {
         ternary(A_NULL, B_POSITIVE, ternary(one, B_POSITIVE, binary(B, ">", literal("1")))));
     assertEquals("(has(this.a) && dyn(this.a) != null && this.a != 1) || this.b > 0",
         simplified(check));
+    CelNode merged = or(and(A_SET, one),
+        ternary(A_SET, ternary(one, binary(B, ">", literal("1")), B_POSITIVE), B_POSITIVE));
+    assertEquals("(has(this.a) && dyn(this.a) != null && this.a == 1) || this.b > 0",
+        simplified(merged));
+    // Known from a ternary's condition, one that may raise.
+    CelNode raising = ternary(or(A_NULL, RAISES),
+        ternary(A_NULL, B_POSITIVE, ternary(RAISES, B_POSITIVE, binary(B, ">", literal("1")))),
+        FALSE);
+    assertEquals("!has(this.a) || dyn(this.a) == null || 1 / this.z > 0 ? this.b > 0 : false",
+        simplified(raising));
   }
 }

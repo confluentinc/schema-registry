@@ -205,8 +205,9 @@ final class CelSimplifier {
   }
 
   // a || (a && b) is a, as is a && (a || b): an operand of the other kind goes when all of one of
-  // its operands' own operands are among the others. So does c ? false : false in an ||, or
-  // c ? true : true in an &&, which only raises, where another operand raises when c does.
+  // its operands' own operands come before it. So does c ? false : false in an ||, or
+  // c ? true : true in an &&, which only raises, where an operand before it or the next one
+  // raises when c does. Taken left to right, what raises first still does.
   private static List<CelNode> absorbed(List<CelNode> operands, boolean and) {
     List<CelNode> out = new ArrayList<>(operands);
     for (int i = out.size() - 1; i >= 0; i--) {
@@ -217,16 +218,17 @@ final class CelSimplifier {
     return out;
   }
 
-  // True if operands' i-th is absorbed by the others.
+  // True if operands' i-th is absorbed by those before it, or a raise-only one by the next.
   private static boolean absorbed(List<CelNode> operands, int i, boolean and) {
     CelNode operand = operands.get(i);
+    List<CelNode> before = operands.subList(0, i);
     if (operand instanceof CelNode.Ternary) {
       CelNode.Ternary ternary = (CelNode.Ternary) operand;
       CelNode identity = CelNode.bool(and);
       if (!ternary.whenTrue.equals(identity) || !ternary.whenFalse.equals(identity)) {
         return false;
       }
-      for (int j = 0; j < operands.size(); j++) {
+      for (int j = 0; j <= i + 1 && j < operands.size(); j++) {
         CelNode other = operands.get(j);
         if (j != i && (other.equals(ternary.condition)
             || strictlyEvaluates(other, ternary.condition))) {
@@ -238,9 +240,8 @@ final class CelSimplifier {
     if (!(operand instanceof CelNode.Junction) || ((CelNode.Junction) operand).and == and) {
       return false;
     }
-    // A part of one of its operands is smaller than it, so isn't it.
     for (CelNode part : ((CelNode.Junction) operand).operands) {
-      if (operands.containsAll(parts(part, and))) {
+      if (before.containsAll(parts(part, and))) {
         return true;
       }
     }
@@ -310,7 +311,7 @@ final class CelSimplifier {
   // condition ? whenTrue : whenFalse, its branches simplified.
   private static CelNode joined(CelNode condition, CelNode whenTrue, CelNode whenFalse,
       Facts facts, boolean compared) {
-    // As a merged condition may be.
+    // A condition shared() merged may already be known.
     CelNode known = facts.get(condition);
     if (known != null) {
       return known.equals(CelNode.TRUE) ? whenTrue : whenFalse;
