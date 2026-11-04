@@ -251,8 +251,15 @@ final class ConstraintResolver {
    */
   static Schema tryResolveCaseExprType(
       LogicalTypesParser.Case_exprContext ctx, ConstraintValidationContext vctx) {
-    // Collect the result branches: each WHEN's THEN (check_expr index 1) plus
-    // the optional ELSE (an untagged check_expr after the ELSE terminal).
+    return commonBranchType(caseResults(ctx), vctx);
+  }
+
+  /**
+   * A CASE's result branches: each WHEN's THEN (check_expr index 1) plus the optional ELSE (an
+   * untagged check_expr after the ELSE terminal).
+   */
+  static List<LogicalTypesParser.Check_exprContext> caseResults(
+      LogicalTypesParser.Case_exprContext ctx) {
     List<LogicalTypesParser.Check_exprContext> results = new ArrayList<>();
     for (LogicalTypesParser.When_clauseContext when : ctx.when_clause()) {
       results.add(when.check_expr(1));
@@ -267,7 +274,7 @@ final class ConstraintResolver {
         break;
       }
     }
-    return commonBranchType(results, vctx);
+    return results;
   }
 
   /**

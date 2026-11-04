@@ -193,10 +193,9 @@ final class ConstraintValidator {
       return paren.indirection() == null && isBooleanShaped(paren.check_expr(), vctx);
     }
     if (c instanceof LogicalTypesParser.CheckCaseContext) {
-      // One whose branches' type doesn't resolve is accepted, as before.
-      Schema type = ConstraintResolver.tryResolveCaseExprType(
-          ((LogicalTypesParser.CheckCaseContext) c).case_expr(), vctx);
-      return type == null || type.getType() == Schema.Type.BOOLEAN;
+      // Each result boolean-shaped too; a NULL one is left to validateCaseBranches to refuse.
+      return ConstraintResolver.caseResults(((LogicalTypesParser.CheckCaseContext) c).case_expr())
+          .stream().allMatch(r -> ConstraintResolver.isLiteralNull(r) || isBooleanShaped(r, vctx));
     }
     if (c instanceof LogicalTypesParser.CheckFuncContext) {
       return isBooleanFunc(((LogicalTypesParser.CheckFuncContext) c).func_expr(), vctx);

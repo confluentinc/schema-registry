@@ -574,23 +574,55 @@ class CheckConstraintTest {
   void aCheckReturningWhatItReadsComparesItWithTrue() throws Exception {
     // The clients take a string result as the failure message and pass an empty one, so a
     // wrongly typed BOOLEAN returned as read would pass on "".
-    String columns = "t BOOLEAN NOT NULL, u BOOLEAN NOT NULL, nt BOOLEAN";
+    String columns = "t BOOLEAN NOT NULL, u BOOLEAN NOT NULL, nt BOOLEAN, x INT NOT NULL";
     for (String[] c : new String[][] {{"t", "this.t == true"}, {"t = TRUE", "this.t == true"},
         {"t <> FALSE", "this.t == true"},
         {"CASE WHEN u THEN t ELSE FALSE END", "this.u ? this.t == true : false"},
+        {"CASE WHEN x < 0 THEN u WHEN x > 0 THEN t ELSE TRUE END",
+            "this.x < 0 ? this.u == true : (this.x > 0 ? this.t == true : true)"},
         {"COALESCE(nt, t)",
             "has(this.nt) && dyn(this.nt) != null ? this.nt == true : this.t == true"}}) {
       String cel = translateCheckOver(columns, c[0]);
       assertEquals(c[1], cel, c[0]);
       for (Object t : new Object[] {"", true}) {
-        Map<String, Object> self = Map.of("t", t, "u", true);
+        Map<String, Object> self = Map.of("t", t, "u", true, "x", 1);
         assertEquals(t.equals(true), evalOver(cel, self), c[0] + " on " + self + " -> " + cel);
       }
+      assertThrows(CelEvaluationException.class, () -> evalOver(cel, Map.of("u", true, "x", 1)),
+          c[0] + " with t absent -> " + cel);
     }
+    String reserved = translateCheckOver("`in` BOOLEAN NOT NULL", "`in`");
+    assertEquals("this[\"in\"] == true", reserved);
+    assertEquals(false, evalOver(reserved, Map.of("in", "")));
     assertEquals("this == true", translateColumnCheck("t BOOLEAN NOT NULL", "t"));
-    // A NULL test or a predicate gives a boolean or raises.
-    assertEquals("!has(this.nt) || dyn(this.nt) == null || this.nt",
-        translateCheckOver(columns, "nt"));
+    // A read in a junction is left as is, as || raises on a non-boolean.
+    String nullable = translateCheckOver(columns, "nt");
+    assertEquals("!has(this.nt) || dyn(this.nt) == null || this.nt", nullable);
+    assertThrows(CelEvaluationException.class, () -> evalOver(nullable, Map.of("nt", "")));
+  }
+
+  @Test
+  void aCaseIsACheckOnlyIfEachResultIsBoolean() {
+    // As a bare column must be BOOLEAN, so must each result a CASE gives, or NULL.
+    String columns = "u BOOLEAN NOT NULL, s STRING NOT NULL, bs BOOLEAN NOT NULL ARRAY NOT NULL, "
+        + "ms BOOLEAN NOT NULL MULTISET NOT NULL, m MAP<STRING, BOOLEAN NOT NULL> NOT NULL, "
+        + "r STRUCT(b BOOLEAN NOT NULL) NOT NULL, v VARIANT NOT NULL, "
+        + "un UNION<b BOOLEAN, s STRING> NOT NULL";
+    for (String result : List.of("bs", "ms", "m", "r", "v", "un", "PARSE_JSON(s)")) {
+      String sql = "CASE WHEN u THEN " + result + " ELSE " + result + " END";
+      ValidationException e = assertThrows(ValidationException.class,
+          () -> translateCheckOver(columns, sql), sql);
+      assertTrue(e.getMessage().contains("must yield a boolean"), e.getMessage());
+    }
+    assertThrows(ValidationException.class,
+        () -> translateCheckOver(columns, "CASE WHEN u THEN TRUE ELSE s END"));
+    ValidationException nullResult = assertThrows(ValidationException.class,
+        () -> translateCheckOver(columns, "CASE WHEN u THEN NULL ELSE u END"));
+    assertTrue(nullResult.getMessage().contains("literal NULL"), nullResult.getMessage());
+    for (String sql : List.of("CASE WHEN u THEN r.b ELSE u END",
+        "CASE WHEN u THEN CASE WHEN u THEN u ELSE FALSE END ELSE r.b END")) {
+      translateCheckOver(columns, sql);
+    }
   }
 
   @Test
