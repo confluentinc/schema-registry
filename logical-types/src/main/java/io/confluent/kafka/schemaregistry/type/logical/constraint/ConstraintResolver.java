@@ -1051,9 +1051,19 @@ final class ConstraintResolver {
    */
   static boolean mayReadVariant(
       LogicalTypesParser.ColumnrefContext col, ConstraintValidationContext vctx) {
-    Schema current = resolvedOrRef(vctx.schemaOf(colidName(col.colid())), vctx);
-    if (col.indirection() != null) {
-      for (LogicalTypesParser.Indirection_elContext el : col.indirection().indirection_el()) {
+    return mayReadVariant(resolvedOrRef(vctx.schemaOf(colidName(col.colid())), vctx),
+        col.indirection(), vctx);
+  }
+
+  /**
+   * {@link #mayReadVariant(LogicalTypesParser.ColumnrefContext, ConstraintValidationContext)}
+   * for the steps of {@code indirection} off a value of type {@code start}, null if unknown.
+   */
+  static boolean mayReadVariant(Schema start, LogicalTypesParser.IndirectionContext indirection,
+      ConstraintValidationContext vctx) {
+    Schema current = start;
+    if (indirection != null) {
+      for (LogicalTypesParser.Indirection_elContext el : indirection.indirection_el()) {
         // A step off a VARIANT doesn't resolve either.
         if (current == null) {
           return true;

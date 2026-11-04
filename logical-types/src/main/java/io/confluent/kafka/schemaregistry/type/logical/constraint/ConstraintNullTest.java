@@ -506,12 +506,13 @@ final class ConstraintNullTest {
     if (node instanceof LogicalTypesParser.ColumnrefContext) {
       return ConstraintResolver.mayReadVariant((LogicalTypesParser.ColumnrefContext) node, vctx);
     }
-    // A step off a bracketed value, as a path's, may reach one where its type doesn't resolve.
+    // Steps off a bracketed value are walked as a path's, from the value's type.
     if (node instanceof LogicalTypesParser.CheckParenContext
         && ((LogicalTypesParser.CheckParenContext) node).indirection() != null) {
-      Schema read = ConstraintResolver.resolveParenType(
-          (LogicalTypesParser.CheckParenContext) node, vctx);
-      return read == null || read.getType() == Schema.Type.VARIANT;
+      LogicalTypesParser.CheckParenContext paren = (LogicalTypesParser.CheckParenContext) node;
+      return ConstraintResolver.mayReadVariant(
+          ConstraintResolver.tryResolveCheckExprType(paren.check_expr(), vctx),
+          paren.indirection(), vctx);
     }
     for (int i = 0; i < node.getChildCount(); i++) {
       if (readsVariant(node.getChild(i), vctx)) {

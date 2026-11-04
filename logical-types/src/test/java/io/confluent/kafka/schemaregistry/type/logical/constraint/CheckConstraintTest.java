@@ -773,7 +773,10 @@ class CheckConstraintTest {
         // A condition, whatever it reads, doesn't flow out.
         "CAST(CASE WHEN EVERY(xs, e, e > 0) THEN x ELSE x END AS STRING) = 'A'",
         "CAST(CASE WHEN v IS NULL THEN x ELSE x END AS STRING) IS NULL",
-        "CAST(NULLIF(x, v) AS STRING) = 'A'")) {
+        "CAST(NULLIF(x, v) AS STRING) = 'A'",
+        // A bracketed value's steps are a path's: an outside field of one is a value too.
+        "CAST((re).x AS STRING) = 'A'", "CAST((ps[1]).yx AS STRING) = 'A'",
+        "CAST((xe)[1] || (xe)[2] AS STRING) = 'A'")) {
       String cel = parseScript(String.format(script, sql)).getRootSchema().getRules().get(0)
           .getExpr();
       assertEquals(true, evalOver(cel, empty), sql + " -> " + cel);
@@ -786,7 +789,7 @@ class CheckConstraintTest {
         "CAST(COALESCE(PARSE_JSON(ns), PARSE_JSON(ns)) AS INT) IS NULL",
         "CAST(NULLIF(v, 'A') AS INT) IS NULL",
         "CAST(xe[1].i AS STRING) IS NULL", "CAST(NULLIF(x.f, 'A') AS STRING) IS NULL",
-        "CAST(NULLIF((x).f, v) AS STRING) IS NULL",
+        "CAST(NULLIF((x).f, v) AS STRING) IS NULL", "CAST(NULLIF((re).x.f, 'A') AS STRING) IS NULL",
         "CAST(CASE WHEN s = 'a' THEN (x).f ELSE (x).f END AS STRING) IS NULL")) {
       ValidationException e = assertThrows(ValidationException.class,
           () -> parseScript(String.format(script, sql)), sql);
