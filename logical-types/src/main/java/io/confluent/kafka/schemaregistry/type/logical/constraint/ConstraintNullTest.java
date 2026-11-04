@@ -447,8 +447,8 @@ final class ConstraintNullTest {
           if (mayBeNullByInput(args.get(0))) {
             return true;
           }
-          ConstraintValidationContext body =
-              ConstraintEmitter.iteration(vctx, args.get(1).getText(), args.get(0));
+          ConstraintValidationContext body = ConstraintEmitter.bodyContext(app, vctx,
+              () -> ConstraintEmitter.iteration(vctx, args.get(1).getText(), args.get(0)));
           EMIT_VCTX.set(body);
           try {
             return mayBeNullByInput(args.get(2));

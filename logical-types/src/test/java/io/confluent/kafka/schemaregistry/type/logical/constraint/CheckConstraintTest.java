@@ -2494,6 +2494,13 @@ class CheckConstraintTest {
     assertEquals("this.n.all(k, !(k in this.m) || this.m[k] > 0)",
         translateCheckOver(columns + ", n MAP<STRING, INT NOT NULL> NOT NULL",
             "EVERY(n, k, m[k] > 0)"));
+    // Nor is one bound over a map its own outer namesake names.
+    String nested = translateCheckOver("mm MAP<STRING, MAP<STRING, INT NOT NULL> NOT NULL> NOT NULL",
+        "EVERY(mm, k, EVERY(mm[k], k, mm[k][k] > 0))");
+    assertEquals("this.mm.all(k, this.mm[k].all(k, !(k in this.mm) || !(k in dyn(this.mm[k]))"
+        + " || this.mm[k][k] > 0))", nested);
+    assertEquals(true,
+        evalOver(nested, Map.of("mm", Map.of("a", Map.of("b", 1), "b", Map.of("x", 2)))), nested);
     // A key compared as its value is refused.
     assertThrows(ValidationException.class,
         () -> translateCheckOver(columns, "EVERY(m, k, k > 0)"));
@@ -3921,6 +3928,36 @@ class CheckConstraintTest {
       String cel = translateCheckOver(columns, (String) r[0]);
       assertEquals(r[2], evalOver(cel, self), r[0] + " on " + self + " -> " + cel);
     }
+  }
+
+  @Test
+  void aLongCheckIsShortenedInTime() {
+    // What is known is learned from what was just learned, and splits simplify a bounded amount
+    // again, so a long CHECK isn't simplified for minutes.
+    String columns = "l INT NOT NULL ARRAY NOT NULL, x INT, y INT";
+    assertTimeoutPreemptively(Duration.ofSeconds(30), () -> {
+      translateCheckOver(columns, "EVERY(l, e, " + clauses(1600) + ")");
+      String sum = "(CASE WHEN " + clauses(200) + " THEN 1 ELSE 0 END)";
+      for (int j = 0; j < 20; j++) {
+        sum = "(CASE WHEN e > " + j + " THEN 1 ELSE 2 END) + (" + sum + ")";
+      }
+      translateCheckOver(columns, "EVERY(l, e, " + sum + " > 0)");
+      sum = "(CASE WHEN " + clauses(1200) + " THEN x ELSE y END)";
+      for (int j = 0; j < 60; j++) {
+        sum = "(CASE WHEN e > " + j + " THEN x ELSE y END) + (" + sum + ")";
+      }
+      translateCheckOver(columns, "EVERY(l, e, " + sum + " > 0)");
+    });
+  }
+
+  // (e = 0 OR e = 1) AND (e = 2 OR e = 3) AND ..., n of them.
+  private static String clauses(int n) {
+    StringBuilder and = new StringBuilder();
+    for (int k = 0; k < n; k++) {
+      and.append(k == 0 ? "" : " AND ").append("(e = ").append(2 * k).append(" OR e = ")
+          .append(2 * k + 1).append(")");
+    }
+    return and.toString();
   }
 
   @Test

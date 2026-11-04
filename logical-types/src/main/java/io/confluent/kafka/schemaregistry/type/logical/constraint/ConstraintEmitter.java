@@ -160,8 +160,12 @@ final class ConstraintEmitter {
     ConstraintValidationContext body = outer.withBinding(var,
         ConstraintResolver.resolveCollectionElementType(collection, outer));
     Schema type = resolveRef(ConstraintResolver.tryResolveCheckExprType(collection, outer));
-    return type != null && type.getType() == Schema.Type.MAP
-        ? body.withKeysOf(var, visitCheckExpr(collection)) : body;
+    if (type == null || type.getType() != Schema.Type.MAP) {
+      return body;
+    }
+    // A map whose CEL names var, as the outer one, is another map in the body.
+    CelNode map = visitCheckExpr(collection);
+    return map.contains(CelNode.ident(var)) ? body : body.withKeysOf(var, map);
   }
 
   private static CelNode visitOr(LogicalTypesParser.Check_expr_orContext ctx) {
