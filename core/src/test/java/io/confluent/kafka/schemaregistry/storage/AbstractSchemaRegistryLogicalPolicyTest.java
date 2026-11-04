@@ -27,6 +27,7 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.type.logical.policy.Incompatibility.Rule;
+import io.confluent.kafka.schemaregistry.type.logical.policy.LogicalPolicyChecker;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;

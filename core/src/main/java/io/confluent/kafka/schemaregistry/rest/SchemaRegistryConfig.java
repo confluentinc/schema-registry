@@ -18,7 +18,7 @@ package io.confluent.kafka.schemaregistry.rest;
 import io.confluent.kafka.schemaregistry.AbstractSchemaProvider;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
-import io.confluent.kafka.schemaregistry.storage.LogicalPolicyChecker;
+import io.confluent.kafka.schemaregistry.type.logical.policy.LogicalPolicyChecker;
 import io.confluent.kafka.schemaregistry.utils.AppInfoParser;
 import io.confluent.rest.metrics.RestMetricsContext;
 import io.confluent.rest.NamedURI;
