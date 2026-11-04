@@ -83,10 +83,13 @@ public final class ConstraintValidationContext {
    * passes any type. Macro-derived contexts inherit it.
    */
   private final boolean typeOnly;
+  // Each binding that ranges over a map's keys, with the map's CEL: such a key is in it.
+  private final Map<String, CelNode> keysOf;
 
   private ConstraintValidationContext(
       Map<String, Schema> columns, Map<String, Schema> bindings,
-      Map<String, Schema> namedTypes, boolean isColumnLevel, boolean typeOnly) {
+      Map<String, Schema> namedTypes, boolean isColumnLevel, boolean typeOnly,
+      Map<String, CelNode> keysOf) {
     this.columns = Collections.unmodifiableMap(new LinkedHashMap<>(columns));
     this.bindings = Collections.unmodifiableMap(new LinkedHashMap<>(bindings));
     this.namedTypes = namedTypes != null
@@ -94,6 +97,7 @@ public final class ConstraintValidationContext {
         : Collections.emptyMap();
     this.isColumnLevel = isColumnLevel;
     this.typeOnly = typeOnly;
+    this.keysOf = keysOf;
   }
 
   /**
@@ -116,7 +120,30 @@ public final class ConstraintValidationContext {
   public ConstraintValidationContext withBinding(String name, Schema type) {
     Map<String, Schema> next = new LinkedHashMap<>(bindings);
     next.put(name, type);
-    return new ConstraintValidationContext(columns, next, namedTypes, isColumnLevel, typeOnly);
+    // A key no longer names what it did, nor a map that mentions name.
+    Map<String, CelNode> keys = new LinkedHashMap<>(keysOf);
+    CelNode variable = CelNode.ident(name);
+    keys.keySet().remove(name);
+    keys.values().removeIf(map -> map.contains(variable));
+    return new ConstraintValidationContext(columns, next, namedTypes, isColumnLevel, typeOnly,
+        keys);
+  }
+
+  /**
+   * A derived context with {@code name}, already bound, ranging over the keys of {@code map}.
+   */
+  ConstraintValidationContext withKeysOf(String name, CelNode map) {
+    Map<String, CelNode> keys = new LinkedHashMap<>(keysOf);
+    keys.put(name, map);
+    return new ConstraintValidationContext(columns, bindings, namedTypes, isColumnLevel, typeOnly,
+        keys);
+  }
+
+  /**
+   * True if {@code key} is a binding that ranges over the keys of {@code map}.
+   */
+  boolean isKeyOf(CelNode key, CelNode map) {
+    return key instanceof CelNode.Ident && map.equals(keysOf.get(key.toString()));
   }
 
   /**
@@ -125,7 +152,8 @@ public final class ConstraintValidationContext {
    * {@code NAMED_TYPE_REF} resolution during indirection validation.
    */
   public ConstraintValidationContext withNamedTypes(Map<String, Schema> types) {
-    return new ConstraintValidationContext(columns, bindings, types, isColumnLevel, typeOnly);
+    return new ConstraintValidationContext(columns, bindings, types, isColumnLevel, typeOnly,
+        keysOf);
   }
 
   /**
@@ -133,7 +161,8 @@ public final class ConstraintValidationContext {
    * types, without NULL guards; see {@link #isTypeOnly()}.
    */
   public ConstraintValidationContext forTypeCheck() {
-    return new ConstraintValidationContext(columns, bindings, namedTypes, isColumnLevel, true);
+    return new ConstraintValidationContext(columns, bindings, namedTypes, isColumnLevel, true,
+        keysOf);
   }
 
   /**
@@ -165,7 +194,7 @@ public final class ConstraintValidationContext {
     map.put(fieldName, fieldSchema);
     return new ConstraintValidationContext(
         map, java.util.Collections.emptyMap(),
-        java.util.Collections.emptyMap(), true, false);
+        java.util.Collections.emptyMap(), true, false, Collections.emptyMap());
   }
 
   /**
@@ -178,7 +207,7 @@ public final class ConstraintValidationContext {
     }
     return new ConstraintValidationContext(
         map, java.util.Collections.emptyMap(),
-        java.util.Collections.emptyMap(), false, false);
+        java.util.Collections.emptyMap(), false, false, Collections.emptyMap());
   }
 
   /**
