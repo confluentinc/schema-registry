@@ -207,24 +207,26 @@ final class CelSimplifier {
   private static List<CelNode> absorbed(List<CelNode> operands, boolean and) {
     List<CelNode> out = new ArrayList<>(operands);
     for (int i = out.size() - 1; i >= 0; i--) {
-      List<CelNode> others = new ArrayList<>(out);
-      others.remove(i);
-      if (absorbs(others, out.get(i), and)) {
+      if (absorbed(out, i, and)) {
         out.remove(i);
       }
     }
     return out;
   }
 
-  private static boolean absorbs(List<CelNode> others, CelNode operand, boolean and) {
+  // True if operands' i-th is absorbed by the others.
+  private static boolean absorbed(List<CelNode> operands, int i, boolean and) {
+    CelNode operand = operands.get(i);
     if (operand instanceof CelNode.Ternary) {
       CelNode.Ternary ternary = (CelNode.Ternary) operand;
       CelNode identity = CelNode.bool(and);
       if (!ternary.whenTrue.equals(identity) || !ternary.whenFalse.equals(identity)) {
         return false;
       }
-      for (CelNode other : others) {
-        if (other.equals(ternary.condition) || strictlyEvaluates(other, ternary.condition)) {
+      for (int j = 0; j < operands.size(); j++) {
+        CelNode other = operands.get(j);
+        if (j != i && (other.equals(ternary.condition)
+            || strictlyEvaluates(other, ternary.condition))) {
           return true;
         }
       }
@@ -233,8 +235,9 @@ final class CelSimplifier {
     if (!(operand instanceof CelNode.Junction) || ((CelNode.Junction) operand).and == and) {
       return false;
     }
+    // A part of one of its operands is smaller than it, so isn't it.
     for (CelNode part : ((CelNode.Junction) operand).operands) {
-      if (others.containsAll(parts(part, and))) {
+      if (operands.containsAll(parts(part, and))) {
         return true;
       }
     }
@@ -772,6 +775,9 @@ final class CelSimplifier {
 
     // The constant node is known to be, or null if it isn't known.
     CelNode get(CelNode node) {
+      if (node.equals(CelNode.TRUE) || node.equals(CelNode.FALSE)) {
+        return node;
+      }
       for (Facts facts = this; facts != null; facts = facts.parent) {
         Boolean value = facts.known.get(node);
         if (value != null) {

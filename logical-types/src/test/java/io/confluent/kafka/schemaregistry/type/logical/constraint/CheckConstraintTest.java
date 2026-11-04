@@ -3886,6 +3886,13 @@ class CheckConstraintTest {
         + " || (this.b > 0) == this.t", raising);
     assertThrows(Exception.class,
         () -> evalOver(raising, Map.of("i", 1, "z", 0, "a", 5, "t", true)), raising);
+    // A condition kept as R OR TRUE, as R may raise, is no clause to learn TRUE from.
+    String kept = assertTimeoutPreemptively(Duration.ofSeconds(30), () -> translateCheckOver(
+        columns, "CASE WHEN i / z > 0 OR TRUE THEN (CASE WHEN i / z > 0 THEN 1 ELSE 2 END)"
+            + " ELSE 3 END = 1"));
+    assertEquals(true, evalOver(kept, Map.of("i", 1, "z", 1)), kept);
+    assertEquals(false, evalOver(kept, Map.of("i", -1, "z", 1)), kept);
+    assertThrows(Exception.class, () -> evalOver(kept, Map.of("i", 1, "z", 0)), kept);
     Object[][] rows = {
         {"CASE WHEN a > 0 THEN b ELSE a END > 1", row(), true},
         {"CASE WHEN a > 0 THEN b ELSE a END > 1", row("a", 5), true},

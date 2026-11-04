@@ -36,7 +36,9 @@ import static io.confluent.kafka.schemaregistry.type.logical.constraint.CelNode.
 import static io.confluent.kafka.schemaregistry.type.logical.constraint.CelNode.ternary;
 import static io.confluent.kafka.schemaregistry.type.logical.constraint.CelSimplifier.simplify;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
+import java.time.Duration;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -212,6 +214,16 @@ class CelSimplifierTest {
     assertEquals("((!has(this.a) || dyn(this.a) == null) && (!has(this.b) || dyn(this.b) =="
             + " null)) || (has(this.a) && dyn(this.a) != null ? this.a : this.b) > 0",
         simplified(or(and(A_NULL, B_NULL), binary(value, ">", literal("0")))));
+  }
+
+  @Test
+  void aKnownConstantOperandIsNoOpenOne() {
+    // 1 / this.z > 0 || true is kept, its first operand raising; given it false, true isn't
+    // left to learn.
+    CelNode kept = or(RAISES, TRUE);
+    CelNode check = ternary(kept, ternary(RAISES, A_POSITIVE, B_POSITIVE), FALSE);
+    assertEquals(check.toString(), assertTimeoutPreemptively(Duration.ofSeconds(10),
+        () -> simplified(check)));
   }
 
   @Test
