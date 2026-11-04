@@ -46,8 +46,8 @@ import java.util.regex.Pattern;
  * <p>Every rule also keeps the verdict (true, false or raising, though not always the same
  * error) of a runtime that takes {@code &&} and {@code ||} left to right and raises the first
  * error: what raised before a deciding operand still raises, and an operand goes only for what
- * comes before it, unless it can't raise, or it is otherwise the identity and raises only where
- * the next one does.
+ * comes before it, unless it can't raise, or, but for raising, it is the identity and raises only
+ * where the next one does.
  */
 final class CelSimplifier {
 
@@ -225,7 +225,7 @@ final class CelSimplifier {
     return out;
   }
 
-  // True if operands' i-th is absorbed by those before it, or a raise-only one by the next.
+  // True if operands' i-th is absorbed by those before it, or a raise-only one also by the next.
   private static boolean absorbed(List<CelNode> operands, int i, boolean and) {
     CelNode operand = operands.get(i);
     if (operand instanceof CelNode.Ternary) {

@@ -185,12 +185,18 @@ class CelSimplifierTest {
     assertEquals(partialAnd.toString(), simplified(partialAnd));
     CelNode partialLast = or(B_POSITIVE, and(or(A_POSITIVE, B_POSITIVE), RAISES));
     assertEquals(partialLast.toString(), simplified(partialLast));
+    assertEquals("this.b > 0 || this.a > 0",
+        simplified(or(B_POSITIVE, A_POSITIVE, and(or(A_POSITIVE, B_POSITIVE), RAISES))));
     // c ? false : false only raises, as an operand raising with c next does.
     assertEquals("1 / this.z > 0", simplified(or(ternary(RAISES, FALSE, FALSE), RAISES)));
     CelNode alone = or(ternary(RAISES, FALSE, FALSE), A_POSITIVE);
     assertEquals(alone.toString(), simplified(alone));
     CelNode apart = or(ternary(RAISES, FALSE, FALSE), A_POSITIVE, RAISES);
     assertEquals(apart.toString(), simplified(apart));
+    // So does one raising with c before it, but only with both branches the identity.
+    assertEquals("1 / this.z > 0", simplified(or(RAISES, ternary(RAISES, FALSE, FALSE))));
+    CelNode branch = or(ternary(RAISES, FALSE, A_POSITIVE), RAISES);
+    assertEquals(branch.toString(), simplified(branch));
   }
 
   @Test
