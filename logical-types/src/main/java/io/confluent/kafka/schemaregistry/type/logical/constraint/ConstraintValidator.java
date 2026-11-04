@@ -1306,7 +1306,7 @@ final class ConstraintValidator {
         if (funcName != null
             && ConstraintResolver.NEVER_NULL_FUNCS.contains(funcName)) {
           // One whose NULL can't be told is refused when emitted if an input may be NULL.
-          String byInputs = ConstraintNullTest.of(is.check_expr_compare(), vctx);
+          CelNode byInputs = ConstraintNullTest.of(is.check_expr_compare(), vctx);
           if (ConstraintNullTest.NEVER.equals(byInputs) || byInputs == null
               && !ConstraintNullTest.mayBeNullByInput(is.check_expr_compare(), vctx)) {
             throw locatedError(is,
