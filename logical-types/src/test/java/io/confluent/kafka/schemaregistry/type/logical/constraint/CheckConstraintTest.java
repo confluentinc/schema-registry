@@ -628,8 +628,7 @@ class CheckConstraintTest {
           () -> translateCheckOver(columns, c[0]), c[0]);
       assertTrue(e.getMessage().contains(c[1]), c[0] + ": " + e.getMessage());
     }
-    for (String[] c : new String[][] {{"(r).b", "this.r.b == true"},
-        {"(bs)[1]", "size(dyn(this.bs)) < 1 || this.bs[0]"},
+    for (String[] c : new String[][] {
         {"CASE WHEN u THEN (r).b ELSE FALSE END", "this.u ? this.r.b == true : false"},
         {"CASE WHEN u THEN TRUE ELSE (bs)[1] END",
             "this.u ? true "
@@ -637,6 +636,46 @@ class CheckConstraintTest {
         {"CASE WHEN u THEN CASE WHEN u THEN u ELSE FALSE END ELSE r.b END",
             "this.u ? true : this.r.b == true"}}) {
       assertEquals(c[1], translateCheckOver(columns, c[0]), c[0]);
+    }
+  }
+
+  @Test
+  void aBracketedBooleanReadIsACheck() throws Exception {
+    // A field or element of a bracketed value reads as r.b does, if it's BOOLEAN.
+    String columns = "u BOOLEAN NOT NULL, "
+        + "r STRUCT(b BOOLEAN NOT NULL, v VARIANT NOT NULL) NOT NULL, "
+        + "bs BOOLEAN NOT NULL ARRAY NOT NULL, vs VARIANT NOT NULL ARRAY NOT NULL, "
+        + "rs STRUCT(b BOOLEAN NOT NULL) NOT NULL ARRAY NOT NULL, rn STRUCT(b BOOLEAN)";
+    for (String[] c : new String[][] {{"(r).b", "this.r.b == true"},
+        {"(bs)[1]", "size(dyn(this.bs)) < 1 || this.bs[0]"},
+        {"(rn).b",
+            "!has(this.rn) || dyn(this.rn) == null || !has(this.rn.b) || dyn(this.rn.b) == null "
+                + "|| this.rn.b"},
+        {"EVERY(rs, e, (e).b)", "this.rs.all(e, e.b)"},
+        {"COALESCE((rn).b, FALSE)",
+            "has(this.rn) && dyn(this.rn) != null && has(this.rn.b) && dyn(this.rn.b) != null "
+                + "&& this.rn.b"},
+        {"NULLIF((r).b, u)", "this.r.b == this.u ? true : dyn(this.r.b) == null || this.r.b"}}) {
+      assertEquals(c[1], translateCheckOver(columns, c[0]), c[0]);
+    }
+    for (String sql : List.of("(r).v", "(vs)[1]")) {
+      ValidationException e = assertThrows(ValidationException.class,
+          () -> translateCheckOver(columns, sql), sql);
+      assertTrue(e.getMessage().contains("must yield a boolean"), sql + ": " + e.getMessage());
+    }
+    // An element or value of a named type is resolved too, however it's bracketed.
+    for (String[] c : new String[][] {{"ps[1].b", "size(this.ps) < 1 || this.ps[0].b"},
+        {"(ps)[1].b", "size(dyn(this.ps)) < 1 || this.ps[0].b"},
+        {"(ps[1]).b", "size(this.ps) < 1 || this.ps[0].b"},
+        {"mp['k'].b", "!('k' in this.mp) || this.mp['k'].b"},
+        {"CAST(ps[1].i AS STRING) = '1'",
+            "size(this.ps) < 1 ? true : string(this.ps[0].i) == '1'"}}) {
+      Schema schema = parseScript("STRUCT P (b BOOLEAN NOT NULL, i INT NOT NULL); STRUCT T ("
+          + "ps P NOT NULL ARRAY NOT NULL, mp MAP<STRING, P NOT NULL> NOT NULL, CHECK (" + c[0]
+          + ")); TYPE T").getRootSchema();
+      String cel = schema.getRules().get(0).getExpr();
+      CelValidator.assertValidStrict(cel, schema);
+      assertEquals(c[1], cel, c[0]);
     }
   }
 

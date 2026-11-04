@@ -41,8 +41,9 @@ import java.util.List;
  *       overflow on pathological inputs.</li>
  *   <li>{@link #validateColumnRefs} — every column ref resolves to a known
  *       binding, with indirection chains type-checked.</li>
- *   <li>Type-aware passes: comparisons, concat, casts, CASE branches, BETWEEN
- *       bounds, IN list/target, function args, macro bodies, modulo.</li>
+ *   <li>Literal, LIKE pattern and type-aware passes: comparisons, concat,
+ *       arithmetic, CASE branches, BETWEEN bounds, IN list/target, function
+ *       args, IS NULL operands, macro bodies.</li>
  *   <li>{@link #validateBooleanRoot} — top-level expression must yield bool;
  *       last, so a part's own error is the one reported.</li>
  * </ol>
@@ -199,9 +200,9 @@ final class ConstraintValidator {
       return resolved != null && resolved.getType() == Schema.Type.BOOLEAN;
     }
     if (c instanceof LogicalTypesParser.CheckCaseContext) {
-      // Each result boolean-shaped too; a NULL one is left to validateCaseBranches to refuse.
+      // Each result boolean-shaped too.
       return ConstraintResolver.caseResults(((LogicalTypesParser.CheckCaseContext) c).case_expr())
-          .stream().allMatch(r -> ConstraintResolver.isLiteralNull(r) || isBooleanShaped(r, vctx));
+          .stream().allMatch(r -> isBooleanShaped(r, vctx));
     }
     if (c instanceof LogicalTypesParser.CheckFuncContext) {
       return isBooleanFunc(((LogicalTypesParser.CheckFuncContext) c).func_expr(), vctx);

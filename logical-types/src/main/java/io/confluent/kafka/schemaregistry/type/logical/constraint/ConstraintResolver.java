@@ -1022,9 +1022,9 @@ final class ConstraintResolver {
       } else if (el.check_expr() != null
           && (current.getType() == Schema.Type.ARRAY
               || current.getType() == Schema.Type.MULTISET)) {
-        current = current.getElementType();
+        current = resolveIfNamedRef(current.getElementType(), vctx);
       } else if (el.check_expr() != null && current.getType() == Schema.Type.MAP) {
-        current = current.getValueType();
+        current = resolveIfNamedRef(current.getValueType(), vctx);
       } else {
         return null;
       }
