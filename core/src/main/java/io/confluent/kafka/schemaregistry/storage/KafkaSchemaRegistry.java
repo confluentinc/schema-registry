@@ -476,7 +476,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       // previous version and set to the next one below
       boolean hasConfluentVersion = schema.getMetadata() != null
           && schema.getMetadata().getConfluentVersion() != null;
-      if (mode != Mode.IMPORT) {
+      if (!mode.isImportOrForwardMode()) {
         maybePopulateFromPrevious(
             config, schema, undeletedVersions, newVersion, propagateSchemaTags);
       }
@@ -510,7 +510,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
                 schemaIdAndSubjects.getVersion(subject), schemaIdAndSubjects.getSchemaId());
           } else if (schemaId < 0
               && schema.getVersion() == 0
-              && mode != Mode.IMPORT
+              && !mode.isImportOrForwardMode()
               && schemaIdAndSubjects.hasSubject(subject)
               && CompatibilityPolicy.forName(config.getCompatibilityPolicy())
                   == CompatibilityPolicy.LOGICAL) {
@@ -563,7 +563,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       List<String> compatibilityErrorLogs = new ArrayList<>();
       // force skips the compatibility checks (both the native format-specific check and the
       // logical check) even outside IMPORT mode, the same way IMPORT mode skips them.
-      if (mode != Mode.IMPORT && !force) {
+      if (!mode.isImportOrForwardMode() && !force) {
         // sort undeleted in ascending
         Collections.reverse(undeletedVersions);
         // Under LOGICAL, soft-deleted versions are checked too, in ascending order with the rest.
@@ -594,7 +594,8 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
         // assign a guid and put the schema in the kafka store
         if (schema.getVersion() <= 0) {
           schema.setVersion(newVersion);
-        } else if (newVersion != schema.getVersion() && mode != Mode.IMPORT) {
+        } else if (newVersion != schema.getVersion()
+                && !mode.isImportOrForwardMode()) {
           throw new InvalidSchemaException("Version is not one more than previous version");
         }
 
@@ -629,9 +630,16 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
                 + "to generating an ID that is already in use.");
           }
         }
+        // The newest soft-deleted version with the same ID stays, so the history shows the ID
+        // was used before; older ones are tombstoned. deletedVersions is newest first.
+        boolean keptNewest = false;
         for (Schema deleted : deletedVersions) {
           if (deleted.getId().equals(schema.getId())
                   && deleted.getVersion().compareTo(schema.getVersion()) < 0) {
+            if (!keptNewest) {
+              keptNewest = true;
+              continue;
+            }
             SchemaKey key = new SchemaKey(deleted.getSubject(), deleted.getVersion());
             // Skip tombstoning if any schema (including soft-deleted) still references this
             // (subject, version): references resolve by subject+version, not by global ID, so

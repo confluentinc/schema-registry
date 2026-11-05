@@ -70,7 +70,7 @@ public class ProtoToLogicalTypeConverter {
   private static final int DEFAULT_DECIMAL_SCALE = 0;
 
   /**
-   * Marks the synthetic root {@link #toLogicalType(ProtobufSchema, boolean)} builds over every
+   * Marks the synthetic root {@link #toMultiMessageLogicalType(ProtobufSchema)} builds over every
    * top-level message. Its fields carry no Protobuf field numbers, so provenance identifies them by
    * name rather than deriving numbers from their position.
    */
@@ -182,21 +182,33 @@ public class ProtoToLogicalTypeConverter {
 
   /**
    * The schema as its records are read: every top-level message, as
-   * {@link #toLogicalType(ProtobufSchema, boolean)} reads them, when
+   * {@link #toMultiMessageLogicalType} reads them, when
    * {@link ProtobufSchema#readsAsSeveralMessages()}, and otherwise its one message. A
    * public-import wrapper is read by the file it re-exports.
    */
   public static LogicalType toLogicalType(final ProtobufSchema schema) {
-    return toLogicalType(schema, schema.readsAsSeveralMessages());
+    return read(schema, schema.readsAsSeveralMessages());
   }
 
   /**
-   * As {@link #toLogicalType(ProtobufSchema)}; with {@code includeMultipleMessages}, the root is a
-   * synthetic struct with one field per top-level message, in file order, each a reference to that
-   * message and named by its fully qualified name. Every message is then a named type, the first
-   * one included, and a file declaring a single message is wrapped all the same.
+   * {@code schema} read as its one message {@code message}, whatever root its file names or
+   * whatever else it declares.
    */
-  public static LogicalType toLogicalType(
+  public static LogicalType toLogicalType(final ProtobufSchema schema, final String message) {
+    return read(schema.copy(message), false);
+  }
+
+  /**
+   * {@code schema}'s file as a whole: the root is a synthetic struct with one field per top-level
+   * message, in file order, each a reference to that message and named by its fully qualified
+   * name. Every message is then a named type, the first one included; a file declaring a single
+   * message is wrapped all the same, and a root it names is not singled out.
+   */
+  public static LogicalType toMultiMessageLogicalType(final ProtobufSchema schema) {
+    return read(schema, true);
+  }
+
+  private static LogicalType read(
       final ProtobufSchema schema, final boolean includeMultipleMessages) {
     if (includeMultipleMessages && schema.rawSchema() != null
         && schema.rawSchema().getTypes().isEmpty() && !isPublicImportWrapper(schema)) {
@@ -351,6 +363,7 @@ public class ProtoToLogicalTypeConverter {
     //   - recursive (self/mutual cycle) — cyclic field references need the body present;
     //   - it has nested types in namedTypes — they use parentOf(), which needs the root present;
     //   - a peer references it — unwrapping would remove the body and dangle that reference;
+    //   - it is nested in another message — unwrapped, only its simple name would be left;
     //   - it isn't the file's first message — its namedTypes entry keeps its place among them.
     // Otherwise unwrap to a bare STRUCT and remove the root from namedTypes, preserving the
     // historical "namedTypes = peers; root is direct" convention for the simple case.
@@ -359,6 +372,7 @@ public class ProtoToLogicalTypeConverter {
     if (LogicalType.isCyclic(rootFqn, ctx.getNamedTypes())
         || hasNestedNamedTypes(rootFqn, ctx.getNamedTypes())
         || LogicalType.isReferencedByPeer(rootFqn, ctx.getNamedTypes())
+        || rootMessage.getContainingType() != null
         || messageTypes.get(0) != rootMessage) {
       rootSchema = Schema.createNamedTypeRef(rootFqn).setNullable(false);
       // Root kept as a NAMED_TYPE_REF: its name is the namedTypes key, so don't duplicate it.
