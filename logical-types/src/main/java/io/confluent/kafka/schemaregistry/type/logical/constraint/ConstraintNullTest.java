@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import org.antlr.v4.runtime.tree.ParseTree;
+import org.antlr.v4.runtime.tree.TerminalNode;
 
 /**
  * The test that a CHECK expression is NULL, from its inputs rather than its value. Almost every
@@ -39,13 +40,14 @@ import org.antlr.v4.runtime.tree.ParseTree;
  * AND, OR, BETWEEN, EVERY and ANY are NULL when neither definitely TRUE nor definitely FALSE. A
  * subscript is NULL when a step, its index or its element is, or its key or index is missing.
  * VARIANT_GET, TRY_VARIANT_GET and TRY_PARSE_JSON are NULL when an input is or their CEL gives
- * null. {@code "false"} means the expression is never NULL. Null means it can't be told without
- * evaluating it: ONE, VARIANT_IS_NULL, a CAST of a VARIANT, an IN whose inputs or array type
- * don't tell, or any of these over one.
+ * null. {@link #NEVER} means the expression is never NULL, {@link #ALWAYS} always. Null means it
+ * can't be told without evaluating it: ONE, VARIANT_IS_NULL, a CAST of a VARIANT, an IN whose
+ * inputs or array type don't tell, or any of these over one.
  */
 final class ConstraintNullTest {
 
-  static final String NEVER = "false";
+  static final CelNode NEVER = CelNode.FALSE;
+  static final CelNode ALWAYS = CelNode.TRUE;
 
   // NULL exactly when an argument is.
   private static final Set<String> STRICT_FUNCS = Set.of(
@@ -60,26 +62,24 @@ final class ConstraintNullTest {
   private ConstraintNullTest() {
   }
 
-  static String of(LogicalTypesParser.Check_exprContext ctx) {
+  static CelNode of(LogicalTypesParser.Check_exprContext ctx) {
     return ConstraintEmitter.cachedNullTest(ctx, () -> ofExpr(ctx));
   }
 
-  static String of(LogicalTypesParser.Check_expr_compareContext ctx) {
-    List<String> tests = new ArrayList<>();
+  static CelNode of(LogicalTypesParser.Check_expr_compareContext ctx) {
+    List<CelNode> tests = new ArrayList<>();
     for (LogicalTypesParser.Check_expr_betweenContext between : ctx.check_expr_between()) {
       if (between.BETWEEN() != null) {
         tests.add(ofBetween(between));
         continue;
       }
       LogicalTypesParser.Check_expr_inContext in = between.check_expr_in(0);
-      String test = in.IN() == null ? of(in.check_expr_like()) : ofIn(in);
+      CelNode test = in.IN() == null ? of(in.check_expr_like()) : ofIn(in);
       if (test == null && in.IN() != null) {
         if (!ConstraintEmitter.givesNullAsNull(in)) {
           return null;
         }
-        StringBuilder emitted = new StringBuilder();
-        ConstraintEmitter.emitParenIn(in, emitted);
-        tests.add("dyn(" + emitted + ") == null");
+        tests.add(CelNode.isNull(ConstraintEmitter.visitIn(in)));
         continue;
       }
       tests.add(test);
@@ -87,13 +87,13 @@ final class ConstraintNullTest {
     return any(tests);
   }
 
-  static String of(LogicalTypesParser.Check_expr_inContext in) {
+  static CelNode of(LogicalTypesParser.Check_expr_inContext in) {
     return in.IN() == null ? of(in.check_expr_like()) : null;
   }
 
-  static String of(LogicalTypesParser.Check_expr_likeContext like) {
+  static CelNode of(LogicalTypesParser.Check_expr_likeContext like) {
     // A LIKE pattern is a literal.
-    List<String> tests = new ArrayList<>();
+    List<CelNode> tests = new ArrayList<>();
     for (LogicalTypesParser.Check_expr_mulContext mul : like.check_expr_add().check_expr_mul()) {
       for (LogicalTypesParser.Check_expr_unary_signContext sign : mul.check_expr_unary_sign()) {
         tests.add(of(sign.c_expr()));
@@ -102,41 +102,34 @@ final class ConstraintNullTest {
     return any(tests);
   }
 
-  private static String of(LogicalTypesParser.C_exprContext c) {
+  private static CelNode of(LogicalTypesParser.C_exprContext c) {
     if (c instanceof LogicalTypesParser.CheckLiteralContext) {
       return ((LogicalTypesParser.CheckLiteralContext) c).literal().NULL() != null
-          ? "true" : NEVER;
+          ? ALWAYS : NEVER;
     }
     if (c instanceof LogicalTypesParser.CheckCaseContext
         && neverNull(((LogicalTypesParser.CheckCaseContext) c).case_expr())) {
       return NEVER;
     }
     if (isTestedByValue(c)) {
-      StringBuilder emitted = new StringBuilder();
-      ConstraintEmitter.visitCExpr(c, emitted);
-      return "dyn(" + emitted + ") == null";
+      return CelNode.isNull(ConstraintEmitter.visitCExpr(c));
     }
     if (c instanceof LogicalTypesParser.CheckFuncContext) {
       LogicalTypesParser.CheckFuncContext func = (LogicalTypesParser.CheckFuncContext) c;
       if (isQuantifier(func)) {
         // Cached, as each nested quantifier's would otherwise be emitted twice per level.
-        return ConstraintEmitter.cachedNullTest(func, () -> {
-          StringBuilder whenTrue = new StringBuilder();
-          StringBuilder whenFalse = new StringBuilder();
-          return neither(ConstraintEmitter.emitQuantifierTruth(func, true, whenTrue)
-              | ConstraintEmitter.emitQuantifierTruth(func, false, whenFalse), whenTrue, whenFalse);
-        });
+        return ConstraintEmitter.cachedNullTest(func, () ->
+            neither(ConstraintEmitter.emitQuantifierTruth(func, true),
+                ConstraintEmitter.emitQuantifierTruth(func, false)));
       }
       List<LogicalTypesParser.Check_exprContext> inputs = valueTestedInputs(func.func_expr());
       if (inputs != null) {
         // NULL when an input is, or when there is no value, which its CEL gives as null.
-        List<String> tests = new ArrayList<>();
+        List<CelNode> tests = new ArrayList<>();
         for (LogicalTypesParser.Check_exprContext input : inputs) {
           tests.add(of(input));
         }
-        StringBuilder emitted = new StringBuilder();
-        ConstraintEmitter.visitCExpr(c, emitted);
-        tests.add("dyn(" + emitted + ") == null");
+        tests.add(CelNode.isNull(ConstraintEmitter.visitCExpr(c)));
         return any(tests);
       }
       return of(func.func_expr());
@@ -148,14 +141,14 @@ final class ConstraintNullTest {
     return ofSelection(c);
   }
 
-  private static String of(LogicalTypesParser.Func_exprContext f) {
+  private static CelNode of(LogicalTypesParser.Func_exprContext f) {
     if (f.func_application() != null) {
       String name = f.func_application().identifier().getText().toUpperCase(Locale.ROOT);
       boolean strict = STRICT_FUNCS.contains(name);
       if (!strict && !"COALESCE".equals(name)) {
         return null;
       }
-      List<String> tests = new ArrayList<>();
+      List<CelNode> tests = new ArrayList<>();
       if (f.func_application().check_expr_list() != null) {
         for (LogicalTypesParser.Check_exprContext arg
             : f.func_application().check_expr_list().check_expr()) {
@@ -167,23 +160,18 @@ final class ConstraintNullTest {
     return of(f.func_expr_common_subexpr());
   }
 
-  static String of(LogicalTypesParser.Func_expr_common_subexprContext sub) {
+  static CelNode of(LogicalTypesParser.Func_expr_common_subexprContext sub) {
     if (sub instanceof LogicalTypesParser.FuncCurrentTimestampContext) {
       return NEVER;
     }
-    // A literal NULL has no type, so isn't taken for a VARIANT: its CAST is always NULL.
-    if (sub instanceof LogicalTypesParser.FuncCastContext && ConstraintResolver.isLiteralNull(
-        ((LogicalTypesParser.FuncCastContext) sub).check_expr())) {
-      return "true";
-    }
     if (sub instanceof LogicalTypesParser.FuncVariantGetContext
         || sub instanceof LogicalTypesParser.FuncTryVariantGetContext
-        || sub instanceof LogicalTypesParser.FuncCastContext && isVariant(
+        || sub instanceof LogicalTypesParser.FuncCastContext && mayBeVariant(
             ((LogicalTypesParser.FuncCastContext) sub).check_expr())) {
       return null;
     }
     // CAST, EXTRACT, SUBSTRING, POSITION and TRIM are NULL when an operand is.
-    List<String> tests = new ArrayList<>();
+    List<CelNode> tests = new ArrayList<>();
     for (int i = 0; i < sub.getChildCount(); i++) {
       ParseTree child = sub.getChild(i);
       if (child instanceof LogicalTypesParser.Check_exprContext) {
@@ -198,7 +186,7 @@ final class ConstraintNullTest {
   /**
    * {@link #of} outside an emission, as during validation.
    */
-  static String of(LogicalTypesParser.Check_expr_compareContext ctx,
+  static CelNode of(LogicalTypesParser.Check_expr_compareContext ctx,
       ConstraintValidationContext vctx) {
     ConstraintValidationContext emitting = EMIT_VCTX.get();
     EMIT_VCTX.set(vctx);
@@ -213,14 +201,12 @@ final class ConstraintNullTest {
     }
   }
 
-  private static String ofExpr(LogicalTypesParser.Check_exprContext ctx) {
+  private static CelNode ofExpr(LogicalTypesParser.Check_exprContext ctx) {
     LogicalTypesParser.Check_expr_orContext or = ctx.check_expr_or();
     if (or.check_expr_and().size() > 1
         || or.check_expr_and(0).check_expr_unary_not().size() > 1) {
-      StringBuilder whenTrue = new StringBuilder();
-      StringBuilder whenFalse = new StringBuilder();
-      return neither(ConstraintEmitter.emitTruth(or, true, whenTrue)
-          | ConstraintEmitter.emitTruth(or, false, whenFalse), whenTrue, whenFalse);
+      return neither(ConstraintEmitter.emitTruth(or, true),
+          ConstraintEmitter.emitTruth(or, false));
     }
     LogicalTypesParser.Check_expr_andContext and = or.check_expr_and(0);
     LogicalTypesParser.Check_expr_unary_notContext not = and.check_expr_unary_not(0);
@@ -235,21 +221,18 @@ final class ConstraintNullTest {
   /**
    * The test that {@code test}'s expression is not NULL.
    */
-  static String not(String test) {
+  static CelNode not(CelNode test) {
     if (NEVER.equals(test)) {
-      return "true";
+      return CelNode.TRUE;
     }
-    if (test.startsWith("dyn(") && test.endsWith(") == null")
-        && closingParen(test, 3) == test.length() - 9) {
-      return test.substring(0, test.length() - 8) + " != null";
-    }
-    return test.startsWith("(") ? "!" + test : "!(" + test + ")";
+    CelNode valueOf = CelNode.isNullOf(test);
+    return valueOf != null ? CelNode.isNotNull(valueOf) : CelNode.not(test);
   }
 
   /**
    * The test that either of two expressions is NULL.
    */
-  static String either(String a, String b) {
+  static CelNode either(CelNode a, CelNode b) {
     return any(Arrays.asList(a, b));
   }
 
@@ -299,8 +282,7 @@ final class ConstraintNullTest {
     boolean afterElse = false;
     for (int i = 0; i < ctx.getChildCount(); i++) {
       ParseTree child = ctx.getChild(i);
-      if (child instanceof org.antlr.v4.runtime.tree.TerminalNode
-          && "ELSE".equalsIgnoreCase(child.getText())) {
+      if (child instanceof TerminalNode && "ELSE".equalsIgnoreCase(child.getText())) {
         afterElse = true;
       } else if (afterElse && child instanceof LogicalTypesParser.Check_exprContext) {
         if (!NEVER.equals(of((LogicalTypesParser.Check_exprContext) child))) {
@@ -326,21 +308,8 @@ final class ConstraintNullTest {
     return c;
   }
 
-  // The index of the parenthesis closing the one at open.
-  private static int closingParen(String s, int open) {
-    int depth = 0;
-    for (int i = open; i < s.length(); i++) {
-      if (s.charAt(i) == '(') {
-        depth++;
-      } else if (s.charAt(i) == ')' && --depth == 0) {
-        return i;
-      }
-    }
-    return -1;
-  }
-
   // A column, a macro variable or a field of either, by its nullable steps.
-  private static String ofSelection(LogicalTypesParser.C_exprContext c) {
+  private static CelNode ofSelection(LogicalTypesParser.C_exprContext c) {
     ConstraintValidationContext vctx = EMIT_VCTX.get();
     // A path has() can't take, (e).x, (arr[1]).x or r.`in`, is tested step by step from its
     // root, so a NULL step above isn't read through.
@@ -356,11 +325,9 @@ final class ConstraintNullTest {
     if (steps.isEmpty()) {
       return NEVER;
     }
-    StringBuilder emitted = new StringBuilder();
-    ConstraintEmitter.visitCExpr(c, emitted);
+    CelNode emitted = ConstraintEmitter.visitCExpr(c);
     return ConstraintResolver.isHasCompatibleCExpr(c, vctx)
-        ? ConstraintEmitter.nullTest(path, emitted.toString(), true)
-        : "dyn(" + emitted + ") == null";
+        ? ConstraintEmitter.nullTest(path, emitted, true) : CelNode.isNull(emitted);
   }
 
   private static boolean hasSubscript(LogicalTypesParser.C_exprContext c) {
@@ -412,7 +379,7 @@ final class ConstraintNullTest {
    * {@code test}, refusing an expression whose NULL can't be told when an input may be NULL:
    * evaluated instead, it could answer as if its NULL were a value.
    */
-  static String told(String test, org.antlr.v4.runtime.ParserRuleContext node) {
+  static CelNode told(CelNode test, org.antlr.v4.runtime.ParserRuleContext node) {
     if (test == null && mayBeNullByInput(node)) {
       throw ConstraintToCelTranslator.locatedError(node, "can't tell when '" + node.getText()
           + "' is NULL, so it can't be tested for NULL here; test its inputs instead.");
@@ -475,8 +442,8 @@ final class ConstraintNullTest {
           if (mayBeNullByInput(args.get(0))) {
             return true;
           }
-          ConstraintValidationContext body = vctx.withBinding(args.get(1).getText(),
-              ConstraintResolver.resolveCollectionElementType(args.get(0), vctx));
+          ConstraintValidationContext body = ConstraintEmitter.bodyContext(app, vctx,
+              () -> ConstraintEmitter.iteration(vctx, args.get(1).getText(), args.get(0)));
           EMIT_VCTX.set(body);
           try {
             return mayBeNullByInput(args.get(2));
@@ -494,37 +461,93 @@ final class ConstraintNullTest {
     return false;
   }
 
-  private static boolean isVariant(LogicalTypesParser.Check_exprContext operand) {
-    Schema type = ConstraintResolver.tryResolveCheckExprType(operand, EMIT_VCTX.get());
-    return type == null || type.getType() == Schema.Type.VARIANT;
+  // True if operand may be a VARIANT, whose CAST can be NULL though it isn't: its type is one, or,
+  // its type not known, a VARIANT is read or made in it.
+  private static boolean mayBeVariant(LogicalTypesParser.Check_exprContext operand) {
+    // NULLIF's value is its first argument, whatever the second's type.
+    if ("NULLIF".equals(ConstraintResolver.tryExtractLeafFuncName(operand))) {
+      LogicalTypesParser.Func_applicationContext call = outermostCall(operand);
+      if (call != null && call.check_expr_list() != null) {
+        return mayBeVariant(call.check_expr_list().check_expr(0));
+      }
+    }
+    ConstraintValidationContext vctx = EMIT_VCTX.get();
+    Schema type = ConstraintResolver.tryResolveCheckExprType(operand, vctx);
+    return type != null ? type.getType() == Schema.Type.VARIANT : readsVariant(operand, vctx);
+  }
+
+  private static LogicalTypesParser.Func_applicationContext outermostCall(ParseTree node) {
+    if (node instanceof LogicalTypesParser.Func_applicationContext) {
+      return (LogicalTypesParser.Func_applicationContext) node;
+    }
+    for (int i = 0; i < node.getChildCount(); i++) {
+      LogicalTypesParser.Func_applicationContext call = outermostCall(node.getChild(i));
+      if (call != null) {
+        return call;
+      }
+    }
+    return null;
+  }
+
+  // A part whose type is known is a VARIANT just when that type is one, so a condition, a
+  // macro or a comparison in it, whose value doesn't flow out, isn't entered.
+  private static boolean readsVariant(ParseTree node, ConstraintValidationContext vctx) {
+    Schema type = null;
+    if (node instanceof LogicalTypesParser.Check_exprContext) {
+      type = ConstraintResolver.tryResolveCheckExprType(
+          (LogicalTypesParser.Check_exprContext) node, vctx);
+    } else if (node instanceof LogicalTypesParser.Func_exprContext) {
+      type = ConstraintResolver.tryResolveFuncReturnType(
+          (LogicalTypesParser.Func_exprContext) node, vctx);
+    }
+    if (type != null) {
+      return type.getType() == Schema.Type.VARIANT;
+    }
+    if (node instanceof LogicalTypesParser.ColumnrefContext) {
+      return ConstraintResolver.mayReadVariant((LogicalTypesParser.ColumnrefContext) node, vctx);
+    }
+    // Steps off a bracketed value are walked as a path's, from the value's type.
+    if (node instanceof LogicalTypesParser.CheckParenContext
+        && ((LogicalTypesParser.CheckParenContext) node).indirection() != null) {
+      LogicalTypesParser.CheckParenContext paren = (LogicalTypesParser.CheckParenContext) node;
+      return ConstraintResolver.mayReadVariant(
+          ConstraintResolver.tryResolveCheckExprType(paren.check_expr(), vctx),
+          paren.indirection(), vctx);
+    }
+    for (int i = 0; i < node.getChildCount(); i++) {
+      if (readsVariant(node.getChild(i), vctx)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   // SYMMETRIC, or with bounds never NULL, NULL exactly when an operand is; else by Kleene's AND.
-  private static String ofBetween(LogicalTypesParser.Check_expr_betweenContext between) {
+  private static CelNode ofBetween(LogicalTypesParser.Check_expr_betweenContext between) {
     List<LogicalTypesParser.Check_expr_inContext> ins = between.check_expr_in();
-    String lo = of(ins.get(1));
-    String hi = of(ins.get(2));
+    CelNode lo = of(ins.get(1));
+    CelNode hi = of(ins.get(2));
     if (between.SYMMETRIC() != null || NEVER.equals(lo) && NEVER.equals(hi)) {
       return any(Arrays.asList(of(ins.get(0)), lo, hi));
     }
-    StringBuilder whenTrue = new StringBuilder();
-    StringBuilder whenFalse = new StringBuilder();
-    return neither(ConstraintEmitter.emitBetweenTruth(between, true, whenTrue)
-        | ConstraintEmitter.emitBetweenTruth(between, false, whenFalse), whenTrue, whenFalse);
+    return neither(ConstraintEmitter.emitBetweenTruth(between, true),
+        ConstraintEmitter.emitBetweenTruth(between, false));
   }
 
   // NULL when neither definitely TRUE nor definitely FALSE, from emitTruth's flags.
-  private static String neither(int flags, CharSequence whenTrue, CharSequence whenFalse) {
+  private static CelNode neither(ConstraintEmitter.Truth whenTrue,
+      ConstraintEmitter.Truth whenFalse) {
+    int flags = whenTrue.flags | whenFalse.flags;
     if ((flags & ConstraintEmitter.UNTOLD) != 0) {
       return null;
     }
     return (flags & ConstraintEmitter.MAY_BE_NULL) == 0 ? NEVER
-        : "(!" + whenTrue + " && !" + whenFalse + ")";
+        : CelNode.and(CelNode.not(whenTrue.cel), CelNode.not(whenFalse.cel));
   }
 
   // An IN's test when its elements are never NULL; null when one may be.
-  private static String ofIn(LogicalTypesParser.Check_expr_inContext in) {
-    String subject = of(in.check_expr_like());
+  private static CelNode ofIn(LogicalTypesParser.Check_expr_inContext in) {
+    CelNode subject = of(in.check_expr_like());
     if (in.in_target() instanceof LogicalTypesParser.InTargetExprContext) {
       ConstraintValidationContext vctx = EMIT_VCTX.get();
       Schema type = vctx == null ? null : ConstraintResolver.inTargetType(in, vctx);
@@ -563,48 +586,40 @@ final class ConstraintNullTest {
    * The test of an IN over a collection: NULL when the collection is, or when the subject is
    * and the collection isn't empty, as SQL's = ANY over no elements is FALSE whatever it is.
    */
-  static String ofCollectionIn(LogicalTypesParser.Check_expr_inContext in, String subject) {
+  static CelNode ofCollectionIn(LogicalTypesParser.Check_expr_inContext in, CelNode subject) {
     LogicalTypesParser.Check_expr_likeContext target =
         ((LogicalTypesParser.InTargetExprContext) in.in_target()).check_expr_like();
-    String collection = of(target);
+    CelNode collection = of(target);
     if (subject == null || collection == null) {
       return null;
     }
-    return either(collection, NEVER.equals(subject) ? NEVER
-        : "(" + subject + " && " + ConstraintEmitter.collectionSize(target) + " > 0)");
+    return either(collection, NEVER.equals(subject) ? NEVER : CelNode.and(subject,
+        CelNode.binary(ConstraintEmitter.collectionSize(target), ">", CelNode.literal("0"))));
   }
 
   // NULL when any input is.
-  static String any(List<String> tests) {
+  static CelNode any(List<CelNode> tests) {
     if (tests.contains(null)) {
       return null;
     }
-    if (tests.contains("true")) {
-      return "true";
+    if (tests.contains(ALWAYS)) {
+      return ALWAYS;
     }
-    Set<String> nullable = new LinkedHashSet<>(tests);
+    Set<CelNode> nullable = new LinkedHashSet<>(tests);
     nullable.remove(NEVER);
-    if (nullable.isEmpty()) {
-      return NEVER;
-    }
-    return nullable.size() == 1 ? nullable.iterator().next()
-        : "(" + String.join(" || ", nullable) + ")";
+    return nullable.isEmpty() ? NEVER : CelNode.or(new ArrayList<>(nullable));
   }
 
   // NULL when every input is.
-  private static String all(List<String> tests) {
+  private static CelNode all(List<CelNode> tests) {
     if (tests.isEmpty() || tests.contains(NEVER)) {
       return NEVER;
     }
     if (tests.contains(null)) {
       return null;
     }
-    Set<String> nullable = new LinkedHashSet<>(tests);
-    nullable.remove("true");
-    if (nullable.isEmpty()) {
-      return "true";
-    }
-    return nullable.size() == 1 ? nullable.iterator().next()
-        : "(" + String.join(" && ", nullable) + ")";
+    Set<CelNode> nullable = new LinkedHashSet<>(tests);
+    nullable.remove(ALWAYS);
+    return nullable.isEmpty() ? ALWAYS : CelNode.and(new ArrayList<>(nullable));
   }
 }
