@@ -199,6 +199,18 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
     throw new UnsupportedOperationException();
   }
 
+  /**
+   * Returns the schemas of the subjects starting with {@code subjectPrefix}, as
+   * {@link #getSchemas} does, but unparsed, with the subject and version of each.
+   */
+  default List<Schema> getSchemaEntities(
+      String subjectPrefix,
+      boolean lookupDeletedSchema,
+      boolean latestOnly)
+      throws IOException, RestClientException {
+    throw new UnsupportedOperationException();
+  }
+
   public Collection<String> getAllSubjectsById(int id) throws IOException, RestClientException;
 
   default Collection<SubjectVersion> getAllVersionsById(int id) throws IOException,
