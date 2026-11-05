@@ -4498,6 +4498,20 @@ class CheckConstraintTest {
   }
 
   @Test
+  void aCheckInAnInlineRootIsTranslated() {
+    // An inline root's CHECKs are queued as the root is built, after every named type.
+    String inline = "TYPE STRUCT(a INT CHECK (a > 0)) NOT NULL;";
+    assertEquals("this > 0",
+        parseScript(inline).getRootSchema().getField("a").getRules().get(0).getExpr());
+    assertEquals("this > 0",
+        ddlRoundTrip(inline).getRootSchema().getField("a").getRules().get(0).getExpr());
+    Schema named = parseScript("STRUCT V (n INT); TYPE STRUCT(v V CHECK (v.n > 0)) NOT NULL;")
+        .getRootSchema();
+    assertEquals("!has(this.n) || dyn(this.n) == null || this.n > 0",
+        named.getField("v").getRules().get(0).getExpr());
+  }
+
+  @Test
   void ddlRoundTripPreservesAllRuleFields() {
     String script = "STRUCT T ("
         + "x INT CONSTRAINT positive_x CHECK (x > 0) MESSAGE 'must be positive'"
