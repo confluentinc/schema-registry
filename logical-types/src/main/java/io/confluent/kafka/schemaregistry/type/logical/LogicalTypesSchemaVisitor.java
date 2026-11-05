@@ -76,6 +76,10 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
   private final Map<String, Schema> namedTypes = new LinkedHashMap<>();
   // Defaults naming a local enum's symbol, checked once every body is built.
   private final List<Runnable> symbolChecks = new ArrayList<>();
+  // CHECK translations, run once the root and every named type's body are built: an inline
+  // root's are queued only as it is built, and a CHECK can read the fields of a type declared
+  // after it, or of its own.
+  private final List<Runnable> checkJobs = new ArrayList<>();
   private Schema rootSchema;
   private final boolean rootsSeveralMessages;
 
@@ -189,6 +193,7 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
         inferAndRegisterRoot(ctx);
       }
     }
+    checkJobs.forEach(Runnable::run);
     symbolChecks.forEach(Runnable::run);
     maybeUnwrapNamedRoot();
     validateAliases();
@@ -791,8 +796,8 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
   }
 
   private Schema buildStruct(LogicalTypesParser.StructBodyContext ctx) {
-    // Two-pass: build all fields first (with column-level CHECK validation),
-    // then build table-level CHECKs against the full field set.
+    // Table-level CHECKs, like column-level ones, are translated later by checkJobs, over the
+    // full field set.
     List<Schema.Field> fields = new ArrayList<>();
     int pos = 0;
     for (LogicalTypesParser.StructBodyItemContext item : ctx.structBodyItem()) {
@@ -800,17 +805,23 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
         fields.add(buildField(item.fieldDef(), pos++));
       }
     }
-    List<Rule> tableRules = new ArrayList<>();
-    ConstraintValidationContext tableCtx = ConstraintValidationContext.tableLevel(fields)
-        .withNamedTypes(namedTypes);
+    List<LogicalTypesParser.CheckClauseContext> checks = new ArrayList<>();
     for (LogicalTypesParser.StructBodyItemContext item : ctx.structBodyItem()) {
       if (item.tableConstraint() != null) {
-        tableRules.add(buildRule(item.tableConstraint().checkClause(), tableCtx));
+        checks.add(item.tableConstraint().checkClause());
       }
     }
     Schema struct = Schema.createStruct(fields);
-    if (!tableRules.isEmpty()) {
-      struct.setRules(tableRules);
+    if (!checks.isEmpty()) {
+      checkJobs.add(() -> {
+        ConstraintValidationContext tableCtx = ConstraintValidationContext.tableLevel(fields)
+            .withNamedTypes(namedTypes);
+        List<Rule> tableRules = new ArrayList<>();
+        for (LogicalTypesParser.CheckClauseContext check : checks) {
+          tableRules.add(buildRule(check, tableCtx));
+        }
+        struct.setRules(tableRules);
+      });
     }
     return struct;
   }
@@ -853,20 +864,21 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
       params = buildParams(ctx.withClause());
     }
 
-    List<Rule> rules = null;
+    Schema.Field field = new Schema.Field(name, schema, position,
+        defaultValue, hasDefault, doc, tags, params, null);
     if (ctx.columnConstraint() != null && !ctx.columnConstraint().isEmpty()) {
-      // Column-level CHECK: only the attached field is in scope.
-      ConstraintValidationContext columnCtx = ConstraintValidationContext
-          .columnLevel(name, schema).withNamedTypes(namedTypes);
-      final List<Rule> rulesList = new ArrayList<>();
-      for (LogicalTypesParser.ColumnConstraintContext cc : ctx.columnConstraint()) {
-        rulesList.add(buildRule(cc.checkClause(), columnCtx));
-      }
-      rules = rulesList;
+      checkJobs.add(() -> {
+        // Column-level CHECK: only the attached field is in scope.
+        ConstraintValidationContext columnCtx = ConstraintValidationContext
+            .columnLevel(name, schema).withNamedTypes(namedTypes);
+        List<Rule> rules = new ArrayList<>();
+        for (LogicalTypesParser.ColumnConstraintContext cc : ctx.columnConstraint()) {
+          rules.add(buildRule(cc.checkClause(), columnCtx));
+        }
+        field.setRules(rules);
+      });
     }
-
-    return new Schema.Field(name, schema, position,
-        defaultValue, hasDefault, doc, tags, params, rules);
+    return field;
   }
 
   /**
