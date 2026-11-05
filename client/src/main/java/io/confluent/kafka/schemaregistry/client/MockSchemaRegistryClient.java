@@ -542,6 +542,25 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
+  public List<Schema> getSchemaEntities(
+      String subjectPrefix,
+      boolean lookupDeletedSchema,
+      boolean latestOnly)
+      throws IOException, RestClientException {
+    List<Schema> schemas = new ArrayList<>();
+    for (String subject : getAllSubjectsByPrefix(subjectPrefix)) {
+      List<Integer> versions = allVersions(subject);
+      if (latestOnly && !versions.isEmpty()) {
+        versions = versions.subList(versions.size() - 1, versions.size());
+      }
+      for (int version : versions) {
+        schemas.add(getByVersion(subject, version, lookupDeletedSchema));
+      }
+    }
+    return schemas;
+  }
+
+  @Override
   public Collection<String> getAllSubjectsById(int id) {
     return idToSchemaCache.entrySet().stream()
             .filter(entry -> entry.getValue().containsKey(id))

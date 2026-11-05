@@ -299,6 +299,33 @@ public class MockSchemaRegistryClientTest {
     }
 
     @Test
+    public void testGetSchemaEntities() throws Exception {
+      client.register(defaultValueSubject, new AvroSchema(SIMPLE_AVRO_SCHEMA));
+      int evolved = client.register(defaultValueSubject, new AvroSchema(EVOLVED_AVRO_SCHEMA));
+      client.register(defaulKeySubject, new AvroSchema(SIMPLE_STRING_SCHEMA));
+      client.register("other", new AvroSchema(SIMPLE_STRING_SCHEMA));
+      client.register("deleted", new AvroSchema(SIMPLE_STRING_SCHEMA));
+      client.deleteSchemaVersion("deleted", "1");
+
+      List<Schema> latest = client.getSchemaEntities("test", false, true);
+      assertEquals(2, latest.size());
+      assertEquals(defaulKeySubject, latest.get(0).getSubject());
+      assertEquals(Integer.valueOf(1), latest.get(0).getVersion());
+      assertEquals(defaultValueSubject, latest.get(1).getSubject());
+      assertEquals(Integer.valueOf(2), latest.get(1).getVersion());
+      assertEquals(Integer.valueOf(evolved), latest.get(1).getId());
+      assertEquals(AvroSchema.TYPE, latest.get(1).getSchemaType());
+      assertEquals(new AvroSchema(EVOLVED_AVRO_SCHEMA).canonicalString(),
+          latest.get(1).getSchema());
+
+      List<Schema> all = client.getSchemaEntities(defaultValueSubject, false, false);
+      assertEquals(Arrays.asList(1, 2),
+          Arrays.asList(all.get(0).getVersion(), all.get(1).getVersion()));
+      // A subject whose only version is deleted has none to list.
+      assertEquals(3, client.getSchemaEntities(null, false, true).size());
+    }
+
+    @Test
     public void testInvalidCreateAssociationRequest() {
       // Call createAssociation endpoint.
       testInvalidCreateAssociationRequestHelper(client::createAssociation);
