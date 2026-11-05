@@ -62,15 +62,25 @@ final class ConstraintResolver {
     if (collType == null) {
       return null;
     }
-    if (collType.getType() == Schema.Type.ARRAY
-        || collType.getType() == Schema.Type.MULTISET) {
+    if (collType.getType() == Schema.Type.ARRAY) {
       return collType.getElementType();
     }
-    // CEL's all/exists/exists_one over a map bind its keys.
-    if (collType.getType() == Schema.Type.MAP) {
-      return collType.getKeyType();
+    // A MULTISET of strings is held as a map, whose keys CEL's all/exists/exists_one bind, as
+    // they bind a MAP's; a string key is never NULL there.
+    Schema bound = collType.getType() == Schema.Type.MULTISET ? collType.getElementType()
+        : collType.getType() == Schema.Type.MAP ? collType.getKeyType() : null;
+    return bound == null ? null : notNullIfString(bound);
+  }
+
+  private static Schema notNullIfString(Schema type) {
+    switch (type.getType()) {
+      case VARCHAR:
+        return Schema.createVarchar(type.getLength()).setNullable(false);
+      case CHAR:
+        return Schema.createChar(type.getLength()).setNullable(false);
+      default:
+        return type;
     }
-    return null;
   }
 
   /**
@@ -214,13 +224,7 @@ final class ConstraintResolver {
       return null;
     }
     if (c instanceof LogicalTypesParser.CheckParenContext) {
-      LogicalTypesParser.CheckParenContext paren = (LogicalTypesParser.CheckParenContext) c;
-      Schema inner = tryResolveCheckExprType(paren.check_expr(), vctx);
-      if (paren.indirection() == null) {
-        return inner;
-      }
-      inner = resolveIfNamedRef(inner, vctx);
-      return inner == null ? null : resolveIndirection(inner, paren.indirection(), vctx);
+      return resolveParenType((LogicalTypesParser.CheckParenContext) c, vctx);
     }
     if (c instanceof LogicalTypesParser.CheckFuncContext) {
       return tryResolveFuncReturnType(
@@ -234,6 +238,20 @@ final class ConstraintResolver {
   }
 
   /**
+   * The type of a bracketed expression, or of the field or element its indirection selects
+   * ({@code (r).b}, {@code (xs)[1]}); null if it doesn't resolve.
+   */
+  static Schema resolveParenType(
+      LogicalTypesParser.CheckParenContext paren, ConstraintValidationContext vctx) {
+    Schema inner = tryResolveCheckExprType(paren.check_expr(), vctx);
+    if (paren.indirection() == null) {
+      return inner;
+    }
+    inner = resolveIfNamedRef(inner, vctx);
+    return inner == null ? null : resolveIndirection(inner, paren.indirection(), vctx);
+  }
+
+  /**
    * Resolve the result type of a CASE expression by unifying the THEN and
    * ELSE branch types. Returns the first branch's type when all resolvable
    * branches share its category; returns null when branches differ
@@ -241,8 +259,15 @@ final class ConstraintResolver {
    */
   static Schema tryResolveCaseExprType(
       LogicalTypesParser.Case_exprContext ctx, ConstraintValidationContext vctx) {
-    // Collect the result branches: each WHEN's THEN (check_expr index 1) plus
-    // the optional ELSE (an untagged check_expr after the ELSE terminal).
+    return commonBranchType(caseResults(ctx), vctx);
+  }
+
+  /**
+   * A CASE's result branches: each WHEN's THEN (check_expr index 1) plus the optional ELSE (an
+   * untagged check_expr after the ELSE terminal).
+   */
+  static List<LogicalTypesParser.Check_exprContext> caseResults(
+      LogicalTypesParser.Case_exprContext ctx) {
     List<LogicalTypesParser.Check_exprContext> results = new ArrayList<>();
     for (LogicalTypesParser.When_clauseContext when : ctx.when_clause()) {
       results.add(when.check_expr(1));
@@ -257,7 +282,7 @@ final class ConstraintResolver {
         break;
       }
     }
-    return commonBranchType(results, vctx);
+    return results;
   }
 
   /**
@@ -358,7 +383,7 @@ final class ConstraintResolver {
         }
         for (LogicalTypesParser.Check_exprContext arg : args) {
           Schema t = tryResolveCheckExprType(arg, vctx);
-          if (t != null) {
+          if (!isUnknownType(t)) {
             return t;
           }
         }
@@ -967,11 +992,11 @@ final class ConstraintResolver {
   }
 
   /**
-   * Resolve the type of {@code col}, walking through any indirection. Returns
-   * null if the root name isn't a known column (validation will catch that
-   * separately) or if the indirection can't be resolved at our coarse
-   * granularity (we follow {@code .field} into structs but stop at array/map
-   * indexing where the type changes per element).
+   * Resolve the type of {@code col}, walking through any indirection: a field,
+   * an element or a map value, through named types. Returns null if the root
+   * name isn't a known column (validation will catch that separately) or if a
+   * step doesn't resolve; an element or value of a named type declared outside
+   * the script is its reference.
    */
   static Schema resolveColumnRefType(
       LogicalTypesParser.ColumnrefContext col, ConstraintValidationContext vctx) {
@@ -988,23 +1013,71 @@ final class ConstraintResolver {
   private static Schema resolveIndirection(Schema current,
       LogicalTypesParser.IndirectionContext indirection, ConstraintValidationContext vctx) {
     for (LogicalTypesParser.Indirection_elContext el : indirection.indirection_el()) {
-      if (el.colid() != null && current.getType() == Schema.Type.STRUCT) {
-        Schema.Field nested = current.getField(colidName(el));
-        if (nested == null) {
-          return null;
-        }
-        current = resolveIfNamedRef(nested.getSchema(), vctx);
-      } else if (el.check_expr() != null
-          && (current.getType() == Schema.Type.ARRAY
-              || current.getType() == Schema.Type.MULTISET)) {
-        current = current.getElementType();
-      } else if (el.check_expr() != null && current.getType() == Schema.Type.MAP) {
-        current = current.getValueType();
-      } else {
+      // A named type declared outside the script doesn't resolve.
+      if (current == null) {
         return null;
       }
+      current = step(current, el, vctx, false);
     }
     return current;
+  }
+
+  // The type one step gives, or null; a field of a named type declared outside the script is
+  // its reference only with keepFieldRef, as an element or value of one always is.
+  private static Schema step(Schema current, LogicalTypesParser.Indirection_elContext el,
+      ConstraintValidationContext vctx, boolean keepFieldRef) {
+    if (el.colid() != null && current.getType() == Schema.Type.STRUCT) {
+      Schema.Field nested = current.getField(colidName(el));
+      if (nested == null) {
+        return null;
+      }
+      return keepFieldRef ? resolvedOrRef(nested.getSchema(), vctx)
+          : resolveIfNamedRef(nested.getSchema(), vctx);
+    }
+    if (el.check_expr() != null && (current.getType() == Schema.Type.ARRAY
+        || current.getType() == Schema.Type.MULTISET)) {
+      return resolvedOrRef(current.getElementType(), vctx);
+    }
+    if (el.check_expr() != null && current.getType() == Schema.Type.MAP) {
+      return resolvedOrRef(current.getValueType(), vctx);
+    }
+    return null;
+  }
+
+  /**
+   * True if what {@code col} reads may be a VARIANT: one is on its path, or a step's type isn't
+   * known. A value of a named type declared outside the script is taken not to be one, but its
+   * fields, which don't resolve, may be.
+   */
+  static boolean mayReadVariant(
+      LogicalTypesParser.ColumnrefContext col, ConstraintValidationContext vctx) {
+    return mayReadVariant(resolvedOrRef(vctx.schemaOf(colidName(col.colid())), vctx),
+        col.indirection(), vctx);
+  }
+
+  /**
+   * {@link #mayReadVariant(LogicalTypesParser.ColumnrefContext, ConstraintValidationContext)}
+   * for the steps of {@code indirection} off a value of type {@code start}, null if unknown.
+   */
+  static boolean mayReadVariant(Schema start, LogicalTypesParser.IndirectionContext indirection,
+      ConstraintValidationContext vctx) {
+    Schema current = start;
+    if (indirection != null) {
+      for (LogicalTypesParser.Indirection_elContext el : indirection.indirection_el()) {
+        // A step off a VARIANT doesn't resolve either.
+        if (current == null) {
+          return true;
+        }
+        current = step(current, el, vctx, true);
+      }
+    }
+    return current == null || current.getType() == Schema.Type.VARIANT;
+  }
+
+  // A named type resolved, or kept as its reference when it's declared outside the script.
+  private static Schema resolvedOrRef(Schema s, ConstraintValidationContext vctx) {
+    Schema resolved = resolveIfNamedRef(s, vctx);
+    return resolved != null ? resolved : s;
   }
 
   // ---------------------------------------------------------------------
@@ -1062,13 +1135,22 @@ final class ConstraintResolver {
   }
 
   /**
+   * True if a resolved type says nothing here: null, or a named type declared outside the
+   * script, which is read untyped, as a root column of one is.
+   */
+  static boolean isUnknownType(Schema type) {
+    return type == null || type.getType() == Schema.Type.NAMED_TYPE_REF;
+  }
+
+  /**
    * True if two LT types are CEL-comparable. Categories must match exactly:
    * CEL has no implicit int↔double promotion in {@code _>_}/{@code _==_}
    * etc. (cel-java's strict checker rejects {@code int > double}). Same for
    * decimal, which isn't a built-in CEL type and rides in its own category.
    */
   static boolean areComparable(Schema.Type a, Schema.Type b) {
-    if (a == b) {
+    // A named type from outside the script isn't known here (isUnknownType).
+    if (a == b || a == Schema.Type.NAMED_TYPE_REF || b == Schema.Type.NAMED_TYPE_REF) {
       return true;
     }
     String ca = categoryOf(a);
@@ -1120,43 +1202,6 @@ final class ConstraintResolver {
   // ---------------------------------------------------------------------
   // Literal/primary detection
   // ---------------------------------------------------------------------
-
-  /**
-   * True if {@code c} is a self-delimited c_expr alternative — column ref,
-   * literal, function call, paren expression, or CASE block. These all emit
-   * as a single tightly-bound token sequence that doesn't need defensive
-   * paren wrapping.
-   */
-  static boolean isPrimaryCExpr(LogicalTypesParser.C_exprContext c) {
-    if (c instanceof LogicalTypesParser.CheckColumnRefContext) {
-      return true;
-    }
-    if (c instanceof LogicalTypesParser.CheckLiteralContext) {
-      return true;
-    }
-    if (c instanceof LogicalTypesParser.CheckFuncContext) {
-      return true;
-    }
-    if (c instanceof LogicalTypesParser.CheckParenContext) {
-      return true;
-    }
-    return c instanceof LogicalTypesParser.CheckCaseContext;
-  }
-
-  /**
-   * {@link #isSimplePrimary} starting from a {@code check_expr_in} level.
-   */
-  static boolean isSimplePrimaryIn(
-      LogicalTypesParser.Check_expr_inContext ctx) {
-    if (ctx.IN() != null) {
-      return false;
-    }
-    LogicalTypesParser.Check_expr_likeContext like = ctx.check_expr_like();
-    if (like.LIKE() != null) {
-      return false;
-    }
-    return isSimplePrimaryAdd(like.check_expr_add());
-  }
 
   /**
    * If {@code ctx} is a pass-through cascade ending at a single literal
@@ -1252,102 +1297,6 @@ final class ConstraintResolver {
     }
     return new LiteralMatch(
         ((LogicalTypesParser.CheckLiteralContext) c).literal(), negate);
-  }
-
-  /**
-   * True if {@code ctx} emits a single tightly-bound primary that doesn't
-   * need defensive paren-wrapping when used as a BETWEEN operand, as a
-   * receiver before a CEL {@code .method()} / {@code [index]}, as the
-   * operand of {@code !}, or as either side of CASE simple-form's implicit
-   * {@code ==}. A primary is a column ref, literal, function call (already
-   * parenthesized), CASE block (self-delimited by END), or already-
-   * parenthesized expression. Compound expressions (any operator at any
-   * cascade level, including unary sign) need wrapping because the
-   * surrounding CEL operator could pull them apart by precedence.
-   *
-   * <p>Each cascade level has a dedicated entry point used when the
-   * caller already holds a sub-context: {@link #isSimplePrimaryUnaryNot}
-   * (NOT operand), {@link #isSimplePrimaryIn} (BETWEEN bound),
-   * {@link #isSimplePrimaryAdd} (LIKE/method receiver). Each one delegates
-   * down to the next level so the cascade descent isn't duplicated across
-   * helpers.
-   */
-  static boolean isSimplePrimary(
-      LogicalTypesParser.Check_exprContext ctx) {
-    LogicalTypesParser.Check_expr_orContext or = ctx.check_expr_or();
-    if (or.check_expr_and().size() > 1) {
-      return false;
-    }
-    LogicalTypesParser.Check_expr_andContext and = or.check_expr_and(0);
-    if (and.check_expr_unary_not().size() > 1) {
-      return false;
-    }
-    return isSimplePrimaryUnaryNot(and.check_expr_unary_not(0));
-  }
-
-  /**
-   * {@link #isSimplePrimary} starting from a {@code check_expr_unary_not}
-   * level — used by NOT emit, which inspects its inner operand.
-   *
-   * <p>Chained NOT (e.g. {@code NOT NOT x}) recurses through the inner
-   * NOT, so {@code !!x} can emit unwrapped if the leaf is a primary.
-   */
-  static boolean isSimplePrimaryUnaryNot(
-      LogicalTypesParser.Check_expr_unary_notContext ctx) {
-    if (ctx instanceof LogicalTypesParser.CheckExprNotContext) {
-      return isSimplePrimaryUnaryNot(
-          ((LogicalTypesParser.CheckExprNotContext) ctx).check_expr_unary_not());
-    }
-    return isSimplePrimaryIsnull(
-        ((LogicalTypesParser.CheckExprNotPassContext) ctx).check_expr_isnull());
-  }
-
-  /**
-   * {@link #isSimplePrimary} starting from a {@code check_expr_isnull}
-   * level — descends isnull → compare → between → in → like → add.
-   */
-  private static boolean isSimplePrimaryIsnull(
-      LogicalTypesParser.Check_expr_isnullContext is) {
-    if (is.IS() != null) {
-      return false;
-    }
-    LogicalTypesParser.Check_expr_compareContext compare = is.check_expr_compare();
-    if (compare.check_expr_between().size() > 1) {
-      return false;
-    }
-    LogicalTypesParser.Check_expr_betweenContext between = compare.check_expr_between(0);
-    if (between.BETWEEN() != null) {
-      return false;
-    }
-    return isSimplePrimaryIn(between.check_expr_in(0));
-  }
-
-  /**
-   * {@link #isSimplePrimary} starting from a {@code check_expr_add}
-   * level — used by emit sites whose receiver is exposed at the additive
-   * value-root level (LIKE → matches).
-   */
-  static boolean isSimplePrimaryAdd(
-      LogicalTypesParser.Check_expr_addContext add) {
-    if (add.check_expr_mul().size() > 1) {
-      return false;
-    }
-    LogicalTypesParser.Check_expr_mulContext mul = add.check_expr_mul(0);
-    if (mul.check_expr_unary_sign().size() > 1) {
-      return false;
-    }
-    LogicalTypesParser.Check_expr_unary_signContext sign = mul.check_expr_unary_sign(0);
-    // A unary sign on the receiver would be wrong (e.g. `-x.method()` parses
-    // as `-(x.method())` in CEL). For BETWEEN it'd be safe but rare; keep
-    // the check conservative so one helper covers all call sites.
-    for (int i = 0; i < sign.getChildCount(); i++) {
-      ParseTree child = sign.getChild(i);
-      if (child instanceof TerminalNode
-          && ("-".equals(child.getText()) || "+".equals(child.getText()))) {
-        return false;
-      }
-    }
-    return isPrimaryCExpr(sign.c_expr());
   }
 
   /**
