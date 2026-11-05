@@ -158,6 +158,13 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
     this.groupId = config.getString(SchemaRegistryConfig.SCHEMAREGISTRY_GROUP_ID_CONFIG);
     this.lookupCache = lookupCache();
     this.idGenerator = identityGenerator(config);
+    int missCacheSize = config.getInt(SchemaRegistryConfig.SCHEMA_MISSING_CACHE_SIZE_CONFIG);
+    if (missCacheSize > 0) {
+      // Before the store, whose update handler invalidates it
+      this.lookupMissCache = new LookupMissCache(missCacheSize,
+          config.getInt(SchemaRegistryConfig.SCHEMA_MISSING_CACHE_EXPIRY_SECS_CONFIG),
+          time::nanoseconds);
+    }
     this.kafkaStore = kafkaStore(config);
     this.store = kafkaStore;
     this.metadataEncoder = new KafkaMetadataEncoderService(this);
@@ -196,6 +203,11 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
             this.serializer, lookupCache, new NoopKey());
   }
 
+  @Override
+  protected boolean mayHaveVersions(String subject) throws SchemaRegistryException {
+    return !getAllSchemaKeysDescending(subject).isEmpty();
+  }
+
   protected SchemaUpdateHandler getSchemaUpdateHandler(SchemaRegistryConfig config) {
     Map<String, Object> handlerConfigs =
         config.originalsWithPrefix(SchemaRegistryConfig.KAFKASTORE_UPDATE_HANDLERS_CONFIG + ".");
@@ -212,6 +224,9 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       );
     }
     customSchemaHandlers.add(storeHandler);
+    if (lookupMissCache != null) {
+      customSchemaHandlers.add(new LookupMissInvalidator(this, lookupMissCache));
+    }
     return new CompositeSchemaUpdateHandler(customSchemaHandlers);
   }
 

@@ -63,6 +63,7 @@ import static org.easymock.EasyMock.reset;
 import static org.easymock.EasyMock.verify;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 
 public class CachedSchemaRegistryClientTest {
@@ -930,6 +931,29 @@ public class CachedSchemaRegistryClientTest {
     fakeTicker.advance(2, TimeUnit.SECONDS);
     Thread.sleep(100);
     client.getId(SUBJECT_0, AVRO_SCHEMA_0);
+  }
+
+  @Test
+  public void testRegisterClearsMissingSchemaCache() throws Exception {
+    Map<String, Object> configs = new HashMap<>();
+    configs.put(SchemaRegistryClientConfig.MISSING_SCHEMA_CACHE_TTL_CONFIG, 60L);
+    client = new CachedSchemaRegistryClient(
+        restService, CACHE_CAPACITY, null, configs, null, new FakeTicker());
+
+    expect(restService.lookUpSubjectVersion(anyObject(RegisterSchemaRequest.class),
+        eq(SUBJECT_0), anyBoolean(), eq(false)))
+        .andThrow(new RestClientException("Schema not found", 404, 40403))
+        .andReturn(new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(SUBJECT_0, 1,
+            ID_25, AvroSchema.TYPE, Collections.emptyList(), SCHEMA_STR_0));
+    expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class),
+        eq(SUBJECT_0), anyBoolean()))
+        .andReturn(new RegisterSchemaResponse(ID_25));
+    replay(restService);
+
+    // A miss under either normalize is cleared, the second lookup reaching the registry
+    assertThrows(RestClientException.class, () -> client.getId(SUBJECT_0, AVRO_SCHEMA_0, true));
+    assertEquals(ID_25, client.register(SUBJECT_0, AVRO_SCHEMA_0));
+    assertEquals(ID_25, client.getId(SUBJECT_0, AVRO_SCHEMA_0, true));
   }
 
   @Test

@@ -585,6 +585,12 @@ public class AvroSchema implements ParsedSchema {
       return false;
     }
     AvroSchema that = (AvroSchema) schema;
+    // Avro's equals walks both schemas unless both cached hashes are set, and equal schemas
+    // have equal hashes, so comparing them first rejects most pairs at once
+    if (schemaObj != null && that.schemaObj != null
+        && schemaObj.hashCode() != that.schemaObj.hashCode()) {
+      return false;
+    }
     return Objects.equals(schemaObj, that.schemaObj)
         && Objects.equals(metadata, that.metadata)
         && Objects.equals(ruleSet, that.ruleSet)

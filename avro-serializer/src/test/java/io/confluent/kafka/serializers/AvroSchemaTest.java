@@ -38,6 +38,7 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Base64;
@@ -1396,6 +1397,28 @@ public class AvroSchemaTest {
     lt = parsed.getLogicalType();
     assertNotNull(lt);
     assertEquals(VariantLogicalType.NAME, lt.getName());
+  }
+
+  @Test
+  public void testEquivalentAcrossInlinedAndReferencedForms() {
+    // The hash comparison in equivalent must not reject a schema sent with its references inlined
+    String b = "{\"type\":\"record\",\"name\":\"B\",\"namespace\":\"ns\","
+        + "\"fields\":[{\"name\":\"x\",\"type\":\"int\"}]}";
+    String a = "{\"type\":\"record\",\"name\":\"A\",\"namespace\":\"ns\","
+        + "\"fields\":[{\"name\":\"b\",\"type\":%s}]}";
+    AvroSchema referenced = new AvroSchema(String.format(a, "\"ns.B\""),
+        Collections.singletonList(new SchemaReference("ns.B", "b-value", 1)),
+        Collections.singletonMap("ns.B", b), null);
+    AvroSchema inlined = new AvroSchema(String.format(a, b));
+    AvroSchema changed = new AvroSchema(String.format(a, b.replace("\"int\"", "\"long\"")));
+
+    assertNotEquals(referenced.canonicalString(), inlined.canonicalString());
+    assertTrue(inlined.equivalent(referenced));
+    assertTrue(referenced.equivalent(inlined));
+    assertFalse(inlined.equivalent(changed));
+    // Hashes already cached on both sides, as on a second comparison
+    assertTrue(inlined.equivalent(referenced));
+    assertFalse(changed.equivalent(inlined));
   }
 
   private static void expectConversionException(JsonNode obj, AvroSchema schema) {
