@@ -599,6 +599,9 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
             toRegisterSchemaRequest(schema, version, id, propagateSchemaTags),
             normalize);
         schemaResponseMap.put(cacheKey, retrievedResponse);
+        // An earlier lookup may have remembered the schema as missing, with either normalize
+        missingSchemaCache.invalidate(new SubjectAndSchema(subject, schema, false));
+        missingSchemaCache.invalidate(new SubjectAndSchema(subject, schema, true));
         return retrievedResponse;
       }
     } catch (ExecutionException e) {
