@@ -148,7 +148,7 @@ public final class ConstraintValidationContext {
 
   /**
    * Returns a derived context with {@code namedTypes} attached. Used by the
-   * DDL visitor to make previously-declared named-type bodies available for
+   * DDL visitor to make every named type's body, declared before or after, available for
    * {@code NAMED_TYPE_REF} resolution during indirection validation.
    */
   public ConstraintValidationContext withNamedTypes(Map<String, Schema> types) {
