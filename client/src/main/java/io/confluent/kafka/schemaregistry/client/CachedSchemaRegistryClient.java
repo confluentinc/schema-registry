@@ -728,6 +728,18 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   @Override
+  public List<Schema> getSchemaEntities(
+          String subjectPrefix,
+          boolean lookupDeletedSchema,
+          boolean latestOnly)
+          throws IOException, RestClientException {
+    return restService.getSchemas(
+            subjectPrefix,
+            lookupDeletedSchema,
+            latestOnly);
+  }
+
+  @Override
   public Collection<String> getAllSubjectsById(int id) throws IOException, RestClientException {
     return restService.getAllSubjectsById(id);
   }

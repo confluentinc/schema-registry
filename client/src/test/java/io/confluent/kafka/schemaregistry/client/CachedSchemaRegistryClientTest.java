@@ -691,6 +691,29 @@ public class CachedSchemaRegistryClientTest {
   }
 
   @Test
+  public void testGetSchemaEntities() throws Exception {
+    List<Schema> schemas = IntStream.range(0, 3)
+        .mapToObj(idx -> new Schema(
+                SUBJECT_0 + idx,
+                idx + 1,
+                idx + 25,
+                AvroSchema.TYPE,
+                Collections.emptyList(),
+                avroSchemaString(idx)
+          )
+        ).collect(Collectors.toList());
+
+    expect(restService.getSchemas(SUBJECT_0, true, false)).andReturn(schemas).times(2);
+
+    replay(restService);
+
+    // Unparsed and uncached, so each call asks the registry.
+    assertEquals(schemas, client.getSchemaEntities(SUBJECT_0, true, false));
+    assertEquals(schemas, client.getSchemaEntities(SUBJECT_0, true, false));
+    verify(restService);
+  }
+
+  @Test
   public void testLatestVersionCache() throws Exception {
     Map<String, Object> configs = new HashMap<>();
     configs.put(SchemaRegistryClientConfig.LATEST_CACHE_TTL_CONFIG, 60L);
