@@ -1572,7 +1572,7 @@ final class ConstraintEmitter {
       }
       // A field name colliding with a CEL reserved word (e.g. `null`, `in`) takes index
       // syntax, `this["in"]`, as `this.in` would fail to parse.
-      return Schema.isCelReservedName(name) ? CelNode.index(self, CelNode.string(name))
+      return Schema.isCelReservedName(name) ? indexedValue(self, CelNode.string(name))
           : CelNode.select(self, name);
     }
     return CelNode.ident(name);
@@ -1641,7 +1641,7 @@ final class ConstraintEmitter {
         // syntax (`["in"]` instead of `.in`) so existing wire schemas
         // with such names produce parseable CEL.
         selected = Schema.isCelReservedName(fieldName)
-            ? CelNode.index(selected, CelNode.string(fieldName))
+            ? indexedValue(selected, CelNode.string(fieldName))
             : CelNode.select(selected, fieldName);
         receiver = stepStructField(receiver, fieldName);
       } else {
@@ -1705,7 +1705,16 @@ final class ConstraintEmitter {
     receiver = resolveRef(receiver);
     CelNode index = visitCheckExpr(el.check_expr());
     boolean isMap = receiver != null && receiver.getType() == Schema.Type.MAP;
-    return CelNode.index(operand, isMap ? index : zeroBased(index));
+    return isMap ? indexedValue(operand, index) : CelNode.index(operand, zeroBased(index));
+  }
+
+  // A map's value, or a reserved name's field, as dyn(): cel-java and cel-go type a value indexed
+  // out of a dyn map or message by the overload or operand beside it, so string(this.m['k']) of a
+  // JSON map raises. The type-only pass keeps its type for the strict check.
+  static CelNode indexedValue(CelNode operand, CelNode key) {
+    CelNode value = CelNode.index(operand, key);
+    ConstraintValidationContext vctx = EMIT_VCTX.get();
+    return vctx != null && vctx.isTypeOnly() ? value : CelNode.dyn(value);
   }
 
   // A 1-based SQL index as CEL's 0-based one.
@@ -1999,9 +2008,11 @@ final class ConstraintEmitter {
       return whenTrue == ternary.whenTrue && whenFalse == ternary.whenFalse ? result
           : CelNode.ternary(ternary.condition, whenTrue, whenFalse);
     }
-    // A field, element or variable; a call, operator or literal gives a boolean or raises.
-    boolean read = result instanceof CelNode.Ident || result instanceof CelNode.Select
-        || result instanceof CelNode.Index;
+    // A field, element or variable, or a dyn() of one; a call, operator or literal gives a
+    // boolean or raises.
+    CelNode value = CelNode.isDyn(result) ? ((CelNode.Call) result).args.get(0) : result;
+    boolean read = value instanceof CelNode.Ident || value instanceof CelNode.Select
+        || value instanceof CelNode.Index;
     return read ? CelNode.binary(result, "==", CelNode.TRUE) : result;
   }
 
@@ -2376,7 +2387,7 @@ final class ConstraintEmitter {
         String fieldName = colidName(el);
         selected = !Schema.isCelReservedName(fieldName);
         prefix = selected ? CelNode.select(prefix, fieldName)
-            : CelNode.index(prefix, CelNode.string(fieldName));
+            : indexedValue(prefix, CelNode.string(fieldName));
         next = f.getSchema();
       } else {
         tests.add(ConstraintNullTest.of(el.check_expr()));
@@ -2387,7 +2398,7 @@ final class ConstraintEmitter {
           if (!vctx.isKeyOf(index, prefix)) {
             tests.add(CelNode.not(CelNode.binary(index, "in", collection)));
           }
-          prefix = CelNode.index(prefix, index);
+          prefix = indexedValue(prefix, index);
           next = type.getValueType();
         } else if (type.getType() == Schema.Type.ARRAY) {
           CelNode size = CelNode.call("size", collection);

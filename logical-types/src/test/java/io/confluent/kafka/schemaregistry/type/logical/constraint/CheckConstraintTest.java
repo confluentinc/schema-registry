@@ -16,12 +16,15 @@
 
 package io.confluent.kafka.schemaregistry.type.logical.constraint;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.cel.compiler.CelCompiler;
 import dev.cel.compiler.CelCompilerFactory;
 import dev.cel.extensions.CelExtensions;
 import dev.cel.runtime.CelEvaluationException;
 import dev.cel.runtime.CelRuntime;
 import dev.cel.runtime.CelRuntimeFactory;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.rules.ValidationRuleError;
 import io.confluent.kafka.schemaregistry.rules.cel.CelUtils;
 import io.confluent.kafka.schemaregistry.rules.cel.builtin.CelDecimal;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
@@ -31,9 +34,12 @@ import io.confluent.kafka.schemaregistry.type.logical.LogicalTypesSchemaVisitor;
 import io.confluent.kafka.schemaregistry.type.logical.Rule;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
+import io.confluent.kafka.schemaregistry.type.logical.avro.LogicalTypeToAvroConverter;
 import io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesParser;
+import io.confluent.kafka.schemaregistry.type.logical.json.LogicalTypeToJsonConverter;
 import org.antlr.v4.runtime.Token;
 import org.antlr.v4.runtime.atn.PredictionMode;
+import org.apache.avro.generic.GenericData;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -46,6 +52,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -593,8 +600,13 @@ class CheckConstraintTest {
           c[0] + " with t absent -> " + cel);
     }
     String reserved = translateCheckOver("`in` BOOLEAN NOT NULL", "`in`");
-    assertEquals("this[\"in\"] == true", reserved);
+    assertEquals("dyn(this[\"in\"]) == true", reserved);
     assertEquals(false, evalOver(reserved, Map.of("in", "")));
+    // A map's value is read as dyn(), and compared all the same.
+    String mapped = translateCheckOver(
+        "mb MAP<STRING, BOOLEAN NOT NULL> NOT NULL, b BOOLEAN NOT NULL", "COALESCE(mb['k'], b)");
+    assertEquals("'k' in this.mb ? dyn(this.mb['k']) == true : this.b == true", mapped);
+    assertEquals(false, evalOver(mapped, Map.of("mb", Map.of("k", ""), "b", true)));
     assertEquals("this == true", translateColumnCheck("t BOOLEAN NOT NULL", "t"));
     // A read in a junction is left as is, as || raises on a non-boolean.
     String nullable = translateCheckOver(columns, "nt");
@@ -690,10 +702,8 @@ class CheckConstraintTest {
     // tt is p's instant written another way, so only timestamp() reads them as equal.
     Map<String, Object> set = new HashMap<>(Map.of("ps", List.of(p), "mp", Map.of("k", p),
         "tt", "2020-01-01T01:00:00+01:00", "dd", CelDecimal.of(new BigDecimal("1.50")),
-        "k", 1L, "es", List.of("A"), "xe", List.of("A")));
+        "k", 1L, "es", List.of("A"), "xe", List.of("A"), "xm", Map.of("k", "A")));
     set.put("xen", Arrays.asList((Object) null));
-    // Left empty, as cel-java can't convert a value indexed out of a dyn map.
-    set.put("xm", Map.of());
     // Each subscript out of range, so each NULL guard is what passes the CHECK.
     Map<String, Object> empty = new HashMap<>(set);
     for (String collection : List.of("ps", "es", "xe", "xen")) {
@@ -703,7 +713,7 @@ class CheckConstraintTest {
     for (String[] c : new String[][] {{"ps[1].b", "size(this.ps) < 1 || this.ps[0].b"},
         {"(ps)[1].b", "size(dyn(this.ps)) < 1 || this.ps[0].b"},
         {"(ps[1]).b", "size(this.ps) < 1 || this.ps[0].b"},
-        {"mp['k'].b", "!('k' in this.mp) || this.mp['k'].b"},
+        {"mp['k'].b", "!('k' in this.mp) || dyn(this.mp['k']).b"},
         {"CAST(ps[1].i AS STRING) = '1'",
             "size(this.ps) < 1 ? true : string(this.ps[0].i) == '1'"},
         {"ps[1].t = tt", "size(this.ps) < 1 || timestamp(this.ps[0].t) == timestamp(this.tt)"},
@@ -719,7 +729,7 @@ class CheckConstraintTest {
         {"CAST(xen[1] AS STRING) = 'A'", "size(this.xen) < 1 || dyn(this.xen[0]) == null ? true "
             + ": string(this.xen[0]) == 'A'"},
         {"CAST(xm['k'] AS STRING) = 'A'",
-            "!('k' in this.xm) ? true : string(this.xm['k']) == 'A'"}}) {
+            "!('k' in this.xm) ? true : string(dyn(this.xm['k'])) == 'A'"}}) {
       String cel = parseScript(String.format(script, c[0])).getRootSchema().getRules().get(0)
           .getExpr();
       assertEquals(c[1], cel, c[0]);
@@ -794,6 +804,68 @@ class CheckConstraintTest {
       ValidationException e = assertThrows(ValidationException.class,
           () -> parseScript(String.format(script, sql)), sql);
       assertTrue(e.getMessage().contains("can't tell"), sql + ": " + e.getMessage());
+    }
+  }
+
+  @Test
+  void aMapValueIsConvertedOnJsonThroughTheValidator() throws Exception {
+    // cel-java types a value indexed out of a JSON map, a dyn map, as the overload beside it
+    // wants, so string(this.m['k']) raised on valid data; Avro's typed maps never did.
+    String columns = "m MAP<STRING, BIGINT NOT NULL> NOT NULL, "
+        + "s MAP<STRING, STRING NOT NULL> NOT NULL";
+    String ddl = "STRUCT T (" + columns + ", "
+        + "CONSTRAINT to_str CHECK (CAST(m['k'] AS STRING) = '1'), "
+        + "CONSTRAINT to_int CHECK (CAST(s['k'] AS INT) = 1), "
+        + "CONSTRAINT to_dbl CHECK (CAST(m['k'] AS DOUBLE) = 1.0e0), "
+        + "CONSTRAINT over_half CHECK (m['k'] > 0.5e0), "
+        + "CONSTRAINT absolute CHECK (ABS(m['k']) = 1), "
+        + "CONSTRAINT sentinel CHECK (s['k'] = 'none')); TYPE T;";
+    assertOnlySentinelFails(ddl, "{\"m\": {\"k\": 1}, \"s\": {\"k\": \"1\"}}", rec -> {
+      rec.put("m", Map.of("k", 1L));
+      rec.put("s", Map.of("k", "1"));
+    });
+    // The strict check still sees each value's own type.
+    for (String sql : List.of("UPPER(m['k']) = 'X'", "m['k'] LIKE 'a%'", "s['k'] > 1")) {
+      ValidationException e = assertThrows(ValidationException.class,
+          () -> translateCheckOver(columns, sql), sql);
+      assertTrue(e.getMessage().contains("strict type-check"), e.getMessage());
+    }
+  }
+
+  @Test
+  void aReservedNameFieldIsConvertedThroughTheValidator() throws Exception {
+    // A field named for a CEL reserved word is read as this["in"], an index cel-java types as it
+    // does a map's value, so it is a dyn() too.
+    String ddl = "STRUCT T (`in` BIGINT NOT NULL, rin STRUCT(`in` BIGINT NOT NULL) NOT NULL, "
+        + "s STRING NOT NULL, CONSTRAINT top CHECK (CAST(`in` AS STRING) = '1'), "
+        + "CONSTRAINT nested CHECK (CAST(rin.`in` AS STRING) = '1'), "
+        + "CONSTRAINT over_half CHECK (rin.`in` > 0.5e0), "
+        + "CONSTRAINT sentinel CHECK (s = 'none')); TYPE T;";
+    assertOnlySentinelFails(ddl, "{\"in\": 1, \"rin\": {\"in\": 1}, \"s\": \"a\"}", rec -> {
+      GenericData.Record rin = new GenericData.Record(rec.getSchema().getField("rin").schema());
+      rin.put("in", 1L);
+      rec.put("in", 1L);
+      rec.put("rin", rin);
+      rec.put("s", "a");
+    });
+  }
+
+  // Validates a record as JSON and as Avro with the rules' CelValidator, not this package's test
+  // helper of the same name; only the sentinel CHECK may fail.
+  private void assertOnlySentinelFails(String ddl, String json,
+      Consumer<GenericData.Record> fill) throws Exception {
+    LogicalType lt = parseScript(ddl).toLogicalType();
+    io.confluent.kafka.schemaregistry.rules.cel.CelValidator validator =
+        new io.confluent.kafka.schemaregistry.rules.cel.CelValidator();
+    AvroSchema avro = LogicalTypeToAvroConverter.fromLogicalType(lt, "T");
+    GenericData.Record rec = new GenericData.Record(avro.rawSchema().getTypes().get(1));
+    fill.accept(rec);
+    for (List<ValidationRuleError> errors : List.of(
+        LogicalTypeToJsonConverter.fromLogicalType(lt, "T")
+            .validateMessage(validator, new ObjectMapper().readTree(json)),
+        avro.validateMessage(validator, rec))) {
+      assertEquals(1, errors.size(), errors.toString());
+      assertEquals("sentinel", errors.get(0).getRule().getName(), errors.toString());
     }
   }
 
@@ -889,7 +961,7 @@ class CheckConstraintTest {
     Schema schema = parseScript(script).getRootSchema();
     Rule r = schema.getRules().get(0);
     assertEquals("!has(this.props) || dyn(this.props) == null || !('name' in this.props) ||"
-            + " dyn(this.props['name']) == null || this.props['name'] == 'alice'",
+            + " dyn(this.props['name']) == null || dyn(this.props['name']) == 'alice'",
         r.getExpr());
   }
 
@@ -1097,7 +1169,7 @@ class CheckConstraintTest {
     Schema schema = parseScript(script).getRootSchema();
     Rule r = schema.getRules().get(0);
     assertEquals("!has(this.meta) || dyn(this.meta) == null || this.meta.all(meta, dyn(meta) =="
-            + " null || !('k' in meta) || dyn(meta['k']) == null || meta['k'] == 'v')",
+            + " null || !('k' in meta) || dyn(meta['k']) == null || dyn(meta['k']) == 'v')",
         r.getExpr());
   }
 
@@ -2718,18 +2790,26 @@ class CheckConstraintTest {
     }
     // A key the quantifier binds is in the map it ranges over, so isn't tested for; one bound
     // over another map is.
-    assertEquals("this.m.all(k, this.m[k] > 0)",
+    assertEquals("this.m.all(k, dyn(this.m[k]) > 0)",
         translateCheckOver(columns, "EVERY(m, k, m[k] > 0)"));
-    assertEquals("this.n.all(k, !(k in this.m) || this.m[k] > 0)",
+    assertEquals("this.n.all(k, !(k in this.m) || dyn(this.m[k]) > 0)",
         translateCheckOver(columns + ", n MAP<STRING, INT NOT NULL> NOT NULL",
             "EVERY(n, k, m[k] > 0)"));
     // Nor is one bound over a map its own outer namesake names.
     String nested = translateCheckOver("mm MAP<STRING, MAP<STRING, INT NOT NULL> NOT NULL> NOT NULL",
         "EVERY(mm, k, EVERY(mm[k], k, mm[k][k] > 0))");
-    assertEquals("this.mm.all(k, this.mm[k].all(k, !(k in this.mm) || !(k in dyn(this.mm[k]))"
-        + " || this.mm[k][k] > 0))", nested);
+    assertEquals("this.mm.all(k, dyn(this.mm[k]).all(k, !(k in this.mm) || !(k in dyn(this.mm[k]))"
+        + " || dyn(dyn(this.mm[k])[k]) > 0))", nested);
     assertEquals(true,
         evalOver(nested, Map.of("mm", Map.of("a", Map.of("b", 1), "b", Map.of("x", 2)))), nested);
+    // Nor is an inner key in the map value it ranges over.
+    assertEquals("this.mm.all(k, dyn(this.mm[k]).all(j, dyn(dyn(this.mm[k])[j]) > 0))",
+        translateCheckOver("mm MAP<STRING, MAP<STRING, INT NOT NULL> NOT NULL> NOT NULL",
+            "EVERY(mm, k, EVERY(mm[k], j, mm[k][j] > 0))"));
+    // Nor is one in a map a reserved name reaches.
+    assertEquals("dyn(this.r[\"in\"]).all(k, dyn(dyn(this.r[\"in\"])[k]) > 0)",
+        translateCheckOver("r STRUCT(`in` MAP<STRING, INT NOT NULL> NOT NULL) NOT NULL",
+            "EVERY(r.`in`, k, r.`in`[k] > 0)"));
     // A key compared as its value is refused.
     assertThrows(ValidationException.class,
         () -> translateCheckOver(columns, "EVERY(m, k, k > 0)"));
@@ -4682,6 +4762,24 @@ class CheckConstraintTest {
       String cel = translateCheckOver(columns, sql);
       assertEquals(true, evalOver(cel, self), sql + " -> " + cel);
     }
+    // A value's dyn() stays one when the simplifier rebuilds a test, and has() still has its
+    // subscripts folded.
+    String values = "mi MAP<STRING, INT> NOT NULL, "
+        + "aps ARRAY<STRUCT(m MAP<STRING, STRUCT(b BOOLEAN) NOT NULL> NOT NULL) NOT NULL> NOT NULL";
+    String nullif = translateCheckOver(values, "NULLIF(mi['k'], 1) IS NULL");
+    assertEquals("!('k' in this.mi) || dyn(this.mi['k']) == null ? true : dyn(this.mi['k']) == 1",
+        nullif);
+    for (Object k : new Object[] {1, 2}) {
+      assertEquals(k.equals(1), evalOver(nullif, Map.of("mi", Map.of("k", k))), nullif);
+    }
+    String folded = translateCheckOver(values, "aps[2].m['k'].b IS NULL");
+    assertEquals("size(this.aps) < 2 || !('k' in this.aps[1].m) || !has(dyn(this.aps[1].m['k']).b)"
+        + " || dyn(dyn(this.aps[1].m['k']).b) == null", folded);
+    for (Map<String, Object> value : List.<Map<String, Object>>of(Map.of(), Map.of("b", true))) {
+      Map<String, Object> element = Map.of("m", Map.of("k", value));
+      assertEquals(value.isEmpty(), evalOver(folded, Map.of("aps", List.of(element, element))),
+          folded);
+    }
   }
 
   private static Object evalOver(String cel, Map<String, Object> self) throws Exception {
@@ -6534,7 +6632,7 @@ class CheckConstraintTest {
     String cel = v.getRootSchema().getRules().get(0).getExpr();
     assertEquals("!has(this.addr) || dyn(this.addr) == null || !has(this.addr.tags) ||"
             + " dyn(this.addr.tags) == null || !('home' in this.addr.tags) ||"
-            + " dyn(this.addr.tags['home']) == null || this.addr.tags['home'] == 'x'",
+            + " dyn(this.addr.tags['home']) == null || dyn(this.addr.tags['home']) == 'x'",
         cel);
   }
 

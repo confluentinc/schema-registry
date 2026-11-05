@@ -615,7 +615,7 @@ final class CelSimplifier {
     return node;
   }
 
-  // A field selection with each subscript's constant worked out.
+  // A field selection with each subscript's constant worked out, a map value's dyn() included.
   private static CelNode subscriptsFolded(CelNode node) {
     if (node instanceof CelNode.Select) {
       CelNode.Select select = (CelNode.Select) node;
@@ -624,6 +624,9 @@ final class CelSimplifier {
     if (node instanceof CelNode.Index) {
       CelNode.Index index = (CelNode.Index) node;
       return CelNode.index(subscriptsFolded(index.operand), constantFolded(index.index));
+    }
+    if (CelNode.isDyn(node)) {
+      return CelNode.dyn(subscriptsFolded(((CelNode.Call) node).args.get(0)));
     }
     return node;
   }

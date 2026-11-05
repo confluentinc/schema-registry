@@ -223,11 +223,13 @@ abstract class CelNode {
   }
 
   static CelNode call(String function, CelNode... args) {
-    return new Call(null, function, Arrays.asList(args));
+    return call(function, Arrays.asList(args));
   }
 
+  // dyn() of a dyn() is that dyn(), the simplifier's rebuilt calls included.
   static CelNode call(String function, List<CelNode> args) {
-    return new Call(null, function, args);
+    return function.equals("dyn") && args.size() == 1 && isDyn(args.get(0)) ? args.get(0)
+        : new Call(null, function, args);
   }
 
   static CelNode method(CelNode target, String function, CelNode... args) {
@@ -238,8 +240,14 @@ abstract class CelNode {
     return new Call(target, function, args);
   }
 
+  // dyn(operand), or operand itself if it already is one.
   static CelNode dyn(CelNode operand) {
     return call("dyn", operand);
+  }
+
+  static boolean isDyn(CelNode node) {
+    return node instanceof Call && ((Call) node).target == null
+        && ((Call) node).function.equals("dyn") && ((Call) node).args.size() == 1;
   }
 
   static CelNode not(CelNode operand) {
