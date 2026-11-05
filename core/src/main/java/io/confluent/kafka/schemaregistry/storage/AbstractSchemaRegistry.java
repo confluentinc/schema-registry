@@ -74,6 +74,7 @@ import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalSchemaProvider;
 import io.confluent.kafka.schemaregistry.type.logical.policy.Incompatibility;
+import io.confluent.kafka.schemaregistry.type.logical.policy.LogicalPolicyChecker;
 import io.confluent.kafka.schemaregistry.client.security.SslFactory;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidSchemaException;
 import io.confluent.kafka.schemaregistry.exceptions.InvalidVersionException;
