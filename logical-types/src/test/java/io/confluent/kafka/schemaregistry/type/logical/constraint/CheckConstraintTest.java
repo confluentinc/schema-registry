@@ -4512,6 +4512,19 @@ class CheckConstraintTest {
   }
 
   @Test
+  void aCheckInAScriptOfSeveralMessagesIsTranslated() {
+    // Rooted at all its structs, as for Protobuf, a script's CHECKs are translated too, and read
+    // a type declared after them.
+    LogicalTypesSchemaVisitor visitor = new LogicalTypesSchemaVisitor(true);
+    visitor.visit(LogicalTypesParserFactory.parse(
+        "STRUCT A (b B CHECK (b.x > 0)); STRUCT B (x INT, CHECK (x > 0));"));
+    String xPositive = "!has(this.x) || dyn(this.x) == null || this.x > 0";
+    assertEquals(xPositive,
+        visitor.getNamedTypes().get("A").getField("b").getRules().get(0).getExpr());
+    assertEquals(xPositive, visitor.getNamedTypes().get("B").getRules().get(0).getExpr());
+  }
+
+  @Test
   void ddlRoundTripPreservesAllRuleFields() {
     String script = "STRUCT T ("
         + "x INT CONSTRAINT positive_x CHECK (x > 0) MESSAGE 'must be positive'"

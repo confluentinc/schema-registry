@@ -855,7 +855,8 @@ public abstract class Schema {
       return rules;
     }
 
-    // A column's CHECKs, which the visitor translates once every named type is built.
+    // A column's CHECKs, which the visitor translates once the root and every named type are
+    // built.
     void setRules(List<Rule> rules) {
       this.rules = Collections.unmodifiableList(new ArrayList<>(rules));
     }
