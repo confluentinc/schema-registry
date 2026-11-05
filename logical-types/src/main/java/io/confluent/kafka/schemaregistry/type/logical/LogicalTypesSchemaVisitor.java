@@ -76,8 +76,8 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
   private final Map<String, Schema> namedTypes = new LinkedHashMap<>();
   // Defaults naming a local enum's symbol, checked once every body is built.
   private final List<Runnable> symbolChecks = new ArrayList<>();
-  // CHECK translations, run once every named type's body is built so a CHECK can read the
-  // fields of one declared after it, or of its own.
+  // CHECK translations, run once the root and every named type's body are built, so a CHECK can
+  // read the fields of a type declared after it, or of its own.
   private final List<Runnable> checkJobs = new ArrayList<>();
   private Schema rootSchema;
   private final boolean rootsSeveralMessages;
@@ -795,8 +795,8 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
   }
 
   private Schema buildStruct(LogicalTypesParser.StructBodyContext ctx) {
-    // Two-pass: build all fields first (with column-level CHECK validation),
-    // then build table-level CHECKs against the full field set.
+    // All fields first, so the table-level CHECKs see the full field set; they and the
+    // column-level ones are translated later, by checkJobs.
     List<Schema.Field> fields = new ArrayList<>();
     int pos = 0;
     for (LogicalTypesParser.StructBodyItemContext item : ctx.structBodyItem()) {
