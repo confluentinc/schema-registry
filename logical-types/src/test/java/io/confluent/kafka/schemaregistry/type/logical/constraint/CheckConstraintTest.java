@@ -784,9 +784,11 @@ class CheckConstraintTest {
         "CAST(CASE WHEN EVERY(xs, e, e > 0) THEN x ELSE x END AS STRING) = 'A'",
         "CAST(CASE WHEN v IS NULL THEN x ELSE x END AS STRING) IS NULL",
         "CAST(NULLIF(x, v) AS STRING) = 'A'",
-        // A bracketed value's steps are a path's: an outside field of one is a value too.
+        // A bracketed value's steps are a path's: an outside field or element of one is a value
+        // too, as is one bracketed whole.
         "CAST((re).x AS STRING) = 'A'", "CAST((ps[1]).yx AS STRING) = 'A'",
-        "CAST((xe)[1] || (xe)[2] AS STRING) = 'A'")) {
+        "CAST((xe)[1] || (xe)[2] AS STRING) = 'A'", "CAST((re.x) AS STRING) = 'A'",
+        "CAST((x) AS STRING) IS NULL", "CAST(((re).x) AS STRING) IS NULL")) {
       String cel = parseScript(String.format(script, sql)).getRootSchema().getRules().get(0)
           .getExpr();
       assertEquals(true, evalOver(cel, empty), sql + " -> " + cel);
