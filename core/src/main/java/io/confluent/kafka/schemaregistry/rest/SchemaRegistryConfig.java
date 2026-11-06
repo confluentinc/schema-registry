@@ -234,6 +234,19 @@ public class SchemaRegistryConfig extends RestConfig {
   public static final int SCHEMA_CACHE_EXPIRY_SECS_DEFAULT = 300;
 
   /**
+   * <code>schema.missing.cache.size</code>
+   */
+  public static final String SCHEMA_MISSING_CACHE_SIZE_CONFIG = "schema.missing.cache.size";
+  public static final int SCHEMA_MISSING_CACHE_SIZE_DEFAULT = 100000;
+
+  /**
+   * <code>schema.missing.cache.expiry.secs</code>
+   */
+  public static final String SCHEMA_MISSING_CACHE_EXPIRY_SECS_CONFIG =
+      "schema.missing.cache.expiry.secs";
+  public static final int SCHEMA_MISSING_CACHE_EXPIRY_SECS_DEFAULT = 300;
+
+  /**
    * <code>size.limit.handler.enabled</code>
    */
   public static final String SIZE_LIMIT_FILTER_ENABLED_CONFIG = "size.limit.filter.enabled";
@@ -472,6 +485,14 @@ public class SchemaRegistryConfig extends RestConfig {
       "The maximum size of the schema cache.";
   protected static final String SCHEMA_CACHE_EXPIRY_SECS_DOC =
       "The expiration in seconds for entries accessed in the cache.";
+  protected static final String SCHEMA_MISSING_CACHE_SIZE_DOC =
+      "The maximum number of schema lookups under a subject that found no match to remember, so "
+      + "that repeating one returns 404 without searching the subject's versions again. "
+      + "A remembered miss is dropped once any change to its tenant is read from the schemas "
+      + "topic. Only applies to a Kafka-backed schema registry; 0 disables the cache.";
+  protected static final String SCHEMA_MISSING_CACHE_EXPIRY_SECS_DOC =
+      "The time in seconds after it is stored that a remembered schema lookup miss expires, "
+      + "even if no change to its tenant has been read.";
   protected static final String SIZE_LIMIT_HANDLER_ENABLED_DOC =
       "Enable the size limit handler to enforce request body size limits. "
       + "When enabled, requests exceeding the configured size will be rejected.";
@@ -750,6 +771,14 @@ public class SchemaRegistryConfig extends RestConfig {
     )
     .define(SCHEMA_CACHE_EXPIRY_SECS_CONFIG, ConfigDef.Type.INT, SCHEMA_CACHE_EXPIRY_SECS_DEFAULT,
         ConfigDef.Importance.LOW, SCHEMA_CACHE_EXPIRY_SECS_DOC
+    )
+    .define(SCHEMA_MISSING_CACHE_SIZE_CONFIG, ConfigDef.Type.INT,
+        SCHEMA_MISSING_CACHE_SIZE_DEFAULT, ConfigDef.Range.atLeast(0),
+        ConfigDef.Importance.LOW, SCHEMA_MISSING_CACHE_SIZE_DOC
+    )
+    .define(SCHEMA_MISSING_CACHE_EXPIRY_SECS_CONFIG, ConfigDef.Type.INT,
+        SCHEMA_MISSING_CACHE_EXPIRY_SECS_DEFAULT, ConfigDef.Range.atLeast(1),
+        ConfigDef.Importance.LOW, SCHEMA_MISSING_CACHE_EXPIRY_SECS_DOC
     )
     .define(SIZE_LIMIT_FILTER_ENABLED_CONFIG, ConfigDef.Type.BOOLEAN,
         SIZE_LIMIT_FILTER_ENABLED_DEFAULT,

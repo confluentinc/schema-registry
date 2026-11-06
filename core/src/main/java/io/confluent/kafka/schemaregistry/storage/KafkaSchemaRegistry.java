@@ -196,6 +196,11 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
             this.serializer, lookupCache, new NoopKey());
   }
 
+  @Override
+  protected boolean mayHaveVersions(String subject) throws SchemaRegistryException {
+    return hasSubjects(subject, true);
+  }
+
   protected SchemaUpdateHandler getSchemaUpdateHandler(SchemaRegistryConfig config) {
     Map<String, Object> handlerConfigs =
         config.originalsWithPrefix(SchemaRegistryConfig.KAFKASTORE_UPDATE_HANDLERS_CONFIG + ".");
@@ -212,7 +217,20 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       );
     }
     customSchemaHandlers.add(storeHandler);
-    return new CompositeSchemaUpdateHandler(customSchemaHandlers);
+    SchemaUpdateHandler handler = new CompositeSchemaUpdateHandler(customSchemaHandlers);
+    int missCacheSize = config.getInt(SchemaRegistryConfig.SCHEMA_MISSING_CACHE_SIZE_CONFIG);
+    if (missCacheSize <= 0) {
+      return handler;
+    }
+    // Created only here, so that a registry whose store bypasses this has no cache to go stale
+    LookupMissCache missCache = lookupMissCache();
+    if (missCache == null) {
+      missCache = new LookupMissCache(missCacheSize,
+          config.getInt(SchemaRegistryConfig.SCHEMA_MISSING_CACHE_EXPIRY_SECS_CONFIG),
+          time::nanoseconds);
+      setLookupMissCache(missCache);
+    }
+    return new LookupMissInvalidator(handler, missCache, this::tenant);
   }
 
   protected LookupCache<SchemaRegistryKey, SchemaRegistryValue> lookupCache() {
