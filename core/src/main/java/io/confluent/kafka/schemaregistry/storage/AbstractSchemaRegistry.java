@@ -2019,28 +2019,23 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
     LookupMissCache.Key missKey = missCache != null && schema != null && tenant != null
         ? LookupMissCache.key(tenant, subject, schema, normalize, lookupDeletedSchema)
         : null;
-    AtomicBoolean contextFailed = new AtomicBoolean();
     if (missKey == null) {
-      return lookUpUsingContexts(
-          subject, schema, normalize, lookupDeletedSchema, contextFailed);
+      return lookUpUsingContexts(subject, schema, normalize, lookupDeletedSchema);
     }
     // Taken before the lookup, so that a write applied during it leaves the miss unserved
     LookupMissCache.Tag tag = missCache.tag(tenant);
     if (missCache.isMiss(missKey, tag)) {
       return null;
     }
-    Schema matchingSchema = lookUpUsingContexts(
-        subject, schema, normalize, lookupDeletedSchema, contextFailed);
-    // A context whose lookup failed, such as on fetching a remote reference, may match later
-    if (matchingSchema == null && !contextFailed.get()) {
+    Schema matchingSchema = lookUpUsingContexts(subject, schema, normalize, lookupDeletedSchema);
+    if (matchingSchema == null) {
       missCache.putMiss(missKey, tag);
     }
     return matchingSchema;
   }
 
   private Schema lookUpUsingContexts(
-          String subject, Schema schema, boolean normalize, boolean lookupDeletedSchema,
-          AtomicBoolean contextFailed)
+          String subject, Schema schema, boolean normalize, boolean lookupDeletedSchema)
           throws SchemaRegistryException {
     Schema matchingSchema =
             lookUpSchemaUnderSubject(subject, schema, normalize, lookupDeletedSchema);
@@ -2069,7 +2064,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
           matchingSchema = lookUpSchemaUnderSubject(
                   qualSub.toQualifiedSubject(), qualSchema, normalize, lookupDeletedSchema);
         } catch (InvalidSchemaException e) {
-          contextFailed.set(true);
+          // ignore
         }
         if (matchingSchema != null) {
           logSchemaOp(matchingSchema, "READ");

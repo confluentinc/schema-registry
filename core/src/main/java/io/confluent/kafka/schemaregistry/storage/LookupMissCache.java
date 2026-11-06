@@ -73,7 +73,7 @@ public class LookupMissCache {
       MessageDigest md = MessageDigest.getInstance("SHA-256");
       try (OutputStream out = new DigestOutputStream(OutputStream.nullOutputStream(), md)) {
         KEY_MAPPER.writeValue(out, Arrays.asList(
-            tenant, subject, normalize, lookupDeletedSchema,
+            tenant, subject, normalize, lookupDeletedSchema, schema.getSubject(),
             schema.getSchemaType(), schema.getVersion(), schema.getId(),
             schema.getReferences(), schema.getMetadata(), schema.getRuleSet(),
             schema.getSchema()));

@@ -148,7 +148,7 @@ public class LookupMissCacheIntegrationTest extends ClusterTestHarness {
   }
 
   @Test
-  public void testMissIsNotCachedWhenAContextLookupFails() throws Exception {
+  public void testMissOfAFailedContextLookupIsCachedUntilAWrite() throws Exception {
     // The reference resolves in the default context, but not in .ctx, whose lookup then fails
     String b = "{\"type\":\"record\",\"name\":\"B\",\"namespace\":\"ns\","
         + "\"fields\":[{\"name\":\"x\",\"type\":\"int\"}]}";
@@ -160,7 +160,16 @@ public class LookupMissCacheIntegrationTest extends ClusterTestHarness {
 
     assertErrorCode(40401, () -> restApp.restClient.lookUpSubjectVersion(
         a, AvroSchema.TYPE, refs, "foo", false));
-    assertEquals(0, missCache(restApp).size());
+    assertEquals(1, missCache(restApp).size());
+
+    // Only writes can make the reference resolve in .ctx, and they drop the miss
+    restApp.restClient.registerSchema(
+        b, AvroSchema.TYPE, Collections.emptyList(), ":.ctx:b-value");
+    restApp.restClient.registerSchema(a, AvroSchema.TYPE, refs, ":.ctx:foo");
+    Schema found =
+        restApp.restClient.lookUpSubjectVersion(a, AvroSchema.TYPE, refs, "foo", false);
+    assertEquals(":.ctx:foo", found.getSubject());
+    assertEquals(2, found.getVersion());
   }
 
   @Test

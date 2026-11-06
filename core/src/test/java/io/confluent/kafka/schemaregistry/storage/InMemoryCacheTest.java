@@ -22,6 +22,7 @@ import static org.junit.Assert.assertTrue;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.storage.serialization.SchemaRegistrySerializer;
+import java.util.function.Predicate;
 import org.junit.Test;
 
 public class InMemoryCacheTest {
@@ -82,9 +83,11 @@ public class InMemoryCacheTest {
     put(cache, "r", 1, true);
     put(cache, ":.ctx:s", 1, false);
     put(cache, ":.ctx:t", 1, true);
+    put(cache, "x*", 1, false);
 
+    // ":.:s" names "s" too, but was never matched to it
     for (String query : new String[] {"s", "sa", "s2", "r", "t", ":.ctx:s", ":.ctx:t",
-        ":.ctx:u", ":.ctx:", ":.other:", ":.ctx:sa"}) {
+        ":.ctx:u", ":.ctx:", ":.other:", ":.ctx:sa", ":.:s", "x*", "s*", "*"}) {
       for (boolean deleted : new boolean[] {false, true}) {
         assertEquals(query + ", deleted " + deleted,
             !cache.subjects(query, deleted).isEmpty(), cache.hasSubjects(query, deleted));
@@ -94,6 +97,24 @@ public class InMemoryCacheTest {
     assertFalse(cache.hasSubjects("r", false));
     assertTrue(cache.hasSubjects("r", true));
     assertFalse(cache.hasSubjects("s2", true));
+  }
+
+  @Test
+  public void hasSubjectsUsesAnOverriddenPredicateForAWildcard() throws Exception {
+    // As a multi-tenant subclass does, matching a name ending in "_*" as a prefix
+    InMemoryCache<SchemaRegistryKey, SchemaRegistryValue> cache =
+        new InMemoryCache<SchemaRegistryKey, SchemaRegistryValue>(new SchemaRegistrySerializer()) {
+          @Override
+          protected Predicate<String> matchingSubjectPredicate(String subject) {
+            return subject.endsWith("_*")
+                ? s -> s.startsWith(subject.substring(0, subject.length() - 1))
+                : super.matchingSubjectPredicate(subject);
+          }
+        };
+    cache.init();
+    put(cache, "t_a", 1, false);
+    assertTrue(cache.hasSubjects("t_*", false));
+    assertFalse(cache.hasSubjects("u_*", false));
   }
 
   private static InMemoryCache<SchemaRegistryKey, SchemaRegistryValue> cache() throws Exception {

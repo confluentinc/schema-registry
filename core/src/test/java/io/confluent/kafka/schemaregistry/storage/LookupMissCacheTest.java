@@ -64,6 +64,7 @@ public class LookupMissCacheTest {
         new Metadata(null, Collections.singletonMap("k", "v"), null))), false, false));
     assertNotEquals(base, key("a", "s", schema(s -> s.setRuleSet(
         new RuleSet(null, List.of(rule("doc"))))), false, false));
+    assertNotEquals(base, key("a", "s", schema(s -> s.setSubject("t")), false, false));
   }
 
   @Test
