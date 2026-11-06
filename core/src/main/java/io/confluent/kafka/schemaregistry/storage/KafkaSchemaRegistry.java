@@ -196,6 +196,25 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
             this.serializer, lookupCache, new NoopKey());
   }
 
+  @Override
+  protected boolean mayHaveVersions(String subject, boolean lookupDeletedSchema)
+      throws SchemaRegistryException {
+    // A range read of the one subject, whatever its name, rather than a predicate scan
+    try (CloseableIterator<SchemaRegistryValue> versions = store.getAll(
+        new SchemaKey(subject, MIN_VERSION), new SchemaKey(subject, MAX_VERSION))) {
+      while (versions.hasNext()) {
+        SchemaRegistryValue value = versions.next();
+        if (value instanceof SchemaValue
+            && (lookupDeletedSchema || !((SchemaValue) value).isDeleted())) {
+          return true;
+        }
+      }
+      return false;
+    } catch (StoreException e) {
+      throw new SchemaRegistryStoreException("Error from the backend Kafka store", e);
+    }
+  }
+
   protected SchemaUpdateHandler getSchemaUpdateHandler(SchemaRegistryConfig config) {
     Map<String, Object> handlerConfigs =
         config.originalsWithPrefix(SchemaRegistryConfig.KAFKASTORE_UPDATE_HANDLERS_CONFIG + ".");
@@ -212,7 +231,20 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
       );
     }
     customSchemaHandlers.add(storeHandler);
-    return new CompositeSchemaUpdateHandler(customSchemaHandlers);
+    SchemaUpdateHandler handler = new CompositeSchemaUpdateHandler(customSchemaHandlers);
+    int missCacheSize = config.getInt(SchemaRegistryConfig.SCHEMA_MISSING_CACHE_SIZE_CONFIG);
+    if (missCacheSize <= 0) {
+      return handler;
+    }
+    // Created only here, so that a registry whose store bypasses this has no cache to go stale
+    LookupMissCache missCache = lookupMissCache();
+    if (missCache == null) {
+      missCache = new LookupMissCache(missCacheSize,
+          config.getInt(SchemaRegistryConfig.SCHEMA_MISSING_CACHE_EXPIRY_SECS_CONFIG),
+          time::nanoseconds);
+      setLookupMissCache(missCache);
+    }
+    return new LookupMissInvalidator(handler, missCache, this::tenant);
   }
 
   protected LookupCache<SchemaRegistryKey, SchemaRegistryValue> lookupCache() {
