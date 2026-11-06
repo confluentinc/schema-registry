@@ -325,6 +325,12 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public synchronized ParsedSchema getSchemaByGuid(String guid, String format)
       throws IOException, RestClientException {
+    return getSchemaBySubjectAndGuid(null, guid, format);
+  }
+
+  @Override
+  public synchronized ParsedSchema getSchemaBySubjectAndGuid(
+      String subject, String guid, String format) throws IOException, RestClientException {
     SchemaString s = null;
     String errorMessage = "Error while retrieving schema with guid " + guid + " from the schema "
         + "registry";
@@ -339,7 +345,8 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
     if (s == null) {
       throw Errors.schemaNotFoundException(guid);
     }
-    return parseSchema(new Schema(null, null, null, s)).get();
+    // Read as of the subject, in whose context its references resolve.
+    return parseSchema(new Schema(subject, null, null, s)).get();
   }
 
   @Override

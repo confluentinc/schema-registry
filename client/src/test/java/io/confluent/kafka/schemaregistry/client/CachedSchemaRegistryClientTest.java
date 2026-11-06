@@ -44,6 +44,7 @@ import org.apache.kafka.common.config.ConfigException;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Mode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdateRequest;
@@ -322,6 +323,77 @@ public class CachedSchemaRegistryClientTest {
         ((AvroSchema) client.getSchemaBySubjectAndId(SUBJECT_0, ID_25)).rawSchema()
     ); // hit the cache
 
+    verify(restService);
+  }
+
+  // A schema fetched by GUID reads its references in the context of the subject it is read
+  // under, which the GUID alone does not tell; the GUID is fetched once for every context.
+  @Test
+  public void testGuidReadsReferencesInTheSubjectsContext() throws Exception {
+    String inA = "{\"type\": \"record\", \"name\": \"Y\", "
+        + "\"fields\": [{\"name\": \"f\", \"type\": \"int\"}]}";
+    String inB = "{\"type\": \"record\", \"name\": \"Y\", "
+        + "\"fields\": [{\"name\": \"g\", \"type\": \"string\"}]}";
+    SchemaString x = new SchemaString("{\"type\": \"record\", \"name\": \"X\", "
+        + "\"fields\": [{\"name\": \"a\", \"type\": \"Y\"}]}");
+    x.setReferences(Collections.singletonList(new SchemaReference("Y", "y", 1)));
+    expect(restService.getByGuid("g1", null)).andReturn(x).once();
+    expect(restService.getVersion(":.a:y", 1, true))
+        .andReturn(new Schema(":.a:y", 1, 7, AvroSchema.TYPE, Collections.emptyList(), inA))
+        .anyTimes();
+    expect(restService.getVersion(":.b:y", 1, true))
+        .andReturn(new Schema(":.b:y", 1, 8, AvroSchema.TYPE, Collections.emptyList(), inB))
+        .anyTimes();
+    replay(restService);
+
+    AvroSchema a = (AvroSchema) client.getSchemaBySubjectAndGuid(":.a:x", "g1", null);
+    AvroSchema b = (AvroSchema) client.getSchemaBySubjectAndGuid(":.b:x", "g1", null);
+    assertNotNull(a.rawSchema().getField("a").schema().getField("f"));
+    assertNotNull(b.rawSchema().getField("a").schema().getField("g"));
+    verify(restService);
+  }
+
+  // A GUID read without a subject, as a deserializer does to name the subject from the schema,
+  // and then with one, is fetched once.
+  @Test
+  public void testGuidReadWithAndWithoutASubjectIsFetchedOnce() throws Exception {
+    expect(restService.getByGuid("g1", null)).andReturn(new SchemaString(SCHEMA_STR_0)).once();
+    replay(restService);
+
+    AvroSchema bare = (AvroSchema) client.getSchemaByGuid("g1", null);
+    AvroSchema named = (AvroSchema) client.getSchemaBySubjectAndGuid(SUBJECT_0, "g1", null);
+    assertEquals(AVRO_SCHEMA_0.rawSchema(), bare.rawSchema());
+    assertEquals(AVRO_SCHEMA_0.rawSchema(), named.rawSchema());
+    verify(restService);
+  }
+
+  // A GUID looked up under a subject of one context does not lend that context's parse to a
+  // read by GUID alone, which reads the references in the default context.
+  @Test
+  public void testGuidLookedUpInAContextIsReadAloneInTheDefaultContext() throws Exception {
+    String inA = "{\"type\": \"record\", \"name\": \"Y\", "
+        + "\"fields\": [{\"name\": \"f\", \"type\": \"int\"}]}";
+    String inDefault = "{\"type\": \"record\", \"name\": \"Y\", "
+        + "\"fields\": [{\"name\": \"g\", \"type\": \"string\"}]}";
+    String body = "{\"type\": \"record\", \"name\": \"X\", "
+        + "\"fields\": [{\"name\": \"a\", \"type\": \"Y\"}]}";
+    List<SchemaReference> refs = Collections.singletonList(new SchemaReference("Y", "y", 1));
+    Schema found = new Schema(":.a:x", 1, 5, AvroSchema.TYPE, refs, body);
+    found.setGuid("g1");
+    expect(restService.lookUpSubjectVersion(anyObject(RegisterSchemaRequest.class),
+        eq(":.a:x"), anyBoolean(), anyBoolean())).andReturn(found);
+    SchemaString x = new SchemaString(body);
+    x.setReferences(refs);
+    expect(restService.getByGuid("g1", null)).andReturn(x);
+    expect(restService.getVersion("y", 1, true))
+        .andReturn(new Schema("y", 1, 8, AvroSchema.TYPE, Collections.emptyList(), inDefault))
+        .anyTimes();
+    replay(restService);
+
+    AvroSchema xa = new AvroSchema(body, refs, Collections.singletonMap("Y", inA), null);
+    assertEquals("g1", client.getGuid(":.a:x", xa));
+    AvroSchema alone = (AvroSchema) client.getSchemaByGuid("g1", null);
+    assertNotNull(alone.rawSchema().getField("a").schema().getField("g"));
     verify(restService);
   }
 

@@ -32,6 +32,7 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientFactory;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.encryption.FieldEncryptionExecutor;
 import io.confluent.kafka.schemaregistry.encryption.EncryptionProperties;
 import io.confluent.kafka.schemaregistry.encryption.local.LocalEncryptionProperties;
@@ -90,6 +91,35 @@ public class RegisterDeksTest {
   public void tearDown() {
     MockSchemaRegistry.clear();
     MockDekRegistryClientFactory.clear();
+  }
+
+  // A schema with references is parsed with them fetched through the client, in its subject's
+  // context, so its DEK is registered rather than the schema reported missing.
+  @Test
+  public void testRegisterDekForASchemaWithReferences() throws Exception {
+    String subject = topic + "-value";
+    String kekName = "kek1";
+    String address = "{\"namespace\": \"example.avro\", \"type\": \"record\", "
+        + "\"name\": \"Address\", \"fields\": [{\"name\": \"street\", \"type\": \"string\"}]}";
+    schemaRegistry.register("address", new AvroSchema(address));
+    String user = "{\"namespace\": \"example.avro\", \"type\": \"record\", "
+        + "\"name\": \"User\", \"fields\": ["
+        + "{\"name\": \"name\", \"type\": [\"null\", \"string\"], \"confluent:tags\": [\"PII\"]},"
+        + "{\"name\": \"address\", \"type\": \"example.avro.Address\"}]}";
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, null, false);
+    AvroSchema avroSchema = new AvroSchema(user,
+        Collections.singletonList(new SchemaReference("example.avro.Address", "address", 1)),
+        Collections.singletonMap("example.avro.Address", address), null)
+        .copy(getMetadata(kekName), new RuleSet(Collections.emptyList(), ImmutableList.of(rule)));
+    schemaRegistry.register(subject, avroSchema);
+
+    int exitCode = new CommandLine(new RegisterDeks()).execute(
+        "mock://", subject, "--property", "rule.executors._default_.param.secret=mysecret");
+    assertEquals(0, exitCode);
+
+    Dek dek = dekRegistry.getDekVersion(kekName, subject, -1, null, false);
+    assertEquals(kekName, dek.getKekName());
   }
 
   @Test
