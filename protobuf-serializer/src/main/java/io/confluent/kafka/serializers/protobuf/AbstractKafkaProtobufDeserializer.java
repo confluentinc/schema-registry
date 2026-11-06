@@ -33,8 +33,8 @@ import io.confluent.kafka.serializers.schema.id.SchemaId;
 import java.io.InterruptedIOException;
 import java.util.Collections;
 import java.util.List;
-import java.util.Objects;
 import java.util.Properties;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 import org.apache.kafka.common.config.ConfigException;
@@ -45,6 +45,7 @@ import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
+import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
@@ -63,10 +64,13 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
   protected Class<T> specificProtobufClass;
   protected Method parseMethod;
   protected boolean deriveType;
-  private final Cache<Pair<String, ProtobufSchema>, ProtobufSchema> schemaCache;
+  // Each schema's copies by message name and version, by the schema instance: equal schemas may
+  // resolve their imports in different contexts, which the client parses apart.
+  private final Cache<ProtobufSchema, Map<Map.Entry<String, Integer>, ProtobufSchema>> schemaCache;
 
   public AbstractKafkaProtobufDeserializer() {
     schemaCache = CacheBuilder.newBuilder()
+        .weakKeys()
         .maximumSize(DEFAULT_CACHE_CAPACITY)
         .build();
   }
@@ -182,8 +186,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
         }
         if (includeSchemaAndVersion || readerSchema != null) {
           Integer version = schemaVersion(topic, isKey, schemaId, subject, schema, null);
-          schema = schema.copy(version);
-          schema = schemaWithName(schema, name);
+          schema = schemaWithName(schema, name, version);
         }
         if (readerSchema != null) {
           migrations = getMigrations(subject, schema, readerSchema);
@@ -273,11 +276,17 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
   }
 
   private ProtobufSchema schemaWithName(ProtobufSchema schema, String name) {
-    Pair<String, ProtobufSchema> cacheKey = new Pair<>(name, schema);
+    return schemaWithName(schema, name, null);
+  }
+
+  // A version too, if not null, so that a copy carrying one is made once, not for every record.
+  private ProtobufSchema schemaWithName(ProtobufSchema schema, String name, Integer version) {
     try {
-      return schemaCache.get(cacheKey, () -> schema.copy(name));
+      return schemaCache.get(schema, ConcurrentHashMap::new).computeIfAbsent(
+          new SimpleImmutableEntry<>(name, version),
+          k -> version == null ? schema.copy(name) : schema.copy(name).copy(version));
     } catch (ExecutionException e) {
-      return schema.copy(name);
+      return version == null ? schema.copy(name) : schema.copy(name).copy(version);
     }
   }
 
@@ -347,49 +356,5 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
   ) throws SerializationException {
     return (ProtobufSchemaAndValue) deserialize(
         true, topic, isKey, headers, payload, writerToReaderSchemaFunc);
-  }
-
-  static class Pair<K, V> {
-    private final K key;
-    private final V value;
-
-    public Pair(K key, V value) {
-      this.key = key;
-      this.value = value;
-    }
-
-    public K getKey() {
-      return key;
-    }
-
-    public V getValue() {
-      return value;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-      if (this == o) {
-        return true;
-      }
-      if (o == null || getClass() != o.getClass()) {
-        return false;
-      }
-      Pair<?, ?> pair = (Pair<?, ?>) o;
-      return Objects.equals(key, pair.key)
-          && Objects.equals(value, pair.value);
-    }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(key, value);
-    }
-
-    @Override
-    public String toString() {
-      return "Pair{"
-          + "key=" + key
-          + ", value=" + value
-          + '}';
-    }
   }
 }

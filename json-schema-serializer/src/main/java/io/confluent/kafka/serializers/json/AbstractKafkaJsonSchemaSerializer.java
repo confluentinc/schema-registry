@@ -175,7 +175,7 @@ public abstract class AbstractKafkaJsonSchemaSerializer<T> extends AbstractKafka
         schemaId = new SchemaId(JsonSchema.TYPE, useSchemaId, s.getGuid());
       } else if (useSchemaGuid != null) {
         restClientErrorMsg = "Error retrieving schema GUID";
-        schema = (JsonSchema) lookupSchemaByGuid(useSchemaGuid, schema, idCompatStrict);
+        schema = (JsonSchema) lookupSchemaByGuid(subject, useSchemaGuid, schema, idCompatStrict);
         int id = schemaRegistry.getId(subject, schema);
         schemaId = new SchemaId(JsonSchema.TYPE, id, useSchemaGuid);
       } else if (metadata != null) {
