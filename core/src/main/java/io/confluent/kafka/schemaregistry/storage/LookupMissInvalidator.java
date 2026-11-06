@@ -24,7 +24,7 @@ import org.apache.kafka.common.TopicPartition;
 /**
  * Wraps the update handlers to drop the remembered lookup misses of the tenant of each record
  * read from the schemas topic, after the handlers have applied it, even if one of them throws.
- * The tenant is the one the handlers run under; null means every tenant.
+ * The tenant is the one this is called under; null means every tenant.
  */
 public class LookupMissInvalidator implements SchemaUpdateHandler {
 
@@ -72,10 +72,12 @@ public class LookupMissInvalidator implements SchemaUpdateHandler {
                            TopicPartition tp,
                            long offset,
                            long timestamp) {
+    // Read first, so that a handler changing the thread's tenant cannot redirect the bump
+    String recordTenant = tenant.get();
     try {
       delegate.handleUpdate(key, value, oldValue, tp, offset, timestamp);
     } finally {
-      lookupMissCache.writeApplied(tenant.get());
+      lookupMissCache.writeApplied(recordTenant);
     }
   }
 

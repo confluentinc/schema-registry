@@ -32,6 +32,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.jupiter.api.Test;
@@ -123,6 +124,18 @@ public class LookupMissCacheTest {
 
     assertThrows(IllegalStateException.class, () -> invalidator.handleUpdate(
         new SchemaKey("s", 1), null, null, new TopicPartition("_schemas", 0), 0, 0));
+    assertFalse(cache.isMiss(key, cache.tag("a")));
+  }
+
+  @Test
+  public void testInvalidatorUsesTheTenantItIsCalledUnder() {
+    LookupMissCache.Key key = key("a", "s", schema(s -> { }), false, false);
+    cache.putMiss(key, cache.tag("a"));
+    // A handler that leaves another tenant on the thread ("a" and "b" use different counters)
+    AtomicReference<String> threadTenant = new AtomicReference<>("a");
+    SchemaUpdateHandler switching = (k, v, old, tp, offset, ts) -> threadTenant.set("b");
+    new LookupMissInvalidator(switching, cache, threadTenant::get).handleUpdate(
+        new SchemaKey("s", 1), null, null, new TopicPartition("_schemas", 0), 0, 0);
     assertFalse(cache.isMiss(key, cache.tag("a")));
   }
 

@@ -27,6 +27,7 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.RestService;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ConfigUpdateRequest;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
@@ -34,6 +35,7 @@ import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import java.util.Collections;
+import java.util.List;
 import java.util.Properties;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -143,6 +145,22 @@ public class LookupMissCacheIntegrationTest extends ClusterTestHarness {
     config.setOverrideMetadata(new Metadata(null, Collections.singletonMap("k", "v"), null));
     restApp.restClient.updateConfig(config, subject);
     assertEquals(1, lookUp(AvroSchema.TYPE, AVRO_1, subject, false).getVersion());
+  }
+
+  @Test
+  public void testMissIsNotCachedWhenAContextLookupFails() throws Exception {
+    // The reference resolves in the default context, but not in .ctx, whose lookup then fails
+    String b = "{\"type\":\"record\",\"name\":\"B\",\"namespace\":\"ns\","
+        + "\"fields\":[{\"name\":\"x\",\"type\":\"int\"}]}";
+    String a = "{\"type\":\"record\",\"name\":\"A\",\"namespace\":\"ns\","
+        + "\"fields\":[{\"name\":\"b\",\"type\":\"ns.B\"}]}";
+    restApp.restClient.registerSchema(b, "b-value");
+    restApp.restClient.registerSchema(AVRO_2, ":.ctx:foo");
+    List<SchemaReference> refs = List.of(new SchemaReference("ns.B", "b-value", 1));
+
+    assertErrorCode(40401, () -> restApp.restClient.lookUpSubjectVersion(
+        a, AvroSchema.TYPE, refs, "foo", false));
+    assertEquals(0, missCache(restApp).size());
   }
 
   @Test

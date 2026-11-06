@@ -2014,26 +2014,33 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
           String subject, Schema schema, boolean normalize, boolean lookupDeletedSchema)
           throws SchemaRegistryException {
     LookupMissCache missCache = lookupMissCache;
-    LookupMissCache.Key missKey = missCache != null && schema != null
-        ? LookupMissCache.key(tenant(), subject, schema, normalize, lookupDeletedSchema)
+    // Without a tenant, no write would be known to drop the miss
+    String tenant = tenant();
+    LookupMissCache.Key missKey = missCache != null && schema != null && tenant != null
+        ? LookupMissCache.key(tenant, subject, schema, normalize, lookupDeletedSchema)
         : null;
+    AtomicBoolean contextFailed = new AtomicBoolean();
     if (missKey == null) {
-      return lookUpUsingContexts(subject, schema, normalize, lookupDeletedSchema);
+      return lookUpUsingContexts(
+          subject, schema, normalize, lookupDeletedSchema, contextFailed);
     }
     // Taken before the lookup, so that a write applied during it leaves the miss unserved
-    LookupMissCache.Tag tag = missCache.tag(tenant());
+    LookupMissCache.Tag tag = missCache.tag(tenant);
     if (missCache.isMiss(missKey, tag)) {
       return null;
     }
-    Schema matchingSchema = lookUpUsingContexts(subject, schema, normalize, lookupDeletedSchema);
-    if (matchingSchema == null) {
+    Schema matchingSchema = lookUpUsingContexts(
+        subject, schema, normalize, lookupDeletedSchema, contextFailed);
+    // A context whose lookup failed, such as on fetching a remote reference, may match later
+    if (matchingSchema == null && !contextFailed.get()) {
       missCache.putMiss(missKey, tag);
     }
     return matchingSchema;
   }
 
   private Schema lookUpUsingContexts(
-          String subject, Schema schema, boolean normalize, boolean lookupDeletedSchema)
+          String subject, Schema schema, boolean normalize, boolean lookupDeletedSchema,
+          AtomicBoolean contextFailed)
           throws SchemaRegistryException {
     Schema matchingSchema =
             lookUpSchemaUnderSubject(subject, schema, normalize, lookupDeletedSchema);
@@ -2062,7 +2069,7 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
           matchingSchema = lookUpSchemaUnderSubject(
                   qualSub.toQualifiedSubject(), qualSchema, normalize, lookupDeletedSchema);
         } catch (InvalidSchemaException e) {
-          // ignore
+          contextFailed.set(true);
         }
         if (matchingSchema != null) {
           logSchemaOp(matchingSchema, "READ");

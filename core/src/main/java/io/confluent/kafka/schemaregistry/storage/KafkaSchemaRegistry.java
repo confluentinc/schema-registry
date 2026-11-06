@@ -198,12 +198,7 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
 
   @Override
   protected boolean mayHaveVersions(String subject) throws SchemaRegistryException {
-    try (CloseableIterator<SchemaRegistryValue> versions = store.getAll(
-        new SchemaKey(subject, MIN_VERSION), new SchemaKey(subject, MAX_VERSION))) {
-      return versions.hasNext();
-    } catch (StoreException e) {
-      throw new SchemaRegistryStoreException("Error from the backend Kafka store", e);
-    }
+    return hasSubjects(subject, true);
   }
 
   protected SchemaUpdateHandler getSchemaUpdateHandler(SchemaRegistryConfig config) {

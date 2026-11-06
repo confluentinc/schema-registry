@@ -64,7 +64,8 @@ public class LookupMissCache {
   }
 
   /**
-   * Returns the key for a lookup, or null if the request cannot be digested.
+   * Returns the key for a lookup, or null if the request cannot be digested. Only the digest is
+   * kept, so a key's size does not depend on the request.
    */
   public static Key key(String tenant, String subject, Schema schema,
                         boolean normalize, boolean lookupDeletedSchema) {
@@ -72,11 +73,12 @@ public class LookupMissCache {
       MessageDigest md = MessageDigest.getInstance("SHA-256");
       try (OutputStream out = new DigestOutputStream(OutputStream.nullOutputStream(), md)) {
         KEY_MAPPER.writeValue(out, Arrays.asList(
+            tenant, subject, normalize, lookupDeletedSchema,
             schema.getSchemaType(), schema.getVersion(), schema.getId(),
             schema.getReferences(), schema.getMetadata(), schema.getRuleSet(),
             schema.getSchema()));
       }
-      return new Key(tenant, subject, normalize, lookupDeletedSchema, md.digest());
+      return new Key(md.digest());
     } catch (IOException | NoSuchAlgorithmException e) {
       return null;
     }
@@ -137,44 +139,23 @@ public class LookupMissCache {
   }
 
   /**
-   * A lookup: its tenant, subject and flags, and a digest of the requested schema.
+   * A lookup, as a digest of its tenant, subject, flags and requested schema.
    */
   public static final class Key {
-    private final String tenant;
-    private final String subject;
-    private final boolean normalize;
-    private final boolean lookupDeletedSchema;
     private final byte[] digest;
 
-    Key(String tenant, String subject, boolean normalize, boolean lookupDeletedSchema,
-        byte[] digest) {
-      this.tenant = tenant;
-      this.subject = subject;
-      this.normalize = normalize;
-      this.lookupDeletedSchema = lookupDeletedSchema;
+    Key(byte[] digest) {
       this.digest = digest;
     }
 
     @Override
     public boolean equals(Object o) {
-      if (this == o) {
-        return true;
-      }
-      if (!(o instanceof Key)) {
-        return false;
-      }
-      Key that = (Key) o;
-      return normalize == that.normalize
-          && lookupDeletedSchema == that.lookupDeletedSchema
-          && Objects.equals(tenant, that.tenant)
-          && Objects.equals(subject, that.subject)
-          && Arrays.equals(digest, that.digest);
+      return this == o || (o instanceof Key && Arrays.equals(digest, ((Key) o).digest));
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(tenant, subject, normalize, lookupDeletedSchema)
-          * 31 + Arrays.hashCode(digest);
+      return Arrays.hashCode(digest);
     }
   }
 
