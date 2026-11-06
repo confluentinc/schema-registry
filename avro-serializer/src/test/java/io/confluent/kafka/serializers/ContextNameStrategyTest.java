@@ -21,9 +21,12 @@ import static org.junit.Assert.assertNotNull;
 
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.serializers.context.strategy.ContextNameStrategy;
+import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -167,6 +170,33 @@ public class ContextNameStrategyTest {
     AbstractKafkaSchemaSerDe.lookupLatestVersion(client, "x", null, null, false);
     Schema latest = ((AvroSchema) AbstractKafkaSchemaSerDe.lookupLatestVersion(
         client, ":.ctx:x", null, null, false).getSchema()).rawSchema();
+    assertNotNull(latest.getField("a").schema().getField("f"));
+  }
+
+  // A latest version found through an alias reads its references in its target's context, the
+  // subject the registry names, not the alias's.
+  @Test
+  public void testLatestVersionOfAnAliasReadsReferencesInItsTargetsContext() throws Exception {
+    // The registry answers a lookup of the alias with the target's version, naming the target.
+    SchemaRegistryClient client = new MockSchemaRegistryClient() {
+      @Override
+      public SchemaMetadata getLatestSchemaMetadata(String subject)
+          throws IOException, RestClientException {
+        return super.getLatestSchemaMetadata(subject.equals(":.a:alias") ? ":.b:x" : subject);
+      }
+    };
+    String inA = "{\"type\": \"record\", \"name\": \"Y\", "
+        + "\"fields\": [{\"name\": \"g\", \"type\": \"string\"}]}";
+    String inB = "{\"type\": \"record\", \"name\": \"Y\", "
+        + "\"fields\": [{\"name\": \"f\", \"type\": \"int\"}]}";
+    String body = "{\"type\": \"record\", \"name\": \"X\", "
+        + "\"fields\": [{\"name\": \"a\", \"type\": \"Y\"}]}";
+    List<SchemaReference> refs = Collections.singletonList(new SchemaReference("Y", "y", 1));
+    client.register(":.a:y", new AvroSchema(inA));
+    client.register(":.b:y", new AvroSchema(inB));
+    client.register(":.b:x", new AvroSchema(body, refs, Collections.singletonMap("Y", inB), null));
+    Schema latest = ((AvroSchema) AbstractKafkaSchemaSerDe.lookupLatestVersion(
+        client, ":.a:alias", null, null, false).getSchema()).rawSchema();
     assertNotNull(latest.getField("a").schema().getField("f"));
   }
 }

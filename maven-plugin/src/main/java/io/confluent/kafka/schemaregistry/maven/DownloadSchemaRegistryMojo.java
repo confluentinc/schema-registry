@@ -237,8 +237,10 @@ public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
     if (isFormatted()) {
       return schemaMetadata.getSchema();
     }
-    // As its subject's version, whose context its references are read in.
-    Optional<ParsedSchema> schema = this.client().parseSchema(new Schema(subject, schemaMetadata));
+    // As its subject's version, whose context its references are read in: an alias's target, or
+    // the subject asked for.
+    String parent = schemaMetadata.getSubject() != null ? schemaMetadata.getSubject() : subject;
+    Optional<ParsedSchema> schema = this.client().parseSchema(new Schema(parent, schemaMetadata));
     if (!schema.isPresent()) {
       throw new MojoExecutionException(
           String.format("Error while parsing schema %s", schemaMetadata.getSchema()));

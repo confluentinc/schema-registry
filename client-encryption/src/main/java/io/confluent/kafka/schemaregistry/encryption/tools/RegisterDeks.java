@@ -176,7 +176,9 @@ public class RegisterDeks implements Callable<Integer> {
         throw new IllegalArgumentException("Unsupported schema type "
             + schemaMetadata.getSchemaType());
     }
-    return provider.parseSchema(new Schema(subject, schemaMetadata), false, false);
+    // An alias's target, whose context its references are read in, or the subject asked for.
+    String parent = schemaMetadata.getSubject() != null ? schemaMetadata.getSubject() : subject;
+    return provider.parseSchema(new Schema(parent, schemaMetadata), false, false);
   }
 
   private Map<String, Object> configsWithoutPrefix(Rule rule, Map<String, Object> configs) {
