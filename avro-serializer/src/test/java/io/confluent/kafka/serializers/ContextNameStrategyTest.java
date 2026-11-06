@@ -26,15 +26,18 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.serializers.context.strategy.ContextNameStrategy;
+import io.confluent.kafka.serializers.schema.id.HeaderSchemaIdSerializer;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.junit.Test;
 
 public class ContextNameStrategyTest {
@@ -118,6 +121,65 @@ public class ContextNameStrategyTest {
 
     bytes = avroSerializer1.serialize(topic2, avroRecord);
     assertEquals(avroRecord, avroDeserializer1.deserialize(topic2, bytes));
+  }
+
+  // One body with the same references registered in two contexts shares a GUID; a record whose
+  // header holds it reads the references of its own topic's context, even once the GUID was read
+  // in the other.
+  @Test
+  public void testGuidInHeaderReadsReferencesInItsTopicsContext() throws Exception {
+    SchemaRegistryClient client = new MockSchemaRegistryClient();
+    String body = "{\"type\": \"record\", \"name\": \"X\", "
+        + "\"fields\": [{\"name\": \"a\", \"type\": \"Y\"}]}";
+    List<SchemaReference> refs = Collections.singletonList(new SchemaReference("Y", "y", 1));
+    String inA = "{\"type\": \"record\", \"name\": \"Y\", "
+        + "\"fields\": [{\"name\": \"f\", \"type\": \"int\"}]}";
+    String inB = "{\"type\": \"record\", \"name\": \"Y\", "
+        + "\"fields\": [{\"name\": \"g\", \"type\": \"string\"}]}";
+    client.register(":.a:y", new AvroSchema(inA));
+    client.register(":.b:y", new AvroSchema(inB));
+    AvroSchema xa = new AvroSchema(body, refs, Collections.singletonMap("Y", inA), null);
+    AvroSchema xb = new AvroSchema(body, refs, Collections.singletonMap("Y", inB), null);
+    client.register(":.a:a-value", xa);
+    client.register(":.b:b-value", xb);
+    assertEquals(client.getLatestSchemaMetadata(":.a:a-value").getGuid(),
+        client.getLatestSchemaMetadata(":.b:b-value").getGuid());
+
+    Map<String, Object> config = new HashMap<>();
+    config.put(KafkaAvroSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus");
+    config.put(AbstractKafkaSchemaSerDeConfig.CONTEXT_NAME_STRATEGY,
+        TopicContextNameStrategy.class.getName());
+    config.put(KafkaAvroSerializerConfig.AUTO_REGISTER_SCHEMAS, false);
+    config.put(KafkaAvroSerializerConfig.USE_LATEST_VERSION, true);
+    config.put(KafkaAvroSerializerConfig.VALUE_SCHEMA_ID_SERIALIZER,
+        HeaderSchemaIdSerializer.class.getName());
+    KafkaAvroSerializer serializer = new KafkaAvroSerializer(client, config);
+    KafkaAvroDeserializer deserializer = new KafkaAvroDeserializer(client, config);
+
+    GenericRecord ya = new GenericData.Record(xa.rawSchema().getField("a").schema());
+    ya.put("f", 5);
+    GenericRecord ra = new GenericData.Record(xa.rawSchema());
+    ra.put("a", ya);
+    GenericRecord yb = new GenericData.Record(xb.rawSchema().getField("a").schema());
+    yb.put("g", "hello");
+    GenericRecord rb = new GenericData.Record(xb.rawSchema());
+    rb.put("a", yb);
+    RecordHeaders headersA = new RecordHeaders();
+    byte[] bytesA = serializer.serialize("a", headersA, ra);
+    RecordHeaders headersB = new RecordHeaders();
+    byte[] bytesB = serializer.serialize("b", headersB, rb);
+
+    GenericRecord readA = (GenericRecord) deserializer.deserialize("a", headersA, bytesA);
+    GenericRecord readB = (GenericRecord) deserializer.deserialize("b", headersB, bytesB);
+    assertEquals(5, ((GenericRecord) readA.get("a")).get("f"));
+    assertEquals("hello", ((GenericRecord) readB.get("a")).get("g").toString());
+  }
+
+  public static class TopicContextNameStrategy implements ContextNameStrategy {
+    @Override
+    public String contextName(String topic) {
+      return topic;
+    }
   }
 
   public static class CustomContextNameStrategy1 implements ContextNameStrategy {
