@@ -33,8 +33,8 @@ import io.confluent.kafka.serializers.schema.id.SchemaId;
 import java.io.InterruptedIOException;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.Properties;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 import org.apache.kafka.common.config.ConfigException;
@@ -45,7 +45,6 @@ import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
-import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
@@ -64,13 +63,10 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
   protected Class<T> specificProtobufClass;
   protected Method parseMethod;
   protected boolean deriveType;
-  // Each schema's copies by message name and version, by the schema instance: equal schemas may
-  // resolve their imports in different contexts, which the client parses apart.
-  private final Cache<ProtobufSchema, Map<Map.Entry<String, Integer>, ProtobufSchema>> schemaCache;
+  private final Cache<CopyKey, ProtobufSchema> schemaCache;
 
   public AbstractKafkaProtobufDeserializer() {
     schemaCache = CacheBuilder.newBuilder()
-        .weakKeys()
         .maximumSize(DEFAULT_CACHE_CAPACITY)
         .build();
   }
@@ -282,9 +278,8 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
   // A version too, if not null, so that a copy carrying one is made once, not for every record.
   private ProtobufSchema schemaWithName(ProtobufSchema schema, String name, Integer version) {
     try {
-      return schemaCache.get(schema, ConcurrentHashMap::new).computeIfAbsent(
-          new SimpleImmutableEntry<>(name, version),
-          k -> version == null ? schema.copy(name) : schema.copy(name).copy(version));
+      return schemaCache.get(new CopyKey(schema, name, version),
+          () -> version == null ? schema.copy(name) : schema.copy(name).copy(version));
     } catch (ExecutionException e) {
       return version == null ? schema.copy(name) : schema.copy(name).copy(version);
     }
@@ -356,5 +351,34 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
   ) throws SerializationException {
     return (ProtobufSchemaAndValue) deserialize(
         true, topic, isKey, headers, payload, writerToReaderSchemaFunc);
+  }
+
+  // A schema's copy with a message name and version, the schema by instance: equal schemas may
+  // resolve their imports in different contexts, which the client parses apart.
+  private static final class CopyKey {
+    private final ProtobufSchema schema;
+    private final String name;
+    private final Integer version;
+
+    CopyKey(ProtobufSchema schema, String name, Integer version) {
+      this.schema = schema;
+      this.name = name;
+      this.version = version;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (!(o instanceof CopyKey)) {
+        return false;
+      }
+      CopyKey that = (CopyKey) o;
+      return schema == that.schema && Objects.equals(name, that.name)
+          && Objects.equals(version, that.version);
+    }
+
+    @Override
+    public int hashCode() {
+      return 31 * System.identityHashCode(schema) + Objects.hash(name, version);
+    }
   }
 }
