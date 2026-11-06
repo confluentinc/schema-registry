@@ -17,6 +17,7 @@
 package io.confluent.kafka.serializers.protobuf;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertSame;
 
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
@@ -82,6 +83,29 @@ public class KafkaProtobufDeserializerContextTest {
     DynamicMessage readB = deserializer.deserialize("b", bytesB);
     assertEquals(5, field(readA, "f"));
     assertEquals("hello", field(readB, "g"));
+  }
+
+  // Records read with their schema's version share one copy of it, so its descriptors are built
+  // once rather than for every record.
+  @Test
+  public void testRecordsReadWithTheirVersionShareOneSchemaCopy() throws Exception {
+    MockSchemaRegistryClient client =
+        new MockSchemaRegistryClient(Collections.singletonList(new ProtobufSchemaProvider()));
+    ProtobufSchema x = new ProtobufSchema("syntax = \"proto3\";\nmessage X { int32 f = 1; }\n");
+    int id = client.register("t-value", x);
+    KafkaProtobufDeserializer<DynamicMessage> deserializer = new KafkaProtobufDeserializer<>(
+        client, Collections.singletonMap(
+            AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus"));
+    Descriptor descriptor = x.toDescriptor();
+    byte[] bytes = wire(id, DynamicMessage.newBuilder(descriptor)
+        .setField(descriptor.findFieldByName("f"), 1).build());
+
+    ProtobufSchemaAndValue first =
+        deserializer.deserializeWithSchemaAndVersion("t", false, null, bytes);
+    ProtobufSchemaAndValue second =
+        deserializer.deserializeWithSchemaAndVersion("t", false, null, bytes);
+    assertEquals(Integer.valueOf(1), first.getSchema().version());
+    assertSame(first.getSchema(), second.getSchema());
   }
 
   private static DynamicMessage message(ProtobufSchema schema, String name, Object value) {

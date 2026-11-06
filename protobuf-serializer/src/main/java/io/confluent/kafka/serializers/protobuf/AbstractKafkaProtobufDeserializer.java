@@ -45,6 +45,7 @@ import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
+import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
@@ -63,9 +64,9 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
   protected Class<T> specificProtobufClass;
   protected Method parseMethod;
   protected boolean deriveType;
-  // Each schema's copies by message name, by the schema instance: equal schemas may resolve
-  // their imports in different contexts, which the client parses apart.
-  private final Cache<ProtobufSchema, Map<String, ProtobufSchema>> schemaCache;
+  // Each schema's copies by message name and version, by the schema instance: equal schemas may
+  // resolve their imports in different contexts, which the client parses apart.
+  private final Cache<ProtobufSchema, Map<Map.Entry<String, Integer>, ProtobufSchema>> schemaCache;
 
   public AbstractKafkaProtobufDeserializer() {
     schemaCache = CacheBuilder.newBuilder()
@@ -185,8 +186,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
         }
         if (includeSchemaAndVersion || readerSchema != null) {
           Integer version = schemaVersion(topic, isKey, schemaId, subject, schema, null);
-          schema = schema.copy(version);
-          schema = schemaWithName(schema, name);
+          schema = schemaWithName(schema, name, version);
         }
         if (readerSchema != null) {
           migrations = getMigrations(subject, schema, readerSchema);
@@ -276,11 +276,17 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
   }
 
   private ProtobufSchema schemaWithName(ProtobufSchema schema, String name) {
+    return schemaWithName(schema, name, null);
+  }
+
+  // A version too, if not null, so that a copy carrying one is made once, not for every record.
+  private ProtobufSchema schemaWithName(ProtobufSchema schema, String name, Integer version) {
     try {
-      return schemaCache.get(schema, ConcurrentHashMap::new)
-          .computeIfAbsent(name, schema::copy);
+      return schemaCache.get(schema, ConcurrentHashMap::new).computeIfAbsent(
+          new SimpleImmutableEntry<>(name, version),
+          k -> version == null ? schema.copy(name) : schema.copy(name).copy(version));
     } catch (ExecutionException e) {
-      return schema.copy(name);
+      return version == null ? schema.copy(name) : schema.copy(name).copy(version);
     }
   }
 
