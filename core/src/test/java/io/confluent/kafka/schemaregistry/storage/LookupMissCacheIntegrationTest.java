@@ -173,6 +173,19 @@ public class LookupMissCacheIntegrationTest extends ClusterTestHarness {
   }
 
   @Test
+  public void testContextWithOnlySoftDeletedVersions() throws Exception {
+    restApp.restClient.registerSchema(AVRO_1, ":.ctx:foo");
+    restApp.restClient.deleteSchemaVersion(
+        RestService.DEFAULT_REQUEST_PROPERTIES, ":.ctx:foo", "1");
+
+    // Skipped unless deleted versions are looked up
+    assertErrorCode(40401, () -> lookUp(AvroSchema.TYPE, AVRO_1, "foo", false));
+    Schema found = lookUp(AvroSchema.TYPE, AVRO_1, "foo", true);
+    assertEquals(":.ctx:foo", found.getSubject());
+    assertEquals(1, found.getVersion());
+  }
+
+  @Test
   public void testNewContextDropsMiss() throws Exception {
     // A context without the subject, which the lookup skips
     restApp.restClient.registerSchema(AVRO_2, ":.other:bar");

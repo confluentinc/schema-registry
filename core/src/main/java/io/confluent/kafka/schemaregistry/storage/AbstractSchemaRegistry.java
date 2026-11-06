@@ -899,9 +899,11 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   }
 
   /**
-   * Returns false only if the subject has no versions, deleted or not, so a lookup can skip it.
+   * Returns false only if the subject has no versions that a lookup could match, soft-deleted
+   * ones counting only if it looks them up, so the lookup can skip it.
    */
-  protected boolean mayHaveVersions(String subject) throws SchemaRegistryException {
+  protected boolean mayHaveVersions(String subject, boolean lookupDeletedSchema)
+          throws SchemaRegistryException {
     return true;
   }
 
@@ -2054,8 +2056,8 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
         ContextValue v = (ContextValue) iter.next();
         QualifiedSubject qualSub =
                 new QualifiedSubject(v.getTenant(), v.getContext(), qs.getSubject());
-        // A context without a version of the subject cannot match, so skip parsing for it
-        if (!mayHaveVersions(qualSub.toQualifiedSubject())) {
+        // A context without a version of the subject to match is skipped, saving its parse
+        if (!mayHaveVersions(qualSub.toQualifiedSubject(), lookupDeletedSchema)) {
           continue;
         }
         Schema qualSchema = schema.copy();

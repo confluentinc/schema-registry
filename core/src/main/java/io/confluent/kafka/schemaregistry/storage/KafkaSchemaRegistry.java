@@ -197,11 +197,19 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
   }
 
   @Override
-  protected boolean mayHaveVersions(String subject) throws SchemaRegistryException {
+  protected boolean mayHaveVersions(String subject, boolean lookupDeletedSchema)
+      throws SchemaRegistryException {
     // A range read of the one subject, whatever its name, rather than a predicate scan
     try (CloseableIterator<SchemaRegistryValue> versions = store.getAll(
         new SchemaKey(subject, MIN_VERSION), new SchemaKey(subject, MAX_VERSION))) {
-      return versions.hasNext();
+      while (versions.hasNext()) {
+        SchemaRegistryValue value = versions.next();
+        if (value instanceof SchemaValue
+            && (lookupDeletedSchema || !((SchemaValue) value).isDeleted())) {
+          return true;
+        }
+      }
+      return false;
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException("Error from the backend Kafka store", e);
     }
