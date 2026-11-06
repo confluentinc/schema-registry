@@ -27,6 +27,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.net.*;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -55,6 +56,9 @@ import org.apache.hc.client5.http.classic.methods.HttpPost;
 import org.apache.hc.client5.http.classic.methods.HttpPut;
 import org.apache.hc.client5.http.impl.classic.CloseableHttpResponse;
 import org.apache.hc.core5.http.HttpEntity;
+import org.apache.hc.core5.http.ConnectionRequestTimeoutException;
+import org.apache.hc.core5.http.ConnectionClosedException;
+import org.apache.hc.core5.http.NoHttpResponseException;
 import org.apache.hc.core5.http.HttpHost;
 import org.apache.hc.core5.http.io.entity.ByteArrayEntity;
 
@@ -316,6 +320,35 @@ public class ApacheClientRestServiceTest {
       fail("Expected RestClientException to be thrown");
     } catch (RestClientException exception) {
       verify(baseUrlSpy, never()).fail(any());
+    }
+  }
+
+  @Test
+  public void testConnectionFailureFailsOver() throws Exception {
+    for (IOException failure : Arrays.asList(
+        new NoHttpResponseException("localhost:8080 failed to respond"),
+        new ConnectionClosedException("Premature end of chunk coded message body"),
+        new ConnectionRequestTimeoutException("Timeout deadline: 180000 MILLISECONDS"))) {
+      UrlList baseUrlSpy = Mockito.spy(
+          new UrlList(Arrays.asList("http://localhost:8080", "http://localhost:8081")));
+      RestService restServiceSpy = spy(new RestService(baseUrlSpy, false, true));
+
+      CloseableHttpClient httpClient = mock(CloseableHttpClient.class);
+      CloseableHttpResponse response = mock(CloseableHttpResponse.class);
+      HttpEntity entity = mock(HttpEntity.class);
+
+      // The first URL fails as the Apache client does; the second answers.
+      when(httpClient.executeOpen(any(), any(), any())).thenThrow(failure).thenReturn(response);
+      when(response.getCode()).thenReturn(200);
+      when(response.getEntity()).thenReturn(entity);
+      when(entity.getContent()).thenReturn(new ByteArrayInputStream("[\"abc\"]".getBytes()));
+
+      Field httpClientField = RestService.class.getDeclaredField("httpClient");
+      httpClientField.setAccessible(true);
+      httpClientField.set(restServiceSpy, httpClient);
+
+      assertEquals(Arrays.asList("abc"), restServiceSpy.getAllSubjects());
+      verify(baseUrlSpy).fail("http://localhost:8080");
     }
   }
 
