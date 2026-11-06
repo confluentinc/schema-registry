@@ -79,7 +79,7 @@ public class LookupMissCacheIntegrationTest extends ClusterTestHarness {
         "syntax = \"proto3\";\nmessage M2 {\n  int32 f2 = 1;\n}\n");
   }
 
-  private void testMissIsCachedUntilRegistered(String type, String looked, String other)
+  private void testMissIsCachedUntilRegistered(String type, String looked, String otherSchema)
       throws Exception {
     String subject = "s";
     assertErrorCode(40401, () -> lookUp(type, looked, subject, false));
@@ -87,7 +87,7 @@ public class LookupMissCacheIntegrationTest extends ClusterTestHarness {
     assertEquals(1, missCache(restApp).size());
 
     // Another schema of the subject: still a miss, now with its subject found
-    restApp.restClient.registerSchema(other, type, Collections.emptyList(), subject);
+    restApp.restClient.registerSchema(otherSchema, type, Collections.emptyList(), subject);
     assertErrorCode(40403, () -> lookUp(type, looked, subject, false));
 
     restApp.restClient.registerSchema(looked, type, Collections.emptyList(), subject);

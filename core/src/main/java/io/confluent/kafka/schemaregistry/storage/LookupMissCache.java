@@ -123,7 +123,7 @@ public class LookupMissCache {
   }
 
   private static int stripe(String tenant) {
-    return tenant != null ? Math.floorMod(tenant.hashCode(), STRIPES) : 0;
+    return Math.floorMod(tenant.hashCode(), STRIPES);
   }
 
   private static ObjectMapper keyMapper() {
