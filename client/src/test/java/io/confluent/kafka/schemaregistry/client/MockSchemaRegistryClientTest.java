@@ -1284,4 +1284,28 @@ public class MockSchemaRegistryClientTest {
         new Schema(":.a:z", null, null, AvroSchema.TYPE, refs, body)).get();
     assertSame(x, z);
   }
+
+  // A GUID read alone reads its references in the default context, whichever context's subject
+  // registered it; read with a subject, in that subject's context.
+  @Test
+  public void testGuidReadAloneReadsReferencesInTheDefaultContext() throws Exception {
+    String inA = "{\"type\": \"record\", \"name\": \"Y\", "
+        + "\"fields\": [{\"name\": \"f\", \"type\": \"int\"}]}";
+    String inDefault = "{\"type\": \"record\", \"name\": \"Y\", "
+        + "\"fields\": [{\"name\": \"g\", \"type\": \"string\"}]}";
+    client.register(":.a:y", new AvroSchema(inA));
+    client.register("y", new AvroSchema(inDefault));
+    String body = "{\"type\": \"record\", \"name\": \"X\", "
+        + "\"fields\": [{\"name\": \"a\", \"type\": \"Y\"}]}";
+    List<SchemaReference> refs = Collections.singletonList(new SchemaReference("Y", "y", 1));
+    client.register(":.a:x",
+        new AvroSchema(body, refs, Collections.singletonMap("Y", inA), null));
+    String guid = client.getLatestSchemaMetadata(":.a:x").getGuid();
+    org.apache.avro.Schema alone =
+        ((AvroSchema) client.getSchemaByGuid(guid, null)).rawSchema();
+    org.apache.avro.Schema inContext =
+        ((AvroSchema) client.getSchemaBySubjectAndGuid(":.a:x", guid, null)).rawSchema();
+    assertNotNull(alone.getField("a").schema().getField("g"));
+    assertNotNull(inContext.getField("a").schema().getField("f"));
+  }
 }

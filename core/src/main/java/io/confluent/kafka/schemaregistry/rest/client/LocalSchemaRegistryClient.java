@@ -345,9 +345,8 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
     if (s == null) {
       throw Errors.schemaNotFoundException(guid);
     }
-    // A schema with references read as of the subject, in whose context they resolve.
-    boolean refs = s.getReferences() != null && !s.getReferences().isEmpty();
-    return parseSchema(new Schema(refs ? subject : null, null, null, s)).get();
+    // Read as of the subject, in whose context its references resolve.
+    return parseSchema(new Schema(subject, null, null, s)).get();
   }
 
   @Override

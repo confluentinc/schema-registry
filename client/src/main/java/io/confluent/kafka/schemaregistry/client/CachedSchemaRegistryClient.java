@@ -748,11 +748,9 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     return schema;
   }
 
-  // A schema with references read as of the subject, in whose context they resolve.
+  // A schema read as of the subject, in whose context its references resolve, and which a
+  // provider whose parse reads the subject is given; the parse cache keys by it only if so.
   static Schema asOf(String subject, Schema schema) {
-    if (schema.getReferences() == null || schema.getReferences().isEmpty()) {
-      return schema;
-    }
     return new Schema(subject, null, null, schema.getSchemaType(), schema.getReferences(),
         schema.getMetadata(), schema.getRuleSet(), schema.getSchema());
   }
