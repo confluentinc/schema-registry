@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.streams.serdes.avro;
 
+import io.confluent.kafka.schemaregistry.avro.AvroTrustedClasses;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
 import java.util.Map;
@@ -47,6 +48,8 @@ public class ReflectionAvroDeserializer<T> implements Deserializer<T> {
   public ReflectionAvroDeserializer(Class<T> type) {
     this.schema = ReflectData.get().getSchema(type);
     this.inner = new KafkaAvroDeserializer();
+    // Avro loads the given class, and the types its schema references
+    AvroTrustedClasses.trust(type);
   }
 
   /**
@@ -63,6 +66,7 @@ public class ReflectionAvroDeserializer<T> implements Deserializer<T> {
   ReflectionAvroDeserializer(final SchemaRegistryClient client, Class<T> type) {
     this.schema = ReflectData.get().getSchema(type);
     this.inner = new KafkaAvroDeserializer(client);
+    AvroTrustedClasses.trust(type);
   }
 
   @Override
