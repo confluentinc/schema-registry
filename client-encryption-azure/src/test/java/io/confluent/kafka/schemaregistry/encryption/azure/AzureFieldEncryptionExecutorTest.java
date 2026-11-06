@@ -37,6 +37,7 @@ import com.azure.security.keyvault.keys.models.KeyVaultKey;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.crypto.tink.Aead;
+import com.microsoft.aad.msal4j.MsalServiceException;
 import io.confluent.dekregistry.client.rest.entities.Dek;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
@@ -96,6 +97,22 @@ public class AzureFieldEncryptionExecutorTest extends FieldEncryptionExecutorTes
     assertFalse(driver.isAccessDeniedException(httpException(404)));
     assertFalse(driver.isAccessDeniedException(httpException(500)));
     assertFalse(driver.isAccessDeniedException(new RuntimeException("not azure")));
+  }
+
+  @Test
+  public void testIsAccessDeniedForNoFederatedCredential() {
+    AzureKmsDriver driver = new AzureKmsDriver();
+    assertTrue(driver.isAccessDeniedException(new MsalServiceException(
+        "AADSTS70025: No matching federated identity record found for presented assertion.",
+        "invalid_client")));
+  }
+
+  @Test
+  public void testIsNotAccessDeniedForOtherMsalErrors() {
+    AzureKmsDriver driver = new AzureKmsDriver();
+    assertFalse(driver.isAccessDeniedException(new MsalServiceException(
+        "AADSTS90002: Tenant not found.", "invalid_request")));
+    assertFalse(driver.isAccessDeniedException(new MsalServiceException(null, "invalid_client")));
   }
 
   @Test
