@@ -44,6 +44,7 @@ import org.apache.kafka.common.config.ConfigException;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaString;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Mode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.ModeUpdateRequest;
@@ -323,6 +324,26 @@ public class CachedSchemaRegistryClientTest {
     ); // hit the cache
 
     verify(restService);
+  }
+
+  // A schema fetched by GUID reads its references in the context of the subject it is read
+  // under, which the GUID alone does not tell, not in the default context.
+  @Test
+  public void testGuidReadsReferencesInTheSubjectsContext() throws Exception {
+    String inContext = "{\"type\": \"record\", \"name\": \"Y\", "
+        + "\"fields\": [{\"name\": \"f\", \"type\": \"int\"}]}";
+    SchemaString x = new SchemaString("{\"type\": \"record\", \"name\": \"X\", "
+        + "\"fields\": [{\"name\": \"a\", \"type\": \"Y\"}]}");
+    x.setReferences(Collections.singletonList(new SchemaReference("Y", "y", 1)));
+    expect(restService.getByGuid("g1", null)).andReturn(x);
+    expect(restService.getVersion(":.ctx:y", 1, true))
+        .andReturn(new Schema(":.ctx:y", 1, 7, AvroSchema.TYPE, Collections.emptyList(),
+            inContext))
+        .anyTimes();
+    replay(restService);
+
+    AvroSchema read = (AvroSchema) client.getSchemaBySubjectAndGuid(":.ctx:x", "g1", null);
+    assertNotNull(read.rawSchema().getField("a").schema().getField("f"));
   }
 
   @Test
