@@ -226,6 +226,8 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   protected final Time time;
 
   protected LookupCache<SchemaRegistryKey, SchemaRegistryValue> lookupCache;
+  // Set only where it is invalidated from the schemas topic, so not by subclasses
+  private volatile LookupMissCache lookupMissCache;
   protected MetadataEncoderService metadataEncoder;
   protected RuleSetHandler ruleSetHandler;
 
@@ -893,6 +895,23 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
       schemaList.add(schemaKey);
     }
     return schemaList;
+  }
+
+  LookupMissCache lookupMissCache() {
+    return lookupMissCache;
+  }
+
+  void setLookupMissCache(LookupMissCache lookupMissCache) {
+    this.lookupMissCache = lookupMissCache;
+  }
+
+  /**
+   * Returns false only if the subject has no versions that a lookup could match, soft-deleted
+   * ones counting only if it looks them up, so the lookup can skip it.
+   */
+  protected boolean mayHaveVersions(String subject, boolean lookupDeletedSchema)
+          throws SchemaRegistryException {
+    return true;
   }
 
   protected List<SchemaKey> getAllSchemaKeysDescending(String subject)
@@ -2169,6 +2188,30 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
   public Schema lookUpSchemaUnderSubjectUsingContexts(
           String subject, Schema schema, boolean normalize, boolean lookupDeletedSchema)
           throws SchemaRegistryException {
+    LookupMissCache missCache = lookupMissCache;
+    // Without a tenant, no write would be known to drop the miss
+    String tenant = tenant();
+    LookupMissCache.Key missKey = missCache != null && schema != null && tenant != null
+        ? LookupMissCache.key(tenant, subject, schema, normalize, lookupDeletedSchema)
+        : null;
+    if (missKey == null) {
+      return lookUpUsingContexts(subject, schema, normalize, lookupDeletedSchema);
+    }
+    // Taken before the lookup, so that a write applied during it leaves the miss unserved
+    LookupMissCache.Tag tag = missCache.tag(tenant);
+    if (missCache.isMiss(missKey, tag)) {
+      return null;
+    }
+    Schema matchingSchema = lookUpUsingContexts(subject, schema, normalize, lookupDeletedSchema);
+    if (matchingSchema == null) {
+      missCache.putMiss(missKey, tag);
+    }
+    return matchingSchema;
+  }
+
+  private Schema lookUpUsingContexts(
+          String subject, Schema schema, boolean normalize, boolean lookupDeletedSchema)
+          throws SchemaRegistryException {
     Schema matchingSchema =
             lookUpSchemaUnderSubject(subject, schema, normalize, lookupDeletedSchema);
     if (matchingSchema != null) {
@@ -2186,6 +2229,10 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
         ContextValue v = (ContextValue) iter.next();
         QualifiedSubject qualSub =
                 new QualifiedSubject(v.getTenant(), v.getContext(), qs.getSubject());
+        // A context without a version of the subject to match is skipped, saving its parse
+        if (!mayHaveVersions(qualSub.toQualifiedSubject(), lookupDeletedSchema)) {
+          continue;
+        }
         Schema qualSchema = schema.copy();
         qualSchema.setSubject(qualSub.toQualifiedSubject());
         try {
