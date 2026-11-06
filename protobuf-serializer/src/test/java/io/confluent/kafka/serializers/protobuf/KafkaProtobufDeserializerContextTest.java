@@ -22,12 +22,15 @@ import static org.junit.Assert.assertSame;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.DynamicMessage;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import io.confluent.kafka.serializers.context.strategy.ContextNameStrategy;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.HashMap;
@@ -105,6 +108,34 @@ public class KafkaProtobufDeserializerContextTest {
     ProtobufSchemaAndValue second =
         deserializer.deserializeWithSchemaAndVersion("t", false, null, bytes);
     assertEquals(Integer.valueOf(1), first.getSchema().version());
+    assertSame(first.getSchema(), second.getSchema());
+  }
+
+  // A client that parses each read afresh, as one without a cache of parsed schemas does, still
+  // gets one copy for its records, so their descriptors are built once.
+  @Test
+  public void testRecordsReadThroughAClientParsingAfreshShareOneSchemaCopy() throws Exception {
+    MockSchemaRegistryClient client = new MockSchemaRegistryClient(
+        Collections.singletonList(new ProtobufSchemaProvider())) {
+      @Override
+      public ParsedSchema getSchemaBySubjectAndId(String subject, int id)
+          throws IOException, RestClientException {
+        return ((ProtobufSchema) super.getSchemaBySubjectAndId(subject, id)).copy();
+      }
+    };
+    ProtobufSchema x = new ProtobufSchema("syntax = \"proto3\";\nmessage X { int32 f = 1; }\n");
+    int id = client.register("t-value", x);
+    KafkaProtobufDeserializer<DynamicMessage> deserializer = new KafkaProtobufDeserializer<>(
+        client, Collections.singletonMap(
+            AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "bogus"));
+    Descriptor descriptor = x.toDescriptor();
+    byte[] bytes = wire(id, DynamicMessage.newBuilder(descriptor)
+        .setField(descriptor.findFieldByName("f"), 1).build());
+
+    ProtobufSchemaAndValue first =
+        deserializer.deserializeWithSchemaAndVersion("t", false, null, bytes);
+    ProtobufSchemaAndValue second =
+        deserializer.deserializeWithSchemaAndVersion("t", false, null, bytes);
     assertSame(first.getSchema(), second.getSchema());
   }
 

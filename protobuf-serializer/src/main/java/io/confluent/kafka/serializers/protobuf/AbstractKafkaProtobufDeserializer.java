@@ -353,8 +353,9 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
         true, topic, isKey, headers, payload, writerToReaderSchemaFunc);
   }
 
-  // A schema's copy with a message name and version, the schema by instance: equal schemas may
-  // resolve their imports in different contexts, which the client parses apart.
+  // A schema's copy with a message name and version, by the schema's content and the imports it
+  // resolved: equal schemas may resolve theirs in different contexts. A client that parses each
+  // read afresh still finds the copy made for an earlier one.
   private static final class CopyKey {
     private final ProtobufSchema schema;
     private final String name;
@@ -372,13 +373,14 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
         return false;
       }
       CopyKey that = (CopyKey) o;
-      return schema == that.schema && Objects.equals(name, that.name)
-          && Objects.equals(version, that.version);
+      return Objects.equals(name, that.name) && Objects.equals(version, that.version)
+          && (schema == that.schema || schema.equals(that.schema)
+              && schema.dependencies().equals(that.schema.dependencies()));
     }
 
     @Override
     public int hashCode() {
-      return 31 * System.identityHashCode(schema) + Objects.hash(name, version);
+      return 31 * schema.hashCode() + Objects.hash(name, version);
     }
   }
 }
