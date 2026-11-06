@@ -371,6 +371,9 @@ public class RestServiceTest {
     Map<String, Object> configs = new HashMap<>();
     configs.put("proxy.host", "http://localhost");
     configs.put("proxy.port", 8080);
+    // Pin the legacy HttpURLConnection path explicitly: use.apache.http.client now defaults to
+    // true, but this test exercises the HttpURLConnection-based proxy behavior via mocks.
+    configs.put("use.apache.http.client", "false");
     restServiceSpy.configure(configs);
 
     doReturn(url).when(restServiceSpy).url(anyString());
