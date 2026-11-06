@@ -33,8 +33,8 @@ import io.confluent.kafka.serializers.schema.id.SchemaId;
 import java.io.InterruptedIOException;
 import java.util.Collections;
 import java.util.List;
-import java.util.Objects;
 import java.util.Properties;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 import org.apache.kafka.common.config.ConfigException;
@@ -63,10 +63,13 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
   protected Class<T> specificProtobufClass;
   protected Method parseMethod;
   protected boolean deriveType;
-  private final Cache<Pair<String, ProtobufSchema>, ProtobufSchema> schemaCache;
+  // Each schema's copies by message name, by the schema instance: equal schemas may resolve
+  // their imports in different contexts, which the client parses apart.
+  private final Cache<ProtobufSchema, Map<String, ProtobufSchema>> schemaCache;
 
   public AbstractKafkaProtobufDeserializer() {
     schemaCache = CacheBuilder.newBuilder()
+        .weakKeys()
         .maximumSize(DEFAULT_CACHE_CAPACITY)
         .build();
   }
@@ -273,9 +276,9 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
   }
 
   private ProtobufSchema schemaWithName(ProtobufSchema schema, String name) {
-    Pair<String, ProtobufSchema> cacheKey = new Pair<>(name, schema);
     try {
-      return schemaCache.get(cacheKey, () -> schema.copy(name));
+      return schemaCache.get(schema, ConcurrentHashMap::new)
+          .computeIfAbsent(name, schema::copy);
     } catch (ExecutionException e) {
       return schema.copy(name);
     }
@@ -347,49 +350,5 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
   ) throws SerializationException {
     return (ProtobufSchemaAndValue) deserialize(
         true, topic, isKey, headers, payload, writerToReaderSchemaFunc);
-  }
-
-  static class Pair<K, V> {
-    private final K key;
-    private final V value;
-
-    public Pair(K key, V value) {
-      this.key = key;
-      this.value = value;
-    }
-
-    public K getKey() {
-      return key;
-    }
-
-    public V getValue() {
-      return value;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-      if (this == o) {
-        return true;
-      }
-      if (o == null || getClass() != o.getClass()) {
-        return false;
-      }
-      Pair<?, ?> pair = (Pair<?, ?>) o;
-      return Objects.equals(key, pair.key)
-          && Objects.equals(value, pair.value);
-    }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(key, value);
-    }
-
-    @Override
-    public String toString() {
-      return "Pair{"
-          + "key=" + key
-          + ", value=" + value
-          + '}';
-    }
   }
 }
