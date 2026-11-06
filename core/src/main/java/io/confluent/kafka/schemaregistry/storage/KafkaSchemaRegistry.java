@@ -209,7 +209,9 @@ public class KafkaSchemaRegistry extends AbstractSchemaRegistry implements
           return true;
         }
       }
-      return false;
+      // getAll excludes its upper bound, and an imported version may be MAX_VERSION
+      SchemaValue last = (SchemaValue) store.get(new SchemaKey(subject, MAX_VERSION));
+      return last != null && (lookupDeletedSchema || !last.isDeleted());
     } catch (StoreException e) {
       throw new SchemaRegistryStoreException("Error from the backend Kafka store", e);
     }

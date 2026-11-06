@@ -186,6 +186,17 @@ public class LookupMissCacheIntegrationTest extends ClusterTestHarness {
   }
 
   @Test
+  public void testContextWithOnlyAVersionAtMaxVersion() throws Exception {
+    // The range read of a context's versions excludes its upper bound
+    restApp.restClient.setMode("IMPORT", ":.ctx:foo");
+    restApp.restClient.registerSchema(AVRO_1, ":.ctx:foo", Integer.MAX_VALUE, 100);
+
+    Schema found = lookUp(AvroSchema.TYPE, AVRO_1, "foo", false);
+    assertEquals(":.ctx:foo", found.getSubject());
+    assertEquals(Integer.MAX_VALUE, found.getVersion());
+  }
+
+  @Test
   public void testNewContextDropsMiss() throws Exception {
     // A context without the subject, which the lookup skips
     restApp.restClient.registerSchema(AVRO_2, ":.other:bar");
