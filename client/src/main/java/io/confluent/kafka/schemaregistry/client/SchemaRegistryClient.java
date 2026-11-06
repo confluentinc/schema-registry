@@ -188,6 +188,16 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
     throw new UnsupportedOperationException();
   }
 
+  /**
+   * The schema with the given GUID, its references read in the given subject's context, where the
+   * GUID is taken to have been written: a reference subject without a context is resolved in its
+   * referrer's, which a GUID alone does not tell.
+   */
+  default ParsedSchema getSchemaBySubjectAndGuid(String subject, String guid, String format)
+      throws IOException, RestClientException {
+    return getSchemaByGuid(guid, format);
+  }
+
   public default List<ParsedSchema> getSchemas(
       String subjectPrefix,
       boolean lookupDeletedSchema,
