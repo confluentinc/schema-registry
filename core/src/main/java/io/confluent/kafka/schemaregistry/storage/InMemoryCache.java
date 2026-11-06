@@ -40,6 +40,8 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static io.confluent.kafka.schemaregistry.storage.SchemaRegistry.MAX_VERSION;
+import static io.confluent.kafka.schemaregistry.storage.SchemaRegistry.MIN_VERSION;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_DELIMITER;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.GLOBAL_CONTEXT_NAME;
@@ -473,6 +475,10 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
 
   @Override
   public boolean hasSubjects(String subject, boolean lookupDeletedSubjects) throws StoreException {
+    QualifiedSubject qs = QualifiedSubject.create(tenant(), subject);
+    if (qs != null && !qs.getSubject().isEmpty()) {
+      return hasVersions(subject, lookupDeletedSubjects);
+    }
     return hasSubjects(matchingSubjectPredicate(subject), lookupDeletedSubjects);
   }
 
@@ -490,6 +496,16 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
           }
           return false;
         });
+  }
+
+  // The versions of one subject are adjacent in the store, so only their range is read
+  @SuppressWarnings("unchecked")
+  private boolean hasVersions(String subject, boolean lookupDeletedSubjects) {
+    return store.subMap((K) new SchemaKey(subject, MIN_VERSION), true,
+            (K) new SchemaKey(subject, MAX_VERSION), true)
+        .values().stream()
+        .anyMatch(v -> v instanceof SchemaValue
+            && (lookupDeletedSubjects || !((SchemaValue) v).isDeleted()));
   }
 
   @Override
