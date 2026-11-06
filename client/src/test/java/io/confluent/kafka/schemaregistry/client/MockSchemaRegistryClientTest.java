@@ -1251,4 +1251,22 @@ public class MockSchemaRegistryClientTest {
         }
     }
 
+  // A body whose references name subjects without a context reads them in its own subject's
+  // context, so the same body and references under two contexts parse to two schemas.
+  @Test
+  public void testSameBodyWithReferencesParsesPerContext() throws Exception {
+    client.register(":.a:y", new AvroSchema("{\"type\": \"record\", \"name\": \"Y\", "
+        + "\"fields\": [{\"name\": \"f\", \"type\": \"int\"}]}"));
+    client.register(":.b:y", new AvroSchema("{\"type\": \"record\", \"name\": \"Y\", "
+        + "\"fields\": [{\"name\": \"g\", \"type\": \"string\"}]}"));
+    String body = "{\"type\": \"record\", \"name\": \"X\", "
+        + "\"fields\": [{\"name\": \"a\", \"type\": \"Y\"}]}";
+    List<SchemaReference> refs = Collections.singletonList(new SchemaReference("Y", "y", 1));
+    org.apache.avro.Schema a = ((AvroSchema) client.parseSchema(
+        new Schema(":.a:x", null, null, AvroSchema.TYPE, refs, body)).get()).rawSchema();
+    org.apache.avro.Schema b = ((AvroSchema) client.parseSchema(
+        new Schema(":.b:x", null, null, AvroSchema.TYPE, refs, body)).get()).rawSchema();
+    assertNotNull(a.getField("a").schema().getField("f"));
+    assertNotNull(b.getField("a").schema().getField("g"));
+  }
 }
