@@ -225,11 +225,15 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
 
   private Schema contentCacheKey(Schema schema) {
     // The subject is part of the key only for a provider whose result depends on it, so that two
-    // subjects sharing a body do not share the first one's parse.
+    // subjects sharing a body do not share the first one's parse. A reference's subject without a
+    // context resolves in its referrer's, so a schema with references is keyed by its context.
     SchemaProvider provider = providers.get(
         schema.getSchemaType() != null ? schema.getSchemaType() : AvroSchema.TYPE);
     String subject = provider != null && provider.isSubjectDependent(schema)
-        ? schema.getSubject() : null;
+        ? schema.getSubject()
+        : schema.getReferences() != null && !schema.getReferences().isEmpty()
+            ? QualifiedSubject.qualifiedContextFor(DEFAULT_TENANT, schema.getSubject())
+            : null;
     return new Schema(
         subject, null, null, schema.getSchemaType(), schema.getReferences(),
         schema.getMetadata(), schema.getRuleSet(), schema.getSchema());
@@ -500,6 +504,19 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   public ParsedSchema getSchemaByGuid(String guid, String format)
       throws IOException, RestClientException {
     return guidToSchemaCache.get(guid);
+  }
+
+  @Override
+  public ParsedSchema getSchemaBySubjectAndGuid(String subject, String guid, String format)
+      throws IOException, RestClientException {
+    ParsedSchema schema = getSchemaByGuid(guid, format);
+    if (schema == null || subject == null || subject.isEmpty()
+        || schema.references().isEmpty()) {
+      return schema;
+    }
+    // Its references read as of the subject, in whose context they resolve.
+    return parseSchemaOrElseThrow(new Schema(subject, null, null, schema.schemaType(),
+        schema.references(), schema.metadata(), schema.ruleSet(), schema.canonicalString()));
   }
 
   private Stream<ParsedSchema> getSchemasForSubject(
