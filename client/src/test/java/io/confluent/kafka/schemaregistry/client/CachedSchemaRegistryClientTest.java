@@ -367,6 +367,36 @@ public class CachedSchemaRegistryClientTest {
     verify(restService);
   }
 
+  // A GUID looked up under a subject of one context does not lend that context's parse to a
+  // read by GUID alone, which reads the references in the default context.
+  @Test
+  public void testGuidLookedUpInAContextIsReadAloneInTheDefaultContext() throws Exception {
+    String inA = "{\"type\": \"record\", \"name\": \"Y\", "
+        + "\"fields\": [{\"name\": \"f\", \"type\": \"int\"}]}";
+    String inDefault = "{\"type\": \"record\", \"name\": \"Y\", "
+        + "\"fields\": [{\"name\": \"g\", \"type\": \"string\"}]}";
+    String body = "{\"type\": \"record\", \"name\": \"X\", "
+        + "\"fields\": [{\"name\": \"a\", \"type\": \"Y\"}]}";
+    List<SchemaReference> refs = Collections.singletonList(new SchemaReference("Y", "y", 1));
+    Schema found = new Schema(":.a:x", 1, 5, AvroSchema.TYPE, refs, body);
+    found.setGuid("g1");
+    expect(restService.lookUpSubjectVersion(anyObject(RegisterSchemaRequest.class),
+        eq(":.a:x"), anyBoolean(), anyBoolean())).andReturn(found);
+    SchemaString x = new SchemaString(body);
+    x.setReferences(refs);
+    expect(restService.getByGuid("g1", null)).andReturn(x);
+    expect(restService.getVersion("y", 1, true))
+        .andReturn(new Schema("y", 1, 8, AvroSchema.TYPE, Collections.emptyList(), inDefault))
+        .anyTimes();
+    replay(restService);
+
+    AvroSchema xa = new AvroSchema(body, refs, Collections.singletonMap("Y", inA), null);
+    assertEquals("g1", client.getGuid(":.a:x", xa));
+    AvroSchema alone = (AvroSchema) client.getSchemaByGuid("g1", null);
+    assertNotNull(alone.rawSchema().getField("a").schema().getField("g"));
+    verify(restService);
+  }
+
   @Test
   public void testGuidCache() throws Exception {
     expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class),

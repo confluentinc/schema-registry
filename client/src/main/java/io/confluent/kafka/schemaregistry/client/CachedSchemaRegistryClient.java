@@ -1058,7 +1058,11 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
 
         final String retrievedGuid = getGuidFromRegistry(subject, schema, normalize);
         guidMap.put(cacheKey, retrievedGuid);
-        guidToSchemaCache.put(retrievedGuid, schema);
+        // A schema with references is the caller's, read in its subject's context; a read by
+        // GUID alone reads them in the default context, so it fetches its own.
+        if (schema.references().isEmpty()) {
+          guidToSchemaCache.put(retrievedGuid, schema);
+        }
         return retrievedGuid;
       }
     } catch (ExecutionException e) {
