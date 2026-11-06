@@ -17,11 +17,16 @@
 package io.confluent.kafka.serializers;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.serializers.context.strategy.ContextNameStrategy;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Properties;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
@@ -139,5 +144,29 @@ public class ContextNameStrategyTest {
     public String contextName(String topic) {
       return ":customContext_" + topic + ":";
     }
+  }
+
+  // A latest version's references are read in its subject's context, even once the same body
+  // with the same references has been parsed in the default context.
+  @Test
+  public void testLatestVersionReadsReferencesInItsSubjectsContext() throws Exception {
+    SchemaRegistryClient client = new MockSchemaRegistryClient();
+    String inDefault = "{\"type\": \"record\", \"name\": \"Y\", "
+        + "\"fields\": [{\"name\": \"g\", \"type\": \"string\"}]}";
+    String inContext = "{\"type\": \"record\", \"name\": \"Y\", "
+        + "\"fields\": [{\"name\": \"f\", \"type\": \"int\"}]}";
+    String body = "{\"type\": \"record\", \"name\": \"X\", "
+        + "\"fields\": [{\"name\": \"a\", \"type\": \"Y\"}]}";
+    List<SchemaReference> refs = Collections.singletonList(new SchemaReference("Y", "y", 1));
+    client.register("y", new AvroSchema(inDefault));
+    client.register(":.ctx:y", new AvroSchema(inContext));
+    client.register("x",
+        new AvroSchema(body, refs, Collections.singletonMap("Y", inDefault), null));
+    client.register(":.ctx:x",
+        new AvroSchema(body, refs, Collections.singletonMap("Y", inContext), null));
+    AbstractKafkaSchemaSerDe.lookupLatestVersion(client, "x", null, null, false);
+    Schema latest = ((AvroSchema) AbstractKafkaSchemaSerDe.lookupLatestVersion(
+        client, ":.ctx:x", null, null, false).getSchema()).rawSchema();
+    assertNotNull(latest.getField("a").schema().getField("f"));
   }
 }

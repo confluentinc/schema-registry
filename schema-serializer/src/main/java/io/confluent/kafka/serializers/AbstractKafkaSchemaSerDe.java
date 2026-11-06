@@ -406,7 +406,7 @@ public abstract class AbstractKafkaSchemaSerDe implements ClusterResourceListene
       ParsedSchema schema =
           schemaRegistry.parseSchemaOrElseThrow(
               new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(
-                  null, schemaMetadata));
+                  subject, schemaMetadata));
       schema = schema.copy(schemaMetadata.getVersion());
       extendedSchema = new ExtendedSchema(
           schemaMetadata.getId(), schemaMetadata.getVersion(),
@@ -423,7 +423,7 @@ public abstract class AbstractKafkaSchemaSerDe implements ClusterResourceListene
     ParsedSchema schema =
         schemaRegistry.parseSchemaOrElseThrow(
             new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(
-                null, schemaMetadata));
+                subject, schemaMetadata));
     return schema.copy(schemaMetadata.getVersion());
   }
 
@@ -661,7 +661,7 @@ public abstract class AbstractKafkaSchemaSerDe implements ClusterResourceListene
       ParsedSchema latestVersion =
           schemaRegistry.parseSchemaOrElseThrow(
               new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(
-                  null, schemaMetadata));
+                  subject, schemaMetadata));
       latestVersion = latestVersion.copy(schemaMetadata.getVersion());
       // Sanity check by testing latest is backward compatibility with schema
       // Don't test for forward compatibility so unions can be handled properly
