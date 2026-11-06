@@ -104,7 +104,7 @@ public class RegisterDeks implements Callable<Integer> {
         Collections.emptyMap()
     )) {
       SchemaMetadata schemaMetadata = getSchemaMetadata(client);
-      Optional<ParsedSchema> schema = parseSchema(schemaMetadata);
+      Optional<ParsedSchema> schema = parseSchema(client, schemaMetadata);
       if (!schema.isPresent()) {
         LOG.error("No schema found");
         return 1;
@@ -154,7 +154,8 @@ public class RegisterDeks implements Callable<Integer> {
     }
   }
 
-  private Optional<ParsedSchema> parseSchema(SchemaMetadata schemaMetadata) throws Exception {
+  private Optional<ParsedSchema> parseSchema(SchemaRegistryClient client,
+                                             SchemaMetadata schemaMetadata) throws Exception {
     SchemaProvider provider;
     switch (schemaMetadata.getSchemaType()) {
       case "AVRO":
@@ -162,13 +163,13 @@ public class RegisterDeks implements Callable<Integer> {
         break;
       case "JSON":
         provider = (SchemaProvider)
-            Class.forName("io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider")
+            Class.forName("io.confluent.kafka.schemaregistry.json.JsonSchemaProvider")
                 .getDeclaredConstructor()
                 .newInstance();
         break;
       case "PROTOBUF":
         provider = (SchemaProvider)
-            Class.forName("io.confluent.kafka.schemaregistry.json.JsonSchemaProvider")
+            Class.forName("io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider")
                 .getDeclaredConstructor()
                 .newInstance();
         break;
@@ -176,7 +177,10 @@ public class RegisterDeks implements Callable<Integer> {
         throw new IllegalArgumentException("Unsupported schema type "
             + schemaMetadata.getSchemaType());
     }
-    // An alias's target, whose context its references are read in, or the subject asked for.
+    // Its references are fetched through the client, in the context of the subject the version
+    // belongs to: an alias's target, or the subject asked for.
+    provider.configure(
+        Collections.singletonMap(SchemaProvider.SCHEMA_VERSION_FETCHER_CONFIG, client));
     String parent = schemaMetadata.getSubject() != null ? schemaMetadata.getSubject() : subject;
     return provider.parseSchema(new Schema(parent, schemaMetadata), false, false);
   }
