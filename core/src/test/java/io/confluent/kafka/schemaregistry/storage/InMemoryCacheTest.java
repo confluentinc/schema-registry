@@ -16,7 +16,9 @@
 package io.confluent.kafka.schemaregistry.storage;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.storage.serialization.SchemaRegistrySerializer;
@@ -70,6 +72,30 @@ public class InMemoryCacheTest {
     assertEquals(new SchemaKey(SUBJECT, 3), cache.schemaKeyById(7, SUBJECT));
   }
 
+  @Test
+  public void hasSubjectsAgreesWithAScanOfEverySubject() throws Exception {
+    // subjects() still scans the whole store with the predicate hasSubjects used to
+    InMemoryCache<SchemaRegistryKey, SchemaRegistryValue> cache = cache();
+    put(cache, "s", 1, false);
+    put(cache, "s", 2, true);
+    put(cache, "sa", 1, false);
+    put(cache, "r", 1, true);
+    put(cache, ":.ctx:s", 1, false);
+    put(cache, ":.ctx:t", 1, true);
+
+    for (String query : new String[] {"s", "sa", "s2", "r", "t", ":.ctx:s", ":.ctx:t",
+        ":.ctx:u", ":.ctx:", ":.other:", ":.ctx:sa"}) {
+      for (boolean deleted : new boolean[] {false, true}) {
+        assertEquals(query + ", deleted " + deleted,
+            !cache.subjects(query, deleted).isEmpty(), cache.hasSubjects(query, deleted));
+      }
+    }
+    assertTrue(cache.hasSubjects("s", false));
+    assertFalse(cache.hasSubjects("r", false));
+    assertTrue(cache.hasSubjects("r", true));
+    assertFalse(cache.hasSubjects("s2", true));
+  }
+
   private static InMemoryCache<SchemaRegistryKey, SchemaRegistryValue> cache() throws Exception {
     InMemoryCache<SchemaRegistryKey, SchemaRegistryValue> cache =
         new InMemoryCache<>(new SchemaRegistrySerializer());
@@ -80,8 +106,13 @@ public class InMemoryCacheTest {
   // As the store handler does: the value goes in the store, then into the indexes.
   private static void put(InMemoryCache<SchemaRegistryKey, SchemaRegistryValue> cache,
       int version, boolean deleted) throws Exception {
-    SchemaKey key = new SchemaKey(SUBJECT, version);
-    SchemaValue value = new SchemaValue(SUBJECT, version, 7, SCHEMA, deleted);
+    put(cache, SUBJECT, version, deleted);
+  }
+
+  private static void put(InMemoryCache<SchemaRegistryKey, SchemaRegistryValue> cache,
+      String subject, int version, boolean deleted) throws Exception {
+    SchemaKey key = new SchemaKey(subject, version);
+    SchemaValue value = new SchemaValue(subject, version, 7, SCHEMA, deleted);
     cache.put(key, value);
     if (deleted) {
       cache.schemaDeleted(key, value, null);
