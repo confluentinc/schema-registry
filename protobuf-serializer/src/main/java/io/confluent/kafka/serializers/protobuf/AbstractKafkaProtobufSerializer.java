@@ -162,7 +162,8 @@ public abstract class AbstractKafkaProtobufSerializer<T extends Message>
           String formatted = schema.formattedString(schemaFormat);
           schema = schema.copyWithSchema(formatted);
         }
-        schema = (ProtobufSchema) lookupSchemaByGuid(useSchemaGuid, schema, idCompatStrict);
+        schema = (ProtobufSchema) lookupSchemaByGuid(
+            subject, useSchemaGuid, schema, idCompatStrict);
         int id = schemaRegistry.getId(subject, schema);
         schemaId = new SchemaId(ProtobufSchema.TYPE, id, useSchemaGuid);
       } else if (metadata != null) {
