@@ -84,6 +84,9 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   private final Cache<String, Cache<SchemaAndNormalize, Integer>> schemaToIdCache;
   private final Cache<String, Cache<Integer, Schema>> idToSchemaCache;
   private final Cache<String, ParsedSchema> guidToSchemaCache;
+  // The schema with each GUID as fetched, unparsed, to parse as of the subject a caller reads it
+  // under.
+  private final Cache<String, Schema> guidToSchemaEntityCache;
   private final Cache<String, Cache<SchemaAndNormalize, String>> schemaToGuidCache;
   private final Cache<String, Cache<SchemaAndNormalize, Integer>> schemaToVersionCache;
   private final Cache<String, Cache<Integer, Schema>> versionToSchemaCache;
@@ -233,6 +236,9 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
         .maximumSize(cacheCapacity)
         .build();
     this.guidToSchemaCache = CacheBuilder.newBuilder()
+        .maximumSize(cacheCapacity)
+        .build();
+    this.guidToSchemaEntityCache = CacheBuilder.newBuilder()
         .maximumSize(cacheCapacity)
         .build();
     this.schemaToVersionCache = CacheBuilder.newBuilder()
@@ -490,6 +496,14 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
 
   protected ParsedSchema getSchemaByGuidFromRegistry(String guid, String format)
       throws IOException, RestClientException {
+    Schema schema = getSchemaEntityByGuidFromRegistry(guid, format);
+    Optional<ParsedSchema> parsed = parseSchema(schema);
+    return parsed.orElseThrow(() -> new IOException("Invalid schema of type "
+        + schema.getSchemaType()));
+  }
+
+  protected Schema getSchemaEntityByGuidFromRegistry(String guid, String format)
+      throws IOException, RestClientException {
     String cacheKey = format != null ? guid + ":" + format : guid;
     if (missingGuidCache.getIfPresent(cacheKey) != null) {
       throw new RestClientException("Schema " + guid + " not found",
@@ -505,9 +519,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       }
       throw rce;
     }
-    Optional<ParsedSchema> schema = parseSchema(new Schema(null, null, null, restSchema));
-    return schema.orElseThrow(() -> new IOException("Invalid schema of type "
-        + restSchema.getSchemaType()));
+    return new Schema(null, null, null, restSchema);
   }
 
   private int getVersionFromRegistry(String subject, ParsedSchema schema, boolean normalize)
@@ -703,6 +715,35 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       guidToSchemaCache.put(cacheKey, retrievedSchema);
       return retrievedSchema;
     }
+  }
+
+  @Override
+  public ParsedSchema getSchemaBySubjectAndGuid(String subject, String guid, String format)
+      throws IOException, RestClientException {
+    if (subject == null || subject.isEmpty()) {
+      return getSchemaByGuid(guid, format);
+    }
+    String cacheKey = format != null ? guid + ":" + format : guid;
+    Schema schema = guidToSchemaEntityCache.getIfPresent(cacheKey);
+    if (schema == null) {
+      synchronized (this) {
+        schema = guidToSchemaEntityCache.getIfPresent(cacheKey);
+        if (schema == null) {
+          schema = getSchemaEntityByGuidFromRegistry(guid, format);
+          guidToSchemaEntityCache.put(cacheKey, schema);
+        }
+      }
+    }
+    return parseSchemaOrElseThrow(asOf(subject, schema));
+  }
+
+  // A schema with references read as of the subject, in whose context they resolve.
+  static Schema asOf(String subject, Schema schema) {
+    if (schema.getReferences() == null || schema.getReferences().isEmpty()) {
+      return schema;
+    }
+    return new Schema(subject, null, null, schema.getSchemaType(), schema.getReferences(),
+        schema.getMetadata(), schema.getRuleSet(), schema.getSchema());
   }
 
   @Override
@@ -1305,6 +1346,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     versionToSchemaCache.invalidateAll();
     schemaToGuidCache.invalidateAll();
     guidToSchemaCache.invalidateAll();
+    guidToSchemaEntityCache.invalidateAll();
     latestVersionCache.invalidateAll();
     latestWithMetadataCache.invalidateAll();
     missingSchemaCache.invalidateAll();

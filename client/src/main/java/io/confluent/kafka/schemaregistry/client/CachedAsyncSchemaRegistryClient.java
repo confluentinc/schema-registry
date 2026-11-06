@@ -83,6 +83,7 @@ public class CachedAsyncSchemaRegistryClient implements AsyncSchemaRegistryClien
   private final Cache<Schema, CompletableFuture<Optional<ParsedSchema>>> parsedSchemaCache;
   private final Cache<SubjectAndInt, CompletableFuture<Schema>> idToSchemaCache;
   private final Cache<String, CompletableFuture<ParsedSchema>> guidToSchemaCache;
+  private final Cache<String, CompletableFuture<Schema>> guidToSchemaEntityCache;
   private final Cache<SubjectAndInt, CompletableFuture<Schema>> versionToSchemaCache;
   private final Cache<String, CompletableFuture<SchemaMetadata>> latestVersionCache;
   private final Cache<SubjectAndMetadata, CompletableFuture<SchemaMetadata>>
@@ -119,6 +120,7 @@ public class CachedAsyncSchemaRegistryClient implements AsyncSchemaRegistryClien
     this.parsedSchemaCache = newCache(cacheCapacity, -1);
     this.idToSchemaCache = newCache(cacheCapacity, -1);
     this.guidToSchemaCache = newCache(cacheCapacity, -1);
+    this.guidToSchemaEntityCache = newCache(cacheCapacity, -1);
     this.versionToSchemaCache = newCache(cacheCapacity, -1);
     this.registerResponseCache = newCache(cacheCapacity, -1);
     this.lookupResponseCache = newCache(cacheCapacity, -1);
@@ -188,7 +190,24 @@ public class CachedAsyncSchemaRegistryClient implements AsyncSchemaRegistryClien
   @Override
   public CompletableFuture<ParsedSchema> getSchemaByGuid(String guid, String format) {
     String key = format != null ? guid + ":" + format : guid;
-    return cached(guidToSchemaCache, key, () -> {
+    return cached(guidToSchemaCache, key,
+        () -> getSchemaEntityByGuid(guid, format).thenCompose(this::parseSchemaOrElseThrow));
+  }
+
+  @Override
+  public CompletableFuture<ParsedSchema> getSchemaBySubjectAndGuid(
+      String subject, String guid, String format) {
+    if (subject == null || subject.isEmpty()) {
+      return getSchemaByGuid(guid, format);
+    }
+    return getSchemaEntityByGuid(guid, format).thenCompose(
+        schema -> parseSchemaOrElseThrow(CachedSchemaRegistryClient.asOf(subject, schema)));
+  }
+
+  // The schema with the GUID as fetched, unparsed.
+  private CompletableFuture<Schema> getSchemaEntityByGuid(String guid, String format) {
+    String key = format != null ? guid + ":" + format : guid;
+    return cached(guidToSchemaEntityCache, key, () -> {
       if (missingGuidCache.getIfPresent(key) != null) {
         return notFound("Schema " + guid + " not found", SCHEMA_NOT_FOUND_ERROR_CODE);
       }
@@ -197,8 +216,7 @@ public class CachedAsyncSchemaRegistryClient implements AsyncSchemaRegistryClien
           missingGuidCache,
           key,
           CachedSchemaRegistryClient::isSchemaOrSubjectNotFoundException)
-          .thenCompose(restSchema ->
-              parseSchemaOrElseThrow(new Schema(null, null, null, restSchema)));
+          .thenApply(restSchema -> new Schema(null, null, null, restSchema));
     });
   }
 
@@ -365,6 +383,7 @@ public class CachedAsyncSchemaRegistryClient implements AsyncSchemaRegistryClien
   @Override
   public void reset() {
     parsedSchemaCache.invalidateAll();
+    guidToSchemaEntityCache.invalidateAll();
     idToSchemaCache.invalidateAll();
     guidToSchemaCache.invalidateAll();
     versionToSchemaCache.invalidateAll();

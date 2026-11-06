@@ -502,6 +502,19 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
     return guidToSchemaCache.get(guid);
   }
 
+  @Override
+  public ParsedSchema getSchemaBySubjectAndGuid(String subject, String guid, String format)
+      throws IOException, RestClientException {
+    ParsedSchema schema = getSchemaByGuid(guid, format);
+    if (schema == null || subject == null || subject.isEmpty()
+        || schema.references().isEmpty()) {
+      return schema;
+    }
+    // Its references read as of the subject, in whose context they resolve.
+    return parseSchemaOrElseThrow(new Schema(subject, null, null, schema.schemaType(),
+        schema.references(), schema.metadata(), schema.ruleSet(), schema.canonicalString()));
+  }
+
   private Stream<ParsedSchema> getSchemasForSubject(
       String subject,
       boolean latestOnly) {
