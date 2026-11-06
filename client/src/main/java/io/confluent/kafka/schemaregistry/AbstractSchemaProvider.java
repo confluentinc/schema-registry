@@ -52,16 +52,6 @@ public abstract class AbstractSchemaProvider implements SchemaProvider {
     return schemaVersionFetcher;
   }
 
-  /**
-   * A schema with references depends on its subject: a reference's subject without a context is
-   * resolved in the referring subject's context, so one body with the same references may read
-   * different schemas under subjects of different contexts.
-   */
-  @Override
-  public boolean isSubjectDependent(Schema schema) {
-    return schema.getReferences() != null && !schema.getReferences().isEmpty();
-  }
-
   protected Map<String, String> resolveReferences(Schema schema) {
     return resolveReferences(schema, false);
   }

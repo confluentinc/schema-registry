@@ -150,7 +150,7 @@ public class ContextNameStrategyTest {
   }
 
   // A latest version's references are read in its subject's context, even once the same body
-  // with the same references has been parsed in the default context.
+  // with the same references has been registered and parsed in the default context.
   @Test
   public void testLatestVersionReadsReferencesInItsSubjectsContext() throws Exception {
     SchemaRegistryClient client = new MockSchemaRegistryClient();
@@ -163,10 +163,10 @@ public class ContextNameStrategyTest {
     List<SchemaReference> refs = Collections.singletonList(new SchemaReference("Y", "y", 1));
     client.register("y", new AvroSchema(inDefault));
     client.register(":.ctx:y", new AvroSchema(inContext));
-    client.register("x",
-        new AvroSchema(body, refs, Collections.singletonMap("Y", inDefault), null));
     client.register(":.ctx:x",
         new AvroSchema(body, refs, Collections.singletonMap("Y", inContext), null));
+    client.register("x",
+        new AvroSchema(body, refs, Collections.singletonMap("Y", inDefault), null));
     AbstractKafkaSchemaSerDe.lookupLatestVersion(client, "x", null, null, false);
     Schema latest = ((AvroSchema) AbstractKafkaSchemaSerDe.lookupLatestVersion(
         client, ":.ctx:x", null, null, false).getSchema()).rawSchema();
@@ -195,6 +195,7 @@ public class ContextNameStrategyTest {
     client.register(":.a:y", new AvroSchema(inA));
     client.register(":.b:y", new AvroSchema(inB));
     client.register(":.b:x", new AvroSchema(body, refs, Collections.singletonMap("Y", inB), null));
+    client.register(":.a:x", new AvroSchema(body, refs, Collections.singletonMap("Y", inA), null));
     Schema latest = ((AvroSchema) AbstractKafkaSchemaSerDe.lookupLatestVersion(
         client, ":.a:alias", null, null, false).getSchema()).rawSchema();
     assertNotNull(latest.getField("a").schema().getField("f"));

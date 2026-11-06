@@ -1269,4 +1269,19 @@ public class MockSchemaRegistryClientTest {
     assertNotNull(a.getField("a").schema().getField("f"));
     assertNotNull(b.getField("a").schema().getField("g"));
   }
+
+  // Only the context matters to the references, so subjects of one context share a parse.
+  @Test
+  public void testSameBodyWithReferencesParsesOncePerContext() throws Exception {
+    client.register(":.a:y", new AvroSchema("{\"type\": \"record\", \"name\": \"Y\", "
+        + "\"fields\": [{\"name\": \"f\", \"type\": \"int\"}]}"));
+    String body = "{\"type\": \"record\", \"name\": \"X\", "
+        + "\"fields\": [{\"name\": \"a\", \"type\": \"Y\"}]}";
+    List<SchemaReference> refs = Collections.singletonList(new SchemaReference("Y", "y", 1));
+    ParsedSchema x = client.parseSchema(
+        new Schema(":.a:x", null, null, AvroSchema.TYPE, refs, body)).get();
+    ParsedSchema z = client.parseSchema(
+        new Schema(":.a:z", null, null, AvroSchema.TYPE, refs, body)).get();
+    assertSame(x, z);
+  }
 }

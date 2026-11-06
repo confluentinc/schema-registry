@@ -189,9 +189,9 @@ public interface SchemaRegistryClient extends Closeable, SchemaVersionFetcher {
   }
 
   /**
-   * The schema with the given GUID, its references read in the given subject's context, as a
-   * schema fetched by id with that subject reads them: a reference subject without a context is
-   * resolved in its referrer's, which a GUID alone does not tell.
+   * The schema with the given GUID, its references read in the given subject's context, where the
+   * GUID is taken to have been written: a reference subject without a context is resolved in its
+   * referrer's, which a GUID alone does not tell.
    */
   default ParsedSchema getSchemaBySubjectAndGuid(String subject, String guid, String format)
       throws IOException, RestClientException {
