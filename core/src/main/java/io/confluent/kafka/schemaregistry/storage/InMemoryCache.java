@@ -40,9 +40,12 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static io.confluent.kafka.schemaregistry.storage.SchemaRegistry.MAX_VERSION;
+import static io.confluent.kafka.schemaregistry.storage.SchemaRegistry.MIN_VERSION;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.CONTEXT_DELIMITER;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_CONTEXT;
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.GLOBAL_CONTEXT_NAME;
+import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.WILDCARD;
 
 
 /**
@@ -473,6 +476,11 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
 
   @Override
   public boolean hasSubjects(String subject, boolean lookupDeletedSubjects) throws StoreException {
+    // A context or a wildcard, which a subclass's predicate may treat as a prefix, is scanned
+    if (subject != null && !subject.contains(WILDCARD)
+        && !QualifiedSubject.isContext(tenant(), subject)) {
+      return hasVersions(subject, lookupDeletedSubjects);
+    }
     return hasSubjects(matchingSubjectPredicate(subject), lookupDeletedSubjects);
   }
 
@@ -490,6 +498,23 @@ public class InMemoryCache<K, V> implements LookupCache<K, V> {
           }
           return false;
         });
+  }
+
+  // The versions of one subject are adjacent in the store, so only their range is read; the
+  // name is still compared, as the order treats spellings of one subject alike
+  @SuppressWarnings("unchecked")
+  private boolean hasVersions(String subject, boolean lookupDeletedSubjects) {
+    return store.subMap((K) new SchemaKey(subject, MIN_VERSION), true,
+            (K) new SchemaKey(subject, MAX_VERSION), true)
+        .entrySet().stream()
+        .anyMatch(e -> e.getKey() instanceof SchemaKey
+            && subject.equals(((SchemaKey) e.getKey()).getSubject())
+            && isVisible(e.getValue(), lookupDeletedSubjects));
+  }
+
+  private static boolean isVisible(Object value, boolean lookupDeletedSubjects) {
+    return value instanceof SchemaValue
+        && (lookupDeletedSubjects || !((SchemaValue) value).isDeleted());
   }
 
   @Override
