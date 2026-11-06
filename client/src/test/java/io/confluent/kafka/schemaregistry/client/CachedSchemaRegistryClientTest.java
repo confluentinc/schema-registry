@@ -353,6 +353,20 @@ public class CachedSchemaRegistryClientTest {
     verify(restService);
   }
 
+  // A GUID read without a subject, as a deserializer does to name the subject from the schema,
+  // and then with one, is fetched once.
+  @Test
+  public void testGuidReadWithAndWithoutASubjectIsFetchedOnce() throws Exception {
+    expect(restService.getByGuid("g1", null)).andReturn(new SchemaString(SCHEMA_STR_0)).once();
+    replay(restService);
+
+    AvroSchema bare = (AvroSchema) client.getSchemaByGuid("g1", null);
+    AvroSchema named = (AvroSchema) client.getSchemaBySubjectAndGuid(SUBJECT_0, "g1", null);
+    assertEquals(AVRO_SCHEMA_0.rawSchema(), bare.rawSchema());
+    assertEquals(AVRO_SCHEMA_0.rawSchema(), named.rawSchema());
+    verify(restService);
+  }
+
   @Test
   public void testGuidCache() throws Exception {
     expect(restService.registerSchema(anyObject(RegisterSchemaRequest.class),

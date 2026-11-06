@@ -501,7 +501,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
 
   protected ParsedSchema getSchemaByGuidFromRegistry(String guid, String format)
       throws IOException, RestClientException {
-    Schema schema = getSchemaEntityByGuidFromRegistry(guid, format);
+    Schema schema = getSchemaEntityByGuid(guid, format);
     Optional<ParsedSchema> parsed = parseSchema(schema);
     return parsed.orElseThrow(() -> new IOException("Invalid schema of type "
         + schema.getSchemaType()));
@@ -728,6 +728,12 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     if (subject == null || subject.isEmpty()) {
       return getSchemaByGuid(guid, format);
     }
+    return parseSchemaOrElseThrow(asOf(subject, getSchemaEntityByGuid(guid, format)));
+  }
+
+  // The schema with the GUID as fetched, fetched once however it is then read.
+  private Schema getSchemaEntityByGuid(String guid, String format)
+      throws IOException, RestClientException {
     String cacheKey = format != null ? guid + ":" + format : guid;
     Schema schema = guidToSchemaEntityCache.getIfPresent(cacheKey);
     if (schema == null) {
@@ -739,7 +745,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
         }
       }
     }
-    return parseSchemaOrElseThrow(asOf(subject, schema));
+    return schema;
   }
 
   // A schema with references read as of the subject, in whose context they resolve.
