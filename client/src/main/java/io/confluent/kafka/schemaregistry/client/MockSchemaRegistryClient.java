@@ -225,11 +225,15 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
 
   private Schema contentCacheKey(Schema schema) {
     // The subject is part of the key only for a provider whose result depends on it, so that two
-    // subjects sharing a body do not share the first one's parse.
+    // subjects sharing a body do not share the first one's parse. A reference's subject without a
+    // context resolves in its referrer's, so a schema with references is keyed by its context.
     SchemaProvider provider = providers.get(
         schema.getSchemaType() != null ? schema.getSchemaType() : AvroSchema.TYPE);
     String subject = provider != null && provider.isSubjectDependent(schema)
-        ? schema.getSubject() : null;
+        ? schema.getSubject()
+        : schema.getReferences() != null && !schema.getReferences().isEmpty()
+            ? QualifiedSubject.qualifiedContextFor(DEFAULT_TENANT, schema.getSubject())
+            : null;
     return new Schema(
         subject, null, null, schema.getSchemaType(), schema.getReferences(),
         schema.getMetadata(), schema.getRuleSet(), schema.getSchema());
@@ -499,7 +503,24 @@ public class MockSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public ParsedSchema getSchemaByGuid(String guid, String format)
       throws IOException, RestClientException {
-    return guidToSchemaCache.get(guid);
+    return asOf(null, guidToSchemaCache.get(guid));
+  }
+
+  @Override
+  public ParsedSchema getSchemaBySubjectAndGuid(String subject, String guid, String format)
+      throws IOException, RestClientException {
+    return asOf(subject == null || subject.isEmpty() ? null : subject,
+        guidToSchemaCache.get(guid));
+  }
+
+  // A schema with a GUID parsed as of the subject, or of none, reading its references in the
+  // default context: the one registered is its caller's, read in the caller's subject's context.
+  private ParsedSchema asOf(String subject, ParsedSchema schema) throws IOException {
+    if (schema == null) {
+      return null;
+    }
+    return parseSchemaOrElseThrow(new Schema(subject, null, null, schema.schemaType(),
+        schema.references(), schema.metadata(), schema.ruleSet(), schema.canonicalString()));
   }
 
   private Stream<ParsedSchema> getSchemasForSubject(
