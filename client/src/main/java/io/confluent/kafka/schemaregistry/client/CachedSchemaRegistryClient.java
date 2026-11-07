@@ -709,17 +709,11 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
     if (cachedSchema != null) {
       return cachedSchema;
     }
-
-    synchronized (this) {
-      cachedSchema = guidToSchemaCache.getIfPresent(cacheKey);
-      if (cachedSchema != null) {
-        return cachedSchema;
-      }
-
-      final ParsedSchema retrievedSchema = getSchemaByGuidFromRegistry(guid, format);
-      guidToSchemaCache.put(cacheKey, retrievedSchema);
-      return retrievedSchema;
-    }
+    // Parsed without holding the client's lock, which only its fetch takes: a parse fetching the
+    // references takes it, so another thread's parse of the same schema would wait on this one.
+    ParsedSchema retrievedSchema = getSchemaByGuidFromRegistry(guid, format);
+    guidToSchemaCache.put(cacheKey, retrievedSchema);
+    return retrievedSchema;
   }
 
   @Override

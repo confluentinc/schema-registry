@@ -35,6 +35,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -64,6 +65,7 @@ import static org.easymock.EasyMock.reset;
 import static org.easymock.EasyMock.verify;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class CachedSchemaRegistryClientTest {
@@ -395,6 +397,44 @@ public class CachedSchemaRegistryClientTest {
     AvroSchema alone = (AvroSchema) client.getSchemaByGuid("g1", null);
     assertNotNull(alone.rawSchema().getField("a").schema().getField("g"));
     verify(restService);
+  }
+
+  // A read by GUID alone parses without holding the client's lock: another thread parsing the
+  // same schema, whose references it fetches under the lock, would otherwise wait forever.
+  @Test
+  public void testAGuidReadAloneDoesNotParseHoldingTheLock() throws Exception {
+    String y = "{\"type\": \"record\", \"name\": \"Y\", "
+        + "\"fields\": [{\"name\": \"f\", \"type\": \"int\"}]}";
+    String body = "{\"type\": \"record\", \"name\": \"X\", "
+        + "\"fields\": [{\"name\": \"a\", \"type\": \"Y\"}]}";
+    List<SchemaReference> refs = Collections.singletonList(new SchemaReference("Y", "y", 1));
+    SchemaString x = new SchemaString(body);
+    x.setReferences(refs);
+    FutureTask<ParsedSchema> other = new FutureTask<>(() -> client.parseSchemaOrElseThrow(
+        new Schema("x", null, null, AvroSchema.TYPE, refs, body)));
+    // While the GUID's fetch holds the lock, the other thread parses and waits for the lock.
+    expect(restService.getByGuid("g1", null)).andAnswer(() -> {
+      Thread parser = new Thread(other);
+      parser.setDaemon(true);
+      parser.start();
+      long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
+      while (parser.getState() != Thread.State.BLOCKED) {
+        assertTrue(System.nanoTime() < deadline);
+        Thread.onSpinWait();
+      }
+      return x;
+    });
+    expect(restService.getVersion("y", 1, true))
+        .andReturn(new Schema("y", 1, 8, AvroSchema.TYPE, Collections.emptyList(), y))
+        .anyTimes();
+    replay(restService);
+
+    FutureTask<ParsedSchema> read = new FutureTask<>(() -> client.getSchemaByGuid("g1", null));
+    Thread reader = new Thread(read);
+    reader.setDaemon(true);
+    reader.start();
+    assertNotNull(read.get(30, TimeUnit.SECONDS));
+    assertNotNull(other.get(30, TimeUnit.SECONDS));
   }
 
   @Test
