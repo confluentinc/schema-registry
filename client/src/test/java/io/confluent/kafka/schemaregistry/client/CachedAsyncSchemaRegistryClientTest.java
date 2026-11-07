@@ -26,6 +26,7 @@ import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.verify;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
@@ -84,6 +85,31 @@ public class CachedAsyncSchemaRegistryClientTest {
     restService = createMock(AsyncRestService.class);
     expect(restService.getExecutor()).andStubAnswer(() -> executor);
     client = newClient(Collections.emptyMap());
+  }
+
+  // A schema fetched by GUID reads its references in the context of the subject it is read
+  // under, which the GUID alone does not tell; the GUID is fetched once for every context.
+  @Test
+  public void testGuidReadsReferencesInTheSubjectsContext() throws Exception {
+    String inA = "{\"type\": \"record\", \"name\": \"Y\", "
+        + "\"fields\": [{\"name\": \"f\", \"type\": \"int\"}]}";
+    String inB = "{\"type\": \"record\", \"name\": \"Y\", "
+        + "\"fields\": [{\"name\": \"g\", \"type\": \"string\"}]}";
+    SchemaString x = new SchemaString("{\"type\": \"record\", \"name\": \"X\", "
+        + "\"fields\": [{\"name\": \"a\", \"type\": \"Y\"}]}");
+    x.setReferences(Collections.singletonList(new SchemaReference("Y", "y", 1)));
+    expect(restService.getByGuid("g1", null)).andReturn(completedFuture(x)).once();
+    expect(restService.getVersion(":.a:y", 1, true)).andReturn(completedFuture(
+        new Schema(":.a:y", 1, 7, AvroSchema.TYPE, Collections.emptyList(), inA))).anyTimes();
+    expect(restService.getVersion(":.b:y", 1, true)).andReturn(completedFuture(
+        new Schema(":.b:y", 1, 8, AvroSchema.TYPE, Collections.emptyList(), inB))).anyTimes();
+    replay(restService);
+
+    AvroSchema a = (AvroSchema) await(client.getSchemaBySubjectAndGuid(":.a:x", "g1", null));
+    AvroSchema b = (AvroSchema) await(client.getSchemaBySubjectAndGuid(":.b:x", "g1", null));
+    assertNotNull(a.rawSchema().getField("a").schema().getField("f"));
+    assertNotNull(b.rawSchema().getField("a").schema().getField("g"));
+    verify(restService);
   }
 
   @Test

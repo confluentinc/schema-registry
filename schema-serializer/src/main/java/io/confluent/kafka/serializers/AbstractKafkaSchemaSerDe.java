@@ -493,7 +493,7 @@ public abstract class AbstractKafkaSchemaSerDe
       ParsedSchema schema =
           schemaRegistry.parseSchemaOrElseThrow(
               new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(
-                  null, schemaMetadata));
+                  subjectOf(schemaMetadata, subject), schemaMetadata));
       schema = schema.copy(schemaMetadata.getVersion());
       extendedSchema = new ExtendedSchema(
           schemaMetadata.getId(), schemaMetadata.getVersion(),
@@ -510,7 +510,7 @@ public abstract class AbstractKafkaSchemaSerDe
     ParsedSchema schema =
         schemaRegistry.parseSchemaOrElseThrow(
             new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(
-                null, schemaMetadata));
+                subjectOf(schemaMetadata, subject), schemaMetadata));
     return schema.copy(schemaMetadata.getVersion());
   }
 
@@ -678,12 +678,21 @@ public abstract class AbstractKafkaSchemaSerDe
     return schemaRegistry.getSchemaEntityBySubjectAndId(subject, id);
   }
 
+  /**
+   * The subject a version found under the given one belongs to: an alias's target, whose context
+   * its references are read in, or the given subject if the registry does not say.
+   */
+  private static String subjectOf(SchemaMetadata schemaMetadata, String subject) {
+    return schemaMetadata.getSubject() != null ? schemaMetadata.getSubject() : subject;
+  }
+
   protected ParsedSchema getSchemaBySchemaId(String subject, SchemaId schemaId)
       throws IOException, RestClientException {
     if (schemaId.getId() != null) {
       return schemaRegistry.getSchemaBySubjectAndId(subject, schemaId.getId());
     } else if (schemaId.getGuid() != null) {
-      return schemaRegistry.getSchemaByGuid(schemaId.getGuid().toString(), null);
+      return schemaRegistry.getSchemaBySubjectAndGuid(
+          subject, schemaId.getGuid().toString(), null);
     } else {
       throw new SerializationException("Could not deserialize schema ID");
     }
@@ -716,7 +725,17 @@ public abstract class AbstractKafkaSchemaSerDe
   protected ParsedSchema lookupSchemaByGuid(
       String guid, ParsedSchema schema, boolean idCompatStrict)
       throws IOException, RestClientException {
-    ParsedSchema lookupSchema = schemaRegistry.getSchemaByGuid(guid, null);
+    return lookupSchemaByGuid(null, guid, schema, idCompatStrict);
+  }
+
+  /**
+   * As {@link #lookupSchemaByGuid(String, ParsedSchema, boolean)}, read as of the subject, in
+   * whose context the schema's references resolve.
+   */
+  protected ParsedSchema lookupSchemaByGuid(
+      String subject, String guid, ParsedSchema schema, boolean idCompatStrict)
+      throws IOException, RestClientException {
+    ParsedSchema lookupSchema = schemaRegistry.getSchemaBySubjectAndGuid(subject, guid, null);
     if (idCompatStrict && !lookupSchema.isBackwardCompatible(schema).isEmpty()) {
       throw new IOException("Incompatible schema of type '" + lookupSchema.schemaType()
           + "'. Set id.compatibility.strict=false to disable this check");
@@ -748,7 +767,7 @@ public abstract class AbstractKafkaSchemaSerDe
       ParsedSchema latestVersion =
           schemaRegistry.parseSchemaOrElseThrow(
               new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(
-                  null, schemaMetadata));
+                  subjectOf(schemaMetadata, subject), schemaMetadata));
       latestVersion = latestVersion.copy(schemaMetadata.getVersion());
       // Sanity check by testing latest is backward compatibility with schema
       // Don't test for forward compatibility so unions can be handled properly
