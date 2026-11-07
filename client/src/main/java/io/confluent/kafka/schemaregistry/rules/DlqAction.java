@@ -209,7 +209,7 @@ public class DlqAction implements RuleAction {
           ctx.source(), ctx.target(),
           ctx.subject(), ctx.topic(), ctx.headers(),
           ctx.originalKey(), ctx.originalValue(), ctx.isKey(),
-          ctx.ruleMode(), newRule, 0, Collections.singletonList(newRule));
+          ctx.ruleMode(), newRule, 0, Collections.singletonList(newRule), false);
       return executor.transform(newCtx, message);
     } catch (RuleException e) {
       log.error("Could not redact fields", e);
