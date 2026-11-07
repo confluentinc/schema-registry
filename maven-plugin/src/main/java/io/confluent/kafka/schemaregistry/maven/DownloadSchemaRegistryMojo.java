@@ -189,7 +189,7 @@ public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
       try (OutputStreamWriter writer = new OutputStreamWriter(
           new FileOutputStream(outputFile), StandardCharsets.UTF_8)
       ) {
-        writer.write(schemaBody(kvp.getValue()));
+        writer.write(schemaBody(subject, kvp.getValue()));
       } catch (Exception ex) {
         throw new MojoExecutionException(
             String.format("Exception thrown while writing subject('%s') schema to %s", subject,
@@ -232,11 +232,15 @@ public class DownloadSchemaRegistryMojo extends SchemaRegistryMojo {
    * earlier versions wrote. Reading a rendered schema that way would undo the rendering -- the
    * providers convert logical types DDL back to its native form.
    */
-  private String schemaBody(SchemaMetadata schemaMetadata) throws MojoExecutionException {
+  private String schemaBody(String subject, SchemaMetadata schemaMetadata)
+      throws MojoExecutionException {
     if (isFormatted()) {
       return schemaMetadata.getSchema();
     }
-    Optional<ParsedSchema> schema = this.client().parseSchema(new Schema(null, schemaMetadata));
+    // As its subject's version, whose context its references are read in: an alias's target, or
+    // the subject asked for.
+    String parent = schemaMetadata.getSubject() != null ? schemaMetadata.getSubject() : subject;
+    Optional<ParsedSchema> schema = this.client().parseSchema(new Schema(parent, schemaMetadata));
     if (!schema.isPresent()) {
       throw new MojoExecutionException(
           String.format("Error while parsing schema %s", schemaMetadata.getSchema()));

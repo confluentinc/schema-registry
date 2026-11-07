@@ -75,7 +75,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
   protected Class<T> specificProtobufClass;
   protected Method parseMethod;
   protected volatile boolean deriveType;
-  private final Cache<Pair<String, ProtobufSchema>, ProtobufSchema> schemaCache;
+  private final Cache<CopyKey, ProtobufSchema> schemaCache;
 
   public AbstractKafkaProtobufDeserializer() {
     schemaCache = CacheBuilder.newBuilder()
@@ -207,8 +207,7 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
         }
         if (includeSchemaAndVersion || readerSchema != null) {
           Integer version = schemaVersion(topic, isKey, schemaId, subject, schema, null);
-          schema = schema.copy(version);
-          schema = schemaWithName(schema, name);
+          schema = schemaWithName(schema, name, version);
         }
         if (readerSchema != null) {
           migrations = getMigrations(subject, schema, readerSchema);
@@ -558,11 +557,16 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
   }
 
   private ProtobufSchema schemaWithName(ProtobufSchema schema, String name) {
-    Pair<String, ProtobufSchema> cacheKey = new Pair<>(name, schema);
+    return schemaWithName(schema, name, null);
+  }
+
+  // A version too, if not null, so that a copy carrying one is made once, not for every record.
+  private ProtobufSchema schemaWithName(ProtobufSchema schema, String name, Integer version) {
     try {
-      return schemaCache.get(cacheKey, () -> schema.copy(name));
+      return schemaCache.get(new CopyKey(schema, name, version),
+          () -> version == null ? schema.copy(name) : schema.copy(name).copy(version));
     } catch (ExecutionException e) {
-      return schema.copy(name);
+      return version == null ? schema.copy(name) : schema.copy(name).copy(version);
     }
   }
 
@@ -643,47 +647,34 @@ public abstract class AbstractKafkaProtobufDeserializer<T extends Message>
         true, topic, isKey, headers, payload, writerToReaderSchemaFunc, includeRuleResults);
   }
 
-  static class Pair<K, V> {
-    private final K key;
-    private final V value;
+  // A schema's copy with a message name and version, by the schema's content and the imports it
+  // resolved: equal schemas may resolve theirs in different contexts. A client that parses each
+  // read afresh still finds the copy made for an earlier one.
+  private static final class CopyKey {
+    private final ProtobufSchema schema;
+    private final String name;
+    private final Integer version;
 
-    public Pair(K key, V value) {
-      this.key = key;
-      this.value = value;
-    }
-
-    public K getKey() {
-      return key;
-    }
-
-    public V getValue() {
-      return value;
+    CopyKey(ProtobufSchema schema, String name, Integer version) {
+      this.schema = schema;
+      this.name = name;
+      this.version = version;
     }
 
     @Override
     public boolean equals(Object o) {
-      if (this == o) {
-        return true;
-      }
-      if (o == null || getClass() != o.getClass()) {
+      if (!(o instanceof CopyKey)) {
         return false;
       }
-      Pair<?, ?> pair = (Pair<?, ?>) o;
-      return Objects.equals(key, pair.key)
-          && Objects.equals(value, pair.value);
+      CopyKey that = (CopyKey) o;
+      return Objects.equals(name, that.name) && Objects.equals(version, that.version)
+          && (schema == that.schema || schema.equals(that.schema)
+              && schema.dependencies().equals(that.schema.dependencies()));
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(key, value);
-    }
-
-    @Override
-    public String toString() {
-      return "Pair{"
-          + "key=" + key
-          + ", value=" + value
-          + '}';
+      return 31 * schema.hashCode() + Objects.hash(name, version);
     }
   }
 }
