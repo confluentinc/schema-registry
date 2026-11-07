@@ -73,6 +73,15 @@ public interface AsyncSchemaRegistryClient extends Closeable {
 
   CompletableFuture<ParsedSchema> getSchemaByGuid(String guid, String format);
 
+  /**
+   * The schema with the given GUID, its references read in the given subject's context, where the
+   * GUID is taken to have been written.
+   */
+  default CompletableFuture<ParsedSchema> getSchemaBySubjectAndGuid(
+      String subject, String guid, String format) {
+    return getSchemaByGuid(guid, format);
+  }
+
   CompletableFuture<SchemaMetadata> getSchemaMetadata(
       String subject, int version, boolean lookupDeletedSchema);
 
