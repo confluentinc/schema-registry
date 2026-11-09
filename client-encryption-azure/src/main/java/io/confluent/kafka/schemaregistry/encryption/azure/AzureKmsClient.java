@@ -188,10 +188,18 @@ public final class AzureKmsClient implements KmsClient {
    * <p>azure-core has no deadline that spans retries for the synchronous client (a
    * {@code TimeoutPolicy} runs the downstream policies on the calling thread, so its reactor
    * timeout cannot fire), so the deadline is enforced by construction instead: retries are
-   * granted only while worst-case attempts (each up to the request timeout) plus the exponential
-   * backoff between them still fit in the budget. The backoff is taken with a 20% margin for
-   * azure-core's jitter. A {@code Retry-After} header from a throttled Key Vault can still make
-   * the SDK wait longer; that is deliberate, since ignoring it would just hammer a throttled vault.
+   * granted only while worst-case attempts plus the exponential backoff between them still fit in
+   * the budget. The backoff is taken with a 20% margin for azure-core's jitter.
+   *
+   * <p>An attempt is costed at connect + request: after a response timeout reactor-netty drops the
+   * connection, so every retry pays the connect timeout again, and the request timeout is applied
+   * as the response timeout (until headers arrive), which is what a slow or hung vault hits. The
+   * same value also serves as the read and write timeout between individual socket operations;
+   * Key Vault payloads are a few hundred bytes, so those only add time if the vault trickles
+   * bytes, and that pathological case is not budgeted. A {@code Retry-After} header from a
+   * throttled Key Vault can also make the SDK wait longer; that is deliberate, since ignoring it
+   * would just hammer a throttled vault. The deadline is therefore a tight bound on the realistic
+   * worst case, not a hard wall clock.
    */
   static int maxRetries(KmsTimeouts timeouts) {
     if (!timeouts.operationTimeout().isPresent()) {
@@ -199,7 +207,8 @@ public final class AzureKmsClient implements KmsClient {
     }
     long budgetMs = timeouts.operationTimeout().get().toMillis();
     // fromConfigs guarantees a request timeout accompanies an operation timeout.
-    long attemptMs = timeouts.requestTimeout().get().toMillis();
+    long attemptMs = timeouts.requestTimeout().get().toMillis()
+        + timeouts.connectTimeout().map(Duration::toMillis).orElse(0L);
     long spentMs = attemptMs;
     int retries = 0;
     while (retries < DEFAULT_MAX_RETRIES) {

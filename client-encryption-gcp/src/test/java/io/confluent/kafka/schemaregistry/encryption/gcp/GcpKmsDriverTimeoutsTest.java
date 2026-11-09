@@ -20,6 +20,7 @@ import static io.confluent.kafka.schemaregistry.encryption.tink.KmsTimeouts.KMS_
 import static io.confluent.kafka.schemaregistry.encryption.tink.KmsTimeouts.KMS_REQUEST_TIMEOUT_MS;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
 import com.google.api.client.http.GenericUrl;
 import com.google.api.client.http.HttpRequest;
@@ -70,6 +71,25 @@ public class GcpKmsDriverTimeoutsTest {
     assertEquals(1500, request.getConnectTimeout());
     assertEquals(4000, request.getReadTimeout());
     assertEquals(4000, request.getWriteTimeout());
+  }
+
+  @Test
+  public void selfBuiltClientCarriesTinksApplicationName() throws Exception {
+    // Guards the reflection into Tink: if APPLICATION_NAME moves, this fails at build time
+    // instead of GCP silently seeing a different User-Agent in production.
+    String name = GcpKmsDriver.tinkApplicationName();
+    assertTrue(name, name.startsWith("Tink/") && !name.startsWith("Tink/unknown"));
+
+    Map<String, Object> configs = new HashMap<>();
+    configs.put(KMS_REQUEST_TIMEOUT_MS, "4000");
+    KmsClient withTimeouts = GcpKmsDriver.newKmsClientWithCloudKms(Optional.of(KEY_URI),
+        Optional.of(fakeCredentials()), null, KmsTimeouts.fromConfigs(configs));
+    KmsClient tinkBuilt = GcpKmsDriver.newKmsClientWithCloudKms(Optional.of(KEY_URI),
+        Optional.of(fakeCredentials()), null, KmsTimeouts.NONE);
+
+    assertEquals(cloudKmsOf(tinkBuilt).getApplicationName(),
+        cloudKmsOf(withTimeouts).getApplicationName());
+    assertEquals(name, cloudKmsOf(withTimeouts).getApplicationName());
   }
 
   @Test

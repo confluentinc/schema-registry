@@ -34,8 +34,10 @@ import java.util.Optional;
  *   <li>{@link #KMS_CONNECT_TIMEOUT_MS}: establishing the TCP/TLS connection.</li>
  *   <li>{@link #KMS_REQUEST_TIMEOUT_MS}: one request attempt, once connected.</li>
  *   <li>{@link #KMS_OPERATION_TIMEOUT_MS}: the whole wrap/unwrap including the SDK's retries.
- *       AWS enforces it natively ({@code apiCallTimeout}); Azure derives how many retries fit in
- *       it; GCP makes a single attempt, so connect + request already bound it.</li>
+ *       AWS enforces it natively and exactly ({@code apiCallTimeout}). Azure derives how many
+ *       retries fit in it, costing each attempt at connect + request, so it is a tight bound on
+ *       the realistic worst case rather than a hard wall clock. GCP makes a single attempt, so
+ *       connect + request already bound it.</li>
  * </ul>
  */
 public final class KmsTimeouts {

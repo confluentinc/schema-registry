@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.encryption.azure;
 
+import static io.confluent.kafka.schemaregistry.encryption.tink.KmsTimeouts.KMS_CONNECT_TIMEOUT_MS;
 import static io.confluent.kafka.schemaregistry.encryption.tink.KmsTimeouts.KMS_OPERATION_TIMEOUT_MS;
 import static io.confluent.kafka.schemaregistry.encryption.tink.KmsTimeouts.KMS_REQUEST_TIMEOUT_MS;
 import static org.junit.Assert.assertEquals;
@@ -31,7 +32,14 @@ import org.junit.Test;
 public class AzureKmsClientTimeoutsTest {
 
   private static KmsTimeouts timeouts(String requestMs, String operationMs) {
+    return timeouts(null, requestMs, operationMs);
+  }
+
+  private static KmsTimeouts timeouts(String connectMs, String requestMs, String operationMs) {
     Map<String, Object> configs = new HashMap<>();
+    if (connectMs != null) {
+      configs.put(KMS_CONNECT_TIMEOUT_MS, connectMs);
+    }
     configs.put(KMS_REQUEST_TIMEOUT_MS, requestMs);
     configs.put(KMS_OPERATION_TIMEOUT_MS, operationMs);
     return KmsTimeouts.fromConfigs(configs);
@@ -68,5 +76,16 @@ public class AzureKmsClientTimeoutsTest {
     assertEquals(5, AzureKmsClient.maxRetries(timeouts("1000", "60000")));
     // 1s attempts in a 5s budget: 1 + 2.2 = 3.2 fits, + 3.4 = 6.6 does not.
     assertEquals(1, AzureKmsClient.maxRetries(timeouts("1000", "5000")));
+  }
+
+  @Test
+  public void connectTimeoutIsPartOfEveryAttempt() {
+    // Each retry reconnects, so an attempt costs connect + request. 5s + 10s in a 30s budget:
+    // 15 + (1.2 + 15) = 31.2 does not fit, so no retries.
+    assertEquals(0, AzureKmsClient.maxRetries(timeouts("5000", "10000", "30000")));
+    // Shrinking connect to 3s makes one retry fit: 13 + 1.2 + 13 = 27.2.
+    assertEquals(1, AzureKmsClient.maxRetries(timeouts("3000", "10000", "30000")));
+    // Same budget without a connect timeout: one retry, as in the test above.
+    assertEquals(1, AzureKmsClient.maxRetries(timeouts("10000", "30000")));
   }
 }

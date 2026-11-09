@@ -36,8 +36,12 @@ import java.security.GeneralSecurityException;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Optional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class GcpKmsDriver implements KmsDriver {
+
+  private static final Logger log = LoggerFactory.getLogger(GcpKmsDriver.class);
 
   public static final String ACCOUNT_TYPE = "account.type";
   public static final String CLIENT_ID = "client.id";
@@ -177,24 +181,40 @@ public class GcpKmsDriver implements KmsDriver {
     return (int) Math.min(d.toMillis(), Integer.MAX_VALUE);
   }
 
-  /** Tink's own user agent for CloudKMS, so requests look the same as without timeouts. */
-  private static String tinkApplicationName() {
+  /**
+   * Tink's own user agent for CloudKMS ({@code "Tink/<version> Java/<java.version>"}), so requests
+   * built here look the same to GCP as the ones Tink builds. Tink keeps it in a private static
+   * field with no accessor and does not derive it from the public {@code Version.TINK_VERSION},
+   * so reflection is the only way to reproduce it exactly. If a Tink upgrade moves the field, the
+   * fallback still identifies the client as Tink-based and the warning makes the drift visible;
+   * the header is informational only, so wrap/unwrap are unaffected.
+   */
+  static String tinkApplicationName() {
     try {
       Field field = GcpKmsClient.class.getDeclaredField("APPLICATION_NAME");
       field.setAccessible(true);
       return (String) field.get(null);
     } catch (Exception e) {
-      return null;
+      log.warn("Could not read Tink's GcpKmsClient.APPLICATION_NAME (Tink upgrade?); GCP KMS "
+          + "requests built with timeouts will carry a generic application name", e);
+      return "Tink/unknown Java/" + System.getProperty("java.version");
     }
   }
 
+  /**
+   * Injects a {@link CloudKMS} into Tink's client, which offers no setter for it. Reached in
+   * production whenever timeouts are configured (not only from tests), so a Tink upgrade that
+   * moves the field fails loudly here at client creation rather than silently losing timeouts.
+   */
   private static void setCloudKms(GcpKmsClient client, CloudKMS cloudKms) {
     try {
       Field field = GcpKmsClient.class.getDeclaredField("cloudKms");
       field.setAccessible(true);
       field.set(client, cloudKms);
     } catch (Exception e) {
-      throw new RuntimeException(e);
+      throw new IllegalStateException("Cannot inject CloudKMS into Tink's GcpKmsClient: the "
+          + "private field 'cloudKms' this driver relies on was not found or not writable. Check "
+          + "the Tink version on the classpath.", e);
     }
   }
 }
