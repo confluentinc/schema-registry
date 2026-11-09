@@ -19,6 +19,7 @@ package io.confluent.kafka.schemaregistry.encryption.aws;
 import com.google.common.base.Splitter;
 import com.google.crypto.tink.KmsClient;
 import io.confluent.kafka.schemaregistry.encryption.tink.KmsDriver;
+import io.confluent.kafka.schemaregistry.encryption.tink.KmsTimeouts;
 import java.lang.reflect.Field;
 import java.security.GeneralSecurityException;
 import java.util.List;
@@ -174,12 +175,19 @@ public class AwsKmsDriver implements KmsDriver {
     Optional<AwsCredentialsProvider> creds = testClient != null
         ? Optional.empty()
         : Optional.of(getCredentials(configs, kekUrl));
-    return newKmsClientWithAwsKms(kekUrl, creds, testClient);
+    return newKmsClientWithAwsKms(kekUrl, creds, testClient, KmsTimeouts.fromConfigs(configs));
   }
 
   protected static KmsClient newKmsClientWithAwsKms(
       Optional<String> keyUri, Optional<AwsCredentialsProvider> credentials,
       software.amazon.awssdk.services.kms.KmsClient awsKms)
+      throws GeneralSecurityException {
+    return newKmsClientWithAwsKms(keyUri, credentials, awsKms, KmsTimeouts.NONE);
+  }
+
+  protected static KmsClient newKmsClientWithAwsKms(
+      Optional<String> keyUri, Optional<AwsCredentialsProvider> credentials,
+      software.amazon.awssdk.services.kms.KmsClient awsKms, KmsTimeouts timeouts)
       throws GeneralSecurityException {
     AwsKmsClient client;
     if (keyUri.isPresent()) {
@@ -192,6 +200,7 @@ public class AwsKmsDriver implements KmsDriver {
     } else {
       client.withDefaultCredentials();
     }
+    client.withTimeouts(timeouts);
     if (awsKms != null) {
       setAwsKms(client, awsKms);
     }
