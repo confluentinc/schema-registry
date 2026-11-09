@@ -25,6 +25,7 @@ import com.azure.security.keyvault.keys.cryptography.CryptographyClient;
 import com.azure.security.keyvault.keys.models.KeyVaultKey;
 import com.google.crypto.tink.KmsClient;
 import io.confluent.kafka.schemaregistry.encryption.tink.KmsDriver;
+import io.confluent.kafka.schemaregistry.encryption.tink.KmsTimeouts;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.security.GeneralSecurityException;
@@ -215,6 +216,7 @@ public class AzureKmsDriver implements KmsDriver {
       client = new AzureKmsClient();
     }
     client.withConfigs(configs);
+    client.withTimeouts(KmsTimeouts.fromConfigs(configs));
     if (credentials.isPresent()) {
       client.withCredentialsProvider(credentials.get());
     } else {
