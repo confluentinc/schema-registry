@@ -21,6 +21,7 @@ import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
@@ -36,6 +37,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -73,6 +75,57 @@ public class KafkaStoreTest extends ClusterTestHarness {
           String retrievedValue = kafkaStore.get(key);
           assertEquals(value, retrievedValue, "Retrieved value should match entered value");
       }
+  }
+
+  // Once the reader thread has died, a put fails with what the thread died of, before it writes
+  // a record that no reader would apply.
+  @Test
+  public void testPutFailsUnwrittenOnceTheReaderHasDied() throws Exception {
+    AtomicBoolean failBatches = new AtomicBoolean();
+    StoreUpdateHandler<String, String> handler = new StringMessageHandler() {
+      @Override
+      public void startBatch(int count) {
+        if (failBatches.get()) {
+          throw new IllegalStateException("handler failed");
+        }
+      }
+    };
+    Properties props = new Properties();
+    props.put(SchemaRegistryConfig.KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG, brokerList);
+    props.put(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG, KAFKASTORE_TOPIC);
+    try (KafkaStore<String, String> kafkaStore = new KafkaStore<>(
+        new SchemaRegistryConfig(props), handler, StringSerializer.INSTANCE,
+        new InMemoryCache<>(StringSerializer.INSTANCE), new NoopKey().toString())) {
+      kafkaStore.init();
+      kafkaStore.put("key1", "value1");
+
+      // The reader thread dies on the batch with this record, which was written.
+      failBatches.set(true);
+      assertThrows(StoreException.class, () -> kafkaStore.put("key2", "value2"));
+      KafkaStoreReaderThread<String, String> readerThread = kafkaStore.getKafkaStoreReaderThread();
+      readerThread.join(TimeUnit.SECONDS.toMillis(30));
+      assertTrue(readerThread.isShutdownComplete(), "The reader thread did not die");
+
+      long endOffset = endOffset();
+      StoreException e = assertThrows(StoreException.class,
+          () -> kafkaStore.put("key3", "value3"));
+      assertTrue(e.getMessage().contains("has died"), e.getMessage());
+      Throwable root = e;
+      while (root.getCause() != null) {
+        root = root.getCause();
+      }
+      assertEquals("handler failed", root.getMessage());
+      assertEquals(endOffset, endOffset(), "The put wrote a record");
+    }
+  }
+
+  private long endOffset() throws Exception {
+    Properties props = new Properties();
+    props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList);
+    try (AdminClient admin = AdminClient.create(props)) {
+      return admin.listOffsets(Collections.singletonMap(tp, OffsetSpec.latest()))
+          .partitionResult(tp).get(ADMIN_TIMEOUT_SEC, TimeUnit.SECONDS).offset();
+    }
   }
 
   @Test
