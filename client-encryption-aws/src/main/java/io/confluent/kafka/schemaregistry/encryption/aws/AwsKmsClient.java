@@ -25,6 +25,7 @@ import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import io.confluent.kafka.schemaregistry.encryption.tink.KmsTimeouts;
 import java.nio.file.Paths;
 import java.security.GeneralSecurityException;
+import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -33,6 +34,7 @@ import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider;
 import software.amazon.awssdk.awscore.exception.AwsServiceException;
+import software.amazon.awssdk.http.SdkHttpConfigurationOption;
 import software.amazon.awssdk.http.apache.ApacheHttpClient;
 import software.amazon.awssdk.profiles.ProfileFile;
 import software.amazon.awssdk.regions.Region;
@@ -199,12 +201,19 @@ public final class AwsKmsClient implements KmsClient {
    * Applies {@code timeouts} to {@code builder}; does nothing at all when they are empty, so the
    * SDK keeps choosing its default HTTP client exactly as it did before timeouts existed.
    *
-   * <p>Connect and socket timeouts go on the Apache client, the SDK's default sync client. The
-   * request timeout is also set as {@code apiCallAttemptTimeout}, which bounds each attempt as a
-   * whole (a socket timeout alone only bounds the gap between reads). The operation timeout is
-   * {@code apiCallTimeout}: the SDK's own deadline across all retries, which aborts the in-flight
-   * attempt when it fires. The SDK's retry policy itself is left at its default.
+   * <p>Connect and socket timeouts go on the Apache client, the SDK's default sync client. Each
+   * attempt is also bounded as a whole by {@code apiCallAttemptTimeout} (a socket timeout alone
+   * only bounds the gap between reads). That SDK timer starts before the connection is made, while
+   * the request timeout is defined as the time allowed once connected, so the attempt timeout is
+   * connect + request: the configured connect timeout, or the SDK's own connect default when the
+   * key is absent, so that a connection the connect timeout would allow is never cut short. The
+   * operation timeout is {@code apiCallTimeout}: the SDK's own deadline across all retries, which
+   * aborts the in-flight attempt when it fires. The SDK's retry policy itself is left at its
+   * default.
    */
+  static final Duration DEFAULT_CONNECT_TIMEOUT = SdkHttpConfigurationOption.GLOBAL_HTTP_DEFAULTS
+      .get(SdkHttpConfigurationOption.CONNECTION_TIMEOUT);
+
   static void applyTimeouts(KmsClientBuilder builder, KmsTimeouts timeouts) {
     if (timeouts.isEmpty()) {
       return;
@@ -215,7 +224,8 @@ public final class AwsKmsClient implements KmsClient {
     builder.httpClientBuilder(http);
     // One overrideConfiguration call: each call replaces the previous configuration.
     builder.overrideConfiguration(c -> {
-      timeouts.requestTimeout().ifPresent(c::apiCallAttemptTimeout);
+      timeouts.requestTimeout().ifPresent(request -> c.apiCallAttemptTimeout(
+          request.plus(timeouts.connectTimeout().orElse(DEFAULT_CONNECT_TIMEOUT))));
       timeouts.operationTimeout().ifPresent(c::apiCallTimeout);
     });
   }

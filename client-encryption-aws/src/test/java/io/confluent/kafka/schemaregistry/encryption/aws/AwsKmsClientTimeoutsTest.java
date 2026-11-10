@@ -23,6 +23,7 @@ import static org.junit.Assert.assertEquals;
 
 import io.confluent.kafka.schemaregistry.encryption.tink.KmsTimeouts;
 import java.time.Duration;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -53,12 +54,14 @@ public class AwsKmsClientTimeoutsTest {
   }
 
   @Test
-  public void requestTimeoutBoundsEachAttempt() {
+  public void attemptTimeoutIsConnectPlusRequest() {
+    // apiCallAttemptTimeout starts before the connection is made, so a 1s connect allowance in
+    // front of a 4s request needs a 5s attempt; the request value alone would cut connects short.
     Map<String, Object> configs = new HashMap<>();
     configs.put(KMS_CONNECT_TIMEOUT_MS, "1000");
     configs.put(KMS_REQUEST_TIMEOUT_MS, "4000");
     try (KmsClient client = build(KmsTimeouts.fromConfigs(configs))) {
-      assertEquals(Optional.of(Duration.ofMillis(4000)),
+      assertEquals(Optional.of(Duration.ofMillis(5000)),
           client.serviceClientConfiguration().overrideConfiguration().apiCallAttemptTimeout());
       assertEquals(Optional.empty(),
           client.serviceClientConfiguration().overrideConfiguration().apiCallTimeout());
@@ -66,13 +69,25 @@ public class AwsKmsClientTimeoutsTest {
   }
 
   @Test
+  public void absentConnectTimeoutIsCostedAtTheSdkDefault() {
+    // The Apache client still enforces its own connect default, so the attempt must allow for it.
+    assertEquals(Duration.ofSeconds(2), AwsKmsClient.DEFAULT_CONNECT_TIMEOUT);
+    try (KmsClient client = build(KmsTimeouts.fromConfigs(
+        Collections.singletonMap(KMS_REQUEST_TIMEOUT_MS, "4000")))) {
+      assertEquals(Optional.of(Duration.ofMillis(4000).plus(AwsKmsClient.DEFAULT_CONNECT_TIMEOUT)),
+          client.serviceClientConfiguration().overrideConfiguration().apiCallAttemptTimeout());
+    }
+  }
+
+  @Test
   public void operationTimeoutBoundsTheWholeCall() {
     Map<String, Object> configs = new HashMap<>();
+    configs.put(KMS_CONNECT_TIMEOUT_MS, "2000");
     configs.put(KMS_REQUEST_TIMEOUT_MS, "4000");
     configs.put(KMS_OPERATION_TIMEOUT_MS, "12000");
     try (KmsClient client = build(KmsTimeouts.fromConfigs(configs))) {
       // Both must survive: a second overrideConfiguration call would replace the first.
-      assertEquals(Optional.of(Duration.ofMillis(4000)),
+      assertEquals(Optional.of(Duration.ofMillis(6000)),
           client.serviceClientConfiguration().overrideConfiguration().apiCallAttemptTimeout());
       assertEquals(Optional.of(Duration.ofMillis(12000)),
           client.serviceClientConfiguration().overrideConfiguration().apiCallTimeout());

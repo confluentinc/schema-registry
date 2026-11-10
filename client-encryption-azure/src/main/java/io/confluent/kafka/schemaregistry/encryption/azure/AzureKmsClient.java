@@ -213,9 +213,9 @@ public final class AzureKmsClient implements KmsClient {
       return new RetryPolicy(
           new ExponentialBackoff(DEFAULT_MAX_RETRIES, RETRY_BASE_DELAY, RETRY_MAX_DELAY));
     }
-    // fromConfigs guarantees a request timeout accompanies an operation timeout.
-    Duration attempt = timeouts.requestTimeout().get()
-        .plus(timeouts.connectTimeout().orElse(Duration.ZERO));
+    // fromConfigs guarantees connect and request timeouts accompany an operation timeout, so the
+    // attempt is never understated by an unbudgeted SDK connect default.
+    Duration attempt = timeouts.connectTimeout().get().plus(timeouts.requestTimeout().get());
     return new DeadlineRetryPolicy(DEFAULT_MAX_RETRIES, RETRY_BASE_DELAY, RETRY_MAX_DELAY,
         attempt, timeouts.operationTimeout().get());
   }

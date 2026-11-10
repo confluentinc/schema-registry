@@ -83,24 +83,44 @@ public class KmsTimeoutsTest {
   }
 
   @Test
-  public void operationTimeoutRequiresRequestTimeout() {
-    IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+  public void operationTimeoutRequiresConnectAndRequestTimeouts() {
+    // Alone: the deadline has no attempt to be measured in.
+    IllegalArgumentException alone = assertThrows(IllegalArgumentException.class,
         () -> KmsTimeouts.fromConfigs(Collections.singletonMap(KMS_OPERATION_TIMEOUT_MS, "30000")));
-    assertTrue(e.getMessage(), e.getMessage().contains(KMS_REQUEST_TIMEOUT_MS));
+    assertTrue(alone.getMessage(), alone.getMessage().contains(KMS_CONNECT_TIMEOUT_MS));
+    assertTrue(alone.getMessage(), alone.getMessage().contains(KMS_REQUEST_TIMEOUT_MS));
+
+    // With only a request timeout the SDK's connect default (up to 20s) would go unbudgeted.
+    Map<String, Object> noConnect = new HashMap<>();
+    noConnect.put(KMS_REQUEST_TIMEOUT_MS, "1000");
+    noConnect.put(KMS_OPERATION_TIMEOUT_MS, "1000");
+    IllegalArgumentException e =
+        assertThrows(IllegalArgumentException.class, () -> KmsTimeouts.fromConfigs(noConnect));
+    assertTrue(e.getMessage(), e.getMessage().contains(KMS_CONNECT_TIMEOUT_MS));
+
+    // With only a connect timeout, likewise.
+    Map<String, Object> noRequest = new HashMap<>();
+    noRequest.put(KMS_CONNECT_TIMEOUT_MS, "1000");
+    noRequest.put(KMS_OPERATION_TIMEOUT_MS, "1000");
+    IllegalArgumentException e2 =
+        assertThrows(IllegalArgumentException.class, () -> KmsTimeouts.fromConfigs(noRequest));
+    assertTrue(e2.getMessage(), e2.getMessage().contains(KMS_REQUEST_TIMEOUT_MS));
   }
 
   @Test
-  public void operationTimeoutMustCoverOneRequest() {
+  public void operationTimeoutMustCoverOneAttempt() {
     Map<String, Object> configs = new HashMap<>();
+    configs.put(KMS_CONNECT_TIMEOUT_MS, "2000");
     configs.put(KMS_REQUEST_TIMEOUT_MS, "10000");
-    configs.put(KMS_OPERATION_TIMEOUT_MS, "9999");
+    configs.put(KMS_OPERATION_TIMEOUT_MS, "11999");
     IllegalArgumentException e =
         assertThrows(IllegalArgumentException.class, () -> KmsTimeouts.fromConfigs(configs));
     assertTrue(e.getMessage(), e.getMessage().contains(KMS_OPERATION_TIMEOUT_MS));
+    assertTrue(e.getMessage(), e.getMessage().contains("12000"));
 
     // Equal is allowed: exactly one attempt.
-    configs.put(KMS_OPERATION_TIMEOUT_MS, "10000");
-    assertEquals(Optional.of(Duration.ofMillis(10000)),
+    configs.put(KMS_OPERATION_TIMEOUT_MS, "12000");
+    assertEquals(Optional.of(Duration.ofMillis(12000)),
         KmsTimeouts.fromConfigs(configs).operationTimeout());
   }
 

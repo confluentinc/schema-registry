@@ -53,10 +53,11 @@ public final class KmsTimeouts {
   public static final String KMS_REQUEST_TIMEOUT_MS = "kms.request.timeout.ms";
   /**
    * Deadline on one whole KMS operation (wrap or unwrap), including every retry the SDK makes.
-   * Requires {@link #KMS_REQUEST_TIMEOUT_MS} and must cover at least one attempt, i.e.
-   * {@link #KMS_CONNECT_TIMEOUT_MS} (if set) plus {@link #KMS_REQUEST_TIMEOUT_MS}: that sum is
-   * the unit the retry budget is computed in, and a smaller deadline is one no transport can
-   * honour.
+   * Requires {@link #KMS_CONNECT_TIMEOUT_MS} and {@link #KMS_REQUEST_TIMEOUT_MS}, and must cover
+   * at least one attempt, i.e. their sum: that sum is the unit the retry budget is computed in,
+   * and a smaller deadline is one no transport can honour. Without an explicit connect timeout
+   * an attempt could still spend the SDK's own connect default (2s on AWS, 10s on Azure, 20s on
+   * GCP) before the request even starts, so the deadline would be understated by that much.
    */
   public static final String KMS_OPERATION_TIMEOUT_MS = "kms.operation.timeout.ms";
 
@@ -76,9 +77,8 @@ public final class KmsTimeouts {
    * Reads the {@code kms.*.timeout.ms} keys from {@code configs}; each may be absent.
    *
    * @throws IllegalArgumentException if a value is present but not a positive integer, or if
-   *     {@link #KMS_OPERATION_TIMEOUT_MS} is set without {@link #KMS_REQUEST_TIMEOUT_MS} or is
-   *     smaller than one attempt ({@link #KMS_CONNECT_TIMEOUT_MS}, if set, plus
-   *     {@link #KMS_REQUEST_TIMEOUT_MS})
+   *     {@link #KMS_OPERATION_TIMEOUT_MS} is set without both {@link #KMS_CONNECT_TIMEOUT_MS} and
+   *     {@link #KMS_REQUEST_TIMEOUT_MS}, or is smaller than their sum (one attempt)
    */
   public static KmsTimeouts fromConfigs(Map<String, ?> configs) {
     if (configs == null) {
@@ -88,13 +88,13 @@ public final class KmsTimeouts {
     Duration request = parse(configs, KMS_REQUEST_TIMEOUT_MS);
     Duration operation = parse(configs, KMS_OPERATION_TIMEOUT_MS);
     if (operation != null) {
-      if (request == null) {
-        throw new IllegalArgumentException(
-            KMS_OPERATION_TIMEOUT_MS + " requires " + KMS_REQUEST_TIMEOUT_MS);
+      if (connect == null || request == null) {
+        throw new IllegalArgumentException(KMS_OPERATION_TIMEOUT_MS + " requires both "
+            + KMS_CONNECT_TIMEOUT_MS + " and " + KMS_REQUEST_TIMEOUT_MS);
       }
       // One attempt costs connect + request (each retry reconnects), so an operation timeout that
       // cannot cover a single attempt is one no transport can honour.
-      long attemptMs = request.toMillis() + (connect == null ? 0 : connect.toMillis());
+      long attemptMs = connect.toMillis() + request.toMillis();
       if (operation.toMillis() < attemptMs) {
         throw new IllegalArgumentException(KMS_OPERATION_TIMEOUT_MS + " (" + operation.toMillis()
             + ") must cover one attempt, i.e. " + KMS_CONNECT_TIMEOUT_MS + " + "
@@ -131,7 +131,7 @@ public final class KmsTimeouts {
     return Optional.ofNullable(requestTimeout);
   }
 
-  /** Deadline for a whole operation including retries; never present without a request timeout. */
+  /** Deadline for a whole operation including retries; never present without the other two. */
   public Optional<Duration> operationTimeout() {
     return Optional.ofNullable(operationTimeout);
   }

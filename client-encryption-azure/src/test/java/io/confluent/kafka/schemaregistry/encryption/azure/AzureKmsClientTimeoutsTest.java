@@ -42,15 +42,9 @@ import reactor.core.publisher.Mono;
 
 public class AzureKmsClientTimeoutsTest {
 
-  private static KmsTimeouts timeouts(String requestMs, String operationMs) {
-    return timeouts(null, requestMs, operationMs);
-  }
-
   private static KmsTimeouts timeouts(String connectMs, String requestMs, String operationMs) {
     Map<String, Object> configs = new HashMap<>();
-    if (connectMs != null) {
-      configs.put(KMS_CONNECT_TIMEOUT_MS, connectMs);
-    }
+    configs.put(KMS_CONNECT_TIMEOUT_MS, connectMs);
     configs.put(KMS_REQUEST_TIMEOUT_MS, requestMs);
     configs.put(KMS_OPERATION_TIMEOUT_MS, operationMs);
     return KmsTimeouts.fromConfigs(configs);
@@ -80,8 +74,6 @@ public class AzureKmsClientTimeoutsTest {
 
   @Test
   public void operationTimeoutPutsADeadlineOnRetries() {
-    assertTrue(AzureKmsClient.retryPolicy(timeouts("10000", "30000"))
-        instanceof DeadlineRetryPolicy);
     assertTrue(AzureKmsClient.retryPolicy(timeouts("5000", "10000", "30000"))
         instanceof DeadlineRetryPolicy);
   }
@@ -97,14 +89,14 @@ public class AzureKmsClientTimeoutsTest {
     long start = System.nanoTime();
     assertNotNull(policy.retryDelay(throttled, null, 0, start));
     assertNull(policy.retryDelay(throttled, null, 0, start - Duration.ofSeconds(15).toNanos()));
-    // Without a connect timeout an attempt is just the request: 10 + 10 fits in 30 with room for
-    // the backoff, 15 elapsed + ~1s backoff + 10 still fits, 21 elapsed does not.
-    DeadlineRetryPolicy requestOnly =
-        (DeadlineRetryPolicy) AzureKmsClient.retryPolicy(timeouts("10000", "30000"));
-    assertNotNull(requestOnly.retryDelay(throttled, null, 0,
+    // A smaller connect timeout makes the attempt cheaper: 2 + 10 = 12, so 15 elapsed + ~1s
+    // backoff + 12 still fits in 30, while 18 elapsed does not.
+    DeadlineRetryPolicy shortConnect =
+        (DeadlineRetryPolicy) AzureKmsClient.retryPolicy(timeouts("2000", "10000", "30000"));
+    assertNotNull(shortConnect.retryDelay(throttled, null, 0,
         start - Duration.ofSeconds(15).toNanos()));
-    assertNull(requestOnly.retryDelay(throttled, null, 0,
-        start - Duration.ofSeconds(21).toNanos()));
+    assertNull(shortConnect.retryDelay(throttled, null, 0,
+        start - Duration.ofSeconds(18).toNanos()));
   }
 
   private static final class ThrottledResponse extends HttpResponse {
