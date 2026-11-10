@@ -218,7 +218,11 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
     try {
       readBatch();
     } catch (RuntimeException | Error e) {
-      failure = e;
+      // Only a failure of a thread still running, not one stopped on purpose that failed as it
+      // stopped.
+      if (isRunning()) {
+        failure = e;
+      }
       throw e;
     }
   }
@@ -371,6 +375,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
 
   @Override
   public void shutdown() {
+    boolean interrupted = false;
     try {
       log.debug("Starting shutdown of KafkaStoreReaderThread.");
 
@@ -380,8 +385,16 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
       }
       // Wait for the thread to finish the batch it may be applying before closing what it
       // writes to; otherwise it can keep writing to a closed store, and checkpoint records
-      // it never stored.
-      super.awaitShutdown();
+      // it never stored. Waits through an interrupt, so that the closes below still happen,
+      // and restores it afterward.
+      while (true) {
+        try {
+          super.awaitShutdown();
+          break;
+        } catch (InterruptedException e) {
+          interrupted = true;
+        }
+      }
       if (localStore != null) {
         localStore.close();
       }
@@ -394,6 +407,10 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
       log.info("KafkaStoreReaderThread shutdown complete.");
     } catch (Exception e) {
       throw new RuntimeException(e);
+    } finally {
+      if (interrupted) {
+        Thread.currentThread().interrupt();
+      }
     }
   }
 

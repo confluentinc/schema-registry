@@ -479,6 +479,8 @@ public class KafkaStore<K, V> implements Store<K, V> {
    * latest offset.
    */
   private long getLatestOffset(int timeoutMs) throws StoreException {
+    // No reader would reach the offset: fail before writing a noop record and waiting for it.
+    kafkaTopicReader.throwIfStopped();
     ProducerRecord<byte[], byte[]> producerRecord = null;
 
     if (this.lastWrittenOffset >= 0) {
