@@ -35,9 +35,11 @@ import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -128,8 +130,7 @@ public class KafkaStoreReaderThreadTest extends ClusterTestHarness {
   @Test
   public void testShutdownClosesTheStoreOnceTheReaderHasStopped() throws Exception {
     HeldReader held = new HeldReader();
-    Thread closer = new Thread(held.readerThread::shutdown);
-    closer.setDaemon(true);
+    Thread closer = held.closer();
     try {
       held.startAndAwaitBatch();
       closer.start();
@@ -137,6 +138,7 @@ public class KafkaStoreReaderThreadTest extends ClusterTestHarness {
       held.release.countDown();
       closer.join(TimeUnit.SECONDS.toMillis(30));
       assertFalse(closer.isAlive());
+      assertNull(held.closeFailure.get(), "The shutdown failed");
       assertFalse(held.closedDuringBatch.get(), "The store was closed under the reader's batch");
       assertTrue(held.closed.get());
     } finally {
@@ -150,19 +152,15 @@ public class KafkaStoreReaderThreadTest extends ClusterTestHarness {
   @Test
   public void testAnInterruptedShutdownStillWaitsForTheReader() throws Exception {
     HeldReader held = new HeldReader();
-    AtomicBoolean interruptRestored = new AtomicBoolean();
-    Thread closer = new Thread(() -> {
-      held.readerThread.shutdown();
-      interruptRestored.set(Thread.currentThread().isInterrupted());
-    });
-    closer.setDaemon(true);
+    Thread closer = held.closer();
     try {
       held.startAndAwaitBatch();
       closer.start();
       awaitWaitingInShutdown(closer);
       closer.interrupt();
-      // Waits again, rather than go on to close the store under the batch.
-      awaitWaitingInShutdown(closer);
+      // Long enough for a shutdown that gave up its wait on the interrupt to close the store.
+      Thread.sleep(500);
+      assertTrue(closer.isAlive(), "The shutdown did not wait for the reader thread");
       assertFalse(held.closed.get(), "The store was closed under the reader's batch");
       held.release.countDown();
       // The reader too, so that its batch has recorded whether the store was closed under it,
@@ -171,8 +169,9 @@ public class KafkaStoreReaderThreadTest extends ClusterTestHarness {
       closer.join(TimeUnit.SECONDS.toMillis(30));
       assertFalse(closer.isAlive());
       assertFalse(held.closedDuringBatch.get(), "The store was closed under the reader's batch");
+      assertNull(held.closeFailure.get(), "The shutdown failed");
       assertTrue(held.closed.get(), "The store was not closed");
-      assertTrue(interruptRestored.get(), "The interrupt was not restored");
+      assertTrue(held.interruptRestored.get(), "The interrupt was not restored");
     } finally {
       held.stop(closer);
     }
@@ -184,6 +183,8 @@ public class KafkaStoreReaderThreadTest extends ClusterTestHarness {
     final CountDownLatch release = new CountDownLatch(1);
     final AtomicBoolean closedDuringBatch = new AtomicBoolean();
     final AtomicBoolean closed = new AtomicBoolean();
+    final AtomicReference<Throwable> closeFailure = new AtomicReference<>();
+    final AtomicBoolean interruptRestored = new AtomicBoolean();
     final KafkaStoreReaderThread<String, String> readerThread;
 
     HeldReader() throws Exception {
@@ -220,10 +221,26 @@ public class KafkaStoreReaderThreadTest extends ClusterTestHarness {
       assertTrue(entered.await(30, TimeUnit.SECONDS));
     }
 
-    // Releases the batch and shuts the reader down, unless the closer has done or is doing so.
+    // A thread that shuts the reader down, recording what the shutdown failed with, if it did,
+    // and whether the thread's interrupt was restored.
+    Thread closer() {
+      Thread closer = new Thread(() -> {
+        try {
+          readerThread.shutdown();
+        } catch (Throwable t) {
+          closeFailure.set(t);
+        }
+        interruptRestored.set(Thread.currentThread().isInterrupted());
+      });
+      closer.setDaemon(true);
+      return closer;
+    }
+
+    // Releases the batch and shuts the reader down if it still runs, unless the closer is still
+    // shutting it down.
     void stop(Thread closer) {
       release.countDown();
-      if (closer.getState() == Thread.State.NEW) {
+      if (!closer.isAlive() && readerThread.isAlive()) {
         readerThread.shutdown();
       }
     }
