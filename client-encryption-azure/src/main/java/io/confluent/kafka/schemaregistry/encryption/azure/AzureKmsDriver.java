@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.encryption.azure;
 
 import com.azure.core.credential.TokenCredential;
 import com.azure.core.exception.HttpResponseException;
+import com.azure.core.http.HttpPipeline;
 import com.azure.identity.ClientSecretCredentialBuilder;
 import com.azure.identity.DefaultAzureCredentialBuilder;
 import com.azure.security.keyvault.keys.KeyClientBuilder;
@@ -25,6 +26,7 @@ import com.azure.security.keyvault.keys.cryptography.CryptographyClient;
 import com.azure.security.keyvault.keys.models.KeyVaultKey;
 import com.google.crypto.tink.KmsClient;
 import io.confluent.kafka.schemaregistry.encryption.tink.KmsDriver;
+import io.confluent.kafka.schemaregistry.encryption.tink.KmsTimeouts;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.security.GeneralSecurityException;
@@ -76,9 +78,26 @@ public class AzureKmsDriver implements KmsDriver {
    * version and do not embed that version in the returned ciphertext, so a caller
    * that only ever uses a versionless reference has no way to know which version encrypted a given
    * DEK once the key has been rotated.
+   *
+   * <p>Builds its own {@code KeyClient} from the credentials in {@code configs}, with azure-core's
+   * default HTTP client and retry policy. Callers that have configured timeouts should use
+   * {@link #getVersionedKeyId(Map, String, HttpPipeline)} so the lookup shares them.
    */
   public static String getVersionedKeyId(Map<String, ?> configs, String kmsKeyId)
       throws GeneralSecurityException {
+    return getVersionedKeyId(configs, kmsKeyId, null);
+  }
+
+  /**
+   * As {@link #getVersionedKeyId(Map, String)}, but the lookup runs on {@code pipeline} when one is
+   * given: the same credential policy, HTTP client timeouts and retry count as the
+   * {@code CryptographyClient} that will use the resolved version, so a configured operation
+   * timeout bounds the resolution attempts the same way it bounds the wrap that follows. With a
+   * null pipeline a {@code KeyClient} is built from the credentials in {@code configs} with
+   * azure-core's defaults.
+   */
+  public static String getVersionedKeyId(Map<String, ?> configs, String kmsKeyId,
+      HttpPipeline pipeline) throws GeneralSecurityException {
     KeyVaultId parsed = parse(kmsKeyId);
     if (parsed.version != null) {
       // Already versioned; respect the explicitly pinned config as-is.
@@ -90,12 +109,20 @@ public class AzureKmsDriver implements KmsDriver {
     @SuppressWarnings("unchecked")
     Function<String, KeyVaultKey> testKeyResolver =
         (Function<String, KeyVaultKey>) configs.get(TEST_KEY_CLIENT);
-    Function<String, KeyVaultKey> keyResolver = testKeyResolver != null
-        ? testKeyResolver
-        : new KeyClientBuilder()
-            .vaultUrl(parsed.vaultUrl)
-            .credential(getCredentials(configs))
-            .buildClient()::getKey;
+    Function<String, KeyVaultKey> keyResolver;
+    if (testKeyResolver != null) {
+      keyResolver = testKeyResolver;
+    } else {
+      KeyClientBuilder builder = new KeyClientBuilder().vaultUrl(parsed.vaultUrl);
+      if (pipeline != null) {
+        // The pipeline already carries the credential policy; KeyClientBuilder ignores
+        // credential/httpClient/retryPolicy when a pipeline is set.
+        builder.pipeline(pipeline);
+      } else {
+        builder.credential(getCredentials(configs));
+      }
+      keyResolver = builder.buildClient()::getKey;
+    }
     KeyVaultKey key;
     try {
       key = keyResolver.apply(parsed.name);
@@ -215,6 +242,7 @@ public class AzureKmsDriver implements KmsDriver {
       client = new AzureKmsClient();
     }
     client.withConfigs(configs);
+    client.withTimeouts(KmsTimeouts.fromConfigs(configs));
     if (credentials.isPresent()) {
       client.withCredentialsProvider(credentials.get());
     } else {
