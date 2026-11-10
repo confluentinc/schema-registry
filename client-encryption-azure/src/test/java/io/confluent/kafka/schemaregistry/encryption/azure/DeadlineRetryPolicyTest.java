@@ -114,6 +114,25 @@ public class DeadlineRetryPolicyTest {
   }
 
   @Test
+  public void asyncRetriableStatusThenExceptionsStaysWithinTheCap() {
+    // A 503 followed by timeouts: the exhausted chain's final error must surface, not be caught
+    // by the first attempt's error handler and retried again from its older count (11 sends).
+    FakeVault vault = new FakeVault(Duration.ofMillis(10),
+        attempt -> attempt == 0 ? (Object) 503 : new TimeoutException("response timed out"));
+    assertThrows(RuntimeException.class, () -> vault.pipeline(BUDGET).send(request()).block());
+    assertEquals(6, vault.requests.size());
+  }
+
+  @Test
+  public void asyncRetriableExceptionsThenStatusesStaysWithinTheCap() {
+    FakeVault vault = new FakeVault(Duration.ofMillis(10),
+        attempt -> attempt < 2 ? (Object) new TimeoutException("response timed out") : 503);
+    HttpResponse response = vault.pipeline(BUDGET).send(request()).block();
+    assertEquals(503, response.getStatusCode());
+    assertEquals(6, vault.requests.size());
+  }
+
+  @Test
   public void hungAttemptEndsTheOperation() {
     // The first attempt used (a little over) its whole worst-case cost, so one more cannot fit.
     // With the real backoff ladder the 1s delay alone pushes an exact 15 + 15 past 30s; this

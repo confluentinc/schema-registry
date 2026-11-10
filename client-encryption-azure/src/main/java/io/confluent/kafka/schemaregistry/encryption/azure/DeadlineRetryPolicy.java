@@ -32,6 +32,7 @@ import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.function.LongSupplier;
+import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
@@ -146,24 +147,33 @@ final class DeadlineRetryPolicy implements HttpPipelinePolicy {
   private Mono<HttpResponse> attemptAsync(HttpPipelineCallContext context,
       HttpPipelineNextPolicy next, HttpRequest original, int tryCount, long start) {
     context.setHttpRequest(original.copy());
+    // Materialize this attempt's outcome (a response or an error) and decide once. A separate
+    // error handler after the retry would also catch the retries' final error and start over
+    // from this attempt's older tryCount.
     return next.clone().process()
-        .flatMap(response -> {
-          Duration delay = retryDelay(response, null, tryCount, start);
-          if (delay == null) {
-            return Mono.just(response);
-          }
-          response.close();
-          return Mono.delay(delay)
-              .then(Mono.defer(() -> attemptAsync(context, next, original, tryCount + 1, start)));
-        })
-        .onErrorResume(error -> {
-          Duration delay = retryDelay(null, error, tryCount, start);
-          if (delay == null) {
-            return Mono.error(error);
-          }
-          return Mono.delay(delay)
-              .then(Mono.defer(() -> attemptAsync(context, next, original, tryCount + 1, start)));
-        });
+        .materialize()
+        .flatMap(outcome -> retryOrFinish(outcome.get(), outcome.getThrowable(),
+            () -> attemptAsync(context, next, original, tryCount + 1, start), tryCount, start));
+  }
+
+  /**
+   * The async counterpart of one turn of the {@link #processSync} loop: returns this attempt's
+   * outcome, or waits and runs {@code nextAttempt}. At most one of {@code response} and
+   * {@code error} is non-null.
+   */
+  private Mono<HttpResponse> retryOrFinish(HttpResponse response, Throwable error,
+      Supplier<Mono<HttpResponse>> nextAttempt, int tryCount, long start) {
+    if (response == null && error == null) {
+      return Mono.empty();
+    }
+    Duration delay = retryDelay(response, error, tryCount, start);
+    if (delay == null) {
+      return error != null ? Mono.error(error) : Mono.just(response);
+    }
+    if (response != null) {
+      response.close();
+    }
+    return Mono.delay(delay).then(Mono.defer(nextAttempt));
   }
 
   /**
