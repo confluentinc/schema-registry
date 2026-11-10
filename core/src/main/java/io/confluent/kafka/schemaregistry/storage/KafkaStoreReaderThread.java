@@ -84,6 +84,8 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
   private final K noopKey;
   private final AtomicBoolean initialized;
   private int pollFailures = 0;
+  // What the thread died of, if it did
+  private volatile Throwable failure;
 
   private Properties consumerProps = new Properties();
 
@@ -195,7 +197,37 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
   }
 
   @Override
+  public void run() {
+    try {
+      super.run();
+    } finally {
+      // Wake any waiters for offsets the thread will no longer reach, so that they fail at once
+      // rather than wait out their timeouts. Signalled under the lock, after the thread is
+      // marked complete, so that a waiter either sees it complete or gets the signal.
+      offsetUpdateLock.lock();
+      try {
+        offsetReachedThreshold.signalAll();
+      } finally {
+        offsetUpdateLock.unlock();
+      }
+    }
+  }
+
+  @Override
   public void doWork() {
+    try {
+      readBatch();
+    } catch (RuntimeException | Error e) {
+      // Only a failure of a thread still running, not one stopped on purpose that failed as it
+      // stopped.
+      if (isRunning()) {
+        failure = e;
+      }
+      throw e;
+    }
+  }
+
+  private void readBatch() {
     ConsumerRecords<byte[], byte[]> records;
     try {
       records = consumer.poll(Duration.ofMillis(Long.MAX_VALUE));
@@ -343,6 +375,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
 
   @Override
   public void shutdown() {
+    boolean interrupted = false;
     try {
       log.debug("Starting shutdown of KafkaStoreReaderThread.");
 
@@ -350,19 +383,31 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
       if (consumer != null) {
         consumer.wakeup();
       }
+      // Wait for the thread to finish the batch it may be applying before closing what it
+      // writes to; otherwise it can keep writing to a closed store, and checkpoint records
+      // it never stored. An interrupt stops the wait, so that a hung reader cannot hang the
+      // shutdown, but not the closes below; the interrupt is restored afterward.
+      try {
+        super.awaitShutdown();
+      } catch (InterruptedException e) {
+        interrupted = true;
+      }
       if (localStore != null) {
         localStore.close();
       }
       if (checkpointFile != null) {
         checkpointFile.close();
       }
-      super.awaitShutdown();
       if (consumer != null) {
         consumer.close();
       }
       log.info("KafkaStoreReaderThread shutdown complete.");
     } catch (Exception e) {
       throw new RuntimeException(e);
+    } finally {
+      if (interrupted) {
+        Thread.currentThread().interrupt();
+      }
     }
   }
 
@@ -376,7 +421,7 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
     try {
       offsetUpdateLock.lock();
       long timeoutNs = TimeUnit.NANOSECONDS.convert(timeout, timeUnit);
-      while ((offsetInSchemasTopic < offset) && (timeoutNs > 0)) {
+      while ((offsetInSchemasTopic < offset) && (timeoutNs > 0) && !isShutdownComplete()) {
         try {
           timeoutNs = offsetReachedThreshold.awaitNanos(timeoutNs);
         } catch (InterruptedException e) {
@@ -389,10 +434,26 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
     }
 
     if (offsetInSchemasTopic < offset) {
+      // No read will reach the offset now: fail at once, with what the thread died of, rather
+      // than as a timeout a caller may retry.
+      throwIfStopped();
       throw new StoreTimeoutException(
           "KafkaStoreReaderThread failed to reach target offset within the timeout interval. "
           + "targetOffset: " + offset + ", offsetReached: " + offsetInSchemasTopic
           + ", timeout(ms): " + TimeUnit.MILLISECONDS.convert(timeout, timeUnit));
+    }
+  }
+
+  /**
+   * Fails once the thread has stopped, as when it has died or the store was closed, since no
+   * record written after that will be read.
+   */
+  public void throwIfStopped() throws StoreException {
+    if (isShutdownComplete()) {
+      Throwable cause = failure;
+      throw new StoreException(cause != null
+          ? "KafkaStoreReaderThread has died"
+          : "KafkaStoreReaderThread has stopped", cause);
     }
   }
 
