@@ -21,6 +21,7 @@ import com.azure.core.http.HttpClient;
 import com.azure.core.http.HttpPipeline;
 import com.azure.core.http.HttpPipelineBuilder;
 import com.azure.core.http.policy.ExponentialBackoff;
+import com.azure.core.http.policy.HttpPipelinePolicy;
 import com.azure.core.http.policy.RetryPolicy;
 import com.azure.core.util.HttpClientOptions;
 import com.azure.identity.DefaultAzureCredentialBuilder;
@@ -65,7 +66,8 @@ public final class AzureKmsClient implements KmsClient {
   // Null means azure-core's default HTTP client. Built once in withTimeouts rather than per
   // getAead, which runs on every DEK wrap/unwrap.
   private HttpClient httpClient;
-  private int maxRetries = DEFAULT_MAX_RETRIES;
+  // Stateless, so shared by every pipeline this client builds.
+  private HttpPipelinePolicy retryPolicy = retryPolicy(KmsTimeouts.NONE);
   private static final EncryptionAlgorithm DEFAULT_ENCRYPTION_ALGORITHM =
       EncryptionAlgorithm.RSA_OAEP_256;
   private EncryptionAlgorithm algorithm = DEFAULT_ENCRYPTION_ALGORITHM;
@@ -170,26 +172,29 @@ public final class AzureKmsClient implements KmsClient {
 
   /**
    * Bounds the connect and per-response time of the HTTP client behind the Key Vault pipeline,
-   * and, when an operation timeout is given, the number of retries so that the whole operation
-   * fits in it (see {@link #maxRetries}). With {@link KmsTimeouts#NONE} (the default) the pipeline
-   * uses azure-core's default HTTP client, timeouts and retry count unchanged.
+   * and, when an operation timeout is given, puts a deadline on the retries so that the whole
+   * operation fits in it (see {@link #retryPolicy}). With {@link KmsTimeouts#NONE} (the default)
+   * the pipeline uses azure-core's default HTTP client, timeouts and retry policy unchanged.
    */
   public KmsClient withTimeouts(KmsTimeouts timeouts) {
     KmsTimeouts effective = timeouts == null ? KmsTimeouts.NONE : timeouts;
     this.httpClient = buildHttpClient(effective);
-    this.maxRetries = maxRetries(effective);
+    this.retryPolicy = retryPolicy(effective);
     return this;
   }
 
   /**
-   * Number of retries that fit in the operation timeout, or {@link #DEFAULT_MAX_RETRIES} when no
-   * operation timeout is set.
+   * The retry policy for the Key Vault pipeline: azure-core's own {@link RetryPolicy} with the
+   * Microsoft-recommended backoff when no operation timeout is set, otherwise a
+   * {@link DeadlineRetryPolicy} with the same backoff that grants each retry only while it still
+   * fits in the operation timeout.
    *
    * <p>azure-core has no deadline that spans retries for the synchronous client (a
    * {@code TimeoutPolicy} runs the downstream policies on the calling thread, so its reactor
-   * timeout cannot fire), so the deadline is enforced by construction instead: retries are
-   * granted only while worst-case attempts plus the exponential backoff between them still fit in
-   * the budget. The backoff is taken with a 20% margin for azure-core's jitter.
+   * timeout cannot fire), so the deadline is enforced at each retry decision instead: a retry is
+   * granted only while the time already spent, the backoff and one more worst-case attempt still
+   * fit in the budget. A vault that fails fast (429, 5xx) gets every retry the cap allows; a vault
+   * that hangs gets none.
    *
    * <p>An attempt is costed at connect + request: after a response timeout reactor-netty drops the
    * connection, so every retry pays the connect timeout again, and the request timeout is applied
@@ -197,33 +202,22 @@ public final class AzureKmsClient implements KmsClient {
    * same value also serves as the read and write timeout between individual socket operations;
    * Key Vault payloads are a few hundred bytes, so those only add time if the vault trickles
    * bytes, and that pathological case is not budgeted. A {@code Retry-After} header from a
-   * throttled Key Vault can also make the SDK wait longer; that is deliberate, since ignoring it
-   * would just hammer a throttled vault. With {@link AzureKmsDriver#ENCRYPT_AZURE_KEY_VERSION_SAVE}
-   * on and a versionless key, encrypt first resolves the current version on the same pipeline,
-   * which is a second round trip with its own retries, so that case can take up to twice the
-   * budget. The deadline is therefore a tight bound on the realistic worst case, not a hard wall
-   * clock.
+   * throttled Key Vault is honoured when it fits in the budget and ends the operation when it does
+   * not. With {@link AzureKmsDriver#ENCRYPT_AZURE_KEY_VERSION_SAVE} on and a versionless key,
+   * encrypt first resolves the current version on the same pipeline, which is a second round trip
+   * with its own budget, so that case can take up to twice the operation timeout. The deadline is
+   * therefore a tight bound on the realistic worst case, not a hard wall clock.
    */
-  static int maxRetries(KmsTimeouts timeouts) {
+  static HttpPipelinePolicy retryPolicy(KmsTimeouts timeouts) {
     if (!timeouts.operationTimeout().isPresent()) {
-      return DEFAULT_MAX_RETRIES;
+      return new RetryPolicy(
+          new ExponentialBackoff(DEFAULT_MAX_RETRIES, RETRY_BASE_DELAY, RETRY_MAX_DELAY));
     }
-    long budgetMs = timeouts.operationTimeout().get().toMillis();
     // fromConfigs guarantees a request timeout accompanies an operation timeout.
-    long attemptMs = timeouts.requestTimeout().get().toMillis()
-        + timeouts.connectTimeout().map(Duration::toMillis).orElse(0L);
-    long spentMs = attemptMs;
-    int retries = 0;
-    while (retries < DEFAULT_MAX_RETRIES) {
-      long delayMs = Math.min(RETRY_BASE_DELAY.toMillis() << retries, RETRY_MAX_DELAY.toMillis());
-      delayMs += delayMs / 5;
-      if (spentMs + delayMs + attemptMs > budgetMs) {
-        break;
-      }
-      spentMs += delayMs + attemptMs;
-      retries++;
-    }
-    return retries;
+    Duration attempt = timeouts.requestTimeout().get()
+        .plus(timeouts.connectTimeout().orElse(Duration.ZERO));
+    return new DeadlineRetryPolicy(DEFAULT_MAX_RETRIES, RETRY_BASE_DELAY, RETRY_MAX_DELAY,
+        attempt, timeouts.operationTimeout().get());
   }
 
   /**
@@ -276,13 +270,12 @@ public final class AzureKmsClient implements KmsClient {
         // Malformed key id; surfaced properly when it is actually used below.
       }
     }
-    // Retry count is DEFAULT_MAX_RETRIES unless withTimeouts derived a smaller budget.
+    // azure-core's RetryPolicy unless withTimeouts gave the operation a deadline.
     HttpPipeline pipeline = new HttpPipelineBuilder()
         .httpClient(httpClient)
         .policies(new KeyVaultCredentialPolicy(provider == null
                 ? new DefaultAzureCredentialBuilder().build() : provider, false),
-            new RetryPolicy(
-                new ExponentialBackoff(maxRetries, RETRY_BASE_DELAY, RETRY_MAX_DELAY)))
+            retryPolicy)
         .build();
     // Built from the raw (possibly versionless) keyUri, exactly as before this feature existed:
     // used directly whenever saveVersion is off, and as decrypt()'s fallback for legacy
@@ -319,7 +312,7 @@ public final class AzureKmsClient implements KmsClient {
     // called for both encrypt and decrypt, and decrypt's own resolution (if needed at all) comes
     // from whatever version is embedded in the ciphertext, not from re-resolving "current" here.
     // Resolved on the same pipeline as the wrap itself, so the lookup gets the configured
-    // timeouts and retry count rather than azure-core's defaults. It is a round trip of its own,
+    // timeouts and retry policy rather than azure-core's defaults. It is a round trip of its own,
     // so for a versionless key with version-saving on, one encrypt can take up to twice the
     // operation budget (resolve + wrap); decrypt never resolves and stays within one budget.
     Supplier<Map.Entry<CryptographyClient, String>> encryptTarget = () -> {

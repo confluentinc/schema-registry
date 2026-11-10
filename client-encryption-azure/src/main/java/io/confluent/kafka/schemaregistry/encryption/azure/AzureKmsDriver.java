@@ -90,7 +90,7 @@ public class AzureKmsDriver implements KmsDriver {
 
   /**
    * As {@link #getVersionedKeyId(Map, String)}, but the lookup runs on {@code pipeline} when one is
-   * given: the same credential policy, HTTP client timeouts and retry count as the
+   * given: the same credential policy, HTTP client timeouts and retry policy as the
    * {@code CryptographyClient} that will use the resolved version, so a configured operation
    * timeout bounds the resolution attempts the same way it bounds the wrap that follows. With a
    * null pipeline a {@code KeyClient} is built from the credentials in {@code configs} with

@@ -38,7 +38,7 @@ import reactor.core.publisher.Mono;
 
 /**
  * The versionless-key resolver must run on the pipeline it is given (the one carrying the
- * configured timeouts and retry count), not on a KeyClient of its own with azure-core defaults.
+ * configured timeouts and retry policy), not on a KeyClient of its own with azure-core defaults.
  */
 public class AzureKmsDriverResolverPipelineTest {
 

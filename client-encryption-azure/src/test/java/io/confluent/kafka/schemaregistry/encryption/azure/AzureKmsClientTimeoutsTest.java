@@ -22,12 +22,23 @@ import static io.confluent.kafka.schemaregistry.encryption.tink.KmsTimeouts.KMS_
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
+import com.azure.core.http.HttpHeaders;
+import com.azure.core.http.HttpMethod;
+import com.azure.core.http.HttpRequest;
+import com.azure.core.http.HttpResponse;
+import com.azure.core.http.policy.RetryPolicy;
 import io.confluent.kafka.schemaregistry.encryption.tink.KmsTimeouts;
+import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
+import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import org.junit.Test;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 public class AzureKmsClientTimeoutsTest {
 
@@ -58,34 +69,82 @@ public class AzureKmsClientTimeoutsTest {
   }
 
   @Test
-  public void noOperationTimeoutKeepsDefaultRetries() {
+  public void noOperationTimeoutKeepsAzureCoreRetryPolicy() {
     assertEquals(5, AzureKmsClient.DEFAULT_MAX_RETRIES);
-    assertEquals(5, AzureKmsClient.maxRetries(KmsTimeouts.NONE));
-    assertEquals(5, AzureKmsClient.maxRetries(KmsTimeouts.fromConfigs(
-        Collections.singletonMap(KMS_REQUEST_TIMEOUT_MS, "4000"))));
+    // Connect and request timeouts alone leave the retry policy exactly as before: azure-core's
+    // own, with the Microsoft-recommended five retries.
+    assertTrue(AzureKmsClient.retryPolicy(KmsTimeouts.NONE) instanceof RetryPolicy);
+    assertTrue(AzureKmsClient.retryPolicy(KmsTimeouts.fromConfigs(
+        Collections.singletonMap(KMS_REQUEST_TIMEOUT_MS, "4000"))) instanceof RetryPolicy);
   }
 
   @Test
-  public void operationTimeoutLimitsRetriesToWhatFits() {
-    // 10s attempts in a 30s budget: 10 + (1.2 + 10) = 21.2 fits, + (2.4 + 10) = 33.6 does not.
-    assertEquals(1, AzureKmsClient.maxRetries(timeouts("10000", "30000")));
-    // Budget equal to one attempt: no retries.
-    assertEquals(0, AzureKmsClient.maxRetries(timeouts("10000", "10000")));
-    // 1s attempts in a 60s budget: 1 + 2.2 + 3.4 + 5.8 + 10.6 + 20.2 = 43.2 fits all five retries;
-    // never more than the default count.
-    assertEquals(5, AzureKmsClient.maxRetries(timeouts("1000", "60000")));
-    // 1s attempts in a 5s budget: 1 + 2.2 = 3.2 fits, + 3.4 = 6.6 does not.
-    assertEquals(1, AzureKmsClient.maxRetries(timeouts("1000", "5000")));
+  public void operationTimeoutPutsADeadlineOnRetries() {
+    assertTrue(AzureKmsClient.retryPolicy(timeouts("10000", "30000"))
+        instanceof DeadlineRetryPolicy);
+    assertTrue(AzureKmsClient.retryPolicy(timeouts("5000", "10000", "30000"))
+        instanceof DeadlineRetryPolicy);
   }
 
   @Test
-  public void connectTimeoutIsPartOfEveryAttempt() {
-    // Each retry reconnects, so an attempt costs connect + request. 5s + 10s in a 30s budget:
-    // 15 + (1.2 + 15) = 31.2 does not fit, so no retries.
-    assertEquals(0, AzureKmsClient.maxRetries(timeouts("5000", "10000", "30000")));
-    // Shrinking connect to 3s makes one retry fit: 13 + 1.2 + 13 = 27.2.
-    assertEquals(1, AzureKmsClient.maxRetries(timeouts("3000", "10000", "30000")));
-    // Same budget without a connect timeout: one retry, as in the test above.
-    assertEquals(1, AzureKmsClient.maxRetries(timeouts("10000", "30000")));
+  public void deadlinePolicyCostsAnAttemptAtConnectPlusRequest() {
+    // Each retry reconnects, so one worst-case attempt is connect + request = 15s. After a hung
+    // first attempt nothing more fits in 30s; after a fast one, a retry does.
+    DeadlineRetryPolicy policy =
+        (DeadlineRetryPolicy) AzureKmsClient.retryPolicy(timeouts("5000", "10000", "30000"));
+    HttpRequest request = new HttpRequest(HttpMethod.POST, "https://vault.example/keys/k/wrap");
+    HttpResponse throttled = new ThrottledResponse(request);
+    long start = System.nanoTime();
+    assertNotNull(policy.retryDelay(throttled, null, 0, start));
+    assertNull(policy.retryDelay(throttled, null, 0, start - Duration.ofSeconds(15).toNanos()));
+    // Without a connect timeout an attempt is just the request: 10 + 10 fits in 30 with room for
+    // the backoff, 15 elapsed + ~1s backoff + 10 still fits, 21 elapsed does not.
+    DeadlineRetryPolicy requestOnly =
+        (DeadlineRetryPolicy) AzureKmsClient.retryPolicy(timeouts("10000", "30000"));
+    assertNotNull(requestOnly.retryDelay(throttled, null, 0,
+        start - Duration.ofSeconds(15).toNanos()));
+    assertNull(requestOnly.retryDelay(throttled, null, 0,
+        start - Duration.ofSeconds(21).toNanos()));
+  }
+
+  private static final class ThrottledResponse extends HttpResponse {
+    ThrottledResponse(HttpRequest request) {
+      super(request);
+    }
+
+    @Override
+    public int getStatusCode() {
+      return 429;
+    }
+
+    @Override
+    public String getHeaderValue(String name) {
+      return null;
+    }
+
+    @Override
+    public HttpHeaders getHeaders() {
+      return new HttpHeaders();
+    }
+
+    @Override
+    public Flux<ByteBuffer> getBody() {
+      return Flux.empty();
+    }
+
+    @Override
+    public Mono<byte[]> getBodyAsByteArray() {
+      return Mono.just(new byte[0]);
+    }
+
+    @Override
+    public Mono<String> getBodyAsString() {
+      return Mono.just("");
+    }
+
+    @Override
+    public Mono<String> getBodyAsString(Charset charset) {
+      return Mono.just("");
+    }
   }
 }
