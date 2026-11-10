@@ -127,70 +127,119 @@ public class KafkaStoreReaderThreadTest extends ClusterTestHarness {
   // batch it is applying, rather than close it under the thread.
   @Test
   public void testShutdownClosesTheStoreOnceTheReaderHasStopped() throws Exception {
-    CountDownLatch entered = new CountDownLatch(1);
-    CountDownLatch release = new CountDownLatch(1);
-    AtomicBoolean closedDuringBatch = new AtomicBoolean();
-    AtomicBoolean closed = new AtomicBoolean();
-    Store<String, String> localStore = new InMemoryCache<String, String>(
-        StringSerializer.INSTANCE) {
-      @Override
-      public void close() throws StoreException {
-        closed.set(true);
-        super.close();
-      }
-    };
-    StoreUpdateHandler<String, String> handler = new StringMessageHandler() {
-      @Override
-      public void handleUpdate(String key, String value, String oldValue,
-                               TopicPartition tp, long offset, long timestamp) {
-        entered.countDown();
-        try {
-          release.await(30, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-          Thread.currentThread().interrupt();
-        }
-        closedDuringBatch.set(closed.get());
-      }
-    };
-    MockConsumer<byte[], byte[]> consumer = mockConsumer();
-    KafkaStoreReaderThread<String, String> readerThread =
-        readerThread(localStore, handler, consumer);
-    consumer.addRecord(new ConsumerRecord<>(KAFKASTORE_TOPIC, 0, 0L,
-        StringSerializer.INSTANCE.serializeKey("key"),
-        StringSerializer.INSTANCE.serializeValue("value")));
-    Thread closer = new Thread(readerThread::shutdown);
+    HeldReader held = new HeldReader();
+    Thread closer = new Thread(held.readerThread::shutdown);
     closer.setDaemon(true);
     try {
-      readerThread.start();
-      assertTrue(entered.await(30, TimeUnit.SECONDS));
-
+      held.startAndAwaitBatch();
       closer.start();
-      try {
-        // Until the shutdown waits in awaitShutdown() for the thread, having done whatever it
-        // does before that.
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
-        while (!waitsIn(closer, "awaitShutdown")) {
-          assertTrue(closer.isAlive() && System.nanoTime() < deadline,
-              "The shutdown did not wait for the reader thread");
-          Thread.sleep(10);
-        }
-      } finally {
-        release.countDown();
-      }
+      awaitWaitingInShutdown(closer);
+      held.release.countDown();
       closer.join(TimeUnit.SECONDS.toMillis(30));
       assertFalse(closer.isAlive());
-      assertFalse(closedDuringBatch.get(), "The store was closed under the reader's batch");
-      assertTrue(closed.get());
+      assertFalse(held.closedDuringBatch.get(), "The store was closed under the reader's batch");
+      assertTrue(held.closed.get());
     } finally {
-      release.countDown();
-      readerThread.shutdown();
+      held.stop(closer);
     }
   }
 
-  private static boolean waitsIn(Thread thread, String method) {
-    return thread.getState() == Thread.State.WAITING
-        && Arrays.stream(thread.getStackTrace())
-            .anyMatch(frame -> frame.getMethodName().equals(method));
+  // An interrupt does not cut a shutdown's wait for the reader thread short, so the store is
+  // still not closed under the reader's batch, and is closed once it is done; the interrupt is
+  // restored afterward.
+  @Test
+  public void testAnInterruptedShutdownStillWaitsForTheReader() throws Exception {
+    HeldReader held = new HeldReader();
+    AtomicBoolean interruptRestored = new AtomicBoolean();
+    Thread closer = new Thread(() -> {
+      held.readerThread.shutdown();
+      interruptRestored.set(Thread.currentThread().isInterrupted());
+    });
+    closer.setDaemon(true);
+    try {
+      held.startAndAwaitBatch();
+      closer.start();
+      awaitWaitingInShutdown(closer);
+      closer.interrupt();
+      // Waits again, rather than go on to close the store under the batch.
+      awaitWaitingInShutdown(closer);
+      assertFalse(held.closed.get(), "The store was closed under the reader's batch");
+      held.release.countDown();
+      // The reader too, so that its batch has recorded whether the store was closed under it,
+      // even if the closer did not wait for it.
+      held.readerThread.join(TimeUnit.SECONDS.toMillis(30));
+      closer.join(TimeUnit.SECONDS.toMillis(30));
+      assertFalse(closer.isAlive());
+      assertFalse(held.closedDuringBatch.get(), "The store was closed under the reader's batch");
+      assertTrue(held.closed.get(), "The store was not closed");
+      assertTrue(interruptRestored.get(), "The interrupt was not restored");
+    } finally {
+      held.stop(closer);
+    }
+  }
+
+  /** A reader thread held inside the batch for its first record until released. */
+  private class HeldReader {
+    final CountDownLatch entered = new CountDownLatch(1);
+    final CountDownLatch release = new CountDownLatch(1);
+    final AtomicBoolean closedDuringBatch = new AtomicBoolean();
+    final AtomicBoolean closed = new AtomicBoolean();
+    final KafkaStoreReaderThread<String, String> readerThread;
+
+    HeldReader() throws Exception {
+      Store<String, String> localStore = new InMemoryCache<String, String>(
+          StringSerializer.INSTANCE) {
+        @Override
+        public void close() throws StoreException {
+          closed.set(true);
+          super.close();
+        }
+      };
+      StoreUpdateHandler<String, String> handler = new StringMessageHandler() {
+        @Override
+        public void handleUpdate(String key, String value, String oldValue,
+                                 TopicPartition tp, long offset, long timestamp) {
+          entered.countDown();
+          try {
+            release.await(30, TimeUnit.SECONDS);
+          } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+          }
+          closedDuringBatch.set(closed.get());
+        }
+      };
+      MockConsumer<byte[], byte[]> consumer = mockConsumer();
+      readerThread = readerThread(localStore, handler, consumer);
+      consumer.addRecord(new ConsumerRecord<>(KAFKASTORE_TOPIC, 0, 0L,
+          StringSerializer.INSTANCE.serializeKey("key"),
+          StringSerializer.INSTANCE.serializeValue("value")));
+    }
+
+    void startAndAwaitBatch() throws InterruptedException {
+      readerThread.start();
+      assertTrue(entered.await(30, TimeUnit.SECONDS));
+    }
+
+    // Releases the batch and shuts the reader down, unless the closer has done or is doing so.
+    void stop(Thread closer) {
+      release.countDown();
+      if (closer.getState() == Thread.State.NEW) {
+        readerThread.shutdown();
+      }
+    }
+  }
+
+  // Until the thread waits in awaitShutdown() for the reader, having done whatever shutdown()
+  // does before that.
+  private static void awaitWaitingInShutdown(Thread closer) throws InterruptedException {
+    long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
+    while (closer.getState() != Thread.State.WAITING
+        || Arrays.stream(closer.getStackTrace())
+            .noneMatch(frame -> frame.getMethodName().equals("awaitShutdown"))) {
+      assertTrue(closer.isAlive() && System.nanoTime() < deadline,
+          "The shutdown did not wait for the reader thread");
+      Thread.sleep(10);
+    }
   }
 
   private static MockConsumer<byte[], byte[]> mockConsumer() {

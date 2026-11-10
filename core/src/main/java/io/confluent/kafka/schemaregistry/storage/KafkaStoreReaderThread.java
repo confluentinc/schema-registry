@@ -385,8 +385,8 @@ public class KafkaStoreReaderThread<K, V> extends ShutdownableThread {
       }
       // Wait for the thread to finish the batch it may be applying before closing what it
       // writes to; otherwise it can keep writing to a closed store, and checkpoint records
-      // it never stored. Waits through an interrupt, so that the closes below still happen,
-      // and restores it afterward.
+      // it never stored. Waits through an interrupt, as closing under a running thread would
+      // risk exactly that, and restores it once the closes below are done.
       while (true) {
         try {
           super.awaitShutdown();

@@ -300,6 +300,8 @@ public class KafkaStore<K, V> implements Store<K, V> {
    * Wait until the KafkaStore catches up to the last message in the Kafka topic.
    */
   public void waitUntilKafkaReaderReachesLastOffset(int timeoutMs) throws StoreException {
+    // A stopped reader will not catch up: fail at once, before writing a noop record.
+    kafkaTopicReader.throwIfStopped();
     long offsetOfLastMessage = getLatestOffset(timeoutMs);
     waitUntilKafkaReaderReachesOffset(offsetOfLastMessage, timeoutMs);
   }
@@ -309,6 +311,8 @@ public class KafkaStore<K, V> implements Store<K, V> {
    */
   public void waitUntilKafkaReaderReachesLastOffset(String subject, int timeoutMs)
       throws StoreException {
+    // A stopped reader will not catch up: fail at once, before writing a noop record.
+    kafkaTopicReader.throwIfStopped();
     long lastOffset = lastOffset(subject);
     if (lastOffset == -1) {
       lastOffset = getLatestOffset(timeoutMs);
@@ -479,8 +483,6 @@ public class KafkaStore<K, V> implements Store<K, V> {
    * latest offset.
    */
   private long getLatestOffset(int timeoutMs) throws StoreException {
-    // No reader would reach the offset: fail before writing a noop record and waiting for it.
-    kafkaTopicReader.throwIfStopped();
     ProducerRecord<byte[], byte[]> producerRecord = null;
 
     if (this.lastWrittenOffset >= 0) {
