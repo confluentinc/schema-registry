@@ -341,6 +341,9 @@ public class KafkaStore<K, V> implements Store<K, V> {
     if (key == null) {
       throw new StoreException("Key should not be null");
     }
+    // No reader would apply the write, which would then fail only once written: fail before
+    // writing instead, so that the caller knows the record was not written.
+    kafkaTopicReader.throwIfStopped();
     V oldValue = get(key);
 
     // write to the Kafka topic
@@ -476,6 +479,8 @@ public class KafkaStore<K, V> implements Store<K, V> {
    * latest offset.
    */
   private long getLatestOffset(int timeoutMs) throws StoreException {
+    // No reader would reach the offset: fail before writing a noop record and waiting for it.
+    kafkaTopicReader.throwIfStopped();
     ProducerRecord<byte[], byte[]> producerRecord = null;
 
     if (this.lastWrittenOffset >= 0) {
