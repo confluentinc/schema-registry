@@ -36,8 +36,10 @@ import java.util.Optional;
  *   <li>{@link #KMS_OPERATION_TIMEOUT_MS}: the whole wrap/unwrap including the SDK's retries.
  *       AWS enforces it natively and exactly ({@code apiCallTimeout}). Azure derives how many
  *       retries fit in it, costing each attempt at connect + request, so it is a tight bound on
- *       the realistic worst case rather than a hard wall clock. GCP makes a single attempt, so
- *       connect + request already bound it.</li>
+ *       the realistic worst case rather than a hard wall clock. GCP has no SDK-native deadline
+ *       either: one attempt is bounded by connect + request, which this deadline must cover, but
+ *       a 401 replay after a token refresh can double that, and the token fetch itself is outside
+ *       these timeouts.</li>
  * </ul>
  */
 public final class KmsTimeouts {
@@ -51,8 +53,10 @@ public final class KmsTimeouts {
   public static final String KMS_REQUEST_TIMEOUT_MS = "kms.request.timeout.ms";
   /**
    * Deadline on one whole KMS operation (wrap or unwrap), including every retry the SDK makes.
-   * Requires {@link #KMS_REQUEST_TIMEOUT_MS} and must not be smaller than it: the request timeout
-   * is the unit the retry budget is computed in.
+   * Requires {@link #KMS_REQUEST_TIMEOUT_MS} and must cover at least one attempt, i.e.
+   * {@link #KMS_CONNECT_TIMEOUT_MS} (if set) plus {@link #KMS_REQUEST_TIMEOUT_MS}: that sum is
+   * the unit the retry budget is computed in, and a smaller deadline is one no transport can
+   * honour.
    */
   public static final String KMS_OPERATION_TIMEOUT_MS = "kms.operation.timeout.ms";
 
@@ -73,7 +77,8 @@ public final class KmsTimeouts {
    *
    * @throws IllegalArgumentException if a value is present but not a positive integer, or if
    *     {@link #KMS_OPERATION_TIMEOUT_MS} is set without {@link #KMS_REQUEST_TIMEOUT_MS} or is
-   *     smaller than it
+   *     smaller than one attempt ({@link #KMS_CONNECT_TIMEOUT_MS}, if set, plus
+   *     {@link #KMS_REQUEST_TIMEOUT_MS})
    */
   public static KmsTimeouts fromConfigs(Map<String, ?> configs) {
     if (configs == null) {
@@ -87,10 +92,13 @@ public final class KmsTimeouts {
         throw new IllegalArgumentException(
             KMS_OPERATION_TIMEOUT_MS + " requires " + KMS_REQUEST_TIMEOUT_MS);
       }
-      if (operation.compareTo(request) < 0) {
+      // One attempt costs connect + request (each retry reconnects), so an operation timeout that
+      // cannot cover a single attempt is one no transport can honour.
+      long attemptMs = request.toMillis() + (connect == null ? 0 : connect.toMillis());
+      if (operation.toMillis() < attemptMs) {
         throw new IllegalArgumentException(KMS_OPERATION_TIMEOUT_MS + " (" + operation.toMillis()
-            + ") must not be smaller than " + KMS_REQUEST_TIMEOUT_MS + " ("
-            + request.toMillis() + ")");
+            + ") must cover one attempt, i.e. " + KMS_CONNECT_TIMEOUT_MS + " + "
+            + KMS_REQUEST_TIMEOUT_MS + " (" + attemptMs + ")");
       }
     }
     return connect == null && request == null && operation == null

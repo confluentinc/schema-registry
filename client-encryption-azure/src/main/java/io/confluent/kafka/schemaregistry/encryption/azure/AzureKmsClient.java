@@ -198,8 +198,11 @@ public final class AzureKmsClient implements KmsClient {
    * Key Vault payloads are a few hundred bytes, so those only add time if the vault trickles
    * bytes, and that pathological case is not budgeted. A {@code Retry-After} header from a
    * throttled Key Vault can also make the SDK wait longer; that is deliberate, since ignoring it
-   * would just hammer a throttled vault. The deadline is therefore a tight bound on the realistic
-   * worst case, not a hard wall clock.
+   * would just hammer a throttled vault. With {@link AzureKmsDriver#ENCRYPT_AZURE_KEY_VERSION_SAVE}
+   * on and a versionless key, encrypt first resolves the current version on the same pipeline,
+   * which is a second round trip with its own retries, so that case can take up to twice the
+   * budget. The deadline is therefore a tight bound on the realistic worst case, not a hard wall
+   * clock.
    */
   static int maxRetries(KmsTimeouts timeouts) {
     if (!timeouts.operationTimeout().isPresent()) {
@@ -315,9 +318,13 @@ public final class AzureKmsClient implements KmsClient {
     // a decrypt-only call site never triggers a wasted version-resolution round trip: getAead() is
     // called for both encrypt and decrypt, and decrypt's own resolution (if needed at all) comes
     // from whatever version is embedded in the ciphertext, not from re-resolving "current" here.
+    // Resolved on the same pipeline as the wrap itself, so the lookup gets the configured
+    // timeouts and retry count rather than azure-core's defaults. It is a round trip of its own,
+    // so for a versionless key with version-saving on, one encrypt can take up to twice the
+    // operation budget (resolve + wrap); decrypt never resolves and stays within one budget.
     Supplier<Map.Entry<CryptographyClient, String>> encryptTarget = () -> {
       try {
-        String resolvedKeyUri = AzureKmsDriver.getVersionedKeyId(clientConfigs, keyUri);
+        String resolvedKeyUri = AzureKmsDriver.getVersionedKeyId(clientConfigs, keyUri, pipeline);
         String version = resolvedKeyUri.substring(resolvedKeyUri.lastIndexOf('/') + 1);
         // Reuses clientFactory rather than building its own CryptographyClient, so there is only
         // one place (clientFactory) that knows how to turn a version into a client.

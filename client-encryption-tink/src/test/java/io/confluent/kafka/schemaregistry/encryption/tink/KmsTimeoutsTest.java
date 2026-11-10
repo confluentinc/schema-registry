@@ -103,4 +103,23 @@ public class KmsTimeoutsTest {
     assertEquals(Optional.of(Duration.ofMillis(10000)),
         KmsTimeouts.fromConfigs(configs).operationTimeout());
   }
+
+  @Test
+  public void operationTimeoutMustCoverConnectPlusRequest() {
+    // Each attempt reconnects, so a budget that covers the request but not the connect in front
+    // of it cannot be honoured by any transport: 10s connect + 1s request does not fit in 5s.
+    Map<String, Object> configs = new HashMap<>();
+    configs.put(KMS_CONNECT_TIMEOUT_MS, "10000");
+    configs.put(KMS_REQUEST_TIMEOUT_MS, "1000");
+    configs.put(KMS_OPERATION_TIMEOUT_MS, "5000");
+    IllegalArgumentException e =
+        assertThrows(IllegalArgumentException.class, () -> KmsTimeouts.fromConfigs(configs));
+    assertTrue(e.getMessage(), e.getMessage().contains(KMS_CONNECT_TIMEOUT_MS));
+    assertTrue(e.getMessage(), e.getMessage().contains("11000"));
+
+    // Exactly connect + request is allowed: one attempt, no retries.
+    configs.put(KMS_OPERATION_TIMEOUT_MS, "11000");
+    assertEquals(Optional.of(Duration.ofMillis(11000)),
+        KmsTimeouts.fromConfigs(configs).operationTimeout());
+  }
 }

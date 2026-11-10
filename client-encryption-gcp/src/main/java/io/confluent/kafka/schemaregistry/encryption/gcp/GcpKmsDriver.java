@@ -147,11 +147,15 @@ public class GcpKmsDriver implements KmsDriver {
    * (scoped credentials, trusted transport, Gson, Tink's application name), plus the given
    * timeouts on every request.
    *
-   * <p>The operation timeout needs no separate enforcement here: google-http-client only retries
-   * when a back-off handler is installed, and Tink installs none (the credentials adapter retries
-   * once on a 401 after refreshing the token). One attempt therefore bounds the whole operation
-   * at connect + request, which {@link KmsTimeouts#fromConfigs} keeps below the operation timeout
-   * for the request part.
+   * <p>google-http-client has no deadline that spans a whole call, so the operation timeout is not
+   * enforced here as a clock. It is honoured by construction instead:
+   * {@link KmsTimeouts#fromConfigs} requires it to cover connect + request, and google-http-client
+   * retries only when a handler asks it to. Tink installs no back-off handler, so a plain attempt
+   * is bounded by connect + request.
+   * The one exception is {@link HttpCredentialsAdapter}, which on a 401 refreshes the token and
+   * has the request re-sent once, so an operation can take up to two attempts plus the refresh.
+   * The token fetch itself (initial or refresh) goes through the credentials' own transport with
+   * google-http-client's default timeouts, outside these settings.
    */
   static CloudKMS buildCloudKms(GoogleCredentials credentials, KmsTimeouts timeouts)
       throws GeneralSecurityException {
