@@ -22,8 +22,10 @@ import com.google.crypto.tink.Aead;
 import com.google.crypto.tink.KmsClient;
 import com.google.crypto.tink.KmsClients;
 import com.google.errorprone.annotations.CanIgnoreReturnValue;
+import io.confluent.kafka.schemaregistry.encryption.tink.KmsTimeouts;
 import java.nio.file.Paths;
 import java.security.GeneralSecurityException;
+import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -32,8 +34,11 @@ import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider;
 import software.amazon.awssdk.awscore.exception.AwsServiceException;
+import software.amazon.awssdk.http.SdkHttpConfigurationOption;
+import software.amazon.awssdk.http.apache.ApacheHttpClient;
 import software.amazon.awssdk.profiles.ProfileFile;
 import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.kms.KmsClientBuilder;
 
 /**
  * An implementation of {@link KmsClient} for <a href="https://aws.amazon.com/kms/">AWS KMS</a>.
@@ -47,6 +52,7 @@ public final class AwsKmsClient implements KmsClient {
   @Nullable private software.amazon.awssdk.services.kms.KmsClient awsKms;
   @Nullable private String keyUri;
   @Nullable private AwsCredentialsProvider provider;
+  private KmsTimeouts timeouts = KmsTimeouts.NONE;
 
   /**
    * Constructs a generic AwsKmsClient that is not bound to any specific key.
@@ -133,6 +139,17 @@ public final class AwsKmsClient implements KmsClient {
   }
 
   /**
+   * Bounds the connect and per-attempt time of the AWS KMS clients this client builds. With
+   * {@link KmsTimeouts#NONE} (the default) the SDK's own HTTP client and timeouts are used
+   * unchanged.
+   */
+  @CanIgnoreReturnValue
+  public KmsClient withTimeouts(KmsTimeouts timeouts) {
+    this.timeouts = timeouts == null ? KmsTimeouts.NONE : timeouts;
+    return this;
+  }
+
+  /**
    * Specifies the {@link software.amazon.awssdk.services.kms.KmsClient} object to be used.
    * Only used for testing.
    */
@@ -167,16 +184,50 @@ public final class AwsKmsClient implements KmsClient {
       }
       String regionName = tokens.get(3);
       if (client == null) {
-        client =
+        KmsClientBuilder builder =
             software.amazon.awssdk.services.kms.KmsClient.builder()
                 .credentialsProvider(provider)
-                .region(Region.of(regionName))
-                .build();
+                .region(Region.of(regionName));
+        applyTimeouts(builder, timeouts);
+        client = builder.build();
       }
       return new AwsKmsAead(client, keyId);
     } catch (AwsServiceException e) {
       throw new GeneralSecurityException("cannot load credentials from provider", e);
     }
+  }
+
+  /**
+   * Applies {@code timeouts} to {@code builder}; does nothing at all when they are empty, so the
+   * SDK keeps choosing its default HTTP client exactly as it did before timeouts existed.
+   *
+   * <p>Connect and socket timeouts go on the Apache client, the SDK's default sync client. Each
+   * attempt is also bounded as a whole by {@code apiCallAttemptTimeout} (a socket timeout alone
+   * only bounds the gap between reads). That SDK timer starts before the connection is made, while
+   * the request timeout is defined as the time allowed once connected, so the attempt timeout is
+   * connect + request: the configured connect timeout, or the SDK's own connect default when the
+   * key is absent, so that a connection the connect timeout would allow is never cut short. The
+   * operation timeout is {@code apiCallTimeout}: the SDK's own deadline across all retries, which
+   * aborts the in-flight attempt when it fires. The SDK's retry policy itself is left at its
+   * default.
+   */
+  static final Duration DEFAULT_CONNECT_TIMEOUT = SdkHttpConfigurationOption.GLOBAL_HTTP_DEFAULTS
+      .get(SdkHttpConfigurationOption.CONNECTION_TIMEOUT);
+
+  static void applyTimeouts(KmsClientBuilder builder, KmsTimeouts timeouts) {
+    if (timeouts.isEmpty()) {
+      return;
+    }
+    ApacheHttpClient.Builder http = ApacheHttpClient.builder();
+    timeouts.connectTimeout().ifPresent(http::connectionTimeout);
+    timeouts.requestTimeout().ifPresent(http::socketTimeout);
+    builder.httpClientBuilder(http);
+    // One overrideConfiguration call: each call replaces the previous configuration.
+    builder.overrideConfiguration(c -> {
+      timeouts.requestTimeout().ifPresent(request -> c.apiCallAttemptTimeout(
+          request.plus(timeouts.connectTimeout().orElse(DEFAULT_CONNECT_TIMEOUT))));
+      timeouts.operationTimeout().ifPresent(c::apiCallTimeout);
+    });
   }
 
   /**
