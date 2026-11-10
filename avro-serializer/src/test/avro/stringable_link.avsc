@@ -1,0 +1,14 @@
+{
+  "namespace": "io.confluent.kafka.example.stringable",
+  "type": "record",
+  "name": "StringableLink",
+  "fields": [
+    {
+      "name": "url",
+      "type": {
+        "type": "string",
+        "java-class": "java.net.URL"
+      }
+    }
+  ]
+}

@@ -22,6 +22,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -48,7 +49,9 @@ import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import org.apache.avro.AvroRuntimeException;
 import org.apache.avro.Schema;
+import org.apache.avro.SchemaParseException;
 import org.apache.avro.generic.GenericArray;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericEnumSymbol;
@@ -1421,6 +1424,121 @@ public class AvroSchemaTest {
     } catch (Exception e) {
       // Expected
     }
+  }
+
+  private static final String TYPE_OBJECT_SCHEMA = "{\"type\":\"record\",\"name\":\"R\","
+      + "\"namespace\":\"tests\",\"fields\":["
+      + "{\"name\":\"a\",\"type\":{\"type\":\"fixed\",\"name\":\"Hash\",\"size\":16}},"
+      + "{\"name\":\"b\",\"type\":{\"type\":\"Hash\"}},"
+      + "{\"name\":\"c\",\"type\":[\"null\",{\"type\":\"tests.Hash\"}],\"default\":null},"
+      + "{\"name\":\"d\",\"type\":{\"type\":\"array\",\"items\":{\"type\":\"Hash\"}}},"
+      + "{\"name\":\"e\",\"type\":{\"type\":\"map\",\"values\":{\"type\":\"Hash\"}}}]}";
+
+  @Test
+  public void testTypeObjectNamingTypeAcceptedForExisting() {
+    AvroSchema schema = new AvroSchema(TYPE_OBJECT_SCHEMA, Collections.emptyList(),
+        Collections.emptyMap(), null, false);
+    assertEquals(Schema.Type.FIXED, schema.rawSchema().getField("b").schema().getType());
+    assertFalse(schema.canonicalString().contains("{\"type\":\"tests.Hash\"}"));
+    assertEquals(Schema.Type.FIXED,
+        schema.rawSchema().getField("e").schema().getValueType().getType());
+  }
+
+  @Test
+  public void testTypeObjectNamingTypeAcceptedForNew() {
+    AvroSchema schema = new AvroSchema(TYPE_OBJECT_SCHEMA, Collections.emptyList(),
+        Collections.emptyMap(), null, true);
+    assertEquals(Schema.Type.FIXED, schema.rawSchema().getField("b").schema().getType());
+    assertFalse(schema.canonicalString().contains("{\"type\":\"tests.Hash\"}"));
+  }
+
+  @Test
+  public void testTypeObjectNamingUndefinedTypeReportsName() {
+    String schema = "{\"type\":\"record\",\"name\":\"R\",\"namespace\":\"tests\","
+        + "\"fields\":[{\"name\":\"a\",\"type\":{\"type\":\"strnig\"}}]}";
+    AvroRuntimeException e = assertThrows(AvroRuntimeException.class,
+        () -> new AvroSchema(schema, Collections.emptyList(), Collections.emptyMap(), null, true));
+    assertTrue(e.getMessage(), e.getMessage().contains("strnig"));
+    // Avro's rejection of the type object is kept as the root cause
+    assertEquals(1, e.getSuppressed().length);
+    assertTrue(e.getSuppressed()[0] instanceof SchemaParseException);
+  }
+
+  @Test
+  public void testTypeObjectWithTrailingContentRejected() {
+    SchemaParseException e = assertThrows(SchemaParseException.class,
+        () -> new AvroSchema(TYPE_OBJECT_SCHEMA + " trailing", Collections.emptyList(),
+            Collections.emptyMap(), null, false));
+    assertNotNull(e.getMessage());
+  }
+
+  @Test
+  public void testTypeObjectWithNonNumericNumberRejected() {
+    // Avro rejects an unquoted NaN, so the rewrite must not turn it into a valid "NaN" default
+    String schema = "{\"type\":\"record\",\"name\":\"R\",\"namespace\":\"tests\",\"fields\":["
+        + "{\"name\":\"a\",\"type\":{\"type\":\"fixed\",\"name\":\"Hash\",\"size\":16}},"
+        + "{\"name\":\"b\",\"type\":{\"type\":\"Hash\"}},"
+        + "{\"name\":\"d\",\"type\":\"double\",\"default\":NaN}]}";
+    assertThrows(SchemaParseException.class,
+        () -> new AvroSchema(schema, Collections.emptyList(), Collections.emptyMap(), null, false));
+    assertNull(AvroSchemaUtils.fixTypeObjects(schema));
+  }
+
+  @Test
+  public void testParseErrorWithoutTypeObjectIsUnchanged() {
+    String schema = "{\"type\":\"record\",\"name\":\"R\","
+        + "\"fields\":[{\"name\":\"x\",\"type\":\"int\",\"default\":\"bad\"}]}";
+    String expected = assertThrows(AvroRuntimeException.class,
+        () -> new Schema.Parser().parse(schema)).getMessage();
+    AvroRuntimeException e = assertThrows(AvroRuntimeException.class,
+        () -> new AvroSchema(schema, Collections.emptyList(), Collections.emptyMap(), null, true));
+    assertEquals(expected, e.getMessage());
+    assertNull(AvroSchemaUtils.fixTypeObjects(schema));
+  }
+
+  @Test
+  public void testTypeObjectNamingTypeInReference() {
+    String ref = "{\"type\":\"fixed\",\"name\":\"Hash\",\"namespace\":\"tests\",\"size\":16}";
+    String main = "{\"type\":\"record\",\"name\":\"R\",\"namespace\":\"tests\","
+        + "\"fields\":[{\"name\":\"b\",\"type\":{\"type\":\"tests.Hash\"}}]}";
+    AvroSchema schema = new AvroSchema(main, Collections.emptyList(),
+        Collections.singletonMap("tests.Hash", ref), null, false);
+    assertEquals(Schema.Type.FIXED, schema.rawSchema().getField("b").schema().getType());
+    assertNotNull(schema.canonicalString());
+  }
+
+  @Test
+  public void testTypeObjectInExistingReferenceAcceptedForNew() {
+    String ref = "{\"type\":\"record\",\"name\":\"Ref\",\"namespace\":\"tests\",\"fields\":["
+        + "{\"name\":\"a\",\"type\":{\"type\":\"fixed\",\"name\":\"Hash\",\"size\":16}},"
+        + "{\"name\":\"b\",\"type\":{\"type\":\"Hash\"}}]}";
+    String main = "{\"type\":\"record\",\"name\":\"R\",\"namespace\":\"tests\","
+        + "\"fields\":[{\"name\":\"r\",\"type\":\"tests.Ref\"}]}";
+    AvroSchema schema = new AvroSchema(main, Collections.emptyList(),
+        Collections.singletonMap("tests.Ref", ref), null, true);
+    assertEquals(Schema.Type.RECORD, schema.rawSchema().getField("r").schema().getType());
+    assertNotNull(schema.canonicalString());
+  }
+
+  @Test
+  public void testTypeObjectNamingTypeWithComments() {
+    String schema = "/* legacy */ {\"type\":\"record\",\"name\":\"R\",\"namespace\":\"tests\","
+        + "\"fields\":[{\"name\":\"a\",\"type\":{\"type\":\"fixed\",\"name\":\"Hash\",\"size\":16}},"
+        + "// wrapped reference\n"
+        + "{\"name\":\"b\",\"type\":{\"type\":\"Hash\"}}]}";
+    AvroSchema parsed = new AvroSchema(schema, Collections.emptyList(),
+        Collections.emptyMap(), null, false);
+    assertEquals(Schema.Type.FIXED, parsed.rawSchema().getField("b").schema().getType());
+  }
+
+  @Test
+  public void testTypeObjectFixLeavesDefaultsAlone() {
+    String schema = "{\"type\":\"record\",\"name\":\"R\",\"fields\":["
+        + "{\"name\":\"x\",\"type\":{\"type\":\"Missing\"},\"default\":{\"type\":\"Foo\"}}]}";
+    String fixed = AvroSchemaUtils.fixTypeObjects(schema);
+    assertTrue(fixed, fixed.contains("\"type\":\"Missing\""));
+    assertFalse(fixed, fixed.contains("{\"type\":\"Missing\"}"));
+    assertTrue(fixed, fixed.contains("{\"type\":\"Foo\"}"));
   }
 
   private static AvroSchema createPrimitiveSchema(String type) {

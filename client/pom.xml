@@ -118,6 +118,27 @@
                     </java>
                 </configuration>
             </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <executions>
+                    <!-- AVRO-4189: trust tests in their own JVM, before any other test trusts or loads
+                         their classes. The pinned test is not overridden by -Dtest; elsewhere it skips
+                         itself. -->
+                    <execution>
+                        <id>avro-untrusted-classes</id>
+                        <goals>
+                            <goal>test</goal>
+                        </goals>
+                        <configuration>
+                            <test>AvroUntrustedClassTest,AvroTrustedClassesTest</test>
+                            <systemPropertyVariables combine.self="override">
+                                <avro.untrusted.classes>true</avro.untrusted.classes>
+                            </systemPropertyVariables>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
 
         <resources>
