@@ -557,9 +557,6 @@ public class LocalSchemaRegistryClient implements SchemaRegistryClient {
   @Override
   public List<Integer> deleteSubject(String subject, boolean isPermanent)
           throws IOException, RestClientException {
-    if (!DEFAULT_TENANT.equals(schemaRegistry.tenant())) {
-      subject = schemaRegistry.tenant() + TENANT_DELIMITER + subject;
-    }
     return deleteSubject(null, subject, isPermanent);
   }
 
