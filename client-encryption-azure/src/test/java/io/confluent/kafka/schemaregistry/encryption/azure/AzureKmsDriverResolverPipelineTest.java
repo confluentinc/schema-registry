@@ -36,10 +36,6 @@ import org.junit.Test;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-/**
- * The versionless-key resolver must run on the pipeline it is given (the one carrying the
- * configured timeouts and retry policy), not on a KeyClient of its own with azure-core defaults.
- */
 public class AzureKmsDriverResolverPipelineTest {
 
   private static final String VAULT = "https://vault.vault.azure.net";
@@ -53,8 +49,6 @@ public class AzureKmsDriverResolverPipelineTest {
       String body = "{\"key\":{\"kid\":\"" + VAULT + "/keys/key1/" + VERSION + "\"}}";
       return Mono.just(new FakeResponse(request, 200, body));
     };
-    // No credential policy: the fake accepts anything, which also proves no real credential is
-    // needed when a pipeline is supplied.
     HttpPipeline pipeline = new HttpPipelineBuilder().httpClient(fake).build();
 
     String resolved = AzureKmsDriver.getVersionedKeyId(

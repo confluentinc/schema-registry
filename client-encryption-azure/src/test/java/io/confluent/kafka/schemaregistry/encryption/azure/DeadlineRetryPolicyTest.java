@@ -49,7 +49,6 @@ public class DeadlineRetryPolicyTest {
   private static final Duration ATTEMPT = Duration.ofSeconds(15);
   private static final Duration BUDGET = Duration.ofSeconds(30);
 
-  /** Five retries with no backoff, so the tests exercise the deadline and not the clock. */
   private static final RetryStrategy NO_BACKOFF = new RetryStrategy() {
     @Override
     public int getMaxRetries() {
@@ -62,7 +61,6 @@ public class DeadlineRetryPolicyTest {
     }
   };
 
-  /** A vault whose reply to attempt {@code n} is scripted, and whose clock the test controls. */
   private static final class FakeVault {
     final AtomicLong nanos = new AtomicLong();
     final List<HttpRequest> requests = Collections.synchronizedList(new ArrayList<>());
@@ -97,8 +95,6 @@ public class DeadlineRetryPolicyTest {
 
   @Test
   public void fastFailuresGetEveryRetryTheCapAllows() {
-    // Each 429 comes back in 10ms, so five retries fit easily in the 30s budget even though a
-    // worst-case attempt is 15s: this is the case the static pre-computation could not grant.
     FakeVault vault = new FakeVault(Duration.ofMillis(10), attempt -> 429);
     HttpResponse response = vault.pipeline(BUDGET).sendSync(request(), Context.NONE);
     assertEquals(429, response.getStatusCode());
@@ -115,8 +111,7 @@ public class DeadlineRetryPolicyTest {
 
   @Test
   public void asyncRetriableStatusThenExceptionsStaysWithinTheCap() {
-    // A 503 followed by timeouts: the exhausted chain's final error must surface, not be caught
-    // by the first attempt's error handler and retried again from its older count (11 sends).
+    // The exhausted chain's error must not be retried again by the first attempt's handler.
     FakeVault vault = new FakeVault(Duration.ofMillis(10),
         attempt -> attempt == 0 ? (Object) 503 : new TimeoutException("response timed out"));
     assertThrows(RuntimeException.class, () -> vault.pipeline(BUDGET).send(request()).block());
@@ -134,9 +129,7 @@ public class DeadlineRetryPolicyTest {
 
   @Test
   public void hungAttemptEndsTheOperation() {
-    // The first attempt used (a little over) its whole worst-case cost, so one more cannot fit.
-    // With the real backoff ladder the 1s delay alone pushes an exact 15 + 15 past 30s; this
-    // strategy has no backoff, so the test adds the margin to the attempt instead.
+    // This strategy has no backoff, so the margin is added to the attempt.
     FakeVault vault = new FakeVault(ATTEMPT.plusMillis(1), attempt -> 503);
     HttpResponse response = vault.pipeline(BUDGET).sendSync(request(), Context.NONE);
     assertEquals(503, response.getStatusCode());
@@ -183,7 +176,6 @@ public class DeadlineRetryPolicyTest {
 
   @Test
   public void withoutABudgetRetriesAreCountedOnly() {
-    // No deadline: the same five retries as azure-core's RetryPolicy, however long attempts take.
     FakeVault vault = new FakeVault(Duration.ofHours(1), attempt -> 503);
     vault.pipeline(null).sendSync(request(), Context.NONE);
     assertEquals(6, vault.requests.size());
@@ -208,11 +200,10 @@ public class DeadlineRetryPolicyTest {
     assertEquals(Duration.ofMillis(2500),
         policy.retryDelay(new FakeResponse(request, 429, fits), null, 0, 0L));
 
-    // 20s of Retry-After plus a 15s attempt does not fit in 30s, so stop rather than overrun.
+    // 20s Retry-After + 15s attempt does not fit in 30s.
     HttpHeaders tooLong = new HttpHeaders().set(HttpHeaderName.RETRY_AFTER, "20");
     assertNull(policy.retryDelay(new FakeResponse(request, 429, tooLong), null, 0, 0L));
 
-    // Without a budget the same header is simply waited out.
     DeadlineRetryPolicy unbounded = new DeadlineRetryPolicy(NO_BACKOFF, null, null, nanos::get);
     assertEquals(Duration.ofSeconds(20),
         unbounded.retryDelay(new FakeResponse(request, 429, tooLong), null, 0, 0L));
@@ -224,7 +215,6 @@ public class DeadlineRetryPolicyTest {
         new HttpHeaders().set(HttpHeaderName.X_MS_RETRY_AFTER_MS, "750")));
     assertEquals(Duration.ofSeconds(3), DeadlineRetryPolicy.retryAfter(
         new HttpHeaders().set(HttpHeaderName.RETRY_AFTER, "3")));
-    // An HTTP date in the past means "now".
     assertEquals(Duration.ZERO, DeadlineRetryPolicy.retryAfter(
         new HttpHeaders().set(HttpHeaderName.RETRY_AFTER, "Wed, 21 Oct 2015 07:28:00 GMT")));
     assertNull(DeadlineRetryPolicy.retryAfter(

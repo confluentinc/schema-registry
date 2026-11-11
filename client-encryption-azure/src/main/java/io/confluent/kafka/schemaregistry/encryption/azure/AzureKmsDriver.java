@@ -78,24 +78,13 @@ public class AzureKmsDriver implements KmsDriver {
    * version and do not embed that version in the returned ciphertext, so a caller
    * that only ever uses a versionless reference has no way to know which version encrypted a given
    * DEK once the key has been rotated.
-   *
-   * <p>Builds its own {@code KeyClient} from the credentials in {@code configs}, with azure-core's
-   * default HTTP client and retry policy. Callers that have configured timeouts should use
-   * {@link #getVersionedKeyId(Map, String, HttpPipeline)} so the lookup shares them.
    */
   public static String getVersionedKeyId(Map<String, ?> configs, String kmsKeyId)
       throws GeneralSecurityException {
     return getVersionedKeyId(configs, kmsKeyId, null);
   }
 
-  /**
-   * As {@link #getVersionedKeyId(Map, String)}, but the lookup runs on {@code pipeline} when one is
-   * given: the same credential policy, HTTP client timeouts and retry policy as the
-   * {@code CryptographyClient} that will use the resolved version, so a configured operation
-   * timeout bounds the resolution attempts the same way it bounds the wrap that follows. With a
-   * null pipeline a {@code KeyClient} is built from the credentials in {@code configs} with
-   * azure-core's defaults.
-   */
+  /** As the two-argument overload, but the lookup runs on the pipeline when it is non-null. */
   public static String getVersionedKeyId(Map<String, ?> configs, String kmsKeyId,
       HttpPipeline pipeline) throws GeneralSecurityException {
     KeyVaultId parsed = parse(kmsKeyId);
@@ -115,8 +104,7 @@ public class AzureKmsDriver implements KmsDriver {
     } else {
       KeyClientBuilder builder = new KeyClientBuilder().vaultUrl(parsed.vaultUrl);
       if (pipeline != null) {
-        // The pipeline already carries the credential policy; KeyClientBuilder ignores
-        // credential/httpClient/retryPolicy when a pipeline is set.
+        // The pipeline already carries the credential policy.
         builder.pipeline(pipeline);
       } else {
         builder.credential(getCredentials(configs));

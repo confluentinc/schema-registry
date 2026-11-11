@@ -52,7 +52,6 @@ public class AzureKmsClientTimeoutsTest {
 
   @Test
   public void noTimeoutsKeepsAzureCoreDefaultClient() {
-    // Null tells HttpPipelineBuilder to use HttpClient.createDefault(), as before.
     assertNull(AzureKmsClient.buildHttpClient(KmsTimeouts.NONE));
   }
 
@@ -65,8 +64,6 @@ public class AzureKmsClientTimeoutsTest {
   @Test
   public void noOperationTimeoutKeepsAzureCoreRetryPolicy() {
     assertEquals(5, AzureKmsClient.DEFAULT_MAX_RETRIES);
-    // Connect and request timeouts alone leave the retry policy exactly as before: azure-core's
-    // own, with the Microsoft-recommended five retries.
     assertTrue(AzureKmsClient.retryPolicy(KmsTimeouts.NONE) instanceof RetryPolicy);
     assertTrue(AzureKmsClient.retryPolicy(KmsTimeouts.fromConfigs(
         Collections.singletonMap(KMS_REQUEST_TIMEOUT_MS, "4000"))) instanceof RetryPolicy);
@@ -80,8 +77,7 @@ public class AzureKmsClientTimeoutsTest {
 
   @Test
   public void deadlinePolicyCostsAnAttemptAtConnectPlusRequest() {
-    // Each retry reconnects, so one worst-case attempt is connect + request = 15s. After a hung
-    // first attempt nothing more fits in 30s; after a fast one, a retry does.
+    // Attempt = 5s + 10s, so after 15s elapsed another does not fit in 30s.
     DeadlineRetryPolicy policy =
         (DeadlineRetryPolicy) AzureKmsClient.retryPolicy(timeouts("5000", "10000", "30000"));
     HttpRequest request = new HttpRequest(HttpMethod.POST, "https://vault.example/keys/k/wrap");
@@ -89,8 +85,7 @@ public class AzureKmsClientTimeoutsTest {
     long start = System.nanoTime();
     assertNotNull(policy.retryDelay(throttled, null, 0, start));
     assertNull(policy.retryDelay(throttled, null, 0, start - Duration.ofSeconds(15).toNanos()));
-    // A smaller connect timeout makes the attempt cheaper: 2 + 10 = 12, so 15 elapsed + ~1s
-    // backoff + 12 still fits in 30, while 18 elapsed does not.
+    // Attempt = 2s + 10s: fits after 15s elapsed, not after 18s.
     DeadlineRetryPolicy shortConnect =
         (DeadlineRetryPolicy) AzureKmsClient.retryPolicy(timeouts("2000", "10000", "30000"));
     assertNotNull(shortConnect.retryDelay(throttled, null, 0,

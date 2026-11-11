@@ -67,8 +67,6 @@
             <groupId>software.amazon.awssdk</groupId>
             <artifactId>sts</artifactId>
         </dependency>
-        <!-- Already on the runtime classpath via kms (the SDK's default sync HTTP client);
-             declared at compile scope so AwsKmsClient can configure its timeouts. -->
         <dependency>
             <groupId>software.amazon.awssdk</groupId>
             <artifactId>apache-client</artifactId>

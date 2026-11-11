@@ -43,7 +43,7 @@ public class GcpKmsDriverTimeoutsTest {
       "gcp-kms://projects/p/locations/global/keyRings/r/cryptoKeys/k";
 
   private static GoogleCredentials fakeCredentials() {
-    // A non-expiring token, so building a request never tries to refresh over the network.
+    // Non-expiring, so nothing is refreshed over the network.
     return GoogleCredentials.create(
         new AccessToken("token", new Date(System.currentTimeMillis() + 3_600_000L)));
   }
@@ -75,8 +75,7 @@ public class GcpKmsDriverTimeoutsTest {
 
   @Test
   public void selfBuiltClientCarriesTinksApplicationName() throws Exception {
-    // Guards the reflection into Tink: if APPLICATION_NAME moves, this fails at build time
-    // instead of GCP silently seeing a different User-Agent in production.
+    // Fails the build if a Tink upgrade moves APPLICATION_NAME.
     String name = GcpKmsDriver.tinkApplicationName();
     assertTrue(name, name.startsWith("Tink/") && !name.startsWith("Tink/unknown"));
 
@@ -97,7 +96,7 @@ public class GcpKmsDriverTimeoutsTest {
     KmsClient client = GcpKmsDriver.newKmsClientWithCloudKms(Optional.of(KEY_URI),
         Optional.of(fakeCredentials()), null, KmsTimeouts.NONE);
 
-    // Built by Tink itself, so google-http-client's defaults apply (20s connect and read).
+    // google-http-client's defaults.
     CloudKMS cloudKms = cloudKmsOf(client);
     assertNotNull(cloudKms);
     HttpRequest request = sampleRequest(cloudKms);

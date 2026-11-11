@@ -119,8 +119,7 @@ public class GcpKmsDriver implements KmsDriver {
       client = new GcpKmsClient();
     }
     if (cloudKms == null && !timeouts.isEmpty()) {
-      // Tink's withCredentials builds its CloudKMS with the transport's default timeouts and no
-      // hook to change them, so build an equivalent one here and inject it instead.
+      // Tink has no hook for timeouts, so build an equivalent CloudKMS and inject it.
       GoogleCredentials creds;
       try {
         creds = credentials.isPresent()
@@ -143,19 +142,9 @@ public class GcpKmsDriver implements KmsDriver {
   }
 
   /**
-   * Builds the same {@link CloudKMS} that Tink's {@code GcpKmsClient.withCredentials} builds
-   * (scoped credentials, trusted transport, Gson, Tink's application name), plus the given
-   * timeouts on every request.
-   *
-   * <p>google-http-client has no deadline that spans a whole call, so the operation timeout is not
-   * enforced here as a clock. It is honoured by construction instead:
-   * {@link KmsTimeouts#fromConfigs} requires it to cover connect + request, and google-http-client
-   * retries only when a handler asks it to. Tink installs no back-off handler, so a plain attempt
-   * is bounded by connect + request.
-   * The one exception is {@link HttpCredentialsAdapter}, which on a 401 refreshes the token and
-   * has the request re-sent once, so an operation can take up to two attempts plus the refresh.
-   * The token fetch itself (initial or refresh) goes through the credentials' own transport with
-   * google-http-client's default timeouts, outside these settings.
+   * Mirrors Tink's {@code withCredentials}, plus timeouts. There is no call-wide deadline: one
+   * attempt is bounded by connect + request, but a 401 token-refresh replay and the token fetch
+   * are not.
    */
   static CloudKMS buildCloudKms(GoogleCredentials credentials, KmsTimeouts timeouts)
       throws GeneralSecurityException {
@@ -185,14 +174,7 @@ public class GcpKmsDriver implements KmsDriver {
     return (int) Math.min(d.toMillis(), Integer.MAX_VALUE);
   }
 
-  /**
-   * Tink's own user agent for CloudKMS ({@code "Tink/<version> Java/<java.version>"}), so requests
-   * built here look the same to GCP as the ones Tink builds. Tink keeps it in a private static
-   * field with no accessor and does not derive it from the public {@code Version.TINK_VERSION},
-   * so reflection is the only way to reproduce it exactly. If a Tink upgrade moves the field, the
-   * fallback still identifies the client as Tink-based and the warning makes the drift visible;
-   * the header is informational only, so wrap/unwrap are unaffected.
-   */
+  /** Tink's private user agent, read by reflection so requests look the same to GCP. */
   static String tinkApplicationName() {
     try {
       Field field = GcpKmsClient.class.getDeclaredField("APPLICATION_NAME");
@@ -205,11 +187,7 @@ public class GcpKmsDriver implements KmsDriver {
     }
   }
 
-  /**
-   * Injects a {@link CloudKMS} into Tink's client, which offers no setter for it. Reached in
-   * production whenever timeouts are configured (not only from tests), so a Tink upgrade that
-   * moves the field fails loudly here at client creation rather than silently losing timeouts.
-   */
+  /** Tink has no setter for its CloudKMS. */
   private static void setCloudKms(GcpKmsClient client, CloudKMS cloudKms) {
     try {
       Field field = GcpKmsClient.class.getDeclaredField("cloudKms");

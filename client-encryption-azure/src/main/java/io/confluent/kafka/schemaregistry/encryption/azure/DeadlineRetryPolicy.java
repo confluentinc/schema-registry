@@ -38,53 +38,26 @@ import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
 
 /**
- * azure-core's exponential-backoff retry, with a deadline on the whole operation.
- *
- * <p>azure-core's own {@link com.azure.core.http.policy.RetryPolicy} decides retries purely by
- * count, and the synchronous client has no deadline that spans retries (a {@code TimeoutPolicy}
- * runs the downstream policies on the calling thread, so its reactor timeout cannot fire). The
- * number of retries that fit in a budget therefore had to be computed up front, costing every
- * attempt at its worst case. That is right for a hung vault and far too pessimistic for the
- * realistic blip, a 429 or 5xx that comes back in milliseconds: at a 15s worst-case attempt a 30s
- * budget allowed no retry at all, even though five fast failures plus the whole backoff ladder
- * take about 31s of sleep and almost no request time.
- *
- * <p>This policy keeps the same ladder and cap but decides each retry at runtime: a retry is
- * granted only while {@code elapsed + delay + one worst-case attempt} still fits in the budget.
- * Fast failures get every retry the cap allows; a hung vault gets none and exits after one
- * attempt, exactly as the static computation did. A {@code Retry-After} header is honoured when
- * it fits and ends the operation when it does not, so a throttled vault is never hammered and the
- * deadline is never silently extended. Without a budget it behaves like
- * {@code new RetryPolicy(new ExponentialBackoff(maxRetries, baseDelay, maxDelay))}.
- *
- * <p>The retry decision itself (which statuses and exceptions are retriable, the jittered delay)
- * is delegated to {@link ExponentialBackoff}, so the two policies disagree only on the deadline.
+ * Exponential-backoff retry that grants a retry only while
+ * {@code elapsed + delay + one worst-case attempt} fits in the operation budget. azure-core's
+ * RetryPolicy only counts retries, and a TimeoutPolicy cannot fire for the synchronous client.
  */
 final class DeadlineRetryPolicy implements HttpPipelinePolicy {
 
   private static final Logger log = LoggerFactory.getLogger(DeadlineRetryPolicy.class);
 
   private final RetryStrategy strategy;
-  /** Worst-case cost of one attempt (connect + request timeouts); only used with a budget. */
   private final Duration attempt;
-  /** Deadline for the whole operation, or null for count-only retries. */
+  // Null means no deadline.
   private final Duration budget;
   private final LongSupplier nanoClock;
 
-  /**
-   * @param maxRetries cap on the number of retries, as for {@link ExponentialBackoff}
-   * @param baseDelay first backoff delay, as for {@link ExponentialBackoff}
-   * @param maxDelay cap on the backoff delay, as for {@link ExponentialBackoff}
-   * @param attempt worst-case cost of one attempt; ignored when {@code budget} is null
-   * @param budget deadline for the whole operation including retries, or null for none
-   */
   DeadlineRetryPolicy(int maxRetries, Duration baseDelay, Duration maxDelay,
       Duration attempt, Duration budget) {
     this(new ExponentialBackoff(maxRetries, baseDelay, maxDelay), attempt, budget,
         System::nanoTime);
   }
 
-  // Visible for testing: the strategy supplies the delays and the clock supplies the time.
   DeadlineRetryPolicy(RetryStrategy strategy, Duration attempt, Duration budget,
       LongSupplier nanoClock) {
     if (budget != null && attempt == null) {
@@ -104,7 +77,7 @@ final class DeadlineRetryPolicy implements HttpPipelinePolicy {
     if (body == null || body.isReplayable()) {
       return attemptAsync(context, next, original, 0, start);
     }
-    // A streamed body can only be sent once; buffer it so every retry can resend it.
+    // A streamed body can only be sent once; buffer it for the retries.
     return body.toReplayableBinaryDataAsync()
         .flatMap(replayable -> attemptAsync(context, next, original.setBody(replayable), 0, start));
   }
@@ -147,20 +120,14 @@ final class DeadlineRetryPolicy implements HttpPipelinePolicy {
   private Mono<HttpResponse> attemptAsync(HttpPipelineCallContext context,
       HttpPipelineNextPolicy next, HttpRequest original, int tryCount, long start) {
     context.setHttpRequest(original.copy());
-    // Materialize this attempt's outcome (a response or an error) and decide once. A separate
-    // error handler after the retry would also catch the retries' final error and start over
-    // from this attempt's older tryCount.
+    // Decide on the materialized outcome: an error handler here would also catch the retries'
+    // final error and retry it again.
     return next.clone().process()
         .materialize()
         .flatMap(outcome -> retryOrFinish(outcome.get(), outcome.getThrowable(),
             () -> attemptAsync(context, next, original, tryCount + 1, start), tryCount, start));
   }
 
-  /**
-   * The async counterpart of one turn of the {@link #processSync} loop: returns this attempt's
-   * outcome, or waits and runs {@code nextAttempt}. At most one of {@code response} and
-   * {@code error} is non-null.
-   */
   private Mono<HttpResponse> retryOrFinish(HttpResponse response, Throwable error,
       Supplier<Mono<HttpResponse>> nextAttempt, int tryCount, long start) {
     if (response == null && error == null) {
@@ -176,13 +143,7 @@ final class DeadlineRetryPolicy implements HttpPipelinePolicy {
     return Mono.delay(delay).then(Mono.defer(nextAttempt));
   }
 
-  /**
-   * Decides whether attempt {@code tryCount} (zero-based) is retried, and after how long.
-   * Exactly one of {@code response} and {@code error} is non-null.
-   *
-   * @return the delay before the next attempt, or null to stop and return this outcome
-   */
-  // Visible for testing.
+  /** Returns the delay before the next attempt, or null to stop. */
   Duration retryDelay(HttpResponse response, Throwable error, int tryCount, long startNanos) {
     if (tryCount >= strategy.getMaxRetries()) {
       return null;
@@ -204,19 +165,23 @@ final class DeadlineRetryPolicy implements HttpPipelinePolicy {
       Duration elapsed = Duration.ofNanos(nanoClock.getAsLong() - startNanos);
       Duration needed = elapsed.plus(delay).plus(attempt);
       if (needed.compareTo(budget) > 0) {
-        log.debug("Not retrying Key Vault request after attempt {}: {} elapsed, next attempt "
-            + "would need up to {} of a {} budget", tryCount + 1, elapsed, needed, budget);
+        // WARN: otherwise a failure the deadline cut short looks like exhausted retries.
+        log.warn("Not retrying Key Vault request after attempt {} ({}): {} elapsed, next attempt "
+            + "would need up to {} of the {} operation timeout",
+            tryCount + 1, describe(response, error), elapsed, needed, budget);
         return null;
       }
     }
+    log.debug("Retrying Key Vault request in {} after attempt {} ({})",
+        delay, tryCount + 1, describe(response, error));
     return delay;
   }
 
-  /**
-   * The server's requested delay, from the same headers azure-core's RetryPolicy consults:
-   * {@code retry-after-ms} and {@code x-ms-retry-after-ms} in milliseconds, then
-   * {@code Retry-After} in seconds or as an HTTP date. Null when absent or unparseable.
-   */
+  private static String describe(HttpResponse response, Throwable error) {
+    return response != null ? "HTTP " + response.getStatusCode() : String.valueOf(error);
+  }
+
+  /** Same headers azure-core's RetryPolicy consults; null when absent or unparseable. */
   static Duration retryAfter(HttpHeaders headers) {
     if (headers == null) {
       return null;

@@ -138,11 +138,6 @@ public final class AwsKmsClient implements KmsClient {
     return this;
   }
 
-  /**
-   * Bounds the connect and per-attempt time of the AWS KMS clients this client builds. With
-   * {@link KmsTimeouts#NONE} (the default) the SDK's own HTTP client and timeouts are used
-   * unchanged.
-   */
   @CanIgnoreReturnValue
   public KmsClient withTimeouts(KmsTimeouts timeouts) {
     this.timeouts = timeouts == null ? KmsTimeouts.NONE : timeouts;
@@ -197,20 +192,6 @@ public final class AwsKmsClient implements KmsClient {
     }
   }
 
-  /**
-   * Applies {@code timeouts} to {@code builder}; does nothing at all when they are empty, so the
-   * SDK keeps choosing its default HTTP client exactly as it did before timeouts existed.
-   *
-   * <p>Connect and socket timeouts go on the Apache client, the SDK's default sync client. Each
-   * attempt is also bounded as a whole by {@code apiCallAttemptTimeout} (a socket timeout alone
-   * only bounds the gap between reads). That SDK timer starts before the connection is made, while
-   * the request timeout is defined as the time allowed once connected, so the attempt timeout is
-   * connect + request: the configured connect timeout, or the SDK's own connect default when the
-   * key is absent, so that a connection the connect timeout would allow is never cut short. The
-   * operation timeout is {@code apiCallTimeout}: the SDK's own deadline across all retries, which
-   * aborts the in-flight attempt when it fires. The SDK's retry policy itself is left at its
-   * default.
-   */
   static final Duration DEFAULT_CONNECT_TIMEOUT = SdkHttpConfigurationOption.GLOBAL_HTTP_DEFAULTS
       .get(SdkHttpConfigurationOption.CONNECTION_TIMEOUT);
 
@@ -222,7 +203,8 @@ public final class AwsKmsClient implements KmsClient {
     timeouts.connectTimeout().ifPresent(http::connectionTimeout);
     timeouts.requestTimeout().ifPresent(http::socketTimeout);
     builder.httpClientBuilder(http);
-    // One overrideConfiguration call: each call replaces the previous configuration.
+    // Single call: a second overrideConfiguration would replace the first. The attempt timer
+    // starts before the connect, so it is connect + request.
     builder.overrideConfiguration(c -> {
       timeouts.requestTimeout().ifPresent(request -> c.apiCallAttemptTimeout(
           request.plus(timeouts.connectTimeout().orElse(DEFAULT_CONNECT_TIMEOUT))));
