@@ -324,8 +324,8 @@ public abstract class AbstractSchemaRegistry implements SchemaRegistry,
 
     NamedURI internalListener = null;
     for (NamedURI listener : listeners) {
-      if (listener.getName() != null
-          && listener.getName().equalsIgnoreCase(interInstanceListenerName)) {
+      String listenerName = listener.getName();
+      if (listenerName != null && listenerName.equalsIgnoreCase(interInstanceListenerName)) {
         internalListener = listener;
         break;
       } else if (listener.getUri().getScheme().equalsIgnoreCase(requestedScheme)) {
