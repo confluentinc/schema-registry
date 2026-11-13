@@ -160,10 +160,8 @@ public class JsonSchemaComparator implements Comparator<Schema> {
       return cmp;
     }
     if (schema1 instanceof CombinedSchema) {
-      List<Schema> comb1Schemas = new ArrayList<>(((CombinedSchema) schema1).getSubschemas());
-      List<Schema> comb2Schemas = new ArrayList<>(((CombinedSchema) schema2).getSubschemas());
-      memo.sortAtDepth(comb1Schemas, depth + 1);
-      memo.sortAtDepth(comb2Schemas, depth + 1);
+      List<Schema> comb1Schemas = memo.sortedSubschemas((CombinedSchema) schema1, depth + 1);
+      List<Schema> comb2Schemas = memo.sortedSubschemas((CombinedSchema) schema2, depth + 1);
       for (int i = 0; i < comb1Schemas.size(); i++) {
         cmp = compare(comb1Schemas.get(i), comb2Schemas.get(i), memo, depth + 1);
         if (cmp != 0) {
@@ -313,16 +311,35 @@ public class JsonSchemaComparator implements Comparator<Schema> {
   }
 
   /**
-   * State for one top-level comparison: results of reference pairs already compared, and the
-   * comparator used to sort subschemas.
+   * State for one top-level comparison: results of reference pairs already compared, the sorted
+   * subschemas of combined schemas already sorted, and the comparator used to sort subschemas.
    */
   private static final class Memo implements Comparator<Schema> {
     private final JsonSchemaComparator owner;
     private Map<SchemaPair, Integer> results;
+    private Map<CombinedSchema, List<Schema>> sorted;
     private int sortDepth;
 
     Memo(JsonSchemaComparator owner) {
       this.owner = owner;
+    }
+
+    /**
+     * The subschemas of {@code schema} in sorted order. A sort that completes gives the same
+     * order at any depth, so each combined schema is sorted once and the list reused; without
+     * that, every comparison re-sorts all the levels below it. The list must not be modified.
+     */
+    List<Schema> sortedSubschemas(CombinedSchema schema, int depth) {
+      List<Schema> subschemas = sorted != null ? sorted.get(schema) : null;
+      if (subschemas == null) {
+        subschemas = new ArrayList<>(schema.getSubschemas());
+        sortAtDepth(subschemas, depth);
+        if (sorted == null) {
+          sorted = new IdentityHashMap<>();
+        }
+        sorted.put(schema, subschemas);
+      }
+      return subschemas;
     }
 
     /**
