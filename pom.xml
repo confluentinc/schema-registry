@@ -319,6 +319,11 @@
                 <version>${aws-java-sdk-v2.version}</version>
             </dependency>
             <dependency>
+                <groupId>software.amazon.awssdk</groupId>
+                <artifactId>apache-client</artifactId>
+                <version>${aws-java-sdk-v2.version}</version>
+            </dependency>
+            <dependency>
                 <groupId>com.google.crypto.tink</groupId>
                 <artifactId>tink-gcpkms</artifactId>
                 <version>${tink.gcp.kms.version}</version>

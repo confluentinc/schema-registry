@@ -17,10 +17,13 @@
 package io.confluent.kafka.schemaregistry.encryption.azure;
 
 import com.azure.core.credential.TokenCredential;
+import com.azure.core.http.HttpClient;
 import com.azure.core.http.HttpPipeline;
 import com.azure.core.http.HttpPipelineBuilder;
 import com.azure.core.http.policy.ExponentialBackoff;
+import com.azure.core.http.policy.HttpPipelinePolicy;
 import com.azure.core.http.policy.RetryPolicy;
+import com.azure.core.util.HttpClientOptions;
 import com.azure.identity.DefaultAzureCredentialBuilder;
 import com.azure.security.keyvault.keys.cryptography.CryptographyClient;
 import com.azure.security.keyvault.keys.cryptography.CryptographyClientBuilder;
@@ -29,6 +32,7 @@ import com.azure.security.keyvault.keys.implementation.KeyVaultCredentialPolicy;
 import com.google.crypto.tink.Aead;
 import com.google.crypto.tink.KmsClient;
 import com.google.crypto.tink.subtle.Validators;
+import io.confluent.kafka.schemaregistry.encryption.tink.KmsTimeouts;
 import java.security.GeneralSecurityException;
 import java.time.Duration;
 import java.util.AbstractMap.SimpleEntry;
@@ -49,10 +53,19 @@ public final class AzureKmsClient implements KmsClient {
 
   public static final String PREFIX = "azure-kms://";
 
+  // Retry policy as per guidelines from MS:
+  // https://docs.microsoft.com/en-us/azure/key-vault/general/overview-throttling#recommended-client-side-throttling-method
+  static final int DEFAULT_MAX_RETRIES = 5;
+  static final Duration RETRY_BASE_DELAY = Duration.ofSeconds(1);
+  static final Duration RETRY_MAX_DELAY = Duration.ofSeconds(16);
+
   private CryptographyClient cryptographyClient;
   private String keyUri;
   private TokenCredential provider;
   private Map<String, ?> configs;
+  // Null means azure-core's default client.
+  private HttpClient httpClient;
+  private HttpPipelinePolicy retryPolicy = retryPolicy(KmsTimeouts.NONE);
   private static final EncryptionAlgorithm DEFAULT_ENCRYPTION_ALGORITHM =
       EncryptionAlgorithm.RSA_OAEP_256;
   private EncryptionAlgorithm algorithm = DEFAULT_ENCRYPTION_ALGORITHM;
@@ -155,6 +168,39 @@ public final class AzureKmsClient implements KmsClient {
     return this;
   }
 
+  public KmsClient withTimeouts(KmsTimeouts timeouts) {
+    KmsTimeouts effective = timeouts == null ? KmsTimeouts.NONE : timeouts;
+    this.httpClient = buildHttpClient(effective);
+    this.retryPolicy = retryPolicy(effective);
+    return this;
+  }
+
+  static HttpPipelinePolicy retryPolicy(KmsTimeouts timeouts) {
+    if (!timeouts.operationTimeout().isPresent()) {
+      return new RetryPolicy(
+          new ExponentialBackoff(DEFAULT_MAX_RETRIES, RETRY_BASE_DELAY, RETRY_MAX_DELAY));
+    }
+    // fromConfigs guarantees both are present. A timed-out attempt drops the connection, so each
+    // retry costs connect + request.
+    Duration attempt = timeouts.connectTimeout().get().plus(timeouts.requestTimeout().get());
+    return new DeadlineRetryPolicy(DEFAULT_MAX_RETRIES, RETRY_BASE_DELAY, RETRY_MAX_DELAY,
+        attempt, timeouts.operationTimeout().get());
+  }
+
+  static HttpClient buildHttpClient(KmsTimeouts timeouts) {
+    if (timeouts.isEmpty()) {
+      return null;
+    }
+    HttpClientOptions options = new HttpClientOptions();
+    timeouts.connectTimeout().ifPresent(options::setConnectTimeout);
+    timeouts.requestTimeout().ifPresent(timeout -> {
+      options.setResponseTimeout(timeout);
+      options.setReadTimeout(timeout);
+      options.setWriteTimeout(timeout);
+    });
+    return HttpClient.createDefault(options);
+  }
+
   /**
    * Returns {@code AzureKmsAead} for the url provided.
    *
@@ -186,13 +232,11 @@ public final class AzureKmsClient implements KmsClient {
         // Malformed key id; surfaced properly when it is actually used below.
       }
     }
-    // retry policy defined as per guidelines from MS
-    // https://docs.microsoft.com/en-us/azure/key-vault/general/overview-throttling#recommended-client-side-throttling-method
     HttpPipeline pipeline = new HttpPipelineBuilder()
+        .httpClient(httpClient)
         .policies(new KeyVaultCredentialPolicy(provider == null
                 ? new DefaultAzureCredentialBuilder().build() : provider, false),
-            new RetryPolicy(
-                new ExponentialBackoff(5, Duration.ofSeconds(1), Duration.ofSeconds(16))))
+            retryPolicy)
         .build();
     // Built from the raw (possibly versionless) keyUri, exactly as before this feature existed:
     // used directly whenever saveVersion is off, and as decrypt()'s fallback for legacy
@@ -228,9 +272,10 @@ public final class AzureKmsClient implements KmsClient {
     // a decrypt-only call site never triggers a wasted version-resolution round trip: getAead() is
     // called for both encrypt and decrypt, and decrypt's own resolution (if needed at all) comes
     // from whatever version is embedded in the ciphertext, not from re-resolving "current" here.
+    // Same pipeline as the wrap, so the lookup shares its timeouts; it has a budget of its own.
     Supplier<Map.Entry<CryptographyClient, String>> encryptTarget = () -> {
       try {
-        String resolvedKeyUri = AzureKmsDriver.getVersionedKeyId(clientConfigs, keyUri);
+        String resolvedKeyUri = AzureKmsDriver.getVersionedKeyId(clientConfigs, keyUri, pipeline);
         String version = resolvedKeyUri.substring(resolvedKeyUri.lastIndexOf('/') + 1);
         // Reuses clientFactory rather than building its own CryptographyClient, so there is only
         // one place (clientFactory) that knows how to turn a version into a client.
