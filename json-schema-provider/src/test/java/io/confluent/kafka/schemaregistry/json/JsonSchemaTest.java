@@ -952,6 +952,26 @@ public class JsonSchemaTest {
     assertNotNull(schema.inlineTaggedEntities());
   }
 
+  @Test(timeout = 10000)
+  public void testComparatorWithDeeplyNestedCombinedSchemas() {
+    // Each level is an anyOf of the deeper levels and a short look-alike, with no references.
+    // Comparing the two sorts the deep member's subschemas again unless sorted lists are reused,
+    // which multiplies the work at every level. 70 levels is past the direct-recursion depth.
+    for (int levels : new int[] {40, 70}) {
+      String nested = "{\"type\": \"string\"}";
+      for (int level = 0; level < levels; level++) {
+        String lookAlike = "{\"type\": \"number\"}";
+        for (int k = 0; k < Math.min(3, level); k++) {
+          lookAlike = "{\"anyOf\": [" + lookAlike + ", {\"type\": \"number\"}]}";
+        }
+        nested = "{\"anyOf\": [" + nested + ", " + lookAlike + "]}";
+      }
+      JsonSchema schema = new JsonSchema(nested);
+      assertConsistentOrdering(rootSubschemas(schema));
+      assertNotNull(schema.inlineTaggedEntities());
+    }
+  }
+
   @Test
   public void testComparatorFollowsAcyclicRefs() {
     // The two members differ only at the end of 50 acyclic reference hops, past the
