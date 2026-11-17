@@ -44,6 +44,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterS
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.encryption.tink.Cryptor;
 import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
+import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
@@ -838,6 +839,28 @@ public abstract class RestApiTest {
       assertEquals(403, e.getStatus());
       assertEquals(DekRegistryErrors.DEK_GENERATION_FORBIDDEN_ERROR_CODE, e.getErrorCode());
     }
+  }
+
+  @Test
+  public void testCreateDekRejectsVersionBelowMin() throws Exception {
+    Map<String, String> headers = new HashMap<>();
+    headers.put("Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED);
+    String kekName = "kek-version-check";
+    String subject = "version-check-subject";
+    DekFormat algorithm = DekFormat.AES256_GCM;
+
+    client.createKek(headers, kekName, kmsType, kmsKeyId, null, null, true, false);
+
+    for (int version : new int[] {0, -1}) {
+      RestClientException e = assertThrows(RestClientException.class,
+          () -> client.createDek(headers, kekName, subject, version, algorithm, null, false));
+      assertEquals(422, e.getStatus());
+      assertEquals(Errors.INVALID_VERSION_ERROR_CODE, e.getErrorCode());
+    }
+    assertKeyNotFound(() -> client.getDek(kekName, subject, algorithm, true));
+
+    Dek dek = client.createDek(headers, kekName, subject, 1, algorithm, null, false);
+    assertEquals(1, dek.getVersion());
   }
 
   @Test
