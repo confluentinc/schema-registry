@@ -72,6 +72,9 @@ $ curl -X GET http://localhost:8081/subjects/Kafka-value/versions/1
 $ curl -X GET http://localhost:8081/subjects/Kafka-value/versions/latest
   {"subject":"Kafka-value","version":1,"id":1,"schema":"\"string\""}
 
+# Pretty-print the nested schema JSON (the schema field is an escaped string)
+$ curl -s http://localhost:8081/subjects/<topicname>-value/versions/latest | jq '.schema | fromjson'
+
 # Delete version 3 of the schema registered under subject "Kafka-value"
 $ curl -X DELETE http://localhost:8081/subjects/Kafka-value/versions/3
   3
