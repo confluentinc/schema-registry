@@ -16,7 +16,10 @@
 package io.confluent.kafka.schemaregistry.rest.filters;
 
 import static io.confluent.kafka.schemaregistry.utils.QualifiedSubject.DEFAULT_TENANT;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
@@ -129,6 +132,46 @@ public class AliasFilterTest {
         "subject=mySubject",
         uri.getQuery()
     );
+  }
+
+  private AliasFilter tenantAliasFilter(SchemaRegistry schemaRegistry) throws Exception {
+    when(schemaRegistry.tenant()).thenReturn("lsrc-x");
+    Config config = new Config();
+    config.setAlias("mySubject");
+    for (String key : new String[] {
+        "lsrc-x_", "lsrc-x_*", "lsrc-x_:.ctx:", "lsrc-x_myAlias"}) {
+      when(schemaRegistry.getConfig(key)).thenReturn(config);
+    }
+    return new AliasFilter(schemaRegistry);
+  }
+
+  private String idsQuery(AliasFilter filter, String subject) {
+    String path = "/schemas/ids/1";
+    UriBuilder uriBuilder = UriBuilder.fromPath(path);
+    MultivaluedMap<String, String> queryParams = new MultivaluedHashMap<>();
+    queryParams.put("subject", Collections.singletonList(subject));
+    return filter.modifyUri(uriBuilder, path, queryParams).getQuery();
+  }
+
+  @Test
+  public void testTenantContextIsNotAliased() throws Exception {
+    // The multi-tenant filter turns an empty subject into the bare tenant prefix.
+    SchemaRegistry schemaRegistry = mock(SchemaRegistry.class);
+    AliasFilter filter = tenantAliasFilter(schemaRegistry);
+
+    Assert.assertEquals("subject=lsrc-x_", idsQuery(filter, "lsrc-x_"));
+    Assert.assertEquals("subject=lsrc-x_*", idsQuery(filter, "lsrc-x_*"));
+    Assert.assertEquals("subject=lsrc-x_:.ctx:", idsQuery(filter, "lsrc-x_:.ctx:"));
+    idsQuery(filter, "lsrc-x_%3A.ctx%3A");
+    verify(schemaRegistry, never()).getConfig(anyString());
+  }
+
+  @Test
+  public void testTenantSubjectIsStillAliased() throws Exception {
+    SchemaRegistry schemaRegistry = mock(SchemaRegistry.class);
+    AliasFilter filter = tenantAliasFilter(schemaRegistry);
+
+    Assert.assertEquals("subject=lsrc-x_mySubject", idsQuery(filter, "lsrc-x_myAlias"));
   }
 
   @Test

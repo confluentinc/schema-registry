@@ -127,7 +127,12 @@ public class AliasFilter implements ContainerRequestFilter {
     }
     Config config = null;
     try {
-      config = schemaRegistry.getConfig(URLDecoder.decode(subject, "UTF-8"));
+      String decoded = URLDecoder.decode(subject, "UTF-8");
+      // A context (including the bare tenant prefix an empty subject becomes) has no alias.
+      if (QualifiedSubject.isContext(tenant, decoded)) {
+        return originalSubject;
+      }
+      config = schemaRegistry.getConfig(decoded);
     } catch (Exception e) {
       // fall through
     }
