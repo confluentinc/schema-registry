@@ -138,7 +138,8 @@ public class ConfigResource {
         throw new RestInvalidRuleSetException(e.getMessage());
       }
     }
-    if (subject != null && !QualifiedSubject.isValidSubject(schemaRegistry.tenant(), subject)) {
+    if (subject != null
+        && !QualifiedSubject.isValidSubject(schemaRegistry.tenant(), subject, true)) {
       throw Errors.invalidSubjectException(subject);
     }
 
@@ -185,15 +186,14 @@ public class ConfigResource {
       @QueryParam("defaultToGlobal") boolean defaultToGlobal) {
 
     if (QualifiedSubject.isDefaultContext(schemaRegistry.tenant(), subject)) {
-      return getTopLevelConfig();
+      return getTopLevelConfig(defaultToGlobal);
     }
 
     subject = QualifiedSubject.normalize(schemaRegistry.tenant(), subject);
 
     Config config;
     try {
-      config =
-          defaultToGlobal
+      config = defaultToGlobal
           ? schemaRegistry.getConfigInScope(subject)
           : schemaRegistry.getConfig(subject);
       if (config == null) {
@@ -283,10 +283,16 @@ public class ConfigResource {
           content = @Content(schema = @Schema(implementation = ErrorMessage.class)))})
   @Tags(@Tag(name = apiTag))
   @PerformanceMetric("config.get-global")
-  public Config getTopLevelConfig() {
+  public Config getTopLevelConfig(
+      @Parameter(description =
+        "Whether to return the global compatibility level "
+            + " if subject compatibility level not found")
+      @QueryParam("defaultToGlobal") boolean defaultToGlobal) {
     Config config;
     try {
-      config = schemaRegistry.getConfig(null);
+      config = defaultToGlobal
+          ? schemaRegistry.getConfigInScope(null)
+          : schemaRegistry.getConfig(null);
     } catch (SchemaRegistryStoreException e) {
       throw Errors.storeException("Failed to get compatibility level", e);
     }

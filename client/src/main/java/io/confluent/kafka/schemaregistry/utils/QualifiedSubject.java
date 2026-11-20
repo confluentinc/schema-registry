@@ -37,6 +37,9 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
 
   public static final String CONTEXT_WILDCARD = CONTEXT_DELIMITER + WILDCARD + CONTEXT_DELIMITER;
 
+  // A special context that is used for global configuration and mode settings.
+  public static final String GLOBAL_CONTEXT_NAME = ".__GLOBAL";
+
   // Subject name under which global permissions are stored.
   public static final String GLOBAL_SUBJECT_NAME = "__GLOBAL";
 
@@ -273,12 +276,34 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
     return tenant != null && !DEFAULT_TENANT.equals(tenant) && WILDCARD.equals(qs.getSubject());
   }
 
+  /**
+   * Checks if the given qualified subject is the default context for the given tenant.
+   * The default context is the context with name "." and an empty subject.
+   *
+   * @param tenant the tenant
+   * @param qualifiedSubject the subject with a tenant prefix
+   * @return true if the qualified subject is the default context, false otherwise
+   */
   public static boolean isDefaultContext(String tenant, String qualifiedSubject) {
     QualifiedSubject qs = QualifiedSubject.create(tenant, qualifiedSubject);
     return qs == null || (qs.getContext().equals(DEFAULT_CONTEXT) && qs.getSubject().isEmpty());
   }
 
+  public static boolean isGlobalContext(String tenant, String qualifiedSubject) {
+    QualifiedSubject qs = QualifiedSubject.create(tenant, qualifiedSubject);
+    if (qs == null || qs.getContext() == null) {
+      return false;
+    }
+    return qs.getContext().equals(GLOBAL_CONTEXT_NAME)
+      && (qs.getSubject().isEmpty() || qs.getSubject() == null);
+  }
+
   public static boolean isValidSubject(String tenant, String qualifiedSubject) {
+    return isValidSubject(tenant, qualifiedSubject, false);
+  }
+
+  public static boolean isValidSubject(
+      String tenant, String qualifiedSubject, boolean isConfigOrMode) {
     if (qualifiedSubject == null || CharMatcher.javaIsoControl().matchesAnyOf(qualifiedSubject)) {
       return false;
     }
@@ -286,6 +311,10 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
     // For backward compatibility, we allow an empty subject
     if (qs == null || qs.getSubject().equals(GLOBAL_SUBJECT_NAME)
         || qs.getSubject().equals(EMPTY_SUBJECT_NAME)) {
+      return false;
+    }
+    if (!isConfigOrMode && qs.getContext().equals(GLOBAL_CONTEXT_NAME)) {
+      // Global context is only valid for config or mode subjects
       return false;
     }
     return true;
@@ -330,4 +359,3 @@ public class QualifiedSubject implements Comparable<QualifiedSubject> {
     }
   }
 }
-

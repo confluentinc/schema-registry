@@ -152,7 +152,7 @@ public class KafkaStoreMessageHandler implements SchemaUpdateHandler {
 
         SchemaKey schemaKey = new SchemaKey(subject, version);
         SchemaValue schemaValue = (SchemaValue) this.lookupCache.get(schemaKey);
-        if (schemaValue != null) {
+        if (schemaValue != null && !schemaValue.isDeleted()) {
           schemaValue.setDeleted(true);
           SchemaValue oldSchemaValue = (SchemaValue) lookupCache.put(schemaKey, schemaValue);
           lookupCache.schemaDeleted(schemaKey, schemaValue, oldSchemaValue);

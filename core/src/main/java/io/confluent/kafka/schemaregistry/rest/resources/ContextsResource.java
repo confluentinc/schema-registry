@@ -59,7 +59,8 @@ public class ContextsResource {
   @GET
   @DocumentedName("getAllContexts")
   @Operation(summary = "List contexts",
-      description = "Retrieves a list of contexts.",
+      description = "Retrieves a list of contexts. "
+          + "Optionally filter by context prefix.",
       responses = {
         @ApiResponse(responseCode = "200", description = "The contexts.", content = @Content(
             array = @ArraySchema(schema = @Schema(example = ".")))),
@@ -73,10 +74,22 @@ public class ContextsResource {
       @Parameter(description = "Pagination offset for results")
       @DefaultValue("0") @QueryParam("offset") int offset,
       @Parameter(description = "Pagination size for results. Ignored if negative")
-      @DefaultValue("-1") @QueryParam("limit") int limit) {
+      @DefaultValue("-1") @QueryParam("limit") int limit,
+      @Parameter(description = "Filter contexts by prefix. "
+          + "Only contexts starting with this prefix will be returned")
+      @QueryParam("contextPrefix") String contextPrefix) {
     try {
       limit = schemaRegistry.normalizeContextLimit(limit);
       List<String> contexts = schemaRegistry.listContexts();
+
+      // Filter by context prefix if provided
+      if (contextPrefix != null && !contextPrefix.isEmpty()) {
+        contexts = contexts.stream()
+            .filter(context -> context.startsWith(contextPrefix))
+            .collect(Collectors.toList());
+      }
+
+      // Apply pagination after filtering
       return contexts.stream()
         .skip(offset)
         .limit(limit)

@@ -15,7 +15,6 @@
 
 package io.confluent.kafka.schemaregistry.storage;
 
-import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.id.IncrementalIdGenerator;
 import io.confluent.kafka.schemaregistry.rest.SchemaRegistryConfig;
 import org.apache.kafka.clients.admin.AdminClient;
@@ -44,7 +43,6 @@ import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertNull;
@@ -94,38 +92,6 @@ public class KafkaStoreTest extends ClusterTestHarness {
       kafkaStore.close();
     }
   }
-
-  // TODO: This requires fix for https://issues.apache.org/jira/browse/KAFKA-1788
-//  @Test
-//  public void testPutRetries() throws InterruptedException {
-//    KafkaStore<String, String> kafkaStore = StoreUtils.createAndInitKafkaStoreInstance(bootstrapServers,
-//                                                                                       zkClient);
-//    String key = "Kafka";
-//    String value = "Rocks";
-//    try {
-//      kafkaStore.put(key, value);
-//    } catch (StoreException e) {
-//      fail("Kafka store put(Kafka, Rocks) operation failed");
-//    }
-//    String retrievedValue = null;
-//    try {
-//      retrievedValue = kafkaStore.get(key);
-//    } catch (StoreException e) {
-//      fail("Kafka store get(Kafka) operation failed");
-//    }
-//    assertEquals("Retrieved value should match entered value", value, retrievedValue);
-//    // stop the Kafka servers
-//    for (KafkaServer server : servers) {
-//      server.shutdown();
-//    }
-//    try {
-//      kafkaStore.put(key, value);
-//      fail("Kafka store put(Kafka, Rocks) operation should fail");
-//    } catch (StoreException e) {
-//      // expected since the Kafka producer will run out of retries
-//    }
-//    kafkaStore.close();
-//  }
 
   @Test
   public void testSimpleGetAfterFailure() throws Exception {
@@ -252,8 +218,6 @@ public class KafkaStoreTest extends ClusterTestHarness {
       kafkaStore.close();
     }
   }
-
-
 
   @Test
   public void testCustomGroupIdConfig() throws Exception {
@@ -583,5 +547,104 @@ public class KafkaStoreTest extends ClusterTestHarness {
 
     // checkpoint updated
     assertEquals(Long.valueOf(1L), storeMessageHandler.checkpoint(1).get(tp));
+  }
+
+  // Test that handleDeleteSubject skips already deleted versions and only processes non-deleted ones
+  @Test
+  public void testKafkaStoreMessageHandlerDeleteSubjectSkipsAlreadyDeletedVersions() throws Exception {
+    Properties props = new Properties();
+    props.put(SchemaRegistryConfig.KAFKASTORE_BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+    props.put(SchemaRegistryConfig.KAFKASTORE_TOPIC_CONFIG, ClusterTestHarness.KAFKASTORE_TOPIC);
+
+    SchemaRegistryConfig config = new SchemaRegistryConfig(props);
+    KafkaSchemaRegistry schemaRegistry = new KafkaSchemaRegistry(
+            config,
+            new SchemaRegistrySerializer()
+    );
+
+    // Custom store that tracks put operations
+    TrackingInMemoryCache store = new TrackingInMemoryCache(new SchemaRegistrySerializer());
+    store.init();
+    KafkaStoreMessageHandler storeMessageHandler = new KafkaStoreMessageHandler(schemaRegistry,
+            store, new IncrementalIdGenerator(schemaRegistry));
+
+    String subject = "test-subject";
+    
+    // Create multiple versions: some deleted, some not
+    SchemaKey key1 = new SchemaKey(subject, 1);
+    SchemaValue value1 = new SchemaValue(subject, 1, 100, "schema1", true); // already deleted
+    
+    SchemaKey key2 = new SchemaKey(subject, 2);
+    SchemaValue value2 = new SchemaValue(subject, 2, 101, "schema2", false); // not deleted
+    
+    SchemaKey key3 = new SchemaKey(subject, 3);
+    SchemaValue value3 = new SchemaValue(subject, 3, 102, "schema3", true); // already deleted
+    
+    SchemaKey key4 = new SchemaKey(subject, 4);
+    SchemaValue value4 = new SchemaValue(subject, 4, 103, "schema4", false); // not deleted
+
+    SchemaKey key5 = new SchemaKey(subject, 5);
+    SchemaValue value5 = new SchemaValue(subject, 5, 104, "schema5", false); // not deleted
+    
+    // Put all versions in store
+    store.put(key1, value1);
+    store.put(key2, value2);
+    store.put(key3, value3);
+    store.put(key4, value4);
+    store.put(key5, value5);
+    // Reset counters
+    store.resetCounts();
+    
+    // Handle delete subject for versions 1-5
+    DeleteSubjectValue deleteSubjectValue = new DeleteSubjectValue(subject, 5);
+    storeMessageHandler.handleUpdate(new DeleteSubjectKey(subject), deleteSubjectValue, null, tp, 0L, 0L);
+    
+    // Should only call put() and schemaDeleted() for non-deleted schemas (versions 2, 4 and 5)
+    assertEquals("Should only process non-deleted schemas with put()", 3, store.getPutCount());
+    assertEquals("Should only process non-deleted schemas with schemaDeleted()", 3, store.getSchemaDeletedCount());
+    
+    // Verify all schemas are now marked as deleted
+    assertTrue("Version 1 should be deleted", ((SchemaValue) store.get(key1)).isDeleted());
+    assertTrue("Version 2 should be deleted", ((SchemaValue) store.get(key2)).isDeleted());
+    assertTrue("Version 3 should be deleted", ((SchemaValue) store.get(key3)).isDeleted());
+    assertTrue("Version 4 should be deleted", ((SchemaValue) store.get(key4)).isDeleted());
+    assertTrue("Version 5 should be deleted", ((SchemaValue) store.get(key5)).isDeleted());
+
+    storeMessageHandler.close();
+  }
+
+  // Helper class to track put operations and schemaDeleted calls
+  private static class TrackingInMemoryCache extends InMemoryCache<SchemaRegistryKey, SchemaRegistryValue> {
+    private int putCount = 0;
+    private int schemaDeletedCount = 0;
+    
+    public TrackingInMemoryCache(SchemaRegistrySerializer serializer) {
+      super(serializer);
+    }
+    
+    @Override
+    public SchemaRegistryValue put(SchemaRegistryKey key, SchemaRegistryValue value) throws StoreException {
+      putCount++;
+      return super.put(key, value);
+    }
+    
+    @Override
+    public void schemaDeleted(SchemaKey schemaKey, SchemaValue schemaValue, SchemaValue oldSchemaValue) {
+      schemaDeletedCount++;
+      super.schemaDeleted(schemaKey, schemaValue, oldSchemaValue);
+    }
+    
+    public int getPutCount() {
+      return putCount;
+    }
+    
+    public int getSchemaDeletedCount() {
+      return schemaDeletedCount;
+    }
+    
+    public void resetCounts() {
+      putCount = 0;
+      schemaDeletedCount = 0;
+    }
   }
 }

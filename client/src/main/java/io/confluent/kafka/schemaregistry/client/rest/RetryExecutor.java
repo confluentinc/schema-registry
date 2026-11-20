@@ -52,7 +52,7 @@ public class RetryExecutor {
       try {
         return callable.call();
       } catch (RestClientException e) {
-        if (i >= maxRetries || !RestService.isRetriable(e)) {
+        if (i >= maxRetries || !RestService.isRestClientExceptionRetriable(e)) {
           throw e;
         }
       } catch (IOException e) {
