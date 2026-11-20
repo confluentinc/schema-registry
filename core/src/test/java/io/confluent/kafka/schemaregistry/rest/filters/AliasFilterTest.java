@@ -27,6 +27,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import java.net.URI;
 import java.util.Collections;
 
+import io.confluent.kafka.schemaregistry.storage.KafkaSchemaRegistry;
 import io.confluent.kafka.schemaregistry.storage.SchemaRegistry;
 import jakarta.ws.rs.core.MultivaluedHashMap;
 import jakarta.ws.rs.core.MultivaluedMap;
