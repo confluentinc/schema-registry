@@ -497,6 +497,9 @@ public class DekRegistryResource extends SchemaRegistryResource {
 
     checkName(kekName);
     checkSubject(subject);
+    if (request.getVersion() != null && request.getVersion() < MIN_VERSION) {
+      throw DekRegistryErrors.invalidOrMissingKeyInfo("version");
+    }
 
     Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
         headers, getSchemaRegistry().config().whitelistHeaders());
