@@ -82,6 +82,7 @@ import static io.confluent.kafka.schemaregistry.type.logical.json.CommonConstant
 public class LogicalTypeToJsonConverter {
 
   private static final int MAX_LENGTH = Integer.MAX_VALUE;
+  private static final Set<String> AVRO_NAMED_TYPES = Set.of("record", "enum", "fixed");
 
   public static JsonSchema fromLogicalType(LogicalType logicalType, String rowName) {
     return fromLogicalType(logicalType, rowName, LogicalTypeVersion.V2);
@@ -89,6 +90,7 @@ public class LogicalTypeToJsonConverter {
 
   public static JsonSchema fromLogicalType(
       LogicalType logicalType, String rowName, LogicalTypeVersion version) {
+    checkExternals(logicalType);
     Schema schema = logicalType.getRootSchema();
     FromLogicalContext<String> ctx =
         new FromLogicalContext<>(logicalType, version);
@@ -218,6 +220,38 @@ public class LogicalTypeToJsonConverter {
    * use the JSON Pointer form {@code #/$defs/&lt;key&gt;}, so the entry key
    * IS the addressable identifier.
    */
+  // A JSON Schema references only JSON Schemas. A reference is read as JSON and never loaded as a
+  // schema, which would resolve its own references, fetching remote ones, and depend on its
+  // draft and where it is registered. Refused: what isn't JSON, as Protobuf, and Avro's schemas.
+  private static void checkExternals(LogicalType logicalType) {
+    for (Map.Entry<String, String> reference : logicalType.getResolvedReferences().entrySet()) {
+      if (notJsonSchema(reference.getValue())) {
+        throw new ValidationException("Cannot emit to JSON Schema: referenced schema '"
+            + reference.getKey() + "' is not a JSON Schema, so its types cannot be "
+            + "referenced. Inline the types it declares, or reference a JSON Schema.");
+      }
+    }
+  }
+
+  // A JSON Schema is an object or a boolean, and "record", "enum" and "fixed", the Avro types a
+  // reference can name, are no JSON Schema types.
+  private static boolean notJsonSchema(String text) {
+    JsonNode node;
+    try {
+      node = JacksonMapper.INSTANCE.readTree(text);
+    } catch (java.io.IOException e) {
+      return true;
+    }
+    if (node == null || node.isMissingNode()) {
+      return true;
+    }
+    if (!node.isObject()) {
+      return !node.isBoolean();
+    }
+    JsonNode type = node.get("type");
+    return type != null && type.isTextual() && AVRO_NAMED_TYPES.contains(type.asText());
+  }
+
   private static void collectExternalNames(
       String docUri, String schemaString, FromLogicalContext<String> ctx) {
     try {
