@@ -89,6 +89,7 @@ public class LogicalTypeToJsonConverter {
 
   public static JsonSchema fromLogicalType(
       LogicalType logicalType, String rowName, LogicalTypeVersion version) {
+    checkExternals(logicalType);
     Schema schema = logicalType.getRootSchema();
     FromLogicalContext<String> ctx =
         new FromLogicalContext<>(logicalType, version);
@@ -218,6 +219,21 @@ public class LogicalTypeToJsonConverter {
    * use the JSON Pointer form {@code #/$defs/&lt;key&gt;}, so the entry key
    * IS the addressable identifier.
    */
+  // A JSON Schema references only JSON Schemas. An Avro schema is JSON too, so each reference is
+  // loaded as a schema, with the others for its own references, which Avro's keywords fail.
+  private static void checkExternals(LogicalType logicalType) {
+    for (Map.Entry<String, String> reference : logicalType.getResolvedReferences().entrySet()) {
+      try {
+        new JsonSchema(reference.getValue(), logicalType.getReferences(),
+            logicalType.getResolvedReferences(), null).rawSchema();
+      } catch (RuntimeException e) {
+        throw new ValidationException("Cannot emit to JSON Schema: referenced schema '"
+            + reference.getKey() + "' is not a JSON Schema, so its types cannot be "
+            + "referenced. Inline the types it declares, or reference a JSON Schema.", e);
+      }
+    }
+  }
+
   private static void collectExternalNames(
       String docUri, String schemaString, FromLogicalContext<String> ctx) {
     try {

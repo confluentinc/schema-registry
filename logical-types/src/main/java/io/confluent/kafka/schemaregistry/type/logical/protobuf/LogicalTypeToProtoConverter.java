@@ -177,12 +177,7 @@ public class LogicalTypeToProtoConverter {
 
   public static ProtobufSchema fromLogicalType(
       LogicalType logicalType, String rowName, LogicalTypeVersion version) {
-    if (!logicalType.getExternalImports().isEmpty()) {
-      throw new ValidationException(
-          "Cannot emit to Proto: LogicalType carries JSON-specific synthetic "
-              + "external imports " + logicalType.getExternalImports().keySet()
-              + ". Re-construct the LT against Proto-compatible externals.");
-    }
+    checkExternals(logicalType);
     Schema schema = logicalType.getRootSchema();
 
     // A named root (bare STRUCT/ENUM carrying LogicalType.name) emits as the file's root message
@@ -325,6 +320,25 @@ public class LogicalTypeToProtoConverter {
       result = result.normalize();
     }
     return applyEditionMetadata(result, version);
+  }
+
+  // A Protobuf file imports only Protobuf files, such as none of an Avro schema's references.
+  private static void checkExternals(LogicalType logicalType) {
+    if (!logicalType.getExternalImports().isEmpty()) {
+      throw new ValidationException(
+          "Cannot emit to Proto: LogicalType carries JSON-specific synthetic "
+              + "external imports " + logicalType.getExternalImports().keySet()
+              + ". Re-construct the LT against Proto-compatible externals.");
+    }
+    for (Map.Entry<String, String> reference : logicalType.getResolvedReferences().entrySet()) {
+      try {
+        new ProtobufSchema(reference.getValue());
+      } catch (RuntimeException e) {
+        throw new ValidationException("Cannot emit to Proto: referenced schema '"
+            + reference.getKey() + "' is not a Protobuf schema, so it cannot be imported. "
+            + "Inline the types it declares, or reference a Protobuf schema.", e);
+      }
+    }
   }
 
   private static ProtobufSchema applyEditionMetadata(
