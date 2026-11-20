@@ -841,6 +841,33 @@ public abstract class RestApiTest {
   }
 
   @Test
+  public void testCreateDekRejectsVersionBelowMin() throws Exception {
+    Map<String, String> headers = new HashMap<>();
+    headers.put("Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED);
+    String kekName = "kek-version-check";
+    String subject = "version-check-subject";
+    String subject2 = "version-check-subject2";
+    DekFormat algorithm = DekFormat.AES256_GCM;
+
+    client.createKek(headers, kekName, kmsType, kmsKeyId, null, null, true, false);
+
+    for (int version : new int[] {0, -1}) {
+      RestClientException e = assertThrows(RestClientException.class,
+          () -> client.createDek(headers, kekName, subject, version, algorithm, null, false));
+      assertEquals(422, e.getStatus());
+      assertEquals(DekRegistryErrors.INVALID_KEY_ERROR_CODE, e.getErrorCode());
+    }
+    assertKeyNotFound(() -> client.getDek(kekName, subject, algorithm, true));
+    assertEquals(0, client.listDeks(kekName, true).size());
+
+    Dek dek = client.createDek(headers, kekName, subject, 1, algorithm, null, false);
+    assertEquals(1, dek.getVersion());
+
+    dek = client.createDek(headers, kekName, subject2, null, algorithm, null, false);
+    assertEquals(1, dek.getVersion());
+  }
+
+  @Test
   public void testNotFoundErrorPaths() throws Exception {
     Map<String, String> headers = new HashMap<>();
     headers.put("Content-Type", Versions.SCHEMA_REGISTRY_V1_JSON_WEIGHTED);
