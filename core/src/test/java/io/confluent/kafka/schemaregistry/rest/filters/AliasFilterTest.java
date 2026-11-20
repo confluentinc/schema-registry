@@ -128,7 +128,7 @@ public class AliasFilterTest {
     );
   }
 
-  private AliasFilter tenantAliasFilter(SchemaRegistry schemaRegistry) throws Exception {
+  private AliasFilter tenantAliasFilter(KafkaSchemaRegistry schemaRegistry) throws Exception {
     when(schemaRegistry.tenant()).thenReturn("lsrc-x");
     Config config = new Config();
     config.setAlias("mySubject");
@@ -150,7 +150,7 @@ public class AliasFilterTest {
   @Test
   public void testTenantContextIsNotAliased() throws Exception {
     // The multi-tenant filter turns an empty subject into the bare tenant prefix.
-    SchemaRegistry schemaRegistry = mock(SchemaRegistry.class);
+    KafkaSchemaRegistry schemaRegistry = mock(KafkaSchemaRegistry.class);
     AliasFilter filter = tenantAliasFilter(schemaRegistry);
 
     Assert.assertEquals("subject=lsrc-x_", idsQuery(filter, "lsrc-x_"));
@@ -162,7 +162,7 @@ public class AliasFilterTest {
 
   @Test
   public void testTenantSubjectIsStillAliased() throws Exception {
-    SchemaRegistry schemaRegistry = mock(SchemaRegistry.class);
+    KafkaSchemaRegistry schemaRegistry = mock(KafkaSchemaRegistry.class);
     AliasFilter filter = tenantAliasFilter(schemaRegistry);
 
     Assert.assertEquals("subject=lsrc-x_mySubject", idsQuery(filter, "lsrc-x_myAlias"));
