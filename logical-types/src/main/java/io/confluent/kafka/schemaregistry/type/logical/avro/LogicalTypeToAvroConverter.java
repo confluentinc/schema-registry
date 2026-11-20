@@ -17,6 +17,7 @@
 package io.confluent.kafka.schemaregistry.type.logical.avro;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import io.confluent.avro.type.LogicalMap;
 import io.confluent.avro.type.VariantConversion;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
@@ -62,6 +63,9 @@ public class LogicalTypeToAvroConverter {
   private static final String CONFLUENT_UNION_PROP = "confluent:union";
   private static final String CONFLUENT_NAMESPACE_PROP = "confluent:namespace";
   private static final String CONFLUENT_EDITION_PROP = "confluent:edition";
+  // Keywords of a JSON Schema document that no Avro schema has at its root
+  private static final List<String> JSON_SCHEMA_KEYWORDS =
+      List.of("$schema", "$defs", "definitions", "properties", "$ref");
 
   /**
    * Converts a logical type schema into an Avro schema using the canonical
@@ -135,20 +139,16 @@ public class LogicalTypeToAvroConverter {
     }
   }
 
-  // An Avro schema is parsed with all its references, so a failure is laid on the first of them
-  // that is no Avro schema, such as a Protobuf or JSON Schema one, and rethrown if there is none.
+  // Parsing fails for more than another format, such as two references defining one name, so a
+  // reference is named only when it is plainly no Avro schema; any other failure is rethrown.
   private static AvroSchema parseExternal(String text, LogicalType logicalType) {
     try {
       return new AvroSchema(text, logicalType.getReferences(),
           logicalType.getResolvedReferences(), null, null, null, false);
     } catch (RuntimeException e) {
-      Map<String, String> prefix = new LinkedHashMap<>();
       for (Map.Entry<String, String> reference :
           logicalType.getResolvedReferences().entrySet()) {
-        prefix.put(reference.getKey(), reference.getValue());
-        try {
-          new AvroSchema((String) null, Collections.emptyList(), prefix, null, null, null, false);
-        } catch (RuntimeException notAvro) {
+        if (notAvro(reference.getValue())) {
           throw new ValidationException("Cannot emit to Avro: referenced schema '"
               + reference.getKey() + "' is not an Avro schema, so its types cannot be "
               + "referenced. Inline the types it declares, or reference an Avro schema.", e);
@@ -156,6 +156,26 @@ public class LogicalTypeToAvroConverter {
       }
       throw e;
     }
+  }
+
+  // Not JSON, as Protobuf, or a JSON Schema document: a boolean, or an object with JSON Schema's
+  // keywords or without Avro's "type".
+  private static boolean notAvro(String text) {
+    JsonNode node;
+    try {
+      node = JacksonMapper.INSTANCE.readTree(text);
+    } catch (JsonProcessingException e) {
+      return true;
+    }
+    if (node == null || node.isMissingNode() || node.isBoolean()) {
+      return true;
+    }
+    if (!node.isObject()) {
+      return false;
+    }
+    JsonNode type = node.get("type");
+    return type == null || "object".equals(type.asText())
+        || JSON_SCHEMA_KEYWORDS.stream().anyMatch(node::has);
   }
 
   private static Emitted emit(LogicalType logicalType, String rowName,
