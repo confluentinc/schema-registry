@@ -44,7 +44,6 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterS
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.encryption.tink.Cryptor;
 import io.confluent.kafka.schemaregistry.encryption.tink.DekFormat;
-import io.confluent.kafka.schemaregistry.rest.exceptions.Errors;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
@@ -856,7 +855,7 @@ public abstract class RestApiTest {
       RestClientException e = assertThrows(RestClientException.class,
           () -> client.createDek(headers, kekName, subject, version, algorithm, null, false));
       assertEquals(422, e.getStatus());
-      assertEquals(Errors.INVALID_VERSION_ERROR_CODE, e.getErrorCode());
+      assertEquals(DekRegistryErrors.INVALID_KEY_ERROR_CODE, e.getErrorCode());
     }
     assertKeyNotFound(() -> client.getDek(kekName, subject, algorithm, true));
     assertEquals(0, client.listDeks(kekName, true).size());

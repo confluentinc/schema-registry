@@ -448,9 +448,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
       @ApiResponse(responseCode = "409", description = "Conflict. "
           + "Error code 40971 -- Key already exists. "
           + "Error code 40972 -- Too many keys."),
-      @ApiResponse(responseCode = "422", description = "Unprocessable entity. "
-          + "Error code 42202 -- Invalid version. "
-          + "Error code 42271 -- Invalid key."),
+      @ApiResponse(responseCode = "422", description = "Error code 42271 -- Invalid key"),
       @ApiResponse(responseCode = "500", description = "Error code 50070 -- Dek generation error")
   })
   @PerformanceMetric("deks.create")
@@ -473,9 +471,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
       @ApiResponse(responseCode = "409", description = "Conflict. "
           + "Error code 40971 -- Key already exists. "
           + "Error code 40972 -- Too many keys."),
-      @ApiResponse(responseCode = "422", description = "Unprocessable entity. "
-          + "Error code 42202 -- Invalid version. "
-          + "Error code 42271 -- Invalid key."),
+      @ApiResponse(responseCode = "422", description = "Error code 42271 -- Invalid key"),
       @ApiResponse(responseCode = "500", description = "Error code 50070 -- Dek generation error")
   })
   @PerformanceMetric("deks.create")
@@ -502,7 +498,7 @@ public class DekRegistryResource extends SchemaRegistryResource {
     checkName(kekName);
     checkSubject(subject);
     if (request.getVersion() != null && request.getVersion() < MIN_VERSION) {
-      throw Errors.invalidVersionException(String.valueOf(request.getVersion()));
+      throw DekRegistryErrors.invalidOrMissingKeyInfo("version");
     }
 
     Map<String, String> headerProperties = requestHeaderBuilder.buildRequestHeaders(
