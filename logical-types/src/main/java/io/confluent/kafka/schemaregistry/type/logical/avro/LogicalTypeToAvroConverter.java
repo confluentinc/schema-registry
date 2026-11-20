@@ -135,6 +135,29 @@ public class LogicalTypeToAvroConverter {
     }
   }
 
+  // An Avro schema is parsed with all its references, so a failure is laid on the first of them
+  // that is no Avro schema, such as a Protobuf or JSON Schema one, and rethrown if there is none.
+  private static AvroSchema parseExternal(String text, LogicalType logicalType) {
+    try {
+      return new AvroSchema(text, logicalType.getReferences(),
+          logicalType.getResolvedReferences(), null, null, null, false);
+    } catch (RuntimeException e) {
+      Map<String, String> prefix = new LinkedHashMap<>();
+      for (Map.Entry<String, String> reference :
+          logicalType.getResolvedReferences().entrySet()) {
+        prefix.put(reference.getKey(), reference.getValue());
+        try {
+          new AvroSchema((String) null, Collections.emptyList(), prefix, null, null, null, false);
+        } catch (RuntimeException notAvro) {
+          throw new ValidationException("Cannot emit to Avro: referenced schema '"
+              + reference.getKey() + "' is not an Avro schema, so its types cannot be "
+              + "referenced. Inline the types it declares, or reference an Avro schema.", e);
+        }
+      }
+      throw e;
+    }
+  }
+
   private static Emitted emit(LogicalType logicalType, String rowName,
       LogicalTypeVersion version, AvroTypeNames names) {
     final Schema schema = logicalType.getRootSchema();
@@ -152,9 +175,7 @@ public class LogicalTypeToAvroConverter {
     Map<String, org.apache.avro.Schema> externalTypes = new HashMap<>();
     for (Map.Entry<String, String> entry :
             logicalType.getResolvedReferences().entrySet()) {
-      AvroSchema parsed = new AvroSchema(entry.getValue(),
-          logicalType.getReferences(), logicalType.getResolvedReferences(),
-          null, null, null, false);
+      AvroSchema parsed = parseExternal(entry.getValue(), logicalType);
       collectNamedSchemas(parsed.rawSchema(), visited, ctx);
       collectFixedSchemas(parsed.rawSchema(), new HashSet<>(), externalTypes);
     }
