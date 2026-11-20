@@ -22,6 +22,7 @@ import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.EnumValue;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.Field;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.UnionBranch;
+import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.TypeTooDeepException;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
@@ -121,7 +122,7 @@ public class JsonToLogicalTypeConverter {
   public static LogicalType toLogicalType(
       final JsonSchema schema, final LogicalTypeVersion version) {
     try {
-      return toLogicalTypeInternal(schema, version);
+      return toLogicalTypeInternal(schema, version).withSourceFormat(SchemaType.JSON);
     } catch (StackOverflowError e) {
       throw new TypeTooDeepException("JSON schema nests types too deeply to convert");
     }

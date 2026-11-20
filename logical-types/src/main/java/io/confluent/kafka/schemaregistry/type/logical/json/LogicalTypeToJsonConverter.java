@@ -25,6 +25,7 @@ import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.EnumValue;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.Field;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.UnionBranch;
+import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 import io.confluent.kafka.schemaregistry.type.logical.common.FromLogicalContext;
 import io.confluent.kafka.schemaregistry.type.logical.common.LogicalTypeVersion;
@@ -89,6 +90,7 @@ public class LogicalTypeToJsonConverter {
 
   public static JsonSchema fromLogicalType(
       LogicalType logicalType, String rowName, LogicalTypeVersion version) {
+    logicalType.requireReferencesIn(SchemaType.JSON);
     Schema schema = logicalType.getRootSchema();
     FromLogicalContext<String> ctx =
         new FromLogicalContext<>(logicalType, version);
