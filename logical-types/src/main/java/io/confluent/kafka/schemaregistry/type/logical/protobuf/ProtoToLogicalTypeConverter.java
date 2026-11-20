@@ -23,6 +23,7 @@ import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.EnumValue;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.Field;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.UnionBranch;
+import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.TypeTooDeepException;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
@@ -203,7 +204,8 @@ public class ProtoToLogicalTypeConverter {
       throw new ValidationException("Protobuf file has no top-level messages");
     }
     try {
-      return toLogicalTypeInternal(schema, includeMultipleMessages);
+      return toLogicalTypeInternal(schema, includeMultipleMessages)
+          .withSourceFormat(SchemaType.PROTOBUF);
     } catch (StackOverflowError e) {
       throw new TypeTooDeepException("Protobuf schema nests types too deeply to convert");
     }

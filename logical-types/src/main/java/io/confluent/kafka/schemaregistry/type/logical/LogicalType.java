@@ -19,6 +19,7 @@ package io.confluent.kafka.schemaregistry.type.logical;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.LinkedHashSet;
@@ -53,6 +54,8 @@ public class LogicalType {
   private final List<SchemaReference> references;
   private final Map<String, String> resolvedReferences;
   private final Map<List<Integer>, Object> defaultValues;
+  // Recorded by the reader that built this type; never part of equality.
+  private final SchemaType sourceFormat;
 
   public LogicalType(final Schema rootSchema) {
     this(null, rootSchema, Map.of(), Set.of(), Map.of(),
@@ -139,6 +142,21 @@ public class LogicalType {
       final List<SchemaReference> references,
       final Map<String, String> resolvedReferences,
       final Map<List<Integer>, Object> defaultValues) {
+    this(name, namespace, rootSchema, namedTypes, externalTypes, externalImports, references,
+        resolvedReferences, defaultValues, null);
+  }
+
+  private LogicalType(
+      final String name,
+      final String namespace,
+      final Schema rootSchema,
+      final Map<String, Schema> namedTypes,
+      final Set<String> externalTypes,
+      final Map<String, String> externalImports,
+      final List<SchemaReference> references,
+      final Map<String, String> resolvedReferences,
+      final Map<List<Integer>, Object> defaultValues,
+      final SchemaType sourceFormat) {
     // Treat empty string as no name, so callers don't have to.
     this.name = (name == null || name.isEmpty()) ? null : name;
     // Treat empty string as no namespace, so callers don't have to.
@@ -156,6 +174,53 @@ public class LogicalType {
         ? Collections.unmodifiableMap(resolvedReferences) : Map.of();
     this.defaultValues = defaultValues != null
         ? Collections.unmodifiableMap(defaultValues) : Map.of();
+    this.sourceFormat = sourceFormat;
+  }
+
+  /**
+   * The format of the schema this type was read from, which is the format its references are
+   * in, or {@code null} for a type that was not read from a schema: one built from a DDL script
+   * or by hand. Each reader records it; it is not part of the type's equality, so a type read
+   * from one format equals the same type read from another.
+   */
+  public SchemaType getSourceFormat() {
+    return sourceFormat;
+  }
+
+  /**
+   * This type, recorded as read from a schema in {@code format}.
+   */
+  public LogicalType withSourceFormat(SchemaType format) {
+    return new LogicalType(name, namespace, rootSchema, namedTypes, externalTypes,
+        externalImports, references, resolvedReferences, defaultValues, format);
+  }
+
+  /**
+   * Refuses to emit this type in {@code target} when it was read from a schema in another format
+   * and carries that schema's references. A schema refers only to schemas in its own format, so
+   * the references cannot come along, and emitting them would fail in the target's parser or
+   * leave a reference to a schema of the wrong format.
+   *
+   * <p>A type with no recorded source format is not checked: its references are whatever its
+   * builder gave it.
+   *
+   * @throws ValidationException naming the references and the format they are in
+   */
+  public void requireReferencesIn(SchemaType target) {
+    if (sourceFormat == null || sourceFormat == target
+        || references.isEmpty() && resolvedReferences.isEmpty()) {
+      return;
+    }
+    List<String> names = new ArrayList<>();
+    references.forEach(reference -> names.add(reference.getName()));
+    if (names.isEmpty()) {
+      names.addAll(resolvedReferences.keySet());
+    }
+    throw new ValidationException("Cannot emit to " + target.displayName() + ": the schema was "
+        + "read from " + sourceFormat.displayName() + ", and its references " + names
+        + " are in " + sourceFormat.displayName() + " too, which a schema in "
+        + target.displayName() + " cannot refer to. Inline the types they declare, or "
+        + "reference schemas in " + target.displayName() + ".");
   }
 
   public Schema getRootSchema() {

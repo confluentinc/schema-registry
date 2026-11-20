@@ -28,6 +28,7 @@ import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.EnumValue;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.Field;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.UnionBranch;
+import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 import io.confluent.kafka.schemaregistry.type.logical.common.FromLogicalContext;
 import io.confluent.kafka.schemaregistry.type.logical.common.LogicalTypeVersion;
@@ -177,12 +178,7 @@ public class LogicalTypeToProtoConverter {
 
   public static ProtobufSchema fromLogicalType(
       LogicalType logicalType, String rowName, LogicalTypeVersion version) {
-    if (!logicalType.getExternalImports().isEmpty()) {
-      throw new ValidationException(
-          "Cannot emit to Proto: LogicalType carries JSON-specific synthetic "
-              + "external imports " + logicalType.getExternalImports().keySet()
-              + ". Re-construct the LT against Proto-compatible externals.");
-    }
+    checkExternals(logicalType);
     Schema schema = logicalType.getRootSchema();
 
     // A named root (bare STRUCT/ENUM carrying LogicalType.name) emits as the file's root message
@@ -325,6 +321,17 @@ public class LogicalTypeToProtoConverter {
       result = result.normalize();
     }
     return applyEditionMetadata(result, version);
+  }
+
+  // What a Protobuf file cannot import: another format's references, and JSON's external imports.
+  private static void checkExternals(LogicalType logicalType) {
+    logicalType.requireReferencesIn(SchemaType.PROTOBUF);
+    if (!logicalType.getExternalImports().isEmpty()) {
+      throw new ValidationException(
+          "Cannot emit to Proto: LogicalType carries JSON-specific synthetic "
+              + "external imports " + logicalType.getExternalImports().keySet()
+              + ". Re-construct the LT against Proto-compatible externals.");
+    }
   }
 
   private static ProtobufSchema applyEditionMetadata(
