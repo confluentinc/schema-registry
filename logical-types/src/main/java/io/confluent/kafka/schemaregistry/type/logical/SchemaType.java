@@ -21,8 +21,9 @@ package io.confluent.kafka.schemaregistry.type.logical;
  * A registry schema type, and the rules by which it identifies a location: how two versions'
  * locations are matched, and which members two logical types pair.
  *
- * <p>The rules are format-specific, but a {@link LogicalType} carries no format discriminator, so
- * the caller states the schema type of each.
+ * <p>The rules are format-specific, but a {@link LogicalType} records the format it was read from
+ * only when it was read from a schema, and never as part of what it is, so the caller states
+ * the schema type of each.
  */
 public enum SchemaType {
 
@@ -55,6 +56,20 @@ public enum SchemaType {
    * {@code ProvenanceComputer}).
    */
   JSON;
+
+  /**
+   * The format's name in a message: {@code Avro}, {@code Protobuf} or {@code JSON Schema}.
+   */
+  public String displayName() {
+    switch (this) {
+      case AVRO:
+        return "Avro";
+      case PROTOBUF:
+        return "Protobuf";
+      default:
+        return "JSON Schema";
+    }
+  }
 
   /**
    * The schema type named {@code AVRO}, {@code PROTOBUF} or {@code JSON}, as
