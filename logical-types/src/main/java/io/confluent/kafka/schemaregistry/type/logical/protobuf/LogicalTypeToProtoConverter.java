@@ -28,6 +28,7 @@ import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.EnumValue;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.Field;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.UnionBranch;
+import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 import io.confluent.kafka.schemaregistry.type.logical.common.FromLogicalContext;
 import io.confluent.kafka.schemaregistry.type.logical.common.LogicalTypeVersion;
@@ -322,22 +323,14 @@ public class LogicalTypeToProtoConverter {
     return applyEditionMetadata(result, version);
   }
 
-  // A Protobuf file imports only Protobuf files, such as none of an Avro schema's references.
+  // What a Protobuf file cannot import: another format's references, and JSON's external imports.
   private static void checkExternals(LogicalType logicalType) {
+    logicalType.requireReferencesIn(SchemaType.PROTOBUF);
     if (!logicalType.getExternalImports().isEmpty()) {
       throw new ValidationException(
           "Cannot emit to Proto: LogicalType carries JSON-specific synthetic "
               + "external imports " + logicalType.getExternalImports().keySet()
               + ". Re-construct the LT against Proto-compatible externals.");
-    }
-    for (Map.Entry<String, String> reference : logicalType.getResolvedReferences().entrySet()) {
-      try {
-        new ProtobufSchema(reference.getValue());
-      } catch (RuntimeException e) {
-        throw new ValidationException("Cannot emit to Proto: referenced schema '"
-            + reference.getKey() + "' is not a Protobuf schema, so it cannot be imported. "
-            + "Inline the types it declares, or reference a Protobuf schema.", e);
-      }
     }
   }
 
