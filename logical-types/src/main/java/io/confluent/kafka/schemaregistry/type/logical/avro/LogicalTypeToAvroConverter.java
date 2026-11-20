@@ -26,6 +26,7 @@ import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.EnumValue;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.Field;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.UnionBranch;
+import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
 import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 import io.confluent.kafka.schemaregistry.type.logical.avro.AvroTypeNames.Kind;
 import io.confluent.kafka.schemaregistry.type.logical.common.FromLogicalContext;
@@ -77,6 +78,7 @@ public class LogicalTypeToAvroConverter {
    */
   public static AvroSchema fromLogicalType(
       LogicalType logicalType, String rowName, LogicalTypeVersion version) {
+    logicalType.requireReferencesIn(SchemaType.AVRO);
     if (!logicalType.getExternalImports().isEmpty()) {
       throw new ValidationException(
           "Cannot emit to Avro: LogicalType carries JSON-specific synthetic "
