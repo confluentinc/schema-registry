@@ -18,6 +18,9 @@ package io.confluent.kafka.schemaregistry.type.logical.alter;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
+import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
+import java.util.List;
 
 /**
  * What this package asks of a schema registry, so that a client of one and a registry's own code
@@ -34,4 +37,15 @@ public interface TypeLookup {
 
   /** A stored version's schema, parsed in its subject's context with its references. */
   ParsedSchema parse(SchemaMetadata version);
+
+  /** A subject's version numbers, the soft-deleted ones too if asked; none if it has none. */
+  List<Integer> versions(String subject, boolean deleted);
+
+  /**
+   * The logical type of a stored version, as the registry gives it for {@code format=logical}.
+   */
+  LogicalType logicalType(String subject, SchemaMetadata version);
+
+  /** A subject's settings, with the registry's for those it doesn't set itself. */
+  Config config(String subject);
 }
