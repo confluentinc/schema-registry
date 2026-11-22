@@ -63,6 +63,9 @@ public final class TypeAlter {
   /** The WITH property that sets the compatibility policy of a type's subject. */
   public static final String COMPATIBILITY_POLICY = "compatibility.policy";
   private static final Set<String> POLICIES = Set.of("LOGICAL", "STRICT", "LENIENT");
+  // Protobuf keeps these field numbers for its own use, and refuses a schema that has one.
+  private static final int RESERVED_FIRST = 19_000;
+  private static final int RESERVED_LAST = 19_999;
   private static final String KEY_SUFFIX = "-key";
   private static final String VALUE_SUFFIX = "-value";
 
@@ -1773,7 +1776,7 @@ public final class TypeAlter {
           if (s.getType() != Schema.Type.UNION) {
             int n = at.number(f.getName());
             params.put(Schema.PROTOBUF_FIELD_NUMBER,
-                String.valueOf(n > 0 ? n : inner[0]++));
+                String.valueOf(n > 0 ? n : take(inner)));
           }
           fields.add(copy(f, f.getName(), s, params));
         }
@@ -1793,7 +1796,7 @@ public final class TypeAlter {
               ? numberIn(was.getParams()) : at.number(memberName(was));
           Map<String, Object> params = new LinkedHashMap<>(b.getParams());
           params.put(Schema.PROTOBUF_FIELD_NUMBER,
-              String.valueOf(n > 0 ? n : counter[0]++));
+              String.valueOf(n > 0 ? n : take(counter)));
           branches.add(new UnionBranch(b.getName(),
               renumbered(b.getSchema(), was != null ? was.getSchema() : null,
                 at.field(n), null), b.getDoc(), params));
@@ -2023,6 +2026,7 @@ public final class TypeAlter {
     List<UnionBranch> branches = new ArrayList<>();
     for (UnionBranch b : type.getBranches()) {
       Map<String, Object> params = new LinkedHashMap<>(b.getParams());
+      next = unreserved(next);
       params.put(Schema.PROTOBUF_FIELD_NUMBER, String.valueOf(next++));
       branches.add(new UnionBranch(b.getName(), b.getSchema(), b.getDoc(), params));
     }
@@ -2041,7 +2045,19 @@ public final class TypeAlter {
         }
       }
     }
-    return max + 1;
+    return unreserved(max + 1);
+  }
+
+  // The number given, or the first after those Protobuf keeps for itself.
+  private static int unreserved(int number) {
+    return number >= RESERVED_FIRST && number <= RESERVED_LAST ? RESERVED_LAST + 1 : number;
+  }
+
+  // The next number of a counter, past those Protobuf keeps for itself.
+  private static int take(int[] counter) {
+    int number = unreserved(counter[0]);
+    counter[0] = number + 1;
+    return number;
   }
 
   private static int numberIn(Map<String, Object> params) {

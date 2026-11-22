@@ -68,8 +68,16 @@ class TypeAlterTest {
         && d.getFields().get(0).getType() == FieldDescriptor.Type.MESSAGE) {
       d = d.getFields().get(0).getMessageType();
     }
-    return d.getFields().stream().map(f -> f.getName() + "=" + f.getNumber())
+    return numbers(d);
+  }
+
+  private static String numbers(Descriptor message) {
+    return message.getFields().stream().map(f -> f.getName() + "=" + f.getNumber())
         .collect(Collectors.joining(" "));
+  }
+
+  private Descriptor message(String subject) {
+    return ((ProtobufSchema) registry.schema(subject)).toDescriptor();
   }
 
   @Test
@@ -428,6 +436,29 @@ class TypeAlterTest {
     registry.alter("kd", new AlterAttributeType("mp",
         "MAP<UNION(x INT, y STRING, z BIGINT, v INT), STRING>"));
     assertThat(entry("kd", "mp")).isEqualTo("x=1 y=2 z=3 v=6 value=4");
+  }
+
+  // Protobuf keeps the numbers 19000 to 19999 for itself, and refuses a schema that has one.
+  @Test
+  void aNewProtobufNumberSkipsTheOnesProtobufKeeps() {
+    // An added attribute, and the branches of an added union.
+    create("r1", SchemaType.PROTOBUF, "(a INT WITH ('protobuf.field.number' = '18999'))");
+    registry.alter("r1", new AddAttribute("b", "INT"));
+    assertThat(numbers(message("r1"))).isEqualTo("a=18999 b=20000");
+    create("r2", SchemaType.PROTOBUF, "(a INT WITH ('protobuf.field.number' = '18998'))");
+    registry.alter("r2", new AddAttribute("u", "UNION(p INT, q STRING)"));
+    assertThat(numbers(message("r2"))).isEqualTo("p=20000 q=20001 a=18998");
+
+    // A field added to a struct inside the type, and a branch added to a union.
+    create("r3", SchemaType.PROTOBUF,
+        "(id INT, s STRUCT<n INT WITH ('protobuf.field.number' = '18999')>)");
+    registry.alter("r3", new AlterAttributeType("s", "STRUCT<n INT, m INT>"));
+    assertThat(numbers(message("r3").findFieldByName("s").getMessageType()))
+        .isEqualTo("n=18999 m=20000");
+    create("r4", SchemaType.PROTOBUF, "(id INT, u UNION(p INT WITH ('protobuf.field.number' = "
+        + "'18998'), q STRING WITH ('protobuf.field.number' = '18999')))");
+    registry.alter("r4", new AlterAttributeType("u", "UNION(p INT, q STRING, r BIGINT)"));
+    assertThat(numbers(message("r4"))).isEqualTo("p=18998 q=18999 r=20000 id=1");
   }
 
   // A field number, an alias or a pinned type name is how the format reads an attribute's data.
