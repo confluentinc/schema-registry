@@ -21,10 +21,12 @@ import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalTypesParserFactory;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalTypesSchemaVisitor;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
+import io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesParser;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import org.antlr.v4.runtime.Token;
 
 /**
  * Turns the raw text of type statements into logical types, by wrapping it in a logical types
@@ -88,6 +90,21 @@ public final class TypeScripts {
   public static String fieldScript(String name, String field, Map<String, String> aliases) {
     return createScript(SCRATCH_STRUCT, BodyKind.STRUCT, "(" + quote(name) + " " + field + ")",
         Map.of(), aliases);
+  }
+
+  /**
+   * Whether an attribute's text is one field definition and nothing after it, as a parenthesis
+   * that closes its struct and a statement of another type would be. Text that is no field
+   * definition is left to the parse of its script, which says why.
+   */
+  public static boolean isOneField(String name, String field) {
+    LogicalTypesParser parser = LogicalTypesParserFactory.newParser(quote(name) + " " + field);
+    try {
+      parser.fieldDef();
+    } catch (RuntimeException e) {
+      return true;
+    }
+    return parser.getCurrentToken().getType() == Token.EOF;
   }
 
   /** The script whose root is the given type expression. */

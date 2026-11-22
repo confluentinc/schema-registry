@@ -331,15 +331,11 @@ final class ColumnIds {
 
   /**
    * The ids of a stored version and of a new one after it, as the registry would compute them
-   * with it registered; null if the new one cannot be made as the registry makes it, left to it.
-   * A refusal starts with {@code refused}, as "Type t cannot be changed so".
+   * with it registered. A refusal starts with {@code refused}, as "Type t cannot be changed so".
    */
   static Ids compute(TypeLookup lookup, String subject, SchemaMetadata base, SchemaType format,
              LogicalType next, int number, String refused) {
-    ParsedSchema schema = nativeOf(subject, format, next);
-    if (schema == null) {
-      return null;
-    }
+    ParsedSchema schema = nativeOf(subject, format, next, refused);
     SchemaType baseType = schemaType(base.getSchemaType());
     LogicalType was = logicalType(refused, lookup.parse(base));
     LogicalType now = logicalType(refused, schema);
@@ -439,19 +435,26 @@ final class ColumnIds {
     }
   }
 
-  // The new version's native schema, null if its script is none the registry would parse, or
-  // it cannot be made as the registry makes it.
-  static ParsedSchema nativeOf(String subject, SchemaType format, LogicalType lt) {
+  // The new version's native schema, as the registry makes it of what is registered. One that
+  // cannot be made is refused: left to the registry, the checks made of it would be skipped.
+  static ParsedSchema nativeOf(String subject, SchemaType format, LogicalType lt,
+      String refused) {
+    RuntimeException cause = null;
     try {
       RegisterSchemaRequest request = Formats.request(format, lt);
-      return LogicalTypeConversion.tryParse(request.getSchema())
+      ParsedSchema schema = LogicalTypeConversion.tryParse(request.getSchema())
           .map(script -> LogicalTypeConversion.toNative(script,
             new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(subject,
               request), lt.getResolvedReferences()))
           .orElse(null);
+      if (schema != null) {
+        return schema;
+      }
     } catch (RuntimeException e) {
-      return null;
+      cause = e;
     }
+    throw new TypeRefusedException(refused + ": no " + format + " schema can be made of it"
+        + (cause == null ? "" : ": " + cause.getMessage()), cause);
   }
 
   // The version edited with its references at the given versions, as provenance reads it.
@@ -461,10 +464,12 @@ final class ColumnIds {
     LogicalType lt = new LogicalType(edited.getName(), edited.getNamespace(),
         edited.getRootSchema(), edited.getNamedTypes(), edited.getExternalTypes(),
         edited.getExternalImports(), refs, TypeReferences.resolve(lookup, subject, refs), Map.of());
-    ParsedSchema schema = nativeOf(subject, format, lt);
-    if (schema == null) {
+    ParsedSchema schema;
+    try {
+      schema = nativeOf(subject, format, lt, refused);
+    } catch (TypeRefusedException e) {
       throw new TypeRefusedException(refused + ": Schema Registry's provenance cannot read it at "
-          + "the versions of the types it refers to between those of its versions");
+          + "the versions of the types it refers to between those of its versions", e);
     }
     return logicalType(refused, schema);
   }

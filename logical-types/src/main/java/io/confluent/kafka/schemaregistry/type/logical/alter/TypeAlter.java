@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.type.logical.alter;
 
 import com.google.protobuf.DescriptorProtos.DescriptorProto;
 import com.google.protobuf.DescriptorProtos.EnumDescriptorProto;
+import com.google.protobuf.DescriptorProtos.FieldDescriptorProto;
 import com.google.protobuf.DescriptorProtos.FileDescriptorProto;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.CompatibilityPolicy;
@@ -38,6 +39,7 @@ import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTypeConverter;
 import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceReport;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -50,6 +52,7 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.IntFunction;
 import java.util.stream.Collectors;
 
 /**
@@ -366,7 +369,8 @@ public final class TypeAlter {
 
   private Result run() {
     // Read first, so that a version registered after the one edited is caught.
-    int version = nextVersion(lookup, subject);
+    List<Integer> versions = lookup.versions(subject, true);
+    int version = versions.stream().mapToInt(Integer::intValue).max().orElse(0) + 1;
     SchemaMetadata md = lookup.latest(subject);
     if (md == null) {
       throw new TypeRefusedException("Unknown type " + subject);
@@ -416,10 +420,8 @@ public final class TypeAlter {
           "Type " + subject + " cannot be changed so", "drop");
       edited = edited();
       refuseOtherColumns(md, edited, version);
-      if (softDeleted) {
-        refuseIncompatible(lookup, subject, format, md, edited, policy, refused(),
-            "version " + md.getVersion() + " of type " + subject);
-      }
+      refuseIncompatible(lookup, subject, format, md, softDeleted, versions, edited, policy,
+          refused(), v -> "version " + v + " of type " + subject);
       check.accept(edited);
     }
     return new Result(format, md, version, edited, policy);
@@ -427,7 +429,8 @@ public final class TypeAlter {
 
   // A new version is written from the logical type, which carries neither what only a proto2
   // file has, such as required fields and defaults, nor the numbers and names a message or
-  // enum reserves. The first would be lost, and the second free for a new field to take.
+  // enum reserves, nor which of its encodings an integer has. The first would be lost, the
+  // second free for a new field to take, and the third changed, so stored values read wrongly.
   private void refuseUncarried(SchemaMetadata md) {
     ParsedSchema schema = lookup.parse(md);
     if (!(schema instanceof ProtobufSchema)) {
@@ -440,11 +443,43 @@ public final class TypeAlter {
         : reserves(file.getMessageTypeList(), file.getEnumTypeList())
           ? "it reserves field numbers or names, which would be dropped, and a new field "
             + "could then take one"
-        : null;
+        : reencoded(file.getMessageTypeList());
     if (lost != null) {
       throw new TypeRefusedException("Type " + subject + " cannot be altered: " + lost
           + ". Register its new version as a Protobuf schema");
     }
+  }
+
+  // The first field whose integer encoding the logical type does not carry, or null.
+  private static String reencoded(List<DescriptorProto> messages) {
+    for (DescriptorProto m : messages) {
+      for (FieldDescriptorProto f : m.getFieldList()) {
+        String as;
+        switch (f.getType()) {
+          case TYPE_SINT32:
+          case TYPE_SFIXED32:
+            as = "int32";
+            break;
+          case TYPE_FIXED32:
+          case TYPE_SINT64:
+          case TYPE_FIXED64:
+          case TYPE_SFIXED64:
+            as = "int64";
+            break;
+          default:
+            continue;
+        }
+        return "field " + f.getName() + " of message " + m.getName() + " is a "
+            + f.getType().name().substring("TYPE_".length()).toLowerCase(Locale.ROOT)
+            + ", which would be written as " + as + ", so its stored values would be read "
+            + "wrongly";
+      }
+      String nested = reencoded(m.getNestedTypeList());
+      if (nested != null) {
+        return nested;
+      }
+    }
+    return null;
   }
 
   private static boolean reserves(List<DescriptorProto> messages,
@@ -488,33 +523,68 @@ public final class TypeAlter {
 
   /**
    * Refuses a new version where the subject's level and policy would refuse it after a dropped
-   * version, {@code md}: the registry checks dropped versions only under LOGICAL. A refusal
-   * starts with {@code refused} and names the version as {@code which}.
+   * version, {@code md}, and at a transitive level after the dropped versions before it: the
+   * registry checks dropped versions only under LOGICAL. A refusal starts with {@code refused}
+   * and names a version as {@code which} does.
    */
   public static void refuseIncompatible(TypeLookup lookup, String subject, SchemaType format,
-      SchemaMetadata md, LogicalType lt, String policy, String refused, String which) {
+      SchemaMetadata md, LogicalType lt, String policy, String refused,
+      IntFunction<String> which) {
+    refuseIncompatible(lookup, subject, format, md, true, null, lt, policy, refused, which);
+  }
+
+  // With dropped false, md is live, and the registry checks it itself. The subject's versions,
+  // soft-deleted too, are read if not given.
+  private static void refuseIncompatible(TypeLookup lookup, String subject, SchemaType format,
+      SchemaMetadata md, boolean dropped, List<Integer> versions, LogicalType lt, String policy,
+      String refused, IntFunction<String> which) {
+    // With no version dropped, the registry checks all there is to check.
+    List<Integer> before = dropped ? null : droppedBefore(lookup, subject, versions, md);
+    if (before != null && before.isEmpty()) {
+      return;
+    }
     Config config = lookup.config(subject);
     CompatibilityLevel level = CompatibilityLevel.forName(config.getCompatibilityLevel());
     CompatibilityPolicy applied = CompatibilityPolicy.forName(policy != null ? policy
         : config.getCompatibilityPolicy());
-    if (level == null || applied == CompatibilityPolicy.LOGICAL) {
+    boolean transitive = level == CompatibilityLevel.BACKWARD_TRANSITIVE
+        || level == CompatibilityLevel.FORWARD_TRANSITIVE
+        || level == CompatibilityLevel.FULL_TRANSITIVE;
+    if (level == null || level == CompatibilityLevel.NONE
+        || applied == CompatibilityPolicy.LOGICAL || !dropped && !transitive) {
       return;
     }
-    // The native schema the registry checks, or null if it cannot be made as the registry
-    // makes it: left to the registry, which refuses it.
-    ParsedSchema schema = ColumnIds.nativeOf(subject, format, lt);
-    if (schema != null && Boolean.TRUE.equals(config.isNormalize())) {
+    // The most recent first, as the one the new version follows.
+    List<SchemaMetadata> against = new ArrayList<>();
+    if (dropped) {
+      against.add(md);
+    }
+    if (transitive) {
+      (before != null ? before : droppedBefore(lookup, subject, versions, md))
+          .forEach(v -> against.add(lookup.version(subject, v)));
+    }
+    ParsedSchema schema = ColumnIds.nativeOf(subject, format, lt, refused);
+    if (Boolean.TRUE.equals(config.isNormalize())) {
       schema = schema.normalize();
     }
-    if (schema == null) {
-      return;
+    for (SchemaMetadata version : against) {
+      List<String> errors = schema.isCompatible(level, applied,
+          List.of(new SimpleParsedSchemaHolder(lookup.parse(version))));
+      if (!errors.isEmpty()) {
+        throw new TypeRefusedException(refused + ": it is incompatible with "
+            + which.apply(version.getVersion()) + ", whose records it reads, at " + level
+            + " compatibility: " + String.join("; ", errors));
+      }
     }
-    List<String> errors = schema.isCompatible(level, applied,
-        List.of(new SimpleParsedSchemaHolder(lookup.parse(md))));
-    if (!errors.isEmpty()) {
-      throw new TypeRefusedException(refused + ": it is incompatible with " + which + ", whose "
-          + "records it reads, at " + level + " compatibility: " + String.join("; ", errors));
-    }
+  }
+
+  // The soft-deleted versions before one, the most recent first.
+  private static List<Integer> droppedBefore(TypeLookup lookup, String subject,
+      List<Integer> versions, SchemaMetadata md) {
+    List<Integer> live = lookup.versions(subject, false);
+    return (versions != null ? versions : lookup.versions(subject, true)).stream()
+        .filter(v -> v < md.getVersion() && !live.contains(v))
+        .sorted(Comparator.reverseOrder()).collect(Collectors.toList());
   }
 
   private boolean apply(AlterAction action) {
@@ -523,12 +593,13 @@ public final class TypeAlter {
     }
     if (action instanceof AlterAction.AddAttribute) {
       AlterAction.AddAttribute a = (AlterAction.AddAttribute) action;
-      Schema one = parse(aliases -> TypeScripts.fieldScript(a.name(), a.field(), aliases))
-          .getRootSchema();
-      // The text is one attribute's: none follows it after a comma, and no clause of a
-      // struct after a parenthesis that closes it.
-      if (one.getFields().size() != 1 || !one.getParams().isEmpty() || one.getDoc() != null
-          || !one.getTags().isEmpty() || !one.getRules().isEmpty()) {
+      // The text is one attribute's: none follows it after a comma, and after a parenthesis
+      // that closes it no clause of a struct, nor a statement of another type.
+      Schema one = !TypeScripts.isOneField(a.name(), a.field()) ? null
+          : parse(aliases -> TypeScripts.fieldScript(a.name(), a.field(), aliases))
+            .getRootSchema();
+      if (one == null || one.getFields().size() != 1 || !one.getParams().isEmpty()
+          || one.getDoc() != null || !one.getTags().isEmpty() || !one.getRules().isEmpty()) {
         throw new TypeRefusedException("Attribute " + a.name() + " is given more than one "
             + "attribute's type and clauses: " + a.field());
       }
@@ -594,6 +665,10 @@ public final class TypeAlter {
       int i = named(fields, a.from());
       if (i < 0) {
         throw new TypeRefusedException("Type " + subject + " has no attribute " + a.from());
+      }
+      // Renamed to the name it has, an attribute is as it was.
+      if (fields.get(i).getName().equals(a.to())) {
+        return false;
       }
       // A column may take its own name in another case, as no other's.
       int taken = named(fields, a.to());
@@ -707,6 +782,9 @@ public final class TypeAlter {
       if (target.getType() == Schema.Type.ENUM && type.getType() == Schema.Type.ENUM) {
         type = copyMetadata(target, Schema.createEnum(type.getEnumValues()))
             .setParams(target.getParams());
+      }
+      if (format == SchemaType.AVRO) {
+        type = withDefaults(target, type);
       }
       setTarget(type);
       return true;

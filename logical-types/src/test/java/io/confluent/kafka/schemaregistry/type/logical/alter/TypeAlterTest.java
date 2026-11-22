@@ -520,6 +520,13 @@ class TypeAlterTest {
         "STRUCT<y INT, x BOOLEAN NOT NULL>")))
         .isInstanceOf(TypeRefusedException.class)
         .hasMessageStartingWith("Attribute x's default 7 cannot be read as BOOLEAN");
+
+    // A type that is no struct keeps a nested default likewise, through SET DATA TYPE.
+    registry.create("rd", SchemaType.AVRO, BodyKind.OTHER,
+        "ARRAY<STRUCT<y INT, x INT NOT NULL DEFAULT 5>>");
+    registry.alter("rd", new SetDataType("ARRAY<STRUCT<y INT, x BIGINT NOT NULL>>"));
+    assertThat(registry.schema("rd").canonicalString())
+        .contains("{\"name\":\"x\",\"type\":\"long\",\"default\":5}");
   }
 
   // A Protobuf schema written by hand may have what the logical type an ALTER edits does not
@@ -545,9 +552,25 @@ class TypeAlterTest {
     assertThat(registry.alter("res", new SetWith(Map.of("compatibility.policy", "STRICT")))
         .edited()).isNull();
 
-    // One the logical type carries whole is altered as any other.
+    // An integer's encoding is not carried either, in a nested message or a map's entry.
+    registry.client.register("enc", new ProtobufSchema("syntax = \"proto3\";\n"
+        + "message E { int32 a = 1; message N { map<string, sint64> m = 1; } N n = 2; }"));
+    assertThatThrownBy(() -> registry.alter("enc", new AddAttribute("c", "INT")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessage("Type enc cannot be altered: field value of message mEntry is a sint64, "
+            + "which would be written as int64, so its stored values would be read wrongly. "
+            + "Register its new version as a Protobuf schema");
+    registry.client.register("fix", new ProtobufSchema("syntax = \"proto3\";\n"
+        + "message F { sfixed32 z = 1; }"));
+    assertThatThrownBy(() -> registry.alter("fix", new AddAttribute("c", "INT")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("field z of message F is a sfixed32, which would be written as "
+            + "int32");
+
+    // One the logical type carries whole is altered as any other; a uint32 is read as a
+    // BIGINT, whose int64 is the same encoding.
     registry.client.register("plain", new ProtobufSchema("syntax = \"proto3\";\n"
-        + "message P { int32 a = 1; int32 b = 2; }"));
+        + "message P { int32 a = 1; uint32 b = 2; }"));
     registry.alter("plain", new AddAttribute("c", "INT"));
     assertThat(numbers(message("plain"))).isEqualTo("a=1 b=2 c=3");
   }
@@ -578,7 +601,7 @@ class TypeAlterTest {
   void anAddedAttributeIsOneAttribute() {
     create("one", SchemaType.AVRO, "(a INT)");
     for (String text : List.of("INT, c STRING", "INT) WITH ('owner' = 'zz'",
-        "INT, CHECK (b > 0)")) {
+        "INT, CHECK (b > 0)", "INT); TYPE STRUCT(x STRING", "INT); STRUCT other (y INT")) {
       assertThatThrownBy(() -> registry.alter("one", new AddAttribute("b", text)))
           .isInstanceOf(TypeRefusedException.class)
           .hasMessage("Attribute b is given more than one attribute's type and clauses: "
@@ -777,5 +800,58 @@ class TypeAlterTest {
     assertThat(registry.struct("sd").getFields()).extracting(Schema.Field::getName)
         .containsExactly("a", "b", "c", "d");
     assertThat(TypeAlter.nextVersion(registry, "nope")).isEqualTo(1);
+  }
+
+  // At a transitive level a new version reads the records of every version before it, the
+  // soft-deleted ones too, which the registry leaves out of its check.
+  @Test
+  void aTransitiveLevelCountsEverySoftDeletedVersion() throws Exception {
+    for (String t : List.of("live", "gone", "plain")) {
+      create(t, SchemaType.AVRO, "(a INT)");
+      if (!t.equals("plain")) {
+        registry.client.updateCompatibility(t, "BACKWARD_TRANSITIVE");
+      }
+      registry.alter(t, new AddAttribute("b", "STRING"));
+      registry.alter(t, new DropAttribute("b", false), new AddAttribute("c", "INT"));
+      registry.softDelete(t, 2);
+    }
+    // Whether the version it follows is live or not.
+    registry.softDelete("gone", 3);
+    for (String t : List.of("live", "gone")) {
+      assertThatThrownBy(() -> registry.alter(t, new AddAttribute("b", "INT")))
+          .isInstanceOf(TypeRefusedException.class)
+          .hasMessageStartingWith("Type " + t + " cannot be changed so: it is incompatible "
+              + "with version 2 of type " + t + ", whose records it reads, at "
+              + "BACKWARD_TRANSITIVE compatibility: ");
+      assertThat(TypeAlter.nextVersion(registry, t)).isEqualTo(4);
+    }
+    // At a level that is not transitive only the version it follows counts.
+    registry.alter("plain", new AddAttribute("b", "INT"));
+    assertThat(version("plain")).isEqualTo(4);
+  }
+
+  // An attribute renamed to the name it has is as it was, and keeps the name it had before.
+  @Test
+  void anAttributeRenamedToItsOwnNameIsAsItWas() {
+    create("same", SchemaType.AVRO, "(a INT, b STRING)");
+    registry.alter("same", new RenameAttribute("b", "bb"), new RenameAttribute("bb", "bb"));
+    assertThat(registry.struct("same").getFields()).extracting(Schema.Field::getName)
+        .containsExactly("a", "bb");
+    assertThat(registry.struct("same").getFields().get(1).getAliases()).containsExactly("b");
+
+    assertThat(registry.alter("same", new RenameAttribute("bb", "bb")).edited()).isNull();
+    assertThat(version("same")).isEqualTo(2);
+  }
+
+  // A new version no schema of its format can be made of is refused with the reason, not left
+  // to the registry with the checks of it skipped.
+  @Test
+  void aVersionNoSchemaCanBeMadeOfIsRefused() {
+    create("un", SchemaType.AVRO, "(a INT)");
+    assertThatThrownBy(() -> registry.alter("un", new AddAttribute("a-b", "INT")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageStartingWith("Type un cannot be changed so: no AVRO schema can be made of "
+            + "it: ");
+    assertThat(version("un")).isEqualTo(1);
   }
 }
