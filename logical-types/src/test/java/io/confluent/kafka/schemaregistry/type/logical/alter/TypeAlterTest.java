@@ -438,6 +438,92 @@ class TypeAlterTest {
     assertThat(entry("kd", "mp")).isEqualTo("x=1 y=2 z=3 v=6 value=4");
   }
 
+  // A type that referred to itself, or to one that refers to it, would lose its own definition.
+  @ParameterizedTest
+  @EnumSource(SchemaType.class)
+  void aTypeRefersToNoTypeThatLeadsBackToIt(SchemaType format) {
+    create("self", format, "(id INT NOT NULL)");
+    assertThatThrownBy(() -> registry.alter("self", new AddAttribute("next", "self")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessage("Type self cannot refer to itself");
+
+    create("b", format, "(id INT NOT NULL)");
+    create("a", format, "(id INT NOT NULL, b b)");
+    create("c", format, "(id INT NOT NULL, a a)");
+    assertThatThrownBy(() -> registry.alter("b", new AddAttribute("a", "a")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessage("Type b cannot refer to type a, which refers to b");
+    // Through another type, too.
+    assertThatThrownBy(() -> registry.alter("b", new AddAttribute("c", "c")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessage("Type b cannot refer to type c, which refers to b");
+    assertThat(version("self")).isEqualTo(1);
+    assertThat(version("b")).isEqualTo(1);
+  }
+
+  // Protobuf takes an enum only with its first value numbered 0, and a value keeps its number.
+  @Test
+  void aProtobufEnumKeepsItsZeroValueFirst() {
+    create("z", SchemaType.PROTOBUF, "(id INT, c ENUM('R', 'G', 'B'))");
+    assertThatThrownBy(() -> registry.alter("z", new AlterAttributeType("c",
+        "ENUM('G', 'R', 'B')")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessage("A Protobuf enum's first value is the one numbered 0: list R first");
+    assertThatThrownBy(() -> registry.alter("z", new AlterAttributeType("c", "ENUM('B', 'G')")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessage("A Protobuf enum's first value is the one numbered 0: R, which is numbered "
+            + "0 in the data written so far, cannot be dropped");
+    assertThat(version("z")).isEqualTo(1);
+
+    registry.alter("z", new AlterAttributeType("c", "ENUM('R', 'B', 'G')"));
+    assertThat(registry.schema("z").canonicalString()).contains("R = 0;", "B = 2;", "G = 1;");
+  }
+
+  // A topic's key and value types share their constraints' names, whichever is altered.
+  @Test
+  void aTopicsKeyAndValueShareTheirConstraintNames() {
+    registry.create("t-key", "t_key", SchemaType.AVRO, BodyKind.STRUCT,
+        "(k INT, k2 INT, CONSTRAINT kk CHECK (k > 0))");
+    registry.create("t-value", "t_value", SchemaType.AVRO, BodyKind.STRUCT,
+        "(v INT, CONSTRAINT vv CHECK (v > 0))");
+    TypeAlter.Options columns = new TypeAlter.Options().columns(true);
+    assertThatThrownBy(() -> registry.alter("t-value", columns,
+        new AddConstraint(new Check("kk", "v < 9", null))))
+        .isInstanceOf(TypeRefusedException.class).hasMessageContaining("already exists");
+    assertThatThrownBy(() -> registry.alter("t-key", columns,
+        new AddConstraint(new Check("VV", "k < 9", null))))
+        .isInstanceOf(TypeRefusedException.class).hasMessageContaining("already exists");
+
+    // Types that are no topic's have their names to themselves.
+    registry.alter("t-key", new AddConstraint(new Check("vv", "k < 9", null)));
+    assertThat(registry.struct("t-key").getRules()).extracting(Rule::getName)
+        .containsExactly("kk", "vv");
+  }
+
+  // The text of an added attribute is one attribute's.
+  @Test
+  void anAddedAttributeIsOneAttribute() {
+    create("one", SchemaType.AVRO, "(a INT)");
+    for (String text : List.of("INT, c STRING", "INT) WITH ('owner' = 'zz'",
+        "INT, CHECK (b > 0)")) {
+      assertThatThrownBy(() -> registry.alter("one", new AddAttribute("b", text)))
+          .isInstanceOf(TypeRefusedException.class)
+          .hasMessage("Attribute b is given more than one attribute's type and clauses: "
+              + text);
+    }
+    assertThat(version("one")).isEqualTo(1);
+
+    registry.alter("one", new AddAttribute("b", "INT CHECK (b > 0) COMMENT 'its own'"));
+    assertThat(registry.struct("one").getFields()).extracting(Schema.Field::getName)
+        .containsExactly("a", "b");
+  }
+
+  @Test
+  void aToolsCheckIsGivenWhenItIsSet() {
+    assertThatThrownBy(() -> new TypeAlter.Options().check(null))
+        .isInstanceOf(NullPointerException.class);
+  }
+
   // Protobuf keeps the numbers 19000 to 19999 for itself, and refuses a schema that has one.
   @Test
   void aNewProtobufNumberSkipsTheOnesProtobufKeeps() {

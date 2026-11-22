@@ -96,7 +96,7 @@ public final class TypeAlter {
 
     /** The tool's own last check of the edited type, which refuses by throwing. */
     public Options check(Consumer<LogicalType> check) {
-      this.check = check;
+      this.check = Objects.requireNonNull(check, "check");
       return this;
     }
   }
@@ -478,8 +478,16 @@ public final class TypeAlter {
     }
     if (action instanceof AlterAction.AddAttribute) {
       AlterAction.AddAttribute a = (AlterAction.AddAttribute) action;
-      Field field = parse(aliases -> TypeScripts.fieldScript(a.name(), a.field(), aliases))
-          .getRootSchema().getFields().get(0);
+      Schema one = parse(aliases -> TypeScripts.fieldScript(a.name(), a.field(), aliases))
+          .getRootSchema();
+      // The text is one attribute's: none follows it after a comma, and no clause of a
+      // struct after a parenthesis that closes it.
+      if (one.getFields().size() != 1 || !one.getParams().isEmpty() || one.getDoc() != null
+          || !one.getTags().isEmpty() || !one.getRules().isEmpty()) {
+        throw new TypeRefusedException("Attribute " + a.name() + " is given more than one "
+            + "attribute's type and clauses: " + a.field());
+      }
+      Field field = one.getFields().get(0);
       List<Field> fields = new ArrayList<>(struct().getFields());
       int same = named(fields, a.name());
       if (same >= 0) {
@@ -1285,14 +1293,17 @@ public final class TypeAlter {
   // the CREATE TOPIC that made them.
   private Set<String> constraintNames(Schema struct) {
     Set<String> names = Constraints.names(struct);
-    if (columns && subject.endsWith(VALUE_SUFFIX)) {
-      SchemaMetadata key = lookup.latest(subject.substring(0,
-          subject.length() - VALUE_SUFFIX.length()) + KEY_SUFFIX);
-      if (key != null) {
-        Schema keyRoot = lookup.logicalType(key.getSubject(), key).getRootSchema();
-        if (keyRoot.getType() == Schema.Type.STRUCT) {
-          names.addAll(Constraints.names(keyRoot));
-        }
+    String other = !columns ? null
+        : subject.endsWith(VALUE_SUFFIX)
+          ? subject.substring(0, subject.length() - VALUE_SUFFIX.length()) + KEY_SUFFIX
+        : subject.endsWith(KEY_SUFFIX)
+          ? subject.substring(0, subject.length() - KEY_SUFFIX.length()) + VALUE_SUFFIX
+        : null;
+    SchemaMetadata md = other == null ? null : lookup.latest(other);
+    if (md != null) {
+      Schema otherRoot = targetOf(lookup.logicalType(other, md));
+      if (otherRoot != null && otherRoot.getType() == Schema.Type.STRUCT) {
+        names.addAll(Constraints.names(otherRoot));
       }
     }
     return names;
@@ -1886,6 +1897,17 @@ public final class TypeAlter {
           }
           values.add(new EnumValue(v.getSymbol(), v.getDoc(), params));
         }
+        // Protobuf takes an enum only with its first value numbered 0.
+        if (!values.isEmpty() && enumNumber(values.get(0)) != 0) {
+          String zero = values.stream().filter(v -> enumNumber(v) == 0)
+              .map(EnumValue::getSymbol).findFirst().orElse(null);
+          String was = symbols.get(0);
+          throw new TypeRefusedException("A Protobuf enum's first value is the one numbered "
+              + "0: " + (zero != null ? "list " + zero + " first"
+              : was != null ? was + ", which is numbered 0 in the data written so far, "
+                + "cannot be dropped"
+              : values.get(0).getSymbol() + " is numbered " + enumNumber(values.get(0))));
+        }
         result = Schema.createEnum(values);
         break;
       }
@@ -1924,6 +1946,10 @@ public final class TypeAlter {
           + was.number() + " would not be read: it takes the lowest number the branches of the "
           + "union beside it leave free, so a branch numbered below it cannot be dropped");
     }
+  }
+
+  private static int enumNumber(EnumValue value) {
+    return Integer.parseInt(value.getParams().get(Schema.PROTOBUF_ENUM_NUMBER).toString());
   }
 
   // A union part of an entry is a oneof of the entry itself, its members numbered among its own.

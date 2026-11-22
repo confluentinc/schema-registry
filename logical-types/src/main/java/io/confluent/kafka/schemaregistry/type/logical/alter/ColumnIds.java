@@ -449,7 +449,7 @@ final class ColumnIds {
             new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(subject,
               request), lt.getResolvedReferences()))
           .orElse(null);
-    } catch (ValidationException e) {
+    } catch (RuntimeException e) {
       return null;
     }
   }
@@ -676,7 +676,7 @@ final class ColumnIds {
   private static LogicalType logicalType(String refused, ParsedSchema schema) {
     try {
       return ProvenanceHistory.logicalTypeOf(schema);
-    } catch (ValidationException e) {
+    } catch (RuntimeException e) {
       throw new TypeRefusedException(refused + ": Schema Registry's provenance cannot read one "
           + "of its versions: " + e.getMessage(), e);
     }

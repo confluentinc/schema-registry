@@ -70,8 +70,13 @@ public final class TypeReferences {
     Map<String, String> resolved = new LinkedHashMap<>();
     // A JSON $ref names one document: a name two types would take is refused.
     Map<String, String> named = format == SchemaType.JSON ? new HashMap<>() : null;
+    // The type itself, as a reference would name it; null when it has no subject yet.
+    String self = referrer == null ? null : referenced(referrer, referrer);
     for (String name : lt.getExternalTypes()) {
       String subject = referenced(referrer, name);
+      if (subject.equals(self)) {
+        throw new TypeRefusedException("Type " + self + " cannot refer to itself");
+      }
       SchemaMetadata md = lookup.latest(subject);
       if (md == null) {
         throw new TypeRefusedException("Unknown type " + subject);
@@ -86,7 +91,12 @@ public final class TypeReferences {
           : stored != null && nameable(stored) ? stored : jsonReferenceName(name);
       references.add(new SchemaReference(refName, name, md.getVersion()));
       requireOneSubject(named, refName, subject);
-      collectReferences(lookup, subject, md.getReferences(), resolved, named);
+      try {
+        collectReferences(lookup, subject, md.getReferences(), resolved, named, self);
+      } catch (RefersBack e) {
+        throw new TypeRefusedException("Type " + self + " cannot refer to type " + subject
+            + ", which refers to " + self);
+      }
       resolved.put(refName, md.getSchema());
       if (format == SchemaType.JSON) {
         if (!refName.equals(name)) {
@@ -132,7 +142,7 @@ public final class TypeReferences {
   public static Map<String, String> resolve(TypeLookup lookup, String referrer,
       List<SchemaReference> references) {
     Map<String, String> resolved = new LinkedHashMap<>();
-    collectReferences(lookup, referrer, references, resolved, null);
+    collectReferences(lookup, referrer, references, resolved, null, null);
     return resolved;
   }
 
@@ -166,11 +176,15 @@ public final class TypeReferences {
   }
 
   // Each schema after those it refers to, which is the order the schema parsers read them in.
+  // One that is self, the type these are collected for, would make it refer to itself.
   private static void collectReferences(TypeLookup lookup, String referrer,
       List<SchemaReference> references, Map<String, String> resolved,
-      Map<String, String> named) {
+      Map<String, String> named, String self) {
     for (SchemaReference ref : references) {
       String subject = referenced(referrer, ref.getSubject());
+      if (subject.equals(self)) {
+        throw new RefersBack();
+      }
       requireOneSubject(named, ref.getName(), subject);
       if (resolved.containsKey(ref.getName())) {
         continue;
@@ -181,8 +195,15 @@ public final class TypeReferences {
         throw new TypeRefusedException("Could not resolve reference " + ref.getName()
             + ": type " + subject + " has no version " + ref.getVersion());
       }
-      collectReferences(lookup, subject, md.getReferences(), resolved, named);
+      collectReferences(lookup, subject, md.getReferences(), resolved, named, self);
       resolved.put(ref.getName(), md.getSchema());
+    }
+  }
+
+  // A type named leads back, through its references, to the type that names it.
+  private static final class RefersBack extends RuntimeException {
+    RefersBack() {
+      super(null, null, false, false);
     }
   }
 
