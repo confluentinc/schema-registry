@@ -138,6 +138,33 @@ class TypeReferencesTest {
         .isInstanceOf(IllegalStateException.class).hasMessage("The registry cannot be reached");
   }
 
+  // A schema holds one version of a name. The registry's resolver keeps the first it meets,
+  // and what is checked here is what it will register.
+  @Test
+  void aNameKeepsTheFirstVersionBoundToIt() {
+    registry.create("point", SchemaType.AVRO, BodyKind.STRUCT, "(x INT)");
+    registry.create("address", SchemaType.AVRO, BodyKind.STRUCT, "(city STRING, at point)");
+    registry.create("point", SchemaType.AVRO, BodyKind.STRUCT, "(x INT, y INT)");
+    String v1 = registry.version("point", 1).getSchema();
+    String v2 = registry.version("point", 2).getSchema();
+
+    // address refers to point's first version, and is named first.
+    LogicalType first = TypeReferences.parse(registry, SchemaType.AVRO,
+        aliases -> TypeScripts.createScript("t", BodyKind.STRUCT, "(a address, p point)",
+            Map.of(), aliases), "t", Map.of());
+    assertThat(first.getResolvedReferences().get("point")).isEqualTo(v1);
+    assertThat(first.getResolvedReferences()).isEqualTo(
+        TypeReferences.resolve(registry, "t", first.getReferences()));
+
+    // point is named first, at its latest version.
+    LogicalType second = TypeReferences.parse(registry, SchemaType.AVRO,
+        aliases -> TypeScripts.createScript("t", BodyKind.STRUCT, "(p point, a address)",
+            Map.of(), aliases), "t", Map.of());
+    assertThat(second.getResolvedReferences().get("point")).isEqualTo(v2);
+    assertThat(second.getResolvedReferences()).isEqualTo(
+        TypeReferences.resolve(registry, "t", second.getReferences()));
+  }
+
   @Test
   void anUnknownTypeOrOneOfAnotherFormatIsRefused() {
     assertThatThrownBy(() -> registry.create("order", SchemaType.AVRO, BodyKind.STRUCT,

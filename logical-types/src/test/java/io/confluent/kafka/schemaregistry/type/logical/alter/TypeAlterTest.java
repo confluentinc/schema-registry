@@ -479,6 +479,79 @@ class TypeAlterTest {
     assertThat(registry.schema("z").canonicalString()).contains("R = 0;", "B = 2;", "G = 1;");
   }
 
+  // A number given to one new value is not taken by another, given or not.
+  @Test
+  void newEnumValuesAreNumberedApart() {
+    create("en", SchemaType.PROTOBUF, "(id INT, c ENUM('RED', 'GREEN'))");
+    registry.alter("en", new AlterAttributeType("c",
+        "ENUM('RED', 'GREEN', 'BLUE' WITH ('protobuf.enum.number' = '2'), 'YELLOW')"));
+    assertThat(registry.schema("en").canonicalString())
+        .contains("BLUE = 2;", "YELLOW = 3;").doesNotContain("allow_alias");
+
+    assertThatThrownBy(() -> registry.alter("en", new AlterAttributeType("c", "ENUM('RED', "
+        + "'GREEN', 'BLUE', 'YELLOW', 'A' WITH ('protobuf.enum.number' = '9'), "
+        + "'B' WITH ('protobuf.enum.number' = '9'))")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessage("Values A and B cannot both be numbered 9: they would be one value in "
+            + "the data");
+  }
+
+  // A field inside an attribute keeps the default Avro reads earlier records by, as an
+  // attribute does, when its struct is given anew without one.
+  @Test
+  void aNestedFieldKeepsItsDefaultThroughARetype() {
+    create("nd", SchemaType.AVRO, "(id INT, s STRUCT<y INT>)");
+    registry.alter("nd", new AlterAttributeType("s",
+        "STRUCT<y INT, x INT NOT NULL DEFAULT 5>"));
+    registry.alter("nd", new AlterAttributeType("s", "STRUCT<y INT, x BIGINT NOT NULL>"));
+    assertThat(registry.schema("nd").canonicalString())
+        .contains("{\"name\":\"x\",\"type\":\"long\",\"default\":5}");
+    // So a record written before x was is still read.
+    assertThat(registry.schema("nd").isBackwardCompatible(
+        registry.parse(registry.version("nd", 1)))).isEmpty();
+
+    // A default the new text gives is the one it has.
+    registry.alter("nd", new AlterAttributeType("s",
+        "STRUCT<y INT, x BIGINT NOT NULL DEFAULT 7>"));
+    assertThat(registry.schema("nd").canonicalString())
+        .contains("{\"name\":\"x\",\"type\":\"long\",\"default\":7}");
+    // One that the new type could not read is refused.
+    assertThatThrownBy(() -> registry.alter("nd", new AlterAttributeType("s",
+        "STRUCT<y INT, x BOOLEAN NOT NULL>")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageStartingWith("Attribute x's default 7 cannot be read as BOOLEAN");
+  }
+
+  // A Protobuf schema written by hand may have what the logical type an ALTER edits does not
+  // carry. Rewriting it would lose that, so it is refused.
+  @Test
+  void aProtobufSchemaAnAlterCouldNotKeepIsRefused() throws Exception {
+    registry.client.register("res", new ProtobufSchema("syntax = \"proto3\";\n"
+        + "message R { reserved 3, 4; reserved \"old\"; int32 a = 1; int32 b = 2; }"));
+    assertThatThrownBy(() -> registry.alter("res", new AddAttribute("c", "INT")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessage("Type res cannot be altered: it reserves field numbers or names, which "
+            + "would be dropped, and a new field could then take one. Register its new "
+            + "version as a Protobuf schema");
+
+    registry.client.register("two", new ProtobufSchema("syntax = \"proto2\";\n"
+        + "message T { required int32 a = 1; optional int32 b = 2 [default = 7]; }"));
+    assertThatThrownBy(() -> registry.alter("two", new AddAttribute("c", "INT")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageStartingWith("Type two cannot be altered: it is not a proto3 file");
+    assertThat(version("res")).isEqualTo(1);
+    assertThat(version("two")).isEqualTo(1);
+    // A statement that makes no new version loses nothing.
+    assertThat(registry.alter("res", new SetWith(Map.of("compatibility.policy", "STRICT")))
+        .edited()).isNull();
+
+    // One the logical type carries whole is altered as any other.
+    registry.client.register("plain", new ProtobufSchema("syntax = \"proto3\";\n"
+        + "message P { int32 a = 1; int32 b = 2; }"));
+    registry.alter("plain", new AddAttribute("c", "INT"));
+    assertThat(numbers(message("plain"))).isEqualTo("a=1 b=2 c=3");
+  }
+
   // A topic's key and value types share their constraints' names, whichever is altered.
   @Test
   void aTopicsKeyAndValueShareTheirConstraintNames() {

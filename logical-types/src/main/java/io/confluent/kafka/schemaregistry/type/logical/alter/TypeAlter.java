@@ -16,6 +16,9 @@
 
 package io.confluent.kafka.schemaregistry.type.logical.alter;
 
+import com.google.protobuf.DescriptorProtos.DescriptorProto;
+import com.google.protobuf.DescriptorProtos.EnumDescriptorProto;
+import com.google.protobuf.DescriptorProtos.FileDescriptorProto;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.CompatibilityPolicy;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
@@ -24,6 +27,7 @@ import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.Rule;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
@@ -300,7 +304,7 @@ public final class TypeAlter {
     Schema old = targetOf(lookup.logicalType(subject, md));
     root = lt.getRootSchema();
     namedTypes.putAll(lt.getNamedTypes());
-    setTarget(withNullDefaults(old, target()));
+    setTarget(withDefaults(old, target()));
     return new LogicalType(lt.getName(), lt.getNamespace(), root, namedTypes,
         lt.getExternalTypes(), lt.getExternalImports(), lt.getReferences(),
         lt.getResolvedReferences(), lt.getDefaultValues());
@@ -398,6 +402,9 @@ public final class TypeAlter {
 
     LogicalType edited = null;
     if (changesSchema) {
+      if (format == SchemaType.PROTOBUF) {
+        refuseUncarried(md);
+      }
       dropStaleAliases();
       recompileRules();
       if (format == SchemaType.JSON) {
@@ -416,6 +423,44 @@ public final class TypeAlter {
       check.accept(edited);
     }
     return new Result(format, md, version, edited, policy);
+  }
+
+  // A new version is written from the logical type, which carries neither what only a proto2
+  // file has, such as required fields and defaults, nor the numbers and names a message or
+  // enum reserves. The first would be lost, and the second free for a new field to take.
+  private void refuseUncarried(SchemaMetadata md) {
+    ParsedSchema schema = lookup.parse(md);
+    if (!(schema instanceof ProtobufSchema)) {
+      return;
+    }
+    FileDescriptorProto file = ((ProtobufSchema) schema).toDescriptor().getFile().toProto();
+    String lost = !"proto3".equals(file.getSyntax())
+        ? "it is not a proto3 file, and would be registered as one, without its required "
+          + "fields and defaults"
+        : reserves(file.getMessageTypeList(), file.getEnumTypeList())
+          ? "it reserves field numbers or names, which would be dropped, and a new field "
+            + "could then take one"
+        : null;
+    if (lost != null) {
+      throw new TypeRefusedException("Type " + subject + " cannot be altered: " + lost
+          + ". Register its new version as a Protobuf schema");
+    }
+  }
+
+  private static boolean reserves(List<DescriptorProto> messages,
+      List<EnumDescriptorProto> enums) {
+    for (EnumDescriptorProto e : enums) {
+      if (e.getReservedRangeCount() > 0 || e.getReservedNameCount() > 0) {
+        return true;
+      }
+    }
+    for (DescriptorProto m : messages) {
+      if (m.getReservedRangeCount() > 0 || m.getReservedNameCount() > 0
+          || reserves(m.getNestedTypeList(), m.getEnumTypeList())) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
@@ -618,7 +663,7 @@ public final class TypeAlter {
         params.keySet().removeIf(Schema::isTypeNameParam);
       }
       if (format == SchemaType.AVRO) {
-        type = withNullDefaults(f.getSchema(), type);
+        type = withDefaults(f.getSchema(), type);
       }
       if (format == SchemaType.PROTOBUF) {
         Messages root = new Messages(current, versions);
@@ -1878,6 +1923,20 @@ public final class TypeAlter {
         // had is kept, and one a value had is no other's.
         Map<Integer, String> symbols = new HashMap<>();
         numbers.forEach((symbol, n) -> symbols.putIfAbsent(n, symbol));
+        // A number given is no other value's to be given, nor a new value's to take.
+        Map<Integer, String> givenTo = new HashMap<>();
+        for (EnumValue v : type.getEnumValues()) {
+          Object given = v.getParams().get(Schema.PROTOBUF_ENUM_NUMBER);
+          if (given != null) {
+            String same = givenTo.putIfAbsent(Integer.parseInt(given.toString()),
+                v.getSymbol());
+            if (same != null) {
+              throw new TypeRefusedException("Values " + same + " and " + v.getSymbol()
+                  + " cannot both be numbered " + given + ": they would be one value in "
+                  + "the data");
+            }
+          }
+        }
         List<EnumValue> values = new ArrayList<>();
         for (EnumValue v : type.getEnumValues()) {
           Map<String, Object> params = new LinkedHashMap<>(v.getParams());
@@ -1892,6 +1951,9 @@ public final class TypeAlter {
                   : "that is the number of value " + other) + " in the data written so far");
             }
           } else {
+            while (had == null && givenTo.containsKey(unused)) {
+              unused++;
+            }
             params.put(Schema.PROTOBUF_ENUM_NUMBER,
                 String.valueOf(had != null ? had : unused++));
           }
@@ -1973,11 +2035,13 @@ public final class TypeAlter {
   }
 
   /**
-   * A type given anew, in Avro, with a null default for each nullable field it adds to a struct
-   * that was already there, as an added attribute gets: Avro reads data without the field only
-   * by its default. Fields match by name, union branches by branch name.
+   * A type given anew, in Avro, with the defaults Avro reads earlier data by. A nullable field
+   * it adds to a struct that was already there gets a null default, as an added attribute
+   * does. A field it keeps without giving it a default keeps the one it had, read under its
+   * new type, as an attribute whose type changes does. Fields match by name, union branches
+   * by branch name.
    */
-  private static Schema withNullDefaults(Schema old, Schema type) {
+  private static Schema withDefaults(Schema old, Schema type) {
     if (old == null || old.getType() != type.getType()) {
       return type;
     }
@@ -1988,8 +2052,7 @@ public final class TypeAlter {
         for (Field f : type.getFields()) {
           Field was = old.getField(f.getName());
           if (was != null) {
-            fields.add(copy(f, f.getName(),
-                withNullDefaults(was.getSchema(), f.getSchema()), f.getParams()));
+            fields.add(defaulted(f, was, withDefaults(was.getSchema(), f.getSchema())));
           } else if (!f.hasDefaultValue() && f.getSchema().isNullable()) {
             fields.add(new Field(f.getName(), f.getSchema(), f.getPosition(), null,
                 true, f.getDoc(), f.getTags(), f.getParams(), f.getRules()));
@@ -2005,7 +2068,7 @@ public final class TypeAlter {
         for (UnionBranch b : type.getBranches()) {
           UnionBranch was = branch(old, b.getName());
           branches.add(was == null ? b : new UnionBranch(b.getName(),
-              withNullDefaults(was.getSchema(), b.getSchema()), b.getDoc(),
+              withDefaults(was.getSchema(), b.getSchema()), b.getDoc(),
               b.getParams()));
         }
         result = Schema.createUnion(branches);
@@ -2013,15 +2076,15 @@ public final class TypeAlter {
       }
       case ARRAY:
         result = Schema.createArray(
-            withNullDefaults(old.getElementType(), type.getElementType()));
+            withDefaults(old.getElementType(), type.getElementType()));
         break;
       case MULTISET:
         result = Schema.createMultiset(
-            withNullDefaults(old.getElementType(), type.getElementType()));
+            withDefaults(old.getElementType(), type.getElementType()));
         break;
       case MAP:
-        result = Schema.createMap(withNullDefaults(old.getKeyType(), type.getKeyType()),
-            withNullDefaults(old.getValueType(), type.getValueType()));
+        result = Schema.createMap(withDefaults(old.getKeyType(), type.getKeyType()),
+            withDefaults(old.getValueType(), type.getValueType()));
         break;
       default:
         return type;
@@ -2109,6 +2172,23 @@ public final class TypeAlter {
       }
     }
     return -1;
+  }
+
+  // A field of a struct given anew, of the type given, with the default the field it
+  // continues had, read as Avro reads it under the new type, unless it is given one of its own.
+  private static Field defaulted(Field f, Field was, Schema type) {
+    if (f.hasDefaultValue() || !was.hasDefaultValue()) {
+      return copy(f, f.getName(), type, f.getParams());
+    }
+    if (was.getDefaultValue() == null) {
+      // A null default does not apply once the field is NOT NULL.
+      return type.isNullable() ? new Field(f.getName(), type, f.getPosition(), null, true,
+          was.hasDerivedDefault(), f.getDoc(), f.getTags(), f.getParams(), f.getRules())
+          : copy(f, f.getName(), type, f.getParams());
+    }
+    return new Field(f.getName(), type, f.getPosition(),
+        AvroDefaults.converted(f.getName(), was.getSchema(), type, was.getDefaultValue()),
+        true, was.hasDerivedDefault(), f.getDoc(), f.getTags(), f.getParams(), f.getRules());
   }
 
   // A union with the given params added to its branches, by branch name.

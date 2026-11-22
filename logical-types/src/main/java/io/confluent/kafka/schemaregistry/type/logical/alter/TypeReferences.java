@@ -91,13 +91,17 @@ public final class TypeReferences {
           : stored != null && nameable(stored) ? stored : jsonReferenceName(name);
       references.add(new SchemaReference(refName, name, md.getVersion()));
       requireOneSubject(named, refName, subject);
-      try {
-        collectReferences(lookup, subject, md.getReferences(), resolved, named, self);
-      } catch (RefersBack e) {
-        throw new TypeRefusedException("Type " + self + " cannot refer to type " + subject
-            + ", which refers to " + self);
+      // A name bound already, as one a type named before it refers to, keeps that binding,
+      // as the registry's resolver has it: a schema holds one version of a name.
+      if (!resolved.containsKey(refName)) {
+        try {
+          collectReferences(lookup, subject, md.getReferences(), resolved, named, self);
+        } catch (RefersBack e) {
+          throw new TypeRefusedException("Type " + self + " cannot refer to type " + subject
+              + ", which refers to " + self);
+        }
+        resolved.put(refName, md.getSchema());
       }
-      resolved.put(refName, md.getSchema());
       if (format == SchemaType.JSON) {
         if (!refName.equals(name)) {
           aliases.put(name, refName);

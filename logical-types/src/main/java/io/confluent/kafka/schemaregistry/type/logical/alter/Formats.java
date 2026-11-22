@@ -169,20 +169,36 @@ public final class Formats {
   // DOUBLE both are numbers: a value of either would match both, which its oneOf refuses.
   private static void refuseOverlappingBranches(Schema union) {
     Map<String, String> kinds = new HashMap<>();
+    String first = null;
+    String variant = null;
     for (UnionBranch b : union.getBranches()) {
       String kind = jsonKind(b.getSchema());
-      if (kind == null) {
-        continue;
+      // A VARIANT is written as any JSON value, so a value of any other branch, a struct or
+      // a collection as much as a scalar, matches it too.
+      String other = "any".equals(kind) ? first : variant;
+      if (other != null) {
+        throw overlapping(other, b.getName());
       }
-      for (Map.Entry<String, String> e : kinds.entrySet()) {
-        if (kind.equals(e.getValue()) || "any".equals(kind) || "any".equals(e.getValue())) {
-          throw new TypeRefusedException("A UNION in a JSON type cannot have branches "
-              + e.getKey() + " and " + b.getName() + ", which are written as one JSON "
-              + "type: a value of either would match both");
+      if (first == null) {
+        first = b.getName();
+      }
+      if ("any".equals(kind)) {
+        variant = b.getName();
+      } else if (kind != null) {
+        for (Map.Entry<String, String> e : kinds.entrySet()) {
+          if (kind.equals(e.getValue())) {
+            throw overlapping(e.getKey(), b.getName());
+          }
         }
+        kinds.put(b.getName(), kind);
       }
-      kinds.put(b.getName(), kind);
     }
+  }
+
+  private static TypeRefusedException overlapping(String one, String other) {
+    return new TypeRefusedException("A UNION in a JSON type cannot have branches " + one
+        + " and " + other + ", which are written as one JSON type: a value of either would "
+        + "match both");
   }
 
   // The JSON type a value of the type is written as, if a scalar or any; null otherwise.

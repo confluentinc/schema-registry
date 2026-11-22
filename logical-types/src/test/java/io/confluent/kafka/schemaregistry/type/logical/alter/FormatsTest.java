@@ -79,6 +79,21 @@ class FormatsTest {
     }
   }
 
+  // A VARIANT is written as any JSON value, so a value of any branch beside it matches both.
+  @Test
+  void aJsonUnionHasNoBranchBesideAVariant() {
+    for (String union : new String[] {"UNION(v VARIANT, s STRUCT<x INT>)",
+        "UNION(a ARRAY<INT>, v VARIANT)", "UNION(v VARIANT, n INT)"}) {
+      assertThatThrownBy(() -> Formats.refuseUnwritable(SchemaType.JSON,
+          struct("(u " + union + ")")))
+          .isInstanceOf(TypeRefusedException.class)
+          .hasMessageContaining("which are written as one JSON type");
+      Formats.refuseUnwritable(SchemaType.AVRO, struct("(u " + union + ")"));
+    }
+    Formats.refuseUnwritable(SchemaType.JSON, struct("(u UNION(v VARIANT))"));
+    Formats.refuseUnwritable(SchemaType.JSON, struct("(u UNION(s STRUCT<x INT>, n INT))"));
+  }
+
   @Test
   void aJsonUnionsBranchesAreWrittenAsDifferentJsonTypes() {
     Formats.refuseUnwritable(SchemaType.JSON, struct("(u UNION(a INT, b STRING))"));
