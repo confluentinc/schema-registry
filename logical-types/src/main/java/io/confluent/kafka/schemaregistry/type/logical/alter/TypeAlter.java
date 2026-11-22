@@ -1579,9 +1579,29 @@ public final class TypeAlter {
           return of(type, namedTypes);
         case UNION:
           return of(entry(new Field(VALUE, type, 0)), namedTypes);
-        case MAP:
-          return of(entry(new Field("key", type.getKeyType(), 0),
+        case MAP: {
+          // No logical type records the number of a key or value that is no union, once the
+          // other's branches record theirs: the writer gives it the lowest one they leave
+          // free.
+          Message entry = of(entry(new Field("key", type.getKeyType(), 0),
               new Field(VALUE, type.getValueType(), 1)), namedTypes);
+          Set<Integer> taken = entry.members().stream().map(Member::number)
+              .collect(Collectors.toSet());
+          List<Member> members = new ArrayList<>();
+          int free = 1;
+          for (Member m : entry.members()) {
+            if (m.number() > 0) {
+              members.add(m);
+              continue;
+            }
+            while (taken.contains(free)) {
+              free++;
+            }
+            taken.add(free);
+            members.add(new Member(m.name(), free, m.type()));
+          }
+          return new Message(members, namedTypes);
+        }
         case MULTISET: {
           // No logical type records the count's number: the writer gives it the lowest
           // one the key's members leave free.
@@ -1786,20 +1806,42 @@ public final class TypeAlter {
             old != null && old.getType() == Schema.Type.ARRAY ? old.getElementType() : null,
             at, null));
         break;
-      case MULTISET:
+      case MULTISET: {
         // Entries of the element, as the key, and its count.
+        boolean wasMultiset = old != null && old.getType() == Schema.Type.MULTISET;
         result = Schema.createMultiset(renumbered(type.getElementType(),
-            old != null && old.getType() == Schema.Type.MULTISET
-              ? old.getElementType() : null, entryPart(at, type.getElementType(), "key"),
-            null));
+            wasMultiset ? old.getElementType() : null,
+            entryPart(at, type.getElementType(), "key"), null));
+        if (wasMultiset) {
+          Message now = entryOf(result);
+          refuseMovedEntryField("multiset's count", last(at.current()), last(now));
+          if (!isUnion(old.getElementType()) && !isUnion(type.getElementType())) {
+            refuseMovedEntryField("multiset's element", first(at.current()), first(now));
+          }
+        }
         break;
+      }
       case MAP: {
         boolean wasMap = old != null && old.getType() == Schema.Type.MAP;
+        // A key and a value that are unions are oneofs of the one entry message, numbered
+        // by one counter.
+        int[] entry = {at.maxUsed() + 1};
         result = Schema.createMap(
             renumbered(type.getKeyType(), wasMap ? old.getKeyType() : null,
-              entryPart(at, type.getKeyType(), "key"), null),
+              entryPart(at, type.getKeyType(), "key"),
+              isUnion(type.getKeyType()) ? entry : null),
             renumbered(type.getValueType(), wasMap ? old.getValueType() : null,
-              entryPart(at, type.getValueType(), VALUE), null));
+              entryPart(at, type.getValueType(), VALUE),
+              isUnion(type.getValueType()) ? entry : null));
+        if (wasMap) {
+          Message now = entryOf(result);
+          if (!isUnion(old.getKeyType()) && !isUnion(type.getKeyType())) {
+            refuseMovedEntryField("map's key", first(at.current()), first(now));
+          }
+          if (!isUnion(old.getValueType()) && !isUnion(type.getValueType())) {
+            refuseMovedEntryField("map's value", last(at.current()), last(now));
+          }
+        }
         break;
       }
       case ENUM: {
@@ -1848,6 +1890,37 @@ public final class TypeAlter {
         return type;
     }
     return copyMetadata(type, result).setParams(type.getParams());
+  }
+
+  // The entry message of a map or multiset, numbered as the writer will number it.
+  private Message entryOf(Schema mapOrMultiset) {
+    return new Message(List.of(), namedTypes).message(mapOrMultiset);
+  }
+
+  private static boolean isUnion(Schema type) {
+    return type.getType() == Schema.Type.UNION;
+  }
+
+  // An entry's key, when it is no union, is its first member; its value or count, its last.
+  private static Member first(Message entry) {
+    return entry == null || entry.members().isEmpty() ? null : entry.members().get(0);
+  }
+
+  private static Member last(Message entry) {
+    return entry == null || entry.members().isEmpty() ? null
+        : entry.members().get(entry.members().size() - 1);
+  }
+
+  // No logical type records the number of an entry's key, value or count that is no union:
+  // the writer gives it the lowest one the branches of a union beside it leave free. So a
+  // change that frees a lower number would move it, and its stored data would not be read.
+  private static void refuseMovedEntryField(String what, Member was, Member now) {
+    if (was != null && now != null && was.number() > 0 && now.number() != was.number()) {
+      throw new TypeRefusedException("A " + what + " would move from Protobuf field number "
+          + was.number() + " to " + now.number() + ", and what is stored under "
+          + was.number() + " would not be read: it takes the lowest number the branches of the "
+          + "union beside it leave free, so a branch numbered below it cannot be dropped");
+    }
   }
 
   // A union part of an entry is a oneof of the entry itself, its members numbered among its own.

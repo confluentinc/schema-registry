@@ -19,6 +19,8 @@ package io.confluent.kafka.schemaregistry.type.logical.alter;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.google.protobuf.Descriptors.Descriptor;
+import com.google.protobuf.Descriptors.FieldDescriptor;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
@@ -40,6 +42,7 @@ import io.confluent.kafka.schemaregistry.type.logical.alter.TypeScripts.BodyKind
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -54,6 +57,19 @@ class TypeAlterTest {
 
   private int version(String subject) {
     return registry.latest(subject).getVersion();
+  }
+
+  // The fields of the entry message of a Protobuf map or multiset attribute, as registered.
+  private String entry(String subject, String attribute) {
+    Descriptor d = ((ProtobufSchema) registry.schema(subject)).toDescriptor()
+        .findFieldByName(attribute).getMessageType();
+    // Through the messages the writer wraps a repeated entry in.
+    while (d.getFields().size() == 1
+        && d.getFields().get(0).getType() == FieldDescriptor.Type.MESSAGE) {
+      d = d.getFields().get(0).getMessageType();
+    }
+    return d.getFields().stream().map(f -> f.getName() + "=" + f.getNumber())
+        .collect(Collectors.joining(" "));
   }
 
   @Test
@@ -350,6 +366,68 @@ class TypeAlterTest {
         new SetWith(Map.of("compatibility.policy", "loose"))))
         .isInstanceOf(TypeRefusedException.class)
         .hasMessage("Unknown compatibility.policy 'loose': it is LOGICAL, STRICT or LENIENT");
+  }
+
+  // No logical type records the number of a map's key or value that is no union: the writer
+  // gives it the lowest one the other's branches leave free. A new branch is numbered above it.
+  @Test
+  void aMapsKeyOrValueKeepsItsNumberAsTheUnionBesideItGainsABranch() {
+    create("k", SchemaType.PROTOBUF, "(id INT, mp MAP<UNION(x INT, y STRING), STRING>)");
+    assertThat(entry("k", "mp")).isEqualTo("x=1 y=2 value=3");
+    registry.alter("k", new AlterAttributeType("mp",
+        "MAP<UNION(x INT, y STRING, z BIGINT), STRING>"));
+    assertThat(entry("k", "mp")).isEqualTo("x=1 y=2 z=4 value=3");
+
+    create("v", SchemaType.PROTOBUF, "(id INT, mp MAP<STRING, UNION(c INT, d STRING)>)");
+    assertThat(entry("v", "mp")).isEqualTo("c=2 d=3 key=1");
+    registry.alter("v", new AlterAttributeType("mp",
+        "MAP<STRING, UNION(c INT, d STRING, e BIGINT)>"));
+    assertThat(entry("v", "mp")).isEqualTo("c=2 d=3 e=4 key=1");
+  }
+
+  // A key and a value that are both unions are oneofs of one entry message.
+  @Test
+  void theUnionsOfAMapsKeyAndValueAreNumberedTogether() {
+    create("both", SchemaType.PROTOBUF,
+        "(id INT, mp MAP<UNION(a INT, b STRING), UNION(c INT, d STRING)>)");
+    assertThat(entry("both", "mp")).isEqualTo("a=1 b=2 c=3 d=4");
+    registry.alter("both", new AlterAttributeType("mp",
+        "MAP<UNION(a INT, b STRING, e BIGINT), UNION(c INT, d STRING, f BIGINT)>"));
+    assertThat(entry("both", "mp")).isEqualTo("a=1 b=2 e=5 c=3 d=4 f=6");
+  }
+
+  // Dropping a branch numbered below a map's value, or a multiset's count, would free a lower
+  // number for it, and the writer would move it there.
+  @Test
+  void aBranchBelowAMapsValueOrAMultisetsCountIsNotDropped() {
+    create("kd", SchemaType.PROTOBUF,
+        "(id INT, mp MAP<UNION(x INT, y STRING, z BIGINT), STRING>)");
+    assertThat(entry("kd", "mp")).isEqualTo("x=1 y=2 z=3 value=4");
+    assertThatThrownBy(() -> registry.alter("kd", new AlterAttributeType("mp",
+        "MAP<UNION(y STRING, z BIGINT), STRING>")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessage("A map's value would move from Protobuf field number 4 to 1, and what is "
+            + "stored under 4 would not be read: it takes the lowest number the branches of "
+            + "the union beside it leave free, so a branch numbered below it cannot be dropped");
+
+    create("ms", SchemaType.PROTOBUF,
+        "(id INT, mp MULTISET<UNION(x INT, y STRING, z BIGINT)>)");
+    assertThat(entry("ms", "mp")).isEqualTo("x=1 y=2 z=3 value=4");
+    assertThatThrownBy(() -> registry.alter("ms", new AlterAttributeType("mp",
+        "MULTISET<UNION(x INT, y STRING)>")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageStartingWith("A multiset's count would move from Protobuf field number 4 "
+            + "to 3,");
+    assertThat(version("kd")).isEqualTo(1);
+    assertThat(version("ms")).isEqualTo(1);
+
+    // A branch added since is numbered above the value, and can go.
+    registry.alter("kd", new AlterAttributeType("mp",
+        "MAP<UNION(x INT, y STRING, z BIGINT, w INT, v INT), STRING>"));
+    assertThat(entry("kd", "mp")).isEqualTo("x=1 y=2 z=3 w=5 v=6 value=4");
+    registry.alter("kd", new AlterAttributeType("mp",
+        "MAP<UNION(x INT, y STRING, z BIGINT, v INT), STRING>"));
+    assertThat(entry("kd", "mp")).isEqualTo("x=1 y=2 z=3 v=6 value=4");
   }
 
   // A field number, an alias or a pinned type name is how the format reads an attribute's data.
