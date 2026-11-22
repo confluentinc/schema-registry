@@ -23,6 +23,7 @@ import io.confluent.kafka.schemaregistry.SimpleParsedSchemaHolder;
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.Rule;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
@@ -82,8 +83,8 @@ public final class TypeAlter {
     }
 
     /**
-     * Asked with the name of a type the altered type would refer to: the refusal if it may not
-     * refer to other types, or null if it may. Not set, it may.
+     * Asked with the name of each type the altered type would refer to: the refusal if it may
+     * not refer to that type, or null if it may. Not set, it may refer to any.
      */
     public Options noReferences(Function<String, String> noReferences) {
       this.noReferences = noReferences;
@@ -124,7 +125,10 @@ public final class TypeAlter {
       return base;
     }
 
-    /** The number the new version takes; another by then means the type changed meanwhile. */
+    /**
+     * The number the new version takes; another by then means the type changed meanwhile. The
+     * request from {@link #request()} carries it, so that the registry refuses it then.
+     */
     public int version() {
       return version;
     }
@@ -137,6 +141,20 @@ public final class TypeAlter {
     /** The compatibility policy a SET WITH gives the subject, or null to leave it. */
     public String policy() {
       return policy;
+    }
+
+    /**
+     * The request that registers the new version, as logical types DDL, with its version, so
+     * that the registry refuses it if another version was registered meanwhile; null if the
+     * statement makes no new version.
+     */
+    public RegisterSchemaRequest request() {
+      if (edited == null) {
+        return null;
+      }
+      RegisterSchemaRequest request = Formats.request(format, edited);
+      request.setVersion(version);
+      return request;
     }
   }
 
@@ -460,8 +478,10 @@ public final class TypeAlter {
       Field field = parse(aliases -> TypeScripts.fieldScript(a.name(), a.field(), aliases))
           .getRootSchema().getFields().get(0);
       List<Field> fields = new ArrayList<>(struct().getFields());
-      if (find(fields, a.name()) >= 0) {
-        throw new TypeRefusedException("Type " + subject + " already has attribute " + a.name());
+      int same = named(fields, a.name());
+      if (same >= 0) {
+        throw new TypeRefusedException("Type " + subject + " already has attribute "
+            + fields.get(same).getName());
       }
       refuseDroppedName(a.name());
       Formats.refuseUnwritable(format, field);
@@ -519,8 +539,11 @@ public final class TypeAlter {
       if (i < 0) {
         throw new TypeRefusedException("Type " + subject + " has no attribute " + a.from());
       }
-      if (find(fields, a.to()) >= 0) {
-        throw new TypeRefusedException("Type " + subject + " already has attribute " + a.to());
+      // A column may take its own name in another case, as no other's.
+      int taken = named(fields, a.to());
+      if (taken >= 0 && taken != i) {
+        throw new TypeRefusedException("Type " + subject + " already has attribute "
+            + fields.get(taken).getName());
       }
       refuseDroppedName(a.to());
       Field f = fields.get(i);
@@ -696,6 +719,17 @@ public final class TypeAlter {
       AlterAction.SetAttributeWith a = (AlterAction.SetAttributeWith) action;
       Field f = field(a.name());
       Map<String, Object> params = new LinkedHashMap<>(f.getParams());
+      // An avro. or protobuf. property, such as a field number, an alias or a pinned type name,
+      // is how the format reads the attribute's existing data, which this package keeps.
+      for (Map.Entry<String, String> e : a.with().entrySet()) {
+        Object was = params.get(e.getKey());
+        if (Schema.isFormatNativeParam(e.getKey())
+            && (was == null || !was.toString().equals(e.getValue()))) {
+          throw new TypeRefusedException("Property " + e.getKey() + " of attribute "
+              + f.getName() + " cannot be set: it is how the " + format + " format reads the "
+              + "attribute's existing data");
+        }
+      }
       params.putAll(a.with());
       setField(copy(f, f.getName(), f.getSchema(), params));
       return true;
@@ -1122,9 +1156,11 @@ public final class TypeAlter {
       if (plain.getExternalTypes().isEmpty()) {
         return plain;
       }
-      String refusal = noReferences.apply(plain.getExternalTypes().iterator().next());
-      if (refusal != null) {
-        throw new TypeRefusedException(refusal);
+      for (String type : plain.getExternalTypes()) {
+        String refusal = noReferences.apply(type);
+        if (refusal != null) {
+          throw new TypeRefusedException(refusal);
+        }
       }
     }
     return TypeReferences.parse(lookup, format, builder, subject, names);
@@ -1782,13 +1818,26 @@ public final class TypeAlter {
             }
           }
         }
+        // A number given is refused where it would read stored values otherwise: one a value
+        // had is kept, and one a value had is no other's.
+        Map<Integer, String> symbols = new HashMap<>();
+        numbers.forEach((symbol, n) -> symbols.putIfAbsent(n, symbol));
         List<EnumValue> values = new ArrayList<>();
         for (EnumValue v : type.getEnumValues()) {
           Map<String, Object> params = new LinkedHashMap<>(v.getParams());
-          if (!params.containsKey(Schema.PROTOBUF_ENUM_NUMBER)) {
-            Integer n = numbers.get(v.getSymbol());
+          Integer had = numbers.get(v.getSymbol());
+          Object given = params.get(Schema.PROTOBUF_ENUM_NUMBER);
+          if (given != null) {
+            int n = Integer.parseInt(given.toString());
+            String other = symbols.get(n);
+            if (had != null && had != n || had == null && other != null) {
+              throw new TypeRefusedException("Value " + v.getSymbol() + " cannot be numbered "
+                  + n + ": " + (had != null ? "it is numbered " + had
+                  : "that is the number of value " + other) + " in the data written so far");
+            }
+          } else {
             params.put(Schema.PROTOBUF_ENUM_NUMBER,
-                String.valueOf(n != null ? n : unused++));
+                String.valueOf(had != null ? had : unused++));
           }
           values.add(new EnumValue(v.getSymbol(), v.getDoc(), params));
         }

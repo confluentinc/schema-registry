@@ -33,6 +33,7 @@ import io.confluent.kafka.schemaregistry.type.logical.alter.AlterAction.Check;
 import io.confluent.kafka.schemaregistry.type.logical.alter.AlterAction.DropAttribute;
 import io.confluent.kafka.schemaregistry.type.logical.alter.AlterAction.DropConstraint;
 import io.confluent.kafka.schemaregistry.type.logical.alter.AlterAction.RenameAttribute;
+import io.confluent.kafka.schemaregistry.type.logical.alter.AlterAction.SetAttributeWith;
 import io.confluent.kafka.schemaregistry.type.logical.alter.AlterAction.SetDataType;
 import io.confluent.kafka.schemaregistry.type.logical.alter.AlterAction.SetWith;
 import io.confluent.kafka.schemaregistry.type.logical.alter.TypeScripts.BodyKind;
@@ -256,6 +257,14 @@ class TypeAlterTest {
         .isInstanceOf(TypeRefusedException.class).hasMessage("Type addr cannot be used here");
     registry.alter("own", none, new AddAttribute("note", "STRING"));
 
+    // Asked of every type named, not only the first.
+    create("other", SchemaType.AVRO, "(n INT)");
+    TypeAlter.Options onlyAddr = new TypeAlter.Options()
+        .noReferences(type -> type.equals("addr") ? null : "Type " + type + " is refused");
+    assertThatThrownBy(() -> registry.alter("own", onlyAddr,
+        new AddAttribute("both", "STRUCT<x addr, y other>")))
+        .isInstanceOf(TypeRefusedException.class).hasMessage("Type other is refused");
+
     // Asked only when a type is named, and may allow it.
     registry.alter("own", new TypeAlter.Options().noReferences(type -> null),
         new AddAttribute("home", "addr"));
@@ -341,6 +350,81 @@ class TypeAlterTest {
         new SetWith(Map.of("compatibility.policy", "loose"))))
         .isInstanceOf(TypeRefusedException.class)
         .hasMessage("Unknown compatibility.policy 'loose': it is LOGICAL, STRICT or LENIENT");
+  }
+
+  // A field number, an alias or a pinned type name is how the format reads an attribute's data.
+  @Test
+  void anAttributesFormatNativePropertiesCannotBeChanged() {
+    create("p", SchemaType.PROTOBUF, "(a INT, b STRING)");
+    assertThatThrownBy(() -> registry.alter("p",
+        new SetAttributeWith("a", Map.of("protobuf.field.number", "3"))))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessage("Property protobuf.field.number of attribute a cannot be set: it is how the "
+            + "PROTOBUF format reads the attribute's existing data");
+    create("v", SchemaType.AVRO, "(a INT)");
+    assertThatThrownBy(() -> registry.alter("v",
+        new SetAttributeWith("a", Map.of("avro.aliases", "z"))))
+        .isInstanceOf(TypeRefusedException.class).hasMessageContaining("avro.aliases");
+    assertThat(version("p")).isEqualTo(1);
+    assertThat(version("v")).isEqualTo(1);
+
+    // Other properties are the type's to set.
+    registry.alter("v", new SetAttributeWith("a", Map.of("owner", "x")));
+    assertThat(registry.struct("v").getFields().get(0).getParams()).containsEntry("owner", "x");
+  }
+
+  // An enum value keeps the number it has had, and a number a value had is no other's.
+  @Test
+  void anEnumValueCannotBeGivenAnotherNumber() {
+    create("e", SchemaType.PROTOBUF, "(id INT, c ENUM('RED', 'GREEN'))");
+    assertThatThrownBy(() -> registry.alter("e", new AlterAttributeType("c",
+        "ENUM('RED', 'GREEN' WITH ('protobuf.enum.number' = '5'))")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessage("Value GREEN cannot be numbered 5: it is numbered 1 in the data written "
+            + "so far");
+    assertThatThrownBy(() -> registry.alter("e", new AlterAttributeType("c",
+        "ENUM('RED', 'BLUE' WITH ('protobuf.enum.number' = '1'))")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessage("Value BLUE cannot be numbered 1: that is the number of value GREEN in the "
+            + "data written so far");
+
+    // The number a value has, or one no value had, is accepted.
+    registry.alter("e", new AlterAttributeType("c", "ENUM('RED', "
+        + "'GREEN' WITH ('protobuf.enum.number' = '1'), 'BLUE' WITH ('protobuf.enum.number' = '7'))"));
+    assertThat(registry.schema("e").canonicalString()).contains("BLUE = 7;");
+  }
+
+  // A topic's columns are one name whatever their case.
+  @Test
+  void aColumnNameDifferingOnlyInCaseIsRefused() {
+    create("cols", SchemaType.AVRO, "(a INT, b INT)");
+    TypeAlter.Options columns = new TypeAlter.Options().columns(true);
+    assertThatThrownBy(() -> registry.alter("cols", columns, new AddAttribute("A", "INT")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessage("Type cols already has attribute a");
+    assertThatThrownBy(() -> registry.alter("cols", columns, new RenameAttribute("b", "A")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessage("Type cols already has attribute a");
+    assertThat(version("cols")).isEqualTo(1);
+
+    // A column may take its own name in another case; a type's attributes keep their case.
+    registry.alter("cols", columns, new RenameAttribute("a", "A"));
+    registry.alter("cols", new AddAttribute("B", "INT"));
+    assertThat(registry.struct("cols").getFields()).extracting(Schema.Field::getName)
+        .containsExactly("A", "b", "B");
+  }
+
+  // The registration carries the version, so the registry refuses it after another.
+  @Test
+  void theRequestCarriesTheVersionTheAlterTakes() {
+    create("rq", SchemaType.AVRO, "(a INT)");
+    TypeAlter.Result result = TypeAlter.alter(registry, "rq",
+        List.of(new AddAttribute("b", "INT")), new TypeAlter.Options());
+    assertThat(result.request().getVersion()).isEqualTo(2);
+    assertThat(result.request().getSchemaType()).isEqualTo("AVRO");
+    assertThat(TypeAlter.alter(registry, "rq", List.of(new SetWith(
+        Map.of("compatibility.policy", "LOGICAL"))), new TypeAlter.Options()).request())
+        .isNull();
   }
 
   // A change back to the live version's type would leave the soft-deleted version's records

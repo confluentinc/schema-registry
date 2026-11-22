@@ -108,9 +108,8 @@ final class TestRegistry implements TypeLookup {
         config.setCompatibilityPolicy(result.policy());
         client.updateConfig(subject, config);
       }
-      if (result.edited() != null) {
-        client.registerWithRequestResponse(subject,
-            Formats.request(result.format(), result.edited()), false);
+      if (result.request() != null) {
+        client.registerWithRequestResponse(subject, result.request(), false);
       }
     } catch (IOException | RestClientException e) {
       throw new IllegalStateException(e);
