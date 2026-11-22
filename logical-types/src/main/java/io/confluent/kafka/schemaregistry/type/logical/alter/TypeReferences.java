@@ -115,24 +115,29 @@ public final class TypeReferences {
     return TypeScripts.withReferences(lt, references, resolved);
   }
 
-  /** The names a reference may be known by in a referring type, or null if unknown. */
+  /**
+   * The names a reference may be known by in a referring type; null if they cannot be told,
+   * because the registry has no such version or its schema cannot be parsed. A lookup that
+   * fails is neither, and fails here as it does.
+   */
   public static Set<String> definedNames(TypeLookup lookup, String referrer,
       SchemaReference ref) {
+    SchemaMetadata md = lookup.version(referenced(referrer, ref.getSubject()),
+        ref.getVersion());
+    if (md == null) {
+      return null;
+    }
+    Set<String> names = new LinkedHashSet<>(List.of(ref.getName(), ref.getSubject()));
+    String fullName;
     try {
-      SchemaMetadata md = lookup.version(referenced(referrer, ref.getSubject()),
-          ref.getVersion());
-      if (md == null) {
-        return null;
-      }
-      Set<String> names = new LinkedHashSet<>(List.of(ref.getName(), ref.getSubject()));
-      String fullName = lookup.parse(md).name();
-      if (fullName != null) {
-        names.add(fullName);
-      }
-      return names;
+      fullName = lookup.parse(md).name();
     } catch (RuntimeException e) {
       return null;
     }
+    if (fullName != null) {
+      names.add(fullName);
+    }
+    return names;
   }
 
   /**

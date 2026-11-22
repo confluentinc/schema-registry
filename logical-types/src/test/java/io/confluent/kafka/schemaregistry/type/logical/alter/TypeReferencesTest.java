@@ -20,10 +20,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
 import io.confluent.kafka.schemaregistry.type.logical.alter.TypeScripts.BodyKind;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -84,6 +87,55 @@ class TypeReferencesTest {
         .containsExactly("addr", "com.acme.Address");
     assertThat(TypeReferences.definedNames(registry, "order",
         new SchemaReference("addr", "addr", 9))).isNull();
+  }
+
+  // A reference kept because its names could not be told is one thing; a registry that
+  // could not be asked is another, and fails the statement.
+  @Test
+  void aLookupThatFailsIsNotAnUnknownName() {
+    registry.create("addr", SchemaType.AVRO, BodyKind.STRUCT, "(city STRING)");
+    registry.create("geo", SchemaType.AVRO, BodyKind.STRUCT, "(lat DOUBLE)");
+    LogicalType order = registry.create("order", SchemaType.AVRO, BodyKind.STRUCT,
+        "(id BIGINT NOT NULL, ship_to addr, at geo)");
+    TypeLookup down = new TypeLookup() {
+      @Override
+      public SchemaMetadata latest(String subject) {
+        return registry.latest(subject);
+      }
+
+      @Override
+      public SchemaMetadata version(String subject, int version) {
+        throw new IllegalStateException("The registry cannot be reached");
+      }
+
+      @Override
+      public ParsedSchema parse(SchemaMetadata version) {
+        return registry.parse(version);
+      }
+
+      @Override
+      public List<Integer> versions(String subject, boolean deleted) {
+        return registry.versions(subject, deleted);
+      }
+
+      @Override
+      public LogicalType logicalType(String subject, SchemaMetadata version) {
+        return registry.logicalType(subject, version);
+      }
+
+      @Override
+      public Config config(String subject) {
+        return registry.config(subject);
+      }
+    };
+
+    assertThatThrownBy(() -> TypeReferences.definedNames(down, "order",
+        order.getReferences().get(0)))
+        .isInstanceOf(IllegalStateException.class).hasMessage("The registry cannot be reached");
+    // Dropping the attribute of one type asks which references are still used.
+    assertThatThrownBy(() -> TypeAlter.alter(down, "order",
+        List.of(new AlterAction.DropAttribute("at", false)), new TypeAlter.Options()))
+        .isInstanceOf(IllegalStateException.class).hasMessage("The registry cannot be reached");
   }
 
   @Test
