@@ -199,6 +199,21 @@ class TypeCreateTest {
     assertThat(registry.versions("t", false)).containsExactly(3);
   }
 
+  // Made as a new type, it would skip what protects its dropped versions' records.
+  @Test
+  void aTypeWhoseLastVersionCannotBeReadIsRefused() {
+    create("t", SchemaType.AVRO, "(a INT)");
+    registry.drop("t");
+    TypeLookup gone = (TypeLookup) Proxy.newProxyInstance(
+        TypeLookup.class.getClassLoader(), new Class<?>[] {TypeLookup.class},
+        (proxy, method, args) -> method.getName().equals("version") ? null
+            : method.invoke(registry, args));
+
+    assertThatThrownBy(() -> TypeCreate.create(gone, "t", "t", BodyKind.STRUCT, "(a INT)", "",
+        Map.of(), null)).isInstanceOf(TypeRefusedException.class)
+        .hasMessage("Could not read type t: it has no version 1");
+  }
+
   @Test
   void aDroppedTypeIsCreatedAgainOnlyInItsFormat() {
     create("t", SchemaType.AVRO, "(a INT)");

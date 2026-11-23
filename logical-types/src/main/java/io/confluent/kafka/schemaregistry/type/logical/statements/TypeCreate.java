@@ -63,6 +63,11 @@ public final class TypeCreate {
     }
     // The last version of the type as it was dropped, if it was; null if none.
     SchemaMetadata last = version > 1 ? lookup.version(subject, version - 1) : null;
+    // Listed and then gone, as one deleted for good meanwhile: not a new type's first version.
+    if (version > 1 && last == null) {
+      throw new TypeRefusedException("Could not read type " + subject + ": it has no version "
+          + (version - 1));
+    }
     refuseOtherFormat(subject, last, format);
 
     int dot = name.lastIndexOf('.');
