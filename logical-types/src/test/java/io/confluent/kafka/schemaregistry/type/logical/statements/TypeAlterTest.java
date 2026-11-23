@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.type.logical.alter;
+package io.confluent.kafka.schemaregistry.type.logical.statements;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -28,18 +28,18 @@ import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.Rule;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
-import io.confluent.kafka.schemaregistry.type.logical.alter.AlterAction.AddAttribute;
-import io.confluent.kafka.schemaregistry.type.logical.alter.AlterAction.AddConstraint;
-import io.confluent.kafka.schemaregistry.type.logical.alter.AlterAction.AddValue;
-import io.confluent.kafka.schemaregistry.type.logical.alter.AlterAction.AlterAttributeType;
-import io.confluent.kafka.schemaregistry.type.logical.alter.AlterAction.Check;
-import io.confluent.kafka.schemaregistry.type.logical.alter.AlterAction.DropAttribute;
-import io.confluent.kafka.schemaregistry.type.logical.alter.AlterAction.DropConstraint;
-import io.confluent.kafka.schemaregistry.type.logical.alter.AlterAction.RenameAttribute;
-import io.confluent.kafka.schemaregistry.type.logical.alter.AlterAction.SetAttributeWith;
-import io.confluent.kafka.schemaregistry.type.logical.alter.AlterAction.SetDataType;
-import io.confluent.kafka.schemaregistry.type.logical.alter.AlterAction.SetWith;
-import io.confluent.kafka.schemaregistry.type.logical.alter.TypeScripts.BodyKind;
+import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.AddAttribute;
+import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.AddConstraint;
+import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.AddValue;
+import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.AlterAttributeType;
+import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.Check;
+import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.DropAttribute;
+import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.DropConstraint;
+import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.RenameAttribute;
+import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.SetAttributeWith;
+import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.SetDataType;
+import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.SetWith;
+import io.confluent.kafka.schemaregistry.type.logical.statements.TypeScripts.BodyKind;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
