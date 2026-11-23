@@ -112,6 +112,19 @@ public class CachedAsyncSchemaRegistryClientTest {
     verify(restService);
   }
 
+  // Latest is fetched once, without deleted versions, and the parse is served from that fetch
+  @Test
+  public void testLatestReferenceResolvesToALiveVersion() throws Exception {
+    expect(restService.getVersion("inner", -1, false)).andReturn(completedFuture(
+        new Schema("inner", 1, 1, AvroSchema.TYPE, Collections.emptyList(), INNER))).once();
+    replay(restService);
+
+    ParsedSchema parsed = await(client.parseSchema(new Schema(null, null, null, AvroSchema.TYPE,
+        Collections.singletonList(new SchemaReference("Inner", "inner", -1)), OUTER))).get();
+    assertEquals(1, (int) parsed.references().get(0).getVersion());
+    verify(restService);
+  }
+
   @Test
   public void testGetSchemaByIdIsCached() throws Exception {
     expect(restService.getId(ID, "")).andReturn(completedFuture(new SchemaString(RECORD))).once();
