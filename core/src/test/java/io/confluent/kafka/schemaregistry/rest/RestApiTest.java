@@ -2006,6 +2006,30 @@ public abstract class RestApiTest {
   }
 
   @Test
+  public void testClientResolvesLatestReferenceToLiveVersion() throws Exception {
+    String base = "my_reference";
+    restApp.restClient.updateCompatibility(NONE.name, base);
+    List<String> schemas = TestUtils.getAvroSchemaWithReferences();
+    TestUtils.registerAndVerifySchema(restApp.restClient, schemas.get(0), expectedSchemaId(1), base);
+    String baseV2 = "{\"type\":\"record\",\"name\":\"Subrecord\",\"namespace\":\"otherns\","
+        + "\"fields\":[{\"name\":\"field2\",\"type\":\"string\"},"
+        + "{\"name\":\"field3\",\"type\":\"string\",\"default\":\"\"}]}";
+    TestUtils.registerAndVerifySchema(restApp.restClient, baseV2, expectedSchemaId(2), base);
+    restApp.restClient.deleteSchemaVersion(RestService.DEFAULT_REQUEST_PROPERTIES, base, "2");
+
+    io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient client =
+        new io.confluent.kafka.schemaregistry.client.CachedSchemaRegistryClient(
+            restApp.restClient, 10);
+    ParsedSchema referrer = client.parseSchema(new Schema(null, null, null, AvroSchema.TYPE,
+        Collections.singletonList(new SchemaReference("otherns.Subrecord", base, -1)),
+        schemas.get(1))).get();
+    client.register("my_referrer", referrer);
+
+    assertEquals(1, (int) restApp.restClient.getLatestVersion("my_referrer")
+        .getReferences().get(0).getVersion());
+  }
+
+  @Test
   public void testDeleteSchemaVersionPermanent() throws Exception {
     List<String> schemas = TestUtils.getRandomCanonicalAvroString(2);
     String subject = "test";
