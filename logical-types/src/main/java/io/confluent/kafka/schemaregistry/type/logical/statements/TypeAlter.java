@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.type.logical.alter;
+package io.confluent.kafka.schemaregistry.type.logical.statements;
 
 import com.google.protobuf.DescriptorProtos.DescriptorProto;
 import com.google.protobuf.DescriptorProtos.EnumDescriptorProto;
@@ -108,7 +108,7 @@ public final class TypeAlter {
     }
   }
 
-  /** The new version an ALTER TYPE makes, for the caller to register. */
+  /** The new version a CREATE TYPE or ALTER TYPE makes, for the caller to register. */
   public static final class Result {
 
     private final SchemaType format;
@@ -130,7 +130,10 @@ public final class TypeAlter {
       return format;
     }
 
-    /** The version edited: the most recent one, soft-deleted or not. */
+    /**
+     * The version edited: the most recent one, soft-deleted or not. Of a created type, the last
+     * version it had when it was dropped, or null if it is new.
+     */
     public SchemaMetadata base() {
       return base;
     }
@@ -148,7 +151,7 @@ public final class TypeAlter {
       return edited;
     }
 
-    /** The compatibility policy a SET WITH gives the subject, or null to leave it. */
+    /** The compatibility policy the statement gives the subject, or null to leave it. */
     public String policy() {
       return policy;
     }
@@ -271,7 +274,7 @@ public final class TypeAlter {
    * them would number it: an attribute keeps the number of its namesake, at every level, and any
    * other is numbered above every number used, so none reads another's data.
    */
-  public static LogicalType numberedAfterDrop(TypeLookup lookup, String subject, SchemaMetadata md,
+  static LogicalType numberedAfterDrop(TypeLookup lookup, String subject, SchemaMetadata md,
                       LogicalType lt) {
     return new TypeAlter(lookup, subject).numberAfterDrop(md, lt);
   }
@@ -298,7 +301,7 @@ public final class TypeAlter {
    * An Avro type created again over its dropped versions, with a null default for each nullable
    * field it adds to the last of them, as an ALTER of it gives one: Avro reads their data by it.
    */
-  public static LogicalType defaultedAfterDrop(TypeLookup lookup, String subject, SchemaMetadata md,
+  static LogicalType defaultedAfterDrop(TypeLookup lookup, String subject, SchemaMetadata md,
                        LogicalType lt) {
     return new TypeAlter(lookup, subject).defaultAfterDrop(md, lt);
   }
@@ -318,7 +321,7 @@ public final class TypeAlter {
    * Registry's provenance pairs with the last of them otherwise than an ALTER of it would, as if
    * it kept every attribute of the same name and added the others.
    */
-  public static void refuseOtherColumnsAfterDrop(TypeLookup lookup, String subject,
+  static void refuseOtherColumnsAfterDrop(TypeLookup lookup, String subject,
       SchemaType format, SchemaMetadata md, LogicalType lt) {
     TypeAlter editor = new TypeAlter(lookup, subject);
     editor.format = format;
@@ -504,7 +507,7 @@ public final class TypeAlter {
    * {@code drop}. Under LOGICAL, which the statement's {@code policy} or the subject's may set,
    * the registry checks soft-deleted versions itself.
    */
-  public static void refuseOlderReferences(TypeLookup lookup, String subject,
+  static void refuseOlderReferences(TypeLookup lookup, String subject,
       List<SchemaReference> was, List<SchemaReference> now, String policy, String refused,
       String drop) {
     List<ColumnIds.Move> back = ColumnIds.moves(was, now).stream()
@@ -527,7 +530,7 @@ public final class TypeAlter {
    * registry checks dropped versions only under LOGICAL. A refusal starts with {@code refused}
    * and names a version as {@code which} does.
    */
-  public static void refuseIncompatible(TypeLookup lookup, String subject, SchemaType format,
+  static void refuseIncompatible(TypeLookup lookup, String subject, SchemaType format,
       SchemaMetadata md, LogicalType lt, String policy, String refused,
       IntFunction<String> which) {
     refuseIncompatible(lookup, subject, format, md, true, null, lt, policy, refused, which);
