@@ -151,7 +151,10 @@ public final class TypeAlter {
       return edited;
     }
 
-    /** The compatibility policy the statement gives the subject, or null to leave it. */
+    /**
+     * The compatibility policy to give the subject, or null to leave it: the statement's, or
+     * for a created type whose statement names none, the caller's.
+     */
     public String policy() {
       return policy;
     }
@@ -237,13 +240,13 @@ public final class TypeAlter {
    * the registry numbers them. Read before the version a statement edits, it makes the
    * registration fail if another statement registered one meanwhile.
    */
-  public static int nextVersion(TypeLookup lookup, String subject) {
+  static int nextVersion(TypeLookup lookup, String subject) {
     return lookup.versions(subject, true).stream().mapToInt(Integer::intValue).max()
         .orElse(0) + 1;
   }
 
   /** Removes a property by its name, ignoring case, returning its value or the fallback. */
-  public static String removeIgnoreCase(Map<String, String> props, String key,
+  static String removeIgnoreCase(Map<String, String> props, String key,
       String otherwise) {
     for (String k : new ArrayList<>(props.keySet())) {
       if (k.equalsIgnoreCase(key)) {
@@ -256,7 +259,7 @@ public final class TypeAlter {
   /**
    * Takes the compatibility policy out of a WITH, upper-cased, or returns null if it has none.
    */
-  public static String removePolicy(Map<String, String> with) {
+  static String removePolicy(Map<String, String> with) {
     String policy = removeIgnoreCase(with, COMPATIBILITY_POLICY, null);
     if (policy == null) {
       return null;

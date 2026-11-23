@@ -47,8 +47,8 @@ public final class TypeCreate {
    * @param clauses a struct's or enum's COMMENT and TAGS clauses, as written, or empty
    * @param with the statement's WITH: its format, Avro if it names none, and its compatibility
    *     policy are taken from it, and the rest are the type's properties
-   * @param policy the compatibility policy the subject gets if the WITH names none, or null to
-   *     leave it
+   * @param policy the compatibility policy the subject gets if the WITH names none, LOGICAL,
+   *     STRICT or LENIENT, or null to leave it
    */
   public static TypeAlter.Result create(TypeLookup lookup, String subject, String name,
       BodyKind kind, String body, String clauses, Map<String, String> with, String policy) {

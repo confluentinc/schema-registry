@@ -29,7 +29,10 @@ import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.Add
 import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.DropAttribute;
 import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.RenameAttribute;
 import io.confluent.kafka.schemaregistry.type.logical.statements.TypeScripts.BodyKind;
+import java.lang.reflect.Proxy;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -94,14 +97,47 @@ class TypeCreateTest {
         Map.of("compatibility.policy", "LENIENT"), "LOGICAL").policy()).isEqualTo("LENIENT");
   }
 
-  @Test
-  void aDottedNameIsTheTypesNamespaceAndName() {
+  // Avro alone would not tell: it splits a dotted record name itself.
+  @ParameterizedTest
+  @EnumSource(SchemaType.class)
+  void aDottedNameIsTheTypesNamespaceAndName(SchemaType format) {
+    Map<String, String> with = Map.of("format", format.name());
     registry.register(":.prod:Parcel", TypeCreate.create(registry, ":.prod:Parcel",
-        "com.acme.Parcel", BodyKind.STRUCT, "(id INT)", "COMMENT 'a parcel'", Map.of(), null));
+        "com.acme.Parcel", BodyKind.STRUCT, "(id INT)", "COMMENT 'a parcel'", with, null));
 
-    AvroSchema stored = (AvroSchema) registry.schema(":.prod:Parcel");
-    assertThat(stored.rawSchema().getFullName()).isEqualTo("com.acme.Parcel");
-    assertThat(stored.rawSchema().getDoc()).isEqualTo("a parcel");
+    String stored = registry.schema(":.prod:Parcel").canonicalString();
+    switch (format) {
+      case AVRO:
+        assertThat(stored).contains("\"name\":\"Parcel\"", "\"namespace\":\"com.acme\"",
+            "\"doc\":\"a parcel\"");
+        break;
+      case PROTOBUF:
+        assertThat(stored).contains("package com.acme;", "message Parcel {");
+        break;
+      default:
+        assertThat(stored).contains("\"title\":\"Parcel\"",
+            "\"confluent:namespace\":\"com.acme\"");
+    }
+    // A type that is one value declares no name, so its dotted name is no namespace.
+    assertThat(LogicalTypeToDdlConverter.toDdl(TypeCreate.create(registry, "com.acme.id",
+        "com.acme.id", BodyKind.OTHER, "BIGINT", "", with, null).edited()))
+        .doesNotContain("NAMESPACE");
+  }
+
+  // A version registered between the two reads then fails to register, by its number.
+  @Test
+  void theSubjectsVersionsAreReadBeforeItsLatestVersion() {
+    List<String> reads = new ArrayList<>();
+    TypeLookup recording = (TypeLookup) Proxy.newProxyInstance(
+        TypeLookup.class.getClassLoader(), new Class<?>[] {TypeLookup.class},
+        (proxy, method, args) -> {
+          reads.add(method.getName());
+          return method.invoke(registry, args);
+        });
+
+    TypeCreate.create(recording, "t", "t", BodyKind.STRUCT, "(id INT)", "", Map.of(), null);
+
+    assertThat(reads).startsWith("versions", "latest");
   }
 
   @ParameterizedTest
@@ -110,16 +146,19 @@ class TypeCreateTest {
     Map<String, String> with = Map.of("format", format.name());
     registry.register("id", TypeCreate.create(registry, "id", "id", BodyKind.OTHER,
         "BIGINT NOT NULL", "", with, null));
-    TypeAlter.Result color = TypeCreate.create(registry, "color", "color", BodyKind.ENUM,
-        "('RED', 'GREEN')", "", with, null);
 
     assertThat(registry.versions("id", false)).containsExactly(1);
-    assertThat(LogicalTypeToDdlConverter.toDdl(color.edited())).contains("ENUM color");
-    // The mock registry takes no Protobuf file whose root is an enum.
-    if (format != SchemaType.PROTOBUF) {
-      registry.register("color", color);
-      assertThat(registry.versions("color", false)).containsExactly(1);
+    // The root of a Protobuf schema is a message, so an enum is no type by itself there.
+    if (format == SchemaType.PROTOBUF) {
+      assertThatThrownBy(() -> TypeCreate.create(registry, "color", "color", BodyKind.ENUM,
+          "('RED', 'GREEN')", "", with, null)).isInstanceOf(TypeRefusedException.class)
+          .hasMessage("A PROTOBUF type cannot be an ENUM: the root of a Protobuf schema is a "
+              + "message");
+      return;
     }
+    registry.register("color", TypeCreate.create(registry, "color", "color", BodyKind.ENUM,
+        "('RED', 'GREEN')", "", with, null));
+    assertThat(registry.versions("color", false)).containsExactly(1);
   }
 
   @ParameterizedTest
@@ -155,6 +194,7 @@ class TypeCreateTest {
 
     assertThat(result.base().getVersion()).isEqualTo(2);
     assertThat(result.version()).isEqualTo(3);
+    assertThat(result.request().getVersion()).isEqualTo(3);
     assertThat(registry.versions("t", false)).containsExactly(3);
   }
 
