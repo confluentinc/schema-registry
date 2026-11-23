@@ -22,6 +22,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
+import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.Rule;
@@ -664,6 +665,54 @@ class TypeAlterTest {
     assertThat(registry.struct("v").getFields().get(0).getParams()).containsEntry("owner", "x");
   }
 
+  // A type's own name and aliases are how the format reads its data, as an attribute's are.
+  @Test
+  void aTypesFormatNativePropertiesCannotBeChanged() throws Exception {
+    registry.client.register("old", new AvroSchema("{\"type\":\"record\",\"name\":\"Now\","
+        + "\"aliases\":[\"Before\"],\"fields\":[{\"name\":\"a\",\"type\":\"int\"}]}"));
+    assertThatThrownBy(() -> registry.alter("old", new SetWith(Map.of("avro.aliases", "Else"))))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessage("Property avro.aliases of type old cannot be set: it is how the AVRO "
+            + "format reads the type's existing data");
+    assertThatThrownBy(() -> registry.alter("old", new SetWith(Map.of("avro.aliases", ""))))
+        .isInstanceOf(TypeRefusedException.class).hasMessageContaining("avro.aliases");
+    assertThatThrownBy(() -> registry.alter("old", new SetWith(Map.of("avro.name", "Other"))))
+        .isInstanceOf(TypeRefusedException.class).hasMessageContaining("avro.name");
+    create("pm", SchemaType.PROTOBUF, "(a INT)");
+    assertThatThrownBy(() -> registry.alter("pm", new SetWith(Map.of("protobuf.name", "Other"))))
+        .isInstanceOf(TypeRefusedException.class).hasMessageContaining("protobuf.name");
+    assertThat(version("old")).isEqualTo(1);
+    assertThat(version("pm")).isEqualTo(1);
+
+    // One given as it is changes nothing, and another property is set beside it.
+    registry.alter("old", new SetWith(Map.of("avro.aliases", "Before", "owner", "me")));
+    assertThat(registry.schema("old").canonicalString())
+        .contains("\"aliases\":[\"Before\"]").contains("\"owner\":\"me\"");
+  }
+
+  // A field or enum number that is none is refused by name, not by the registry without one.
+  @Test
+  void aProtobufNumberThatIsNoneIsRefused() {
+    create("bn", SchemaType.PROTOBUF, "(a INT, c ENUM('RED', 'GREEN'))");
+    assertThatThrownBy(() -> registry.alter("bn", new AlterAttributeType("c",
+        "ENUM('RED', 'GREEN', 'BLUE' WITH ('protobuf.enum.number' = 'x'))")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessage("Property protobuf.enum.number of value BLUE is not a valid number: 'x'");
+    assertThatThrownBy(() -> registry.alter("bn", new AddAttribute("e",
+        "ENUM('RED', 'GREEN' WITH ('protobuf.enum.number' = '99999999999'))")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("of value GREEN is not a valid number: '99999999999'");
+    assertThatThrownBy(() -> registry.alter("bn", new AddAttribute("s",
+        "STRUCT<x INT WITH ('protobuf.field.number' = 'x')>")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessage("Property protobuf.field.number of attribute x is not a valid number: 'x'");
+    assertThatThrownBy(() -> registry.alter("bn", new AddAttribute("u",
+        "UNION(p INT WITH ('protobuf.field.number' = ''), q STRING)")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessage("Property protobuf.field.number of branch p is not a valid number: ''");
+    assertThat(version("bn")).isEqualTo(1);
+  }
+
   // An enum value keeps the number it has had, and a number a value had is no other's.
   @Test
   void anEnumValueCannotBeGivenAnotherNumber() {
@@ -703,6 +752,26 @@ class TypeAlterTest {
     registry.alter("cols", new AddAttribute("B", "INT"));
     assertThat(registry.struct("cols").getFields()).extracting(Schema.Field::getName)
         .containsExactly("A", "b", "B");
+  }
+
+  // A constraint names a column in the column's own case, so it is found however a statement
+  // spells the column.
+  @Test
+  void aColumnOfAConstraintIsFoundInAnyCase() {
+    create("cc", SchemaType.AVRO, "(A INT, b INT, CONSTRAINT pos CHECK (A > 0))");
+    TypeAlter.Options columns = new TypeAlter.Options().columns(true);
+    assertThatThrownBy(() -> registry.alter("cc", columns, new DropAttribute("a", false)))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessage("Attribute a is used by constraint pos; drop the constraint first");
+    assertThatThrownBy(() -> registry.alter("cc", columns,
+        new AddConstraint(new Check("low", "a < 9", null))))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("Unknown column in CHECK: 'a'");
+    assertThat(version("cc")).isEqualTo(1);
+
+    registry.alter("cc", columns, new RenameAttribute("a", "z"));
+    assertThat(registry.struct("cc").getRules()).extracting(Rule::getSql)
+        .containsExactly("z > 0");
   }
 
   // The registration carries the version, so the registry refuses it after another.

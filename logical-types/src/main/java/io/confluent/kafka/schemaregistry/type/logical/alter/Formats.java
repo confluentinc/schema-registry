@@ -22,6 +22,7 @@ import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalTypeConversion;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalTypeToDdlConverter;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
+import io.confluent.kafka.schemaregistry.type.logical.Schema.EnumValue;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.Field;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.UnionBranch;
 import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
@@ -113,7 +114,8 @@ public final class Formats {
 
   /**
    * Refuses what a type declares that its format cannot write: a DEFAULT outside Avro, a NOT
-   * NULL UNION in Protobuf, a JSON UNION whose branches are written as one JSON type.
+   * NULL UNION in Protobuf, a Protobuf field or enum number that is none, a JSON UNION whose
+   * branches are written as one JSON type.
    */
   public static void refuseUnwritable(SchemaType format, LogicalType lt) {
     refuseUnwritable(format, lt.getRootSchema());
@@ -131,6 +133,8 @@ public final class Formats {
           + format + " type cannot apply: a record without it reads "
           + (format == SchemaType.PROTOBUF ? "the zero value" : "NULL"));
     }
+    refuseBadNumber(format, Schema.PROTOBUF_FIELD_NUMBER, "attribute " + f.getName(),
+        f.getParams());
     refuseUnwritable(format, f.getSchema());
   }
 
@@ -150,7 +154,17 @@ public final class Formats {
         if (format == SchemaType.JSON) {
           refuseOverlappingBranches(schema);
         }
-        schema.getBranches().forEach(b -> refuseUnwritable(format, b.getSchema()));
+        for (UnionBranch b : schema.getBranches()) {
+          refuseBadNumber(format, Schema.PROTOBUF_FIELD_NUMBER, "branch " + b.getName(),
+              b.getParams());
+          refuseUnwritable(format, b.getSchema());
+        }
+        break;
+      case ENUM:
+        for (EnumValue v : schema.getEnumValues()) {
+          refuseBadNumber(format, Schema.PROTOBUF_ENUM_NUMBER, "value " + v.getSymbol(),
+              v.getParams());
+        }
         break;
       case ARRAY:
       case MULTISET:
@@ -162,6 +176,22 @@ public final class Formats {
         break;
       default:
         break;
+    }
+  }
+
+  // Refuses a Protobuf field or enum number that is none, which the registry would refuse
+  // without naming it.
+  private static void refuseBadNumber(SchemaType format, String property, String of,
+      Map<String, Object> params) {
+    Object number = params.get(property);
+    if (format != SchemaType.PROTOBUF || number == null) {
+      return;
+    }
+    try {
+      Integer.parseInt(number.toString());
+    } catch (NumberFormatException e) {
+      throw new TypeRefusedException("Property " + property + " of " + of
+          + " is not a valid number: '" + number + "'", e);
     }
   }
 

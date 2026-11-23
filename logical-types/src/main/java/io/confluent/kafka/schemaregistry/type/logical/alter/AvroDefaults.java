@@ -45,22 +45,24 @@ public final class AvroDefaults {
     if (source == Kind.ENUM && target == Kind.ENUM) {
       // An enum's default is its symbol, which Avro reads by name; one of a type of its own,
       // only named here, the registry checks the new enum has.
-      String symbol = (String) value;
-      read = to.getType() != Schema.Type.ENUM || to.getEnumValues().stream()
-          .map(EnumValue::getSymbol).anyMatch(symbol::equals) ? symbol : null;
+      read = value instanceof String && (to.getType() != Schema.Type.ENUM
+          || to.getEnumValues().stream().map(EnumValue::getSymbol).anyMatch(value::equals))
+          ? value : null;
     } else if (source != Kind.ENUM && source != Kind.OTHER) {
       read = fits(to, promoted(source, target, written(from, value)));
     }
+    RuntimeException cause = null;
     try {
       if (read != null) {
         return AvroDefaultValueConverter.toJavaData(to, read);
       }
     } catch (RuntimeException e) {
       // Out of the new type's range, as a time of day past midnight.
+      cause = e;
     }
     throw new TypeRefusedException("Attribute " + name + "'s default " + value + " cannot be read "
         + "as " + to.getType() + ", as Avro reads a " + from.getType() + " written before "
-        + "the change");
+        + "the change", cause);
   }
 
   // A whole number in the range of the new type, which Avro holds as an int whatever its range.

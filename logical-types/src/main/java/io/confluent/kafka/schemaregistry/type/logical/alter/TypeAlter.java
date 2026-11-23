@@ -853,17 +853,7 @@ public final class TypeAlter {
       AlterAction.SetAttributeWith a = (AlterAction.SetAttributeWith) action;
       Field f = field(a.name());
       Map<String, Object> params = new LinkedHashMap<>(f.getParams());
-      // An avro. or protobuf. property, such as a field number, an alias or a pinned type name,
-      // is how the format reads the attribute's existing data, which this package keeps.
-      for (Map.Entry<String, String> e : a.with().entrySet()) {
-        Object was = params.get(e.getKey());
-        if (Schema.isFormatNativeParam(e.getKey())
-            && (was == null || !was.toString().equals(e.getValue()))) {
-          throw new TypeRefusedException("Property " + e.getKey() + " of attribute "
-              + f.getName() + " cannot be set: it is how the " + format + " format reads the "
-              + "attribute's existing data");
-        }
-      }
+      refuseNativeParams(a.with(), params, "attribute", f.getName());
       params.putAll(a.with());
       setField(copy(f, f.getName(), f.getSchema(), params));
       return true;
@@ -900,6 +890,7 @@ public final class TypeAlter {
             + " are only allowed on a struct or enum type");
       }
       Map<String, Object> params = new LinkedHashMap<>(target.getParams());
+      refuseNativeParams(with, params, "type", subject);
       params.putAll(with);
       Schema copy = target.getType() == Schema.Type.STRUCT
           ? Schema.createStruct(target.getFields()) : Schema.createEnum(target.getEnumValues());
@@ -2230,6 +2221,21 @@ public final class TypeAlter {
   private static int numberIn(Map<String, Object> params) {
     Object n = params.get(Schema.PROTOBUF_FIELD_NUMBER);
     return n == null ? 0 : Integer.parseInt(n.toString());
+  }
+
+  // An avro. or protobuf. property, such as a field number, an alias or a pinned type name,
+  // is how the format reads existing data, which this package keeps. One as it is may be given.
+  private void refuseNativeParams(Map<String, String> with, Map<String, Object> params,
+      String kind, String name) {
+    for (Map.Entry<String, String> e : with.entrySet()) {
+      Object was = params.get(e.getKey());
+      if (Schema.isFormatNativeParam(e.getKey())
+          && (was == null || !was.toString().equals(e.getValue()))) {
+        throw new TypeRefusedException("Property " + e.getKey() + " of " + kind + " " + name
+            + " cannot be set: it is how the " + format + " format reads the " + kind
+            + "'s existing data");
+      }
+    }
   }
 
   // The attribute a statement names; a column is named as the database names it, in any case.

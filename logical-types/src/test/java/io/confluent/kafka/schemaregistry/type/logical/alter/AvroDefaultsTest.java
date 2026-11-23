@@ -48,6 +48,10 @@ class AvroDefaultsTest {
     // A whole number Avro holds as an int, beyond the new type's range.
     assertThatThrownBy(() -> AvroDefaults.converted("n", type("INT"), type("TINYINT"), 500))
         .isInstanceOf(TypeRefusedException.class);
+    // A time of day past midnight; why it was refused is kept.
+    assertThatThrownBy(() -> AvroDefaults.converted("t", type("INT"), type("TIME(3)"),
+        90_000_000))
+        .isInstanceOf(TypeRefusedException.class).hasCauseInstanceOf(RuntimeException.class);
   }
 
   @Test
@@ -56,6 +60,9 @@ class AvroDefaultsTest {
     assertThat(AvroDefaults.converted("c", colors, type("ENUM('GREEN', 'RED', 'BLUE')"),
         "RED")).isEqualTo("RED");
     assertThatThrownBy(() -> AvroDefaults.converted("c", colors, type("ENUM('GREEN')"), "RED"))
+        .isInstanceOf(TypeRefusedException.class);
+    // A default that is no symbol, as a hand-written schema's may be.
+    assertThatThrownBy(() -> AvroDefaults.converted("c", colors, colors, 5))
         .isInstanceOf(TypeRefusedException.class);
   }
 }
