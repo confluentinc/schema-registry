@@ -25,6 +25,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
+import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.AddAttribute;
 import io.confluent.kafka.schemaregistry.type.logical.statements.TypeScripts.BodyKind;
 import java.util.List;
 import java.util.Map;
@@ -41,8 +42,7 @@ class TypeReferencesTest {
   void aNamedTypeBecomesAReferenceToItsLatestVersion(SchemaType format) {
     registry.create("com.acme.address", format, BodyKind.STRUCT,
         "(city STRING NOT NULL, zip INT)");
-    registry.create("com.acme.address", format, BodyKind.STRUCT,
-        "(city STRING NOT NULL, zip INT, country STRING)");
+    registry.alter("com.acme.address", new AddAttribute("country", "STRING"));
     LogicalType order = registry.create("com.acme.order_value", format, BodyKind.STRUCT,
         "(id BIGINT NOT NULL, addr com.acme.address, tags ARRAY<STRING>)");
 
@@ -144,7 +144,7 @@ class TypeReferencesTest {
   void aNameKeepsTheFirstVersionBoundToIt() {
     registry.create("point", SchemaType.AVRO, BodyKind.STRUCT, "(x INT)");
     registry.create("address", SchemaType.AVRO, BodyKind.STRUCT, "(city STRING, at point)");
-    registry.create("point", SchemaType.AVRO, BodyKind.STRUCT, "(x INT, y INT)");
+    registry.alter("point", new AddAttribute("y", "INT"));
     String v1 = registry.version("point", 1).getSchema();
     String v2 = registry.version("point", 2).getSchema();
 
