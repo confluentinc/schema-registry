@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.type.logical.alter;
+package io.confluent.kafka.schemaregistry.type.logical.statements;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -22,7 +22,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
-import io.confluent.kafka.schemaregistry.type.logical.alter.TypeScripts.BodyKind;
+import io.confluent.kafka.schemaregistry.type.logical.statements.TypeScripts.BodyKind;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;

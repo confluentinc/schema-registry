@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.type.logical.alter;
+package io.confluent.kafka.schemaregistry.type.logical.statements;
 
 import com.google.protobuf.DescriptorProtos.DescriptorProto;
 import com.google.protobuf.DescriptorProtos.EnumDescriptorProto;
@@ -108,7 +108,7 @@ public final class TypeAlter {
     }
   }
 
-  /** The new version an ALTER TYPE makes, for the caller to register. */
+  /** The new version a CREATE TYPE or ALTER TYPE makes, for the caller to register. */
   public static final class Result {
 
     private final SchemaType format;
@@ -130,7 +130,10 @@ public final class TypeAlter {
       return format;
     }
 
-    /** The version edited: the most recent one, soft-deleted or not. */
+    /**
+     * The version edited: the most recent one, soft-deleted or not. Of a created type, the last
+     * version it had when it was dropped, or null if it is new.
+     */
     public SchemaMetadata base() {
       return base;
     }
@@ -148,7 +151,10 @@ public final class TypeAlter {
       return edited;
     }
 
-    /** The compatibility policy a SET WITH gives the subject, or null to leave it. */
+    /**
+     * The compatibility policy to give the subject, or null to leave it: the statement's, or
+     * for a created type whose statement names none, the caller's.
+     */
     public String policy() {
       return policy;
     }
@@ -234,13 +240,13 @@ public final class TypeAlter {
    * the registry numbers them. Read before the version a statement edits, it makes the
    * registration fail if another statement registered one meanwhile.
    */
-  public static int nextVersion(TypeLookup lookup, String subject) {
+  static int nextVersion(TypeLookup lookup, String subject) {
     return lookup.versions(subject, true).stream().mapToInt(Integer::intValue).max()
         .orElse(0) + 1;
   }
 
   /** Removes a property by its name, ignoring case, returning its value or the fallback. */
-  public static String removeIgnoreCase(Map<String, String> props, String key,
+  static String removeIgnoreCase(Map<String, String> props, String key,
       String otherwise) {
     for (String k : new ArrayList<>(props.keySet())) {
       if (k.equalsIgnoreCase(key)) {
@@ -253,7 +259,7 @@ public final class TypeAlter {
   /**
    * Takes the compatibility policy out of a WITH, upper-cased, or returns null if it has none.
    */
-  public static String removePolicy(Map<String, String> with) {
+  static String removePolicy(Map<String, String> with) {
     String policy = removeIgnoreCase(with, COMPATIBILITY_POLICY, null);
     if (policy == null) {
       return null;
@@ -267,11 +273,27 @@ public final class TypeAlter {
   }
 
   /**
+   * Refuses a Protobuf type created again over its dropped versions if the last of them has
+   * what a statement's type cannot carry, or is several messages, as an ALTER of it is
+   * refused: the new version would lose it, and stored values could be read wrongly.
+   */
+  static void refuseUncarriedAfterDrop(TypeLookup lookup, String subject, SchemaMetadata md) {
+    new TypeAlter(lookup, subject).refuseUncarried(md, "created again");
+    // Whatever the subject's compatibility level, which may be none.
+    if (ProtoToLogicalTypeConverter.isMultiMessageRoot(
+        lookup.logicalType(subject, md).getRootSchema())) {
+      throw new TypeRefusedException("Type " + subject + " cannot be created again: it is "
+          + "several Protobuf messages, and would be registered as one, leaving the records "
+          + "of the others unreadable. Register its new version as a Protobuf schema");
+    }
+  }
+
+  /**
    * A Protobuf type created again over its dropped versions, numbered as an ALTER of the last of
    * them would number it: an attribute keeps the number of its namesake, at every level, and any
    * other is numbered above every number used, so none reads another's data.
    */
-  public static LogicalType numberedAfterDrop(TypeLookup lookup, String subject, SchemaMetadata md,
+  static LogicalType numberedAfterDrop(TypeLookup lookup, String subject, SchemaMetadata md,
                       LogicalType lt) {
     return new TypeAlter(lookup, subject).numberAfterDrop(md, lt);
   }
@@ -298,7 +320,7 @@ public final class TypeAlter {
    * An Avro type created again over its dropped versions, with a null default for each nullable
    * field it adds to the last of them, as an ALTER of it gives one: Avro reads their data by it.
    */
-  public static LogicalType defaultedAfterDrop(TypeLookup lookup, String subject, SchemaMetadata md,
+  static LogicalType defaultedAfterDrop(TypeLookup lookup, String subject, SchemaMetadata md,
                        LogicalType lt) {
     return new TypeAlter(lookup, subject).defaultAfterDrop(md, lt);
   }
@@ -318,7 +340,7 @@ public final class TypeAlter {
    * Registry's provenance pairs with the last of them otherwise than an ALTER of it would, as if
    * it kept every attribute of the same name and added the others.
    */
-  public static void refuseOtherColumnsAfterDrop(TypeLookup lookup, String subject,
+  static void refuseOtherColumnsAfterDrop(TypeLookup lookup, String subject,
       SchemaType format, SchemaMetadata md, LogicalType lt) {
     TypeAlter editor = new TypeAlter(lookup, subject);
     editor.format = format;
@@ -407,7 +429,7 @@ public final class TypeAlter {
     LogicalType edited = null;
     if (changesSchema) {
       if (format == SchemaType.PROTOBUF) {
-        refuseUncarried(md);
+        refuseUncarried(md, "altered");
       }
       dropStaleAliases();
       recompileRules();
@@ -431,7 +453,7 @@ public final class TypeAlter {
   // file has, such as required fields and defaults, nor the numbers and names a message or
   // enum reserves, nor which of its encodings an integer has. The first would be lost, the
   // second free for a new field to take, and the third changed, so stored values read wrongly.
-  private void refuseUncarried(SchemaMetadata md) {
+  private void refuseUncarried(SchemaMetadata md, String done) {
     ParsedSchema schema = lookup.parse(md);
     if (!(schema instanceof ProtobufSchema)) {
       return;
@@ -445,7 +467,7 @@ public final class TypeAlter {
             + "could then take one"
         : reencoded(file.getMessageTypeList());
     if (lost != null) {
-      throw new TypeRefusedException("Type " + subject + " cannot be altered: " + lost
+      throw new TypeRefusedException("Type " + subject + " cannot be " + done + ": " + lost
           + ". Register its new version as a Protobuf schema");
     }
   }
@@ -504,7 +526,7 @@ public final class TypeAlter {
    * {@code drop}. Under LOGICAL, which the statement's {@code policy} or the subject's may set,
    * the registry checks soft-deleted versions itself.
    */
-  public static void refuseOlderReferences(TypeLookup lookup, String subject,
+  static void refuseOlderReferences(TypeLookup lookup, String subject,
       List<SchemaReference> was, List<SchemaReference> now, String policy, String refused,
       String drop) {
     List<ColumnIds.Move> back = ColumnIds.moves(was, now).stream()
@@ -527,7 +549,7 @@ public final class TypeAlter {
    * registry checks dropped versions only under LOGICAL. A refusal starts with {@code refused}
    * and names a version as {@code which} does.
    */
-  public static void refuseIncompatible(TypeLookup lookup, String subject, SchemaType format,
+  static void refuseIncompatible(TypeLookup lookup, String subject, SchemaType format,
       SchemaMetadata md, LogicalType lt, String policy, String refused,
       IntFunction<String> which) {
     refuseIncompatible(lookup, subject, format, md, true, null, lt, policy, refused, which);
