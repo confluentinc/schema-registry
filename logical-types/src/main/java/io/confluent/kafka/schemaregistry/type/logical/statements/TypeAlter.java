@@ -270,6 +270,15 @@ public final class TypeAlter {
   }
 
   /**
+   * Refuses a Protobuf type created again over its dropped versions if the last of them has
+   * what a statement's type cannot carry, as an ALTER of it is refused: the new version would
+   * lose it, and stored values could be read wrongly.
+   */
+  static void refuseUncarriedAfterDrop(TypeLookup lookup, String subject, SchemaMetadata md) {
+    new TypeAlter(lookup, subject).refuseUncarried(md, "created again");
+  }
+
+  /**
    * A Protobuf type created again over its dropped versions, numbered as an ALTER of the last of
    * them would number it: an attribute keeps the number of its namesake, at every level, and any
    * other is numbered above every number used, so none reads another's data.
@@ -410,7 +419,7 @@ public final class TypeAlter {
     LogicalType edited = null;
     if (changesSchema) {
       if (format == SchemaType.PROTOBUF) {
-        refuseUncarried(md);
+        refuseUncarried(md, "altered");
       }
       dropStaleAliases();
       recompileRules();
@@ -434,7 +443,7 @@ public final class TypeAlter {
   // file has, such as required fields and defaults, nor the numbers and names a message or
   // enum reserves, nor which of its encodings an integer has. The first would be lost, the
   // second free for a new field to take, and the third changed, so stored values read wrongly.
-  private void refuseUncarried(SchemaMetadata md) {
+  private void refuseUncarried(SchemaMetadata md, String done) {
     ParsedSchema schema = lookup.parse(md);
     if (!(schema instanceof ProtobufSchema)) {
       return;
@@ -448,7 +457,7 @@ public final class TypeAlter {
             + "could then take one"
         : reencoded(file.getMessageTypeList());
     if (lost != null) {
-      throw new TypeRefusedException("Type " + subject + " cannot be altered: " + lost
+      throw new TypeRefusedException("Type " + subject + " cannot be " + done + ": " + lost
           + ". Register its new version as a Protobuf schema");
     }
   }

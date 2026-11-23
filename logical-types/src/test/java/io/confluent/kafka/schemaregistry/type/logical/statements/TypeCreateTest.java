@@ -187,6 +187,41 @@ class TypeCreateTest {
     assertThat(nested).isEqualTo(Map.of("x", 1, "y", 2, "z", 3));
   }
 
+  // A statement writes a proto3 file with no reserved numbers and plain integers. Over a file
+  // written by hand with more, a new attribute could take a reserved number, as c would take 3.
+  @Test
+  void aProtobufTypeCreatedAgainOverWhatAStatementCannotCarryIsRefused() throws Exception {
+    String proto3 = "syntax = \"proto3\";\n";
+    registry.client.register("r", new ProtobufSchema(proto3
+        + "message r {\n  reserved 3;\n  int32 a = 1;\n  string b = 2;\n}\n"));
+    registry.client.register("q", new ProtobufSchema("syntax = \"proto2\";\nmessage q {\n"
+        + "  required int32 a = 1;\n  optional string b = 2 [default = \"x\"];\n}\n"));
+    registry.client.register("s", new ProtobufSchema(proto3
+        + "message s {\n  sint32 a = 1;\n}\n"));
+    registry.client.register("plain", new ProtobufSchema(proto3
+        + "message plain {\n  int32 a = 1;\n  string b = 2;\n}\n"));
+    for (String subject : new String[] {"r", "q", "s", "plain"}) {
+      registry.drop(subject);
+    }
+
+    assertThatThrownBy(() -> create("r", SchemaType.PROTOBUF, "(a INT, b STRING, c STRING)"))
+        .isInstanceOf(TypeRefusedException.class).hasMessage("Type r cannot be created again: "
+            + "it reserves field numbers or names, which would be dropped, and a new field "
+            + "could then take one. Register its new version as a Protobuf schema");
+    assertThatThrownBy(() -> create("q", SchemaType.PROTOBUF, "(a INT NOT NULL, b STRING)"))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageStartingWith("Type q cannot be created again: it is not a proto3 file");
+    assertThatThrownBy(() -> create("s", SchemaType.PROTOBUF, "(a INT)"))
+        .isInstanceOf(TypeRefusedException.class).hasMessageStartingWith("Type s cannot be "
+            + "created again: field a of message s is a sint32, which would be written as int32");
+    assertThat(registry.versions("r", true)).containsExactly(1);
+
+    // A file written by hand with none of these is created again as any other.
+    create("plain", SchemaType.PROTOBUF, "(a INT, b STRING, c STRING)");
+    Descriptor plain = ((ProtobufSchema) registry.schema("plain")).toDescriptor();
+    assertThat(plain.findFieldByName("c").getNumber()).isEqualTo(3);
+  }
+
   // Avro reads the dropped versions' data by the default of an attribute they lack.
   @Test
   void anAvroTypeCreatedAgainDefaultsTheNullableAttributesItAdds() {

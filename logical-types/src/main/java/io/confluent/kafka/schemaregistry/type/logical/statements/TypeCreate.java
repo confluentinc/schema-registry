@@ -82,8 +82,10 @@ public final class TypeCreate {
       SchemaMetadata last, LogicalType created, String policy) {
     String refused = "Type " + subject + " cannot be created again so";
     LogicalType lt = created;
-    // Its dropped versions are read with the new ones, so a Protobuf type keeps their numbers.
+    // Its dropped versions are read with the new ones, so a Protobuf type keeps their numbers,
+    // and is refused over a file with what the new version would lose.
     if (format == SchemaType.PROTOBUF) {
+      TypeAlter.refuseUncarriedAfterDrop(lookup, subject, last);
       lt = TypeAlter.numberedAfterDrop(lookup, subject, last, lt);
     }
     // And an Avro type gives the nullable attributes it adds a null default, as an ALTER does.
