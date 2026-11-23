@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.type.logical.alter;
+package io.confluent.kafka.schemaregistry.type.logical.statements;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
@@ -22,7 +22,6 @@ import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
-import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
@@ -73,23 +72,13 @@ final class TestRegistry implements TypeLookup {
   }
 
   /**
-   * Registers a type under a subject and returns it. Its dotted name's last part is the name
-   * its schema declares, in the namespace the parts before it make.
+   * Creates a type under a subject, as a CREATE TYPE statement would, and returns it. Its dotted
+   * name's last part is the name its schema declares, in the namespace the parts before it make.
    */
   LogicalType create(String subject, String name, SchemaType format, TypeScripts.BodyKind kind,
       String body) {
-    int dot = name.lastIndexOf('.');
-    LogicalType parsed = TypeReferences.parse(this, format, aliases -> TypeScripts.createScript(
-        name.substring(dot + 1), kind, body, Map.of(), aliases), subject, Map.of());
-    LogicalType lt = Constraints.named(kind != TypeScripts.BodyKind.OTHER && dot > 0
-        ? TypeScripts.withNamespace(parsed, name.substring(0, dot)) : parsed, subject);
-    Formats.refuseUnwritable(format, lt);
-    try {
-      client.registerWithRequestResponse(subject, Formats.request(format, lt), false);
-    } catch (IOException | RestClientException e) {
-      throw new IllegalStateException(e);
-    }
-    return lt;
+    return register(subject, TypeCreate.create(this, subject, name, kind, body, "",
+        Map.of(TypeAlter.FORMAT, format.name()), null)).edited();
   }
 
   /**
@@ -101,7 +90,11 @@ final class TestRegistry implements TypeLookup {
   }
 
   TypeAlter.Result alter(String subject, TypeAlter.Options options, AlterAction... actions) {
-    TypeAlter.Result result = TypeAlter.alter(this, subject, List.of(actions), options);
+    return register(subject, TypeAlter.alter(this, subject, List.of(actions), options));
+  }
+
+  /** What a tool does with a result: sets the policy it has, then registers its version. */
+  TypeAlter.Result register(String subject, TypeAlter.Result result) {
     try {
       if (result.policy() != null) {
         Config config = new Config((String) null);
@@ -130,6 +123,14 @@ final class TestRegistry implements TypeLookup {
         .NAMED_TYPE_REF ? lt.getNamedTypes().get(root.getQualifiedName()) : root;
   }
 
+  /**
+   * Soft-deletes every live version of a subject, as a DROP TYPE does; one by one, since the
+   * mock forgets the versions of a subject deleted whole.
+   */
+  void drop(String subject) {
+    versions(subject, false).forEach(v -> softDelete(subject, v));
+  }
+
   void softDelete(String subject, int version) {
     try {
       client.deleteSchemaVersion(subject, String.valueOf(version));
@@ -152,16 +153,11 @@ final class TestRegistry implements TypeLookup {
     }
   }
 
-  // As the registry renders format=logical: the stored schema as logical types DDL, read back
-  // with its references.
+  // As the registry renders format=logical: the stored schema as logical types DDL.
   @Override
   public LogicalType logicalType(String subject, SchemaMetadata md) {
-    String ddl = LogicalTypeToDdlConverter.toDdl(LogicalTypeConversion.toLogicalType(parse(md)));
-    List<SchemaReference> references =
-        md.getReferences() != null ? md.getReferences() : List.of();
-    boolean protobuf = Formats.ofSchemaType(md.getSchemaType()) == SchemaType.PROTOBUF;
-    return TypeScripts.withReferences(TypeScripts.parse(ddl, protobuf), references,
-        TypeReferences.resolve(this, subject, references));
+    return TypeReferences.read(this, subject, md,
+        LogicalTypeToDdlConverter.toDdl(LogicalTypeConversion.toLogicalType(parse(md))));
   }
 
   // As the registry gives a subject's settings in scope: each unset one the global one.

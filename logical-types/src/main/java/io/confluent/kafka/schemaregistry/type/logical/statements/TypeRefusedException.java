@@ -14,13 +14,20 @@
  * limitations under the License.
  */
 
+package io.confluent.kafka.schemaregistry.type.logical.statements;
+
 /**
- * Making and altering types from the text of {@code CREATE TYPE} and {@code ALTER TYPE}
- * statements, for tools that have such statements: the body of a statement becomes a logical
- * type, with the types it names resolved to schema references.
- *
- * <p>Nothing here calls a registry itself. What it needs of one it asks through
- * {@link io.confluent.kafka.schemaregistry.type.logical.alter.TypeLookup}, and registering the
- * result is the caller's.
+ * A statement about a type that this package refuses, with the reason as its message. It is
+ * not a {@code ValidationException}, which the logical types parser and converters throw, so
+ * that code here can tell its own refusals from theirs.
  */
-package io.confluent.kafka.schemaregistry.type.logical.alter;
+public class TypeRefusedException extends RuntimeException {
+
+  public TypeRefusedException(String message) {
+    super(message);
+  }
+
+  public TypeRefusedException(String message, Throwable cause) {
+    super(message, cause);
+  }
+}
