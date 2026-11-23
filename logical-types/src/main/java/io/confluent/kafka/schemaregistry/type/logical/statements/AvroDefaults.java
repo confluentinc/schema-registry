@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.type.logical.alter;
+package io.confluent.kafka.schemaregistry.type.logical.statements;
 
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.EnumValue;
