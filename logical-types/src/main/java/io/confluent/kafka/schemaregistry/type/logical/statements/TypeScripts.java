@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.type.logical.alter;
+package io.confluent.kafka.schemaregistry.type.logical.statements;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
@@ -130,7 +130,7 @@ public final class TypeScripts {
     }
   }
 
-  public static LogicalType withNamespace(LogicalType lt, String namespace) {
+  static LogicalType withNamespace(LogicalType lt, String namespace) {
     return new LogicalType(lt.getName(), namespace, lt.getRootSchema(), lt.getNamedTypes(),
         lt.getExternalTypes(), lt.getExternalImports(), lt.getReferences(),
         lt.getResolvedReferences(), lt.getDefaultValues());
