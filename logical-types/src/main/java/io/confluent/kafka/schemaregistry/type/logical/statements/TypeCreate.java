@@ -17,10 +17,12 @@
 package io.confluent.kafka.schemaregistry.type.logical.statements;
 
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
 import io.confluent.kafka.schemaregistry.type.logical.statements.TypeScripts.BodyKind;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -71,9 +73,12 @@ public final class TypeCreate {
     refuseOtherFormat(subject, last, format);
 
     int dot = name.lastIndexOf('.');
+    String simpleName = name.substring(dot + 1);
+    TypeScripts.refuseOtherStatements(subject, kind,
+        TypeScripts.createScript(simpleName, kind, body, clauses, params, Map.of()));
     LogicalType parsed = TypeReferences.parse(lookup, format,
-        aliases -> TypeScripts.createScript(name.substring(dot + 1), kind, body, clauses,
-            params, aliases), subject, Map.of());
+        aliases -> TypeScripts.createScript(simpleName, kind, body, clauses, params, aliases),
+        subject, Map.of());
     LogicalType lt = Constraints.named(kind != BodyKind.OTHER && dot > 0
         ? TypeScripts.withNamespace(parsed, name.substring(0, dot)) : parsed, subject);
     Formats.refuseUnwritable(format, lt);
@@ -99,8 +104,10 @@ public final class TypeCreate {
     }
     // And it is refused where an ALTER of the last of them would be: it refers to no older
     // version of a type than the last did, pairs its attributes as one, and is compatible.
-    TypeAlter.refuseOlderReferences(lookup, subject, last.getReferences(), lt.getReferences(),
-        policy, refused, "leave out");
+    List<SchemaReference> was = last.getReferences() != null ? last.getReferences()
+        : List.of();
+    TypeAlter.refuseOlderReferences(lookup, subject, was, lt.getReferences(), policy, refused,
+        "leave out");
     TypeAlter.refuseOtherColumnsAfterDrop(lookup, subject, format, last, lt);
     TypeAlter.refuseIncompatible(lookup, subject, format, last, lt, policy, refused,
         v -> "version " + v);

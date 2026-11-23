@@ -86,6 +86,26 @@ public final class TypeScripts {
     return sb.toString();
   }
 
+  /**
+   * Refuses a created type's script that is more than the one type its body's kind says: a
+   * body or clauses that end their statement and begin another, whose type the script's would
+   * then be. A script that does not parse is left to its parse, which says why.
+   */
+  static void refuseOtherStatements(String subject, BodyKind kind, String script) {
+    LogicalTypesParser.ScriptContext parsed;
+    try {
+      parsed = LogicalTypesParserFactory.parse(script);
+    } catch (RuntimeException e) {
+      return;
+    }
+    int declared = parsed.createTypeStmt().size();
+    boolean rooted = parsed.registerTypeStmt() != null;
+    if (kind == BodyKind.OTHER ? declared != 0 || !rooted : declared != 1 || rooted) {
+      throw new TypeRefusedException("Type " + subject + " is given more than one type's "
+          + "definition");
+    }
+  }
+
   /** The script whose only field is the given field definition, for an added attribute. */
   public static String fieldScript(String name, String field, Map<String, String> aliases) {
     return createScript(SCRATCH_STRUCT, BodyKind.STRUCT, "(" + quote(name) + " " + field + ")",

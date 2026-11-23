@@ -21,6 +21,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.google.protobuf.Descriptors.Descriptor;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalTypeToDdlConverter;
@@ -174,6 +175,54 @@ class TypeCreateTest {
     assertThat(result.edited().getReferences().get(0).getSubject()).isEqualTo("address");
     assertThat(result.edited().getReferences().get(0).getVersion()).isEqualTo(2);
     assertThat(registry.latest("o").getReferences()).hasSize(1);
+  }
+
+  // A body or clauses that close their statement would make the script another type's.
+  @Test
+  void aBodyOrClausesThatBeginAnotherStatementAreRefused() {
+    String refused = "Type t is given more than one type's definition";
+    assertThatThrownBy(() -> struct("t", "(id INT); TYPE STRING", Map.of()))
+        .isInstanceOf(TypeRefusedException.class).hasMessage(refused);
+    assertThatThrownBy(() -> struct("t", "(id INT); STRUCT other (b INT)", Map.of()))
+        .isInstanceOf(TypeRefusedException.class).hasMessage(refused);
+    assertThatThrownBy(() -> TypeCreate.create(registry, "t", "t", BodyKind.STRUCT, "(id INT)",
+        "COMMENT 'x'; TYPE STRING", Map.of(), null))
+        .isInstanceOf(TypeRefusedException.class).hasMessage(refused);
+    assertThatThrownBy(() -> TypeCreate.create(registry, "t", "t", BodyKind.ENUM,
+        "('A'); TYPE STRING", "", Map.of(), null))
+        .isInstanceOf(TypeRefusedException.class).hasMessage(refused);
+    // What is no script at all is refused by its parse.
+    assertThatThrownBy(() -> struct("t", "(id INT", Map.of()))
+        .isInstanceOf(TypeRefusedException.class).hasMessageStartingWith("Invalid type");
+  }
+
+  // A lookup may give a version with no list of references, not an empty one.
+  @Test
+  void aDroppedVersionWithNoListOfReferencesIsCreatedAgainWithOne() {
+    create("address", SchemaType.AVRO, "(city STRING)");
+    create("o", SchemaType.AVRO, "(id INT NOT NULL)");
+    registry.drop("o");
+    TypeLookup listless = (TypeLookup) Proxy.newProxyInstance(
+        TypeLookup.class.getClassLoader(), new Class<?>[] {TypeLookup.class},
+        (proxy, method, args) -> {
+          Object answer = method.invoke(registry, args);
+          if (!(answer instanceof SchemaMetadata)) {
+            return answer;
+          }
+          io.confluent.kafka.schemaregistry.client.rest.entities.Schema schema =
+              new io.confluent.kafka.schemaregistry.client.rest.entities.Schema(
+                  ((SchemaMetadata) answer).getSubject(), (SchemaMetadata) answer);
+          if (schema.getReferences().isEmpty()) {
+            schema.setReferences(null);
+          }
+          return new SchemaMetadata(schema);
+        });
+
+    TypeAlter.Result result = TypeCreate.create(listless, "o", "o", BodyKind.STRUCT,
+        "(id INT NOT NULL, addr address)", "", Map.of(), null);
+
+    assertThat(result.base().getReferences()).isNull();
+    assertThat(result.edited().getReferences()).hasSize(1);
   }
 
   @Test

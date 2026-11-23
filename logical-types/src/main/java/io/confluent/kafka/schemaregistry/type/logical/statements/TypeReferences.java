@@ -203,6 +203,9 @@ public final class TypeReferences {
   private static void collectReferences(TypeLookup lookup, String referrer,
       List<SchemaReference> references, Map<String, String> resolved,
       Map<String, String> named, String self) {
+    if (references == null) {
+      return;
+    }
     for (SchemaReference ref : references) {
       String subject = referenced(referrer, ref.getSubject());
       if (subject.equals(self)) {
