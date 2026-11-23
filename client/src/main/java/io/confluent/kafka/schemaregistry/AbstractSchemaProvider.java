@@ -104,8 +104,9 @@ public abstract class AbstractSchemaProvider implements SchemaProvider {
       }
       QualifiedSubject refSubject = QualifiedSubject.qualifySubjectWithParent(
               fetcher.tenant(), subject, reference.getSubject());
+      // A stored schema never holds -1, so latest always resolves to a live version
       Schema s = fetcher.getByVersion(refSubject.toQualifiedSubject(),
-              reference.getVersion(), lookupDeletedSchema);
+              reference.getVersion(), lookupDeletedSchema && reference.getVersion() != -1);
       if (s == null) {
         throw new IllegalArgumentException("No schema reference found for subject \""
                 + refSubject
