@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.type.logical.alter;
+package io.confluent.kafka.schemaregistry.type.logical.statements;
 
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
@@ -120,6 +120,20 @@ public final class TypeReferences {
   }
 
   /**
+   * The logical type of a stored version, from the logical types DDL the registry gives for it
+   * as {@code format=logical}, with the version's references resolved: what
+   * {@link TypeLookup#logicalType} answers.
+   */
+  public static LogicalType read(TypeLookup lookup, String subject, SchemaMetadata version,
+      String ddl) {
+    List<SchemaReference> references = version.getReferences() != null
+        ? version.getReferences() : List.of();
+    boolean protobuf = Formats.ofSchemaType(version.getSchemaType()) == SchemaType.PROTOBUF;
+    return TypeScripts.withReferences(TypeScripts.parse(ddl, protobuf), references,
+        resolve(lookup, subject, references));
+  }
+
+  /**
    * The names a reference may be known by in a referring type; null if they cannot be told,
    * because the registry has no such version or its schema cannot be parsed. A lookup that
    * fails is neither, and fails here as it does.
@@ -189,6 +203,9 @@ public final class TypeReferences {
   private static void collectReferences(TypeLookup lookup, String referrer,
       List<SchemaReference> references, Map<String, String> resolved,
       Map<String, String> named, String self) {
+    if (references == null) {
+      return;
+    }
     for (SchemaReference ref : references) {
       String subject = referenced(referrer, ref.getSubject());
       if (subject.equals(self)) {

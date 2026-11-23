@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.confluent.kafka.schemaregistry.type.logical.alter;
+package io.confluent.kafka.schemaregistry.type.logical.statements;
 
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
@@ -114,10 +114,18 @@ public final class Formats {
 
   /**
    * Refuses what a type declares that its format cannot write: a DEFAULT outside Avro, a NOT
-   * NULL UNION in Protobuf, a Protobuf field or enum number that is none, a JSON UNION whose
-   * branches are written as one JSON type.
+   * NULL UNION in Protobuf, a Protobuf field or enum number that is none, a Protobuf type that
+   * is an ENUM, a JSON UNION whose branches are written as one JSON type.
    */
   public static void refuseUnwritable(SchemaType format, LogicalType lt) {
+    Schema root = lt.getRootSchema();
+    if (root.getType() == Schema.Type.NAMED_TYPE_REF) {
+      root = lt.getNamedTypes().getOrDefault(root.getQualifiedName(), root);
+    }
+    if (format == SchemaType.PROTOBUF && root.getType() == Schema.Type.ENUM) {
+      throw new TypeRefusedException("A PROTOBUF type cannot be an ENUM: the root of a "
+          + "Protobuf schema is a message");
+    }
     refuseUnwritable(format, lt.getRootSchema());
     lt.getNamedTypes().values().forEach(s -> refuseUnwritable(format, s));
   }
