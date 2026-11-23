@@ -274,11 +274,18 @@ public final class TypeAlter {
 
   /**
    * Refuses a Protobuf type created again over its dropped versions if the last of them has
-   * what a statement's type cannot carry, as an ALTER of it is refused: the new version would
-   * lose it, and stored values could be read wrongly.
+   * what a statement's type cannot carry, or is several messages, as an ALTER of it is
+   * refused: the new version would lose it, and stored values could be read wrongly.
    */
   static void refuseUncarriedAfterDrop(TypeLookup lookup, String subject, SchemaMetadata md) {
     new TypeAlter(lookup, subject).refuseUncarried(md, "created again");
+    // Whatever the subject's compatibility level, which may be none.
+    if (ProtoToLogicalTypeConverter.isMultiMessageRoot(
+        lookup.logicalType(subject, md).getRootSchema())) {
+      throw new TypeRefusedException("Type " + subject + " cannot be created again: it is "
+          + "several Protobuf messages, and would be registered as one, leaving the records "
+          + "of the others unreadable. Register its new version as a Protobuf schema");
+    }
   }
 
   /**

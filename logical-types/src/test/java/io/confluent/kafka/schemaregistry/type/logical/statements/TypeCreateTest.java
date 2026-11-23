@@ -21,6 +21,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.google.protobuf.Descriptors.Descriptor;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalTypeToDdlConverter;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
@@ -240,7 +241,11 @@ class TypeCreateTest {
         + "message s {\n  sint32 a = 1;\n}\n"));
     registry.client.register("plain", new ProtobufSchema(proto3
         + "message plain {\n  int32 a = 1;\n  string b = 2;\n}\n"));
-    for (String subject : new String[] {"r", "q", "s", "plain"}) {
+    // Several messages, at a compatibility level that checks nothing.
+    registry.client.register("m", new ProtobufSchema(proto3
+        + "message first {\n  int32 a = 1;\n}\nmessage second {\n  string b = 1;\n}\n"));
+    registry.client.updateConfig("m", new Config("NONE"));
+    for (String subject : new String[] {"r", "q", "s", "plain", "m"}) {
       registry.drop(subject);
     }
 
@@ -254,7 +259,11 @@ class TypeCreateTest {
     assertThatThrownBy(() -> create("s", SchemaType.PROTOBUF, "(a INT)"))
         .isInstanceOf(TypeRefusedException.class).hasMessageStartingWith("Type s cannot be "
             + "created again: field a of message s is a sint32, which would be written as int32");
+    assertThatThrownBy(() -> create("m", SchemaType.PROTOBUF, "(a INT)"))
+        .isInstanceOf(TypeRefusedException.class).hasMessageStartingWith("Type m cannot be "
+            + "created again: it is several Protobuf messages, and would be registered as one");
     assertThat(registry.versions("r", true)).containsExactly(1);
+    assertThat(registry.versions("m", true)).containsExactly(1);
 
     // A file written by hand with none of these is created again as any other.
     create("plain", SchemaType.PROTOBUF, "(a INT, b STRING, c STRING)");
