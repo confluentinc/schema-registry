@@ -624,23 +624,24 @@ public final class LogicalTypeToDdlConverter {
     private boolean namedTypeKeyExistsForRoot(String rootName) {
       String ns = lt.getNamespace();
       boolean namespaced = ns != null && !ns.isEmpty();
-      // The name the root's declaration would have, which a name that has the namespace
-      // already is: a type of it, declared or only referred to, is that very type to the
-      // reader.
-      String own = namespaced && !rootName.startsWith(ns + ".") ? ns + "." + rootName
-          : rootName;
+      // The name the root is declared by, without the namespace it may carry, and the name
+      // that declaration reads as: a dotted one as written, any other in the namespace. A
+      // type of that name, declared or only referred to, is that very type to the reader.
+      String bare = namespaced && rootName.startsWith(ns + ".")
+          ? rootName.substring(ns.length() + 1) : rootName;
+      String own = namespaced && !bare.contains(".") ? ns + "." + bare : rootName;
       if (lt.getNamedTypes().containsKey(own) || lt.getExternalTypes().contains(own)) {
         return true;
       }
-      if (own.equals(rootName)) {
+      if (own.equals(bare)) {
         return false;
       }
       // Under a namespace the bare name is another type's. One the script declares takes it,
       // and so does one bound to a reference, whose name is read with the namespace; any
       // other it refers to is aliased to itself, and the root is named with its namespace.
-      return lt.getNamedTypes().containsKey(rootName) && !lt.getExternalTypes().contains(rootName)
-          || lt.getExternalImports().containsKey(rootName)
-            && collectExternalRefs().contains(rootName);
+      return lt.getNamedTypes().containsKey(bare) && !lt.getExternalTypes().contains(bare)
+          || lt.getExternalImports().containsKey(bare)
+            && collectExternalRefs().contains(bare);
     }
 
     /**

@@ -604,11 +604,12 @@ class LogicalTypeToDdlConverterTest {
   void aRootIsNotDeclaredByTheNameOfATypeItRefersTo() {
     Schema referred = Schema.createStruct(List.of(
         new Schema.Field("x", Schema.createString(), 0)));
-    // With no namespace, with one, and with one that the root's name gives too.
+    // With no namespace, with one, with one that the root's name gives too, and with a
+    // dotted name of another, which is read as written.
     for (String[] named : new String[][] {{"Order", null}, {"Order", "shop"},
-        {"shop.Order", "shop"}}) {
+        {"shop.Order", "shop"}, {"shop.Order", "a.b"}}) {
       String namespace = named[1];
-      String key = namespace == null ? "Order" : namespace + ".Order";
+      String key = namespace == null ? "Order" : "shop.Order";
       Schema root = Schema.createStruct(List.of(
           new Schema.Field("id", Schema.createString(), 0),
           new Schema.Field("prev", Schema.createNamedTypeRef(key), 1)));
@@ -631,14 +632,25 @@ class LogicalTypeToDdlConverterTest {
     Schema root = Schema.createStruct(List.of(
         new Schema.Field("id", Schema.createString(), 0),
         new Schema.Field("prev", Schema.createNamedTypeRef("Order"), 1)));
-    LogicalType lt = new LogicalType("Order", "shop", root, Map.of("Order", referred),
-        Set.of("Order"), Map.of("Order", "common.json"), List.of(), Map.of(), Map.of());
-    String ddl = LogicalTypeToDdlConverter.toDdl(lt, true);
-    assertTrue(ddl.contains("USING TYPE Order FOR REF 'common.json'"), ddl);
-    assertFalse(ddl.contains("STRUCT Order "), ddl);
-    LogicalType read = parse(ddl);
-    assertEquals(Set.of("shop.Order"), read.getExternalTypes(), ddl);
-    assertEquals(ddl, LogicalTypeToDdlConverter.toDdl(read, true));
+    // Whether or not the root's name gives the namespace too.
+    for (String name : List.of("Order", "shop.Order")) {
+      LogicalType lt = new LogicalType(name, "shop", root, Map.of("Order", referred),
+          Set.of("Order"), Map.of("Order", "common.json"), List.of(), Map.of(), Map.of());
+      String ddl = LogicalTypeToDdlConverter.toDdl(lt, true);
+      assertTrue(ddl.contains("USING TYPE Order FOR REF 'common.json'"), ddl);
+      assertFalse(ddl.contains("STRUCT Order "), ddl);
+      LogicalType read = parse(ddl);
+      assertEquals(Set.of("shop.Order"), read.getExternalTypes(), ddl);
+      assertEquals(ddl, LogicalTypeToDdlConverter.toDdl(read, true));
+    }
+    // One the root does not refer to is not written, and leaves the root its name.
+    Schema alone = Schema.createStruct(List.of(
+        new Schema.Field("id", Schema.createString(), 0)));
+    String ddl = LogicalTypeToDdlConverter.toDdl(new LogicalType("Order", "shop", alone,
+        Map.of("Order", referred), Set.of("Order"), Map.of("Order", "common.json"), List.of(),
+        Map.of(), Map.of()), true);
+    assertEquals("NAMESPACE shop; STRUCT Order (id STRING); TYPE Order;", ddl);
+    assertEquals("Order", parse(ddl).getName());
   }
 
   // The root is declared in the script as a named type is: a name that begins with its name

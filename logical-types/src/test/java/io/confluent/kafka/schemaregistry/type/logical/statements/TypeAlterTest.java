@@ -1083,11 +1083,14 @@ class TypeAlterTest {
             new AddAttribute("y", "INT", Position.after("a")), new AddAttribute("z", "INT")},
         new AlterAction[] {new AddConstraint(new Check("ck", "bb > 0", null)),
             new MoveAttribute("a", Position.after("b")), new RenameAttribute("b", "bb")},
+        // An attribute's own, which holds of the type it is given after.
         new AlterAction[] {new AddAttributeCheck("b", new Check("ck", "b > 0", null)),
-            new AddAttribute("y", "INT", Position.first())});
+            new AddAttribute("y", "INT", Position.first()),
+            new AlterAttributeType("b", "INT")});
     for (int i = 0; i < statements.size(); i++) {
       String type = "pc" + i;
-      create(type, SchemaType.AVRO, "(a INT NOT NULL, b INT)");
+      create(type, SchemaType.AVRO, i < 3 ? "(a INT NOT NULL, b INT)"
+          : "(a INT NOT NULL, b STRING)");
       registry.alter(type, statements.get(i));
       assertThat(version(type)).as("statement %d", i).isEqualTo(2);
       Schema struct = registry.struct(type);
@@ -1107,6 +1110,26 @@ class TypeAlterTest {
         new MoveAttribute("b", Position.first()))).isInstanceOf(TypeRefusedException.class)
         .hasMessageContaining("Unknown column in CHECK: 'z'");
     assertThat(version("pe")).isEqualTo(1);
+  }
+
+  // A record whose name another type's begins with is read as a named type the root refers
+  // to: its CHECKs are left out of the names' reading there as at the root.
+  @Test
+  void anAvroCheckIsJudgedAtTheEndOfAStatementOnARootReadAsANamedType() throws Exception {
+    registry.client.register("nr", new AvroSchema("{\"type\": \"record\", \"name\": "
+        + "\"Order\", \"fields\": [{\"name\": \"v\", \"type\": \"int\"}, "
+        + "{\"name\": \"w\", \"type\": [\"null\", \"int\"], \"default\": null}, "
+        + "{\"name\": \"s\", \"type\": {\"type\": \"record\", \"name\": \"Inner\", "
+        + "\"namespace\": \"Order\", \"fields\": [{\"name\": \"x\", \"type\": \"int\"}]}}, "
+        + "{\"name\": \"t\", \"type\": \"Order.Inner\"}]}"));
+    assertThat(registry.logicalType("nr", registry.latest("nr")).getRootSchema().getType())
+        .isEqualTo(Schema.Type.NAMED_TYPE_REF);
+    registry.alter("nr", new AddConstraint(new Check("ck", "z > 0", null)),
+        new MoveAttribute("w", Position.first()), new AddAttribute("z", "INT"));
+    Schema order = registry.struct("nr");
+    assertThat(order.getFields()).extracting(Schema.Field::getName)
+        .containsExactly("w", "v", "s", "t", "z");
+    assertThat(order.getRules()).extracting(Rule::getName).containsExactly("ck");
   }
 
   // A column's name compares whatever its case, in a position as elsewhere.
@@ -1224,6 +1247,13 @@ class TypeAlterTest {
               + ", the type of e in Protobuf message en, would be renamed");
     }
     assertThat(version("en")).isEqualTo(1);
+    // And an enum may be what takes a message's name.
+    create("em", SchemaType.PROTOBUF, "(id INT NOT NULL, foo STRUCT(x STRING))");
+    assertThatThrownBy(() -> registry.alter("em", new AddAttribute("k",
+        "ENUM('A', 'B') WITH ('protobuf.name' = 'FooRow')")))
+        .isInstanceOf(TypeRefusedException.class).hasMessageContaining(
+            "FooRow, the type of foo in Protobuf message em, would be renamed Foo2Row");
+    assertThat(version("em")).isEqualTo(1);
   }
 
   // A reference to a whole document is given a name, Ref1, that is read with the namespace:
@@ -1234,21 +1264,42 @@ class TypeAlterTest {
         + "{\"x\": {\"type\": \"string\"}}}";
     registry.client.register("common", new JsonSchema(common));
     SchemaReference reference = new SchemaReference("common.json", "common", 1);
-    registry.client.register("jr", new JsonSchema("{\"type\": \"object\", \"title\": "
-        + "\"Ref1\", \"confluent:namespace\": \"shop\", \"properties\": {\"id\": "
-        + "{\"type\": \"string\"}, \"prev\": {\"$ref\": \"common.json\"}}}",
-        List.of(reference), Map.of("common.json", common), null));
-    registry.alter("jr", new AddAttribute("nick", "STRING"));
-    assertThat(version("jr")).isEqualTo(2);
-    assertThat(registry.schema("jr").canonicalString()).contains(
-        "\"$ref\":\"common.json\"", "\"nick\"", "\"confluent:namespace\":\"shop\"");
-    assertThat(registry.schema("jr").references()).containsExactly(reference);
+    // The title may give the namespace too.
+    for (String title : List.of("Ref1", "shop.Ref1")) {
+      String subject = "jr" + title.length();
+      registry.client.register(subject, new JsonSchema("{\"type\": \"object\", \"title\": \""
+          + title + "\", \"confluent:namespace\": \"shop\", \"properties\": {\"id\": "
+          + "{\"type\": \"string\"}, \"prev\": {\"$ref\": \"common.json\"}}}",
+          List.of(reference), Map.of("common.json", common), null));
+      registry.alter(subject, new AddAttribute("nick", "STRING"));
+      assertThat(version(subject)).isEqualTo(2);
+      assertThat(registry.schema(subject).canonicalString()).contains(
+          "\"$ref\":\"common.json\"", "\"nick\"", "\"confluent:namespace\":\"shop\"");
+      assertThat(registry.schema(subject).references()).containsExactly(reference);
+    }
+  }
+
+  // A definition of the document's own takes the name as one it refers to does.
+  @ParameterizedTest
+  @ValueSource(strings = {"Order", "shop.Order"})
+  void aNamespacedJsonTypeTitledAsADefinitionOfItsOwnIsAltered(String title) throws Exception {
+    registry.client.register("jd", new JsonSchema("{\"type\": \"object\", \"title\": \""
+        + title + "\", \"confluent:namespace\": \"shop\", \"properties\": {\"id\": "
+        + "{\"type\": \"string\"}, \"prev\": {\"$ref\": \"#/$defs/Order\"}}, \"$defs\": "
+        + "{\"Order\": {\"type\": \"object\", \"properties\": {\"x\": {\"type\": "
+        + "\"string\"}}}}}"));
+    registry.alter("jd", new AddAttribute("nick", "STRING"));
+    assertThat(version("jd")).isEqualTo(2);
+    // The definition is written by its name in the namespace, as it was before.
+    assertThat(registry.schema("jd").canonicalString())
+        .contains("\"$ref\":\"#/$defs/shop.Order\"", "\"nick\"");
   }
 
   // A JSON document titled as the definition it refers to: they are two types of one name,
   // which only the reference tells apart.
   @ParameterizedTest
-  @ValueSource(strings = {"", "\"confluent:namespace\": \"shop\", "})
+  @ValueSource(strings = {"", "\"confluent:namespace\": \"shop\", ",
+      "\"confluent:namespace\": \"a.b\", "})
   void aJsonTypeTitledAsTheDefinitionItRefersToIsAltered(String namespace) throws Exception {
     String common = "{\"$defs\": {\"Order\": {\"type\": \"object\", \"properties\": "
         + "{\"x\": {\"type\": \"string\"}}}, \"shop.Order\": {\"type\": \"object\", "
@@ -1488,6 +1539,20 @@ class TypeAlterTest {
     assertThat(version("kept")).isEqualTo(2);
     registry.alter("kept", new AddConstraint(new Check("ck", "a > 0", null)));
     assertThat(version("kept")).isEqualTo(3);
+  }
+
+  // A schema this writer did not write is rewritten by a version, without what the logical
+  // type does not carry, as an enum's default: a type said as it is must not make one.
+  @Test
+  void anAttributeOfANativeSchemaRetypedAsItIsMakesNoVersion() throws Exception {
+    registry.client.register("nv", new AvroSchema("{\"type\": \"record\", \"name\": \"R\", "
+        + "\"fields\": [{\"name\": \"id\", \"type\": \"int\"}, {\"name\": \"e\", \"type\": "
+        + "{\"type\": \"enum\", \"name\": \"E\", \"symbols\": [\"A\", \"B\"], "
+        + "\"default\": \"A\"}}]}"));
+    assertThat(registry.latest("nv").getMetadata()).isNull();
+    assertThat(registry.alter("nv", new AlterAttributeType("id", "INT NOT NULL"),
+        new MoveAttribute("id", Position.first())).edited()).isNull();
+    assertThat(version("nv")).isEqualTo(1);
   }
 
   // The properties the writer sets are part of what is stored: a schema registered without
