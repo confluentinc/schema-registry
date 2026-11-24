@@ -32,7 +32,9 @@ declareNamespaceStmt
 // LogicalType. That is why it works for every target format, and why aliases do
 // not round-trip — the DDL writer emits the resolved FQN inline. The target is
 // taken verbatim (never namespace-qualified), may be a local type, and must not
-// itself be an alias; chains are rejected.
+// itself be an alias; chains are rejected. Under a NAMESPACE, a name aliased to
+// itself is so the type of no namespace, which the writer emits for one: written
+// bare, it would be read as a type of the namespace.
 //
 // `USING TYPE <name> FOR REF <stringLiteral>` attaches a synthetic-wrapper URI
 // to a named external, for sources an FQN can't address (whole-doc JSON refs,

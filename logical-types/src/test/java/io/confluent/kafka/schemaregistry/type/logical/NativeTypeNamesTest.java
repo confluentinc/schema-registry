@@ -362,6 +362,31 @@ class NativeTypeNamesTest {
         + "}\n");
   }
 
+  // A name Flink's writer derives is taken as derived, and the type written back takes this
+  // writer's, another type to the registry; read with names as written, it keeps its name.
+  @Test
+  void testProtoNamesFlinkDerivedAreKeptWhenReadAsWritten() {
+    ProtobufSchema original = new ProtobufSchema("syntax = \"proto3\";\n"
+        + "message Record {\n"
+        + "  optional addr_Row addr = 1;\n"
+        + "  repeated item_Row item = 2;\n"
+        + "  optional HomeRow home = 3;\n"
+        + "  message addr_Row { optional string city = 1; }\n"
+        + "  message item_Row { optional string sku = 1; }\n"
+        + "  message HomeRow { optional string city = 1; }\n"
+        + "}\n");
+    LogicalType derived = ProtoToLogicalTypeConverter.toLogicalType(original);
+    assertThat(ddl(derived)).doesNotContain("protobuf.name");
+    assertThat(LogicalTypeToProtoConverter.fromLogicalType(derived, "Record")
+        .isBackwardCompatible(original)).isNotEmpty();
+
+    LogicalType asWritten = ProtoToLogicalTypeConverter.toLogicalType(original, true);
+    assertThat(ddl(asWritten)).contains("'protobuf.name' = 'addr_Row'",
+        "'protobuf.name' = 'item_Row'").doesNotContain("HomeRow");
+    assertThat(LogicalTypeToProtoConverter.fromLogicalType(asWritten, "Record")
+        .isBackwardCompatible(original)).isEmpty();
+  }
+
   private static void assertProtoWritesBack(String proto) {
     ProtobufSchema original = new ProtobufSchema(proto);
     LogicalType logicalType = ProtoToLogicalTypeConverter.toLogicalType(original);

@@ -109,11 +109,27 @@ public final class LogicalTypeToDdlConverter {
     // try/finally.
     private StringBuilder sb = new StringBuilder();
     private final boolean oneLine;
+    // The types a script with a namespace refers to whose names it would read as its own, each
+    // aliased to itself so that its name is read as written: one of no namespace, and one
+    // whose name begins with that of a type the script declares, which reads as nested in it.
+    private final Set<String> topLevel = new LinkedHashSet<>();
 
     Printer(LogicalType lt, boolean oneLine) {
       this.lt = lt;
       this.oneLine = oneLine;
       this.localNames = lt.getNamedTypes().keySet();
+      String ns = lt.getNamespace();
+      if (ns != null && !ns.isEmpty()) {
+        for (String external : collectExternalRefs()) {
+          if (lt.getExternalImports().containsKey(external)) {
+            continue;
+          }
+          if (!external.contains(".")
+              || !external.startsWith(ns + ".") && hasLocalParentPrefix(external, ns)) {
+            topLevel.add(external);
+          }
+        }
+      }
     }
 
     String script() {
@@ -138,6 +154,13 @@ public final class LogicalTypeToDdlConverter {
         // namespace-qualified, and re-parsing applies the namespace again.
         sb.append("USING TYPE ").append(qualifiedName(displayName(e.getKey())))
             .append(" FOR REF ").append(stringLiteral(e.getValue()))
+            .append(endOfStatement());
+      }
+      // A type of no namespace, named in a script that has one, would read back as a type of
+      // the script's namespace. Aliased to itself, its name is taken as written.
+      for (String external : topLevel) {
+        sb.append("USING TYPE ").append(qualifiedName(external))
+            .append(" FOR ").append(qualifiedName(external))
             .append(endOfStatement());
       }
 
@@ -748,6 +771,10 @@ public final class LogicalTypeToDdlConverter {
         return fqn;
       }
       String relative = fqn.substring(ns.length() + 1);
+      // Bare, the name is the type of no namespace that is aliased to itself.
+      if (topLevel.contains(relative)) {
+        return fqn;
+      }
       if (!relative.contains(".") || hasLocalParentPrefix(relative, ns)) {
         return relative;
       }
