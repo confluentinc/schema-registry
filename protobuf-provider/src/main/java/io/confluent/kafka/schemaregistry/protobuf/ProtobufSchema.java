@@ -3138,7 +3138,8 @@ public class ProtobufSchema implements ParsedSchema {
           .collect(Collectors.toList());
     } else if (message instanceof Map) {
       return message;
-    } else if (message instanceof Message && !isCelLeafMessage(desc)) {
+    } else if (message instanceof Message && !isCelLeafMessage(desc)
+        && !isVariantMessage(desc)) {
       Message.Builder copy = ((Message) message).toBuilder();
       for (FieldDescriptor fd : copy.getDescriptorForType().getFields()) {
         if (isMapKeyField(fd)) {
@@ -3647,6 +3648,15 @@ public class ProtobufSchema implements ParsedSchema {
     return DECIMAL_TYPE_NAME.equals(name) || TIMESTAMP_TYPE_NAME.equals(name);
   }
 
+  private static final String VARIANT_TYPE_NAME = "confluent.type.Variant";
+
+  /**
+   * A variant is one value of Type.ANY, not a message to walk into.
+   */
+  private static boolean isVariantMessage(Descriptor desc) {
+    return desc != null && VARIANT_TYPE_NAME.equals(desc.getFullName());
+  }
+
   private RuleContext.Type getType(FieldDescriptor field) {
     if (field.isMapField()) {
       return RuleContext.Type.MAP;
@@ -3659,6 +3669,9 @@ public class ProtobufSchema implements ParsedSchema {
           return DECIMAL_TYPE_NAME.equals(field.getMessageType().getFullName())
               ? RuleContext.Type.BYTES
               : RuleContext.Type.LONG;
+        }
+        if (isVariantMessage(field.getMessageType())) {
+          return RuleContext.Type.ANY;
         }
         return RuleContext.Type.RECORD;
       case ENUM:

@@ -1349,11 +1349,11 @@ public class JsonSchema implements ParsedSchema {
       return toTransformedMessage(ctx, ((ReferenceSchema)schema).getReferredSchema(),
           path, message, transform);
     } else if (schema instanceof ConditionalSchema
-        || schema instanceof EmptySchema
         || schema instanceof FalseSchema
         || schema instanceof NotSchema) {
       return message;
     } else {
+      // An empty schema lands here too, as Type.ANY, so an executor can reject it.
       if (fieldCtx != null) {
         try {
           Set<String> ruleTags = ctx.rule().getTags();
@@ -1642,6 +1642,8 @@ public class JsonSchema implements ParsedSchema {
       return numberSchema.requiresInteger() ? Type.INT : Type.DOUBLE;
     } else if (schema instanceof BooleanSchema) {
       return Type.BOOLEAN;
+    } else if (schema instanceof EmptySchema) {
+      return Type.ANY;
     } else {
       return Type.NULL;
     }
