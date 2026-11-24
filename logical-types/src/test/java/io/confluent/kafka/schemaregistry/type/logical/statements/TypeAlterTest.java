@@ -233,6 +233,27 @@ class TypeAlterTest {
     assertThat(version("sh")).isEqualTo(3);
   }
 
+  // An alias is a name the attribute's data was written with: the one it is stored under,
+  // not one it had only within the statement.
+  @Test
+  void anAvroAliasIsOnlyOfANameTheAttributeWasStoredUnder() {
+    create("al", SchemaType.AVRO, "(id INT NOT NULL, a INT, b INT, c BIGINT)");
+    // Renamed and renamed back, the attribute is as it was.
+    assertThat(registry.alter("al", new RenameAttribute("c", "cc"),
+        new RenameAttribute("cc", "c")).edited()).isNull();
+    assertThat(version("al")).isEqualTo(1);
+    // A swap through a third name, a rename in two steps, and an attribute added and renamed.
+    registry.alter("al", new RenameAttribute("a", "t"), new RenameAttribute("b", "a"),
+        new RenameAttribute("t", "b"), new RenameAttribute("c", "c1"),
+        new RenameAttribute("c1", "c2"), new AddAttribute("z", "INT"),
+        new RenameAttribute("z", "y"));
+    Map<String, List<String>> aliases = new LinkedHashMap<>();
+    registry.struct("al").getFields().forEach(f -> aliases.put(f.getName(), f.getAliases()));
+    assertThat(aliases).containsExactly(Map.entry("id", List.of()),
+        Map.entry("b", List.of("a")), Map.entry("a", List.of("b")),
+        Map.entry("c2", List.of("c")), Map.entry("y", List.of()));
+  }
+
   // A swap back in one statement after a swap is refused, as the aliases would read it as no
   // rename; the message gives the three statements that make it.
   @Test
@@ -1553,6 +1574,48 @@ class TypeAlterTest {
     assertThat(registry.alter("nv", new AlterAttributeType("id", "INT NOT NULL"),
         new MoveAttribute("id", Position.first())).edited()).isNull();
     assertThat(version("nv")).isEqualTo(1);
+  }
+
+  // A oneof is read after the fields beside it, and the messages a type declares are written
+  // in its attributes' order: a file that only declares them in another order is the same.
+  @Test
+  void aProtobufTypeDeclaringItsMessagesInAnotherOrderIsNoVersion() {
+    create("pu", SchemaType.PROTOBUF,
+        "(id INT NOT NULL, u UNION(r STRUCT(k INT), s STRING), w STRUCT(q INT))");
+    String stored = registry.schema("pu").canonicalString();
+    assertThat(registry.alter("pu", new AddAttribute("d", "INT"),
+        new DropAttribute("d", false)).edited()).isNull();
+    assertThat(registry.alter("pu",
+        new AlterAttributeType("u", "UNION(r STRUCT(k INT), s STRING)")).edited()).isNull();
+    assertThat(version("pu")).isEqualTo(1);
+
+    // What changes a line of it is a version: a comment, a CHECK, a member of a nested row.
+    registry.alter("pu", new SetAttributeComment("w", "the weight"));
+    registry.alter("pu", new AddConstraint(new Check("ck", "id > 0", null)));
+    registry.alter("pu", new AlterAttributeType("w", "STRUCT(q INT, p INT)"));
+    assertThat(version("pu")).isEqualTo(4);
+    assertThat(registry.schema("pu").canonicalString()).isNotEqualTo(stored)
+        .contains("the weight", "id > 0");
+  }
+
+  // The names of an Avro root union's branches are in a property written beside the schema,
+  // which the version is read with: a branch is added, and one commented is a version of the
+  // same schema.
+  @Test
+  void anAvroRootUnionIsAltered() {
+    registry.create("ru", SchemaType.AVRO, BodyKind.OTHER, "UNION(i INT, s STRING)");
+    registry.alter("ru", new SetDataType("UNION(i INT, s STRING, l BIGINT)"));
+    assertThat(version("ru")).isEqualTo(2);
+    String text = registry.schema("ru").canonicalString();
+    assertThat(text).contains("\"long\"");
+
+    String commented = "UNION(i INT COMMENT 'the count', s STRING, l BIGINT)";
+    registry.alter("ru", new SetDataType(commented));
+    assertThat(version("ru")).isEqualTo(3);
+    assertThat(registry.schema("ru").canonicalString()).isEqualTo(text);
+    assertThat(registry.latest("ru").getMetadata().getProperties().get("confluent:union"))
+        .contains("the count");
+    assertThat(registry.alter("ru", new SetDataType(commented)).edited()).isNull();
   }
 
   // The properties the writer sets are part of what is stored: a schema registered without

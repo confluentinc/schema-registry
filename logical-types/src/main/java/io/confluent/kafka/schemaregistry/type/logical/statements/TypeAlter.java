@@ -479,6 +479,7 @@ public final class TypeAlter {
   private static boolean writesWhatIsStored(SchemaMetadata md, ParsedSchema stored,
       ParsedSchema written) {
     if (!written.canonicalString().equals(stored.canonicalString())
+        && !declaresTheSameInAnotherOrder(stored, written)
         || !new HashSet<>(written.references()).equals(new HashSet<>(stored.references()))) {
       return false;
     }
@@ -487,6 +488,47 @@ public final class TypeAlter {
         : written.metadata().getProperties();
     return sets == null || sets.isEmpty()
         || had != null && had.entrySet().containsAll(sets.entrySet());
+  }
+
+  // A Protobuf message's nested messages and enums are written in the order of the attributes
+  // they are of, and a oneof is read after the fields beside it: the two files may so declare
+  // the same types in another order. The same lines, and the same messages by their names.
+  private static boolean declaresTheSameInAnotherOrder(ParsedSchema stored,
+      ParsedSchema written) {
+    if (!(stored instanceof ProtobufSchema) || !(written instanceof ProtobufSchema)
+        || !sortedLines(stored).equals(sortedLines(written))) {
+      return false;
+    }
+    try {
+      Descriptor was = ((ProtobufSchema) stored).toDescriptor();
+      Descriptor now = ((ProtobufSchema) written).toDescriptor();
+      return was != null && now != null
+          && unordered(was.getFile().toProto()).equals(unordered(now.getFile().toProto()));
+    } catch (RuntimeException e) {
+      return false;
+    }
+  }
+
+  private static List<String> sortedLines(ParsedSchema schema) {
+    return schema.canonicalString().lines().sorted().collect(Collectors.toList());
+  }
+
+  private static FileDescriptorProto unordered(FileDescriptorProto file) {
+    FileDescriptorProto.Builder builder = file.toBuilder().clearMessageType();
+    file.getMessageTypeList().forEach(message -> builder.addMessageType(unordered(message)));
+    return builder.build();
+  }
+
+  // A message with the types it declares, at every level, in the order of their names.
+  private static DescriptorProto unordered(DescriptorProto message) {
+    DescriptorProto.Builder builder = message.toBuilder().clearNestedType().clearEnumType();
+    message.getNestedTypeList().stream().map(TypeAlter::unordered)
+        .sorted(Comparator.comparing(DescriptorProto::getName))
+        .forEach(builder::addNestedType);
+    message.getEnumTypeList().stream()
+        .sorted(Comparator.comparing(EnumDescriptorProto::getName))
+        .forEach(builder::addEnumType);
+    return builder.build();
   }
 
   // A new version is written from the logical type, which carries neither what only a proto2
@@ -796,9 +838,14 @@ public final class TypeAlter {
       }
       Map<String, Object> params = new LinkedHashMap<>(f.getParams());
       if (format == SchemaType.AVRO) {
+        // The name it is stored under, which its data was written with: not one this
+        // statement gave it, nor that of an attribute the statement adds.
         List<String> aliases = new ArrayList<>(f.getAliases());
-        aliases.add(f.getName());
-        params.put(Schema.AVRO_ALIASES, String.join(",", aliases));
+        if (previousName(f.getName()).equals(f.getName()) && !added.contains(f.getName())
+            && !aliases.contains(f.getName())) {
+          aliases.add(f.getName());
+          params.put(Schema.AVRO_ALIASES, String.join(",", aliases));
+        }
       }
       // The native names of the attribute's types follow its name; pin them to the old one.
       params.putAll(Formats.typeNameParams(format, edited(), subject, f.getName()));
