@@ -598,6 +598,27 @@ class LogicalTypeToDdlConverterTest {
     assertRoundTrip(lt);
   }
 
+  // A referred type whose name is the very name the root's declaration would have is that
+  // declaration to the reader: the root is then written without a name, as it was.
+  @Test
+  void aRootIsNotDeclaredByTheNameOfATypeItRefersTo() {
+    Schema referred = Schema.createStruct(List.of(
+        new Schema.Field("x", Schema.createString(), 0)));
+    for (String namespace : new String[] {null, "shop"}) {
+      String key = namespace == null ? "Order" : namespace + ".Order";
+      Schema root = Schema.createStruct(List.of(
+          new Schema.Field("id", Schema.createString(), 0),
+          new Schema.Field("prev", Schema.createNamedTypeRef(key), 1)));
+      LogicalType lt = new LogicalType("Order", namespace, root, Map.of(key, referred),
+          Set.of(key), Map.of(), List.of(), Map.of(), Map.of());
+      String ddl = LogicalTypeToDdlConverter.toDdl(lt, true);
+      assertFalse(ddl.contains("STRUCT Order ") || ddl.contains("STRUCT shop.Order "), ddl);
+      LogicalType read = parse(ddl);
+      assertEquals(Set.of(key), read.getExternalTypes(), ddl);
+      assertEquals(ddl, LogicalTypeToDdlConverter.toDdl(read, true));
+    }
+  }
+
   // The root is declared in the script as a named type is: a name that begins with its name
   // reads as a type nested in it.
   @Test

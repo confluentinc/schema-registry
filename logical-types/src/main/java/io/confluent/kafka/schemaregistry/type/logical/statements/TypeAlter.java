@@ -32,6 +32,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
+import io.confluent.kafka.schemaregistry.type.logical.LogicalTypeConversion;
 import io.confluent.kafka.schemaregistry.type.logical.Rule;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.EnumValue;
@@ -200,10 +201,6 @@ public final class TypeAlter {
   private final Map<String, String> previousNames = new HashMap<>();
   // The attributes this statement adds, by their names in it.
   private final Set<String> added = new HashSet<>();
-  // The messages and enums the Protobuf message of the version being edited declares, and
-  // those of them each attribute's fields are of: gone with the attribute, a name is free.
-  private final Set<String> declared = new HashSet<>();
-  private final Map<String, Set<String>> owned = new HashMap<>();
   private final List<Message> versions = new ArrayList<>();
   // The compatibility policy a SET WITH gives the subject, or null to leave it.
   private String policy;
@@ -456,6 +453,9 @@ public final class TypeAlter {
       refuseOlderReferences(lookup, subject, original.getReferences(), references, policy,
           "Type " + subject + " cannot be changed so", "drop");
       edited = edited();
+      if (format == SchemaType.PROTOBUF) {
+        refuseTakenNames(md, edited);
+      }
       refuseOtherColumns(md, edited, version);
       refuseIncompatible(lookup, subject, format, md, softDeleted, versions, edited, policy,
           refused(), v -> "version " + v + " of type " + subject);
@@ -649,7 +649,6 @@ public final class TypeAlter {
       }
       refuseDroppedName(a.name());
       Formats.refuseUnwritable(format, field);
-      refuseDeclaredName(a.name());
       Map<String, Object> params = new LinkedHashMap<>(field.getParams());
       if (format == SchemaType.PROTOBUF) {
         params.put(Schema.PROTOBUF_FIELD_NUMBER, String.valueOf(nextNumber(fields)));
@@ -664,24 +663,21 @@ public final class TypeAlter {
       if (format == SchemaType.PROTOBUF) {
         at = fields.size();
       }
-      // Avro names the types under the attributes in their order too, and keeps the order:
-      // those of the attributes there keep their names by a pin, as on a rename.
-      if (format == SchemaType.AVRO && at < fields.size()) {
-        LogicalType now = edited();
-        for (int i = 0; i < fields.size(); i++) {
-          Field f = fields.get(i);
-          Map<String, Object> pinned = new LinkedHashMap<>(f.getParams());
-          pinned.putAll(Formats.typeNameParams(format, now, subject, f.getName()));
-          fields.set(i, copy(f, f.getName(), withBranchParams(f.getSchema(),
-              Formats.branchTypeNameParams(format, now, subject, f.getName())), pinned));
-        }
-      }
-      fields.add(at, new Field(field.getName(), schema, at,
+      fields.add(new Field(field.getName(), schema, fields.size(),
           nullDefault ? null : field.getDefaultValue(),
           nullDefault || field.hasDefaultValue(), field.getDoc(), field.getTags(), params,
           namedRules(field)));
       added.add(field.getName());
       setStruct(fields);
+      if (at < fields.size() - 1) {
+        // Avro names the types under the attributes in their order, and keeps the order:
+        // each keeps the name it has with the new attribute last, which then takes its place.
+        if (format == SchemaType.AVRO) {
+          fields = pinAvroNames();
+        }
+        fields.add(at, fields.remove(fields.size() - 1));
+        setStruct(fields);
+      }
       return true;
     } else if (action instanceof AlterAction.DropAttribute) {
       AlterAction.DropAttribute a = (AlterAction.DropAttribute) action;
@@ -705,7 +701,6 @@ public final class TypeAlter {
       added.remove(name);
       dropped.add(name);
       dropped.add(previous);
-      freeDeclared(previous);
       // Given to another attribute earlier in the statement, as in RENAME a TO b, ADD a.
       if (find(fields, previous) >= 0) {
         refuseDroppedName(previous);
@@ -730,6 +725,11 @@ public final class TypeAlter {
       // written in the order of their numbers.
       if (at == i || format == SchemaType.PROTOBUF) {
         return false;
+      }
+      // As for an attribute added at a position: the names are those of the order there is.
+      if (format == SchemaType.AVRO) {
+        fields = pinAvroNames();
+        moved = fields.remove(i);
       }
       fields.add(at, moved);
       setStruct(fields);
@@ -756,7 +756,6 @@ public final class TypeAlter {
             + fields.get(taken).getName());
       }
       refuseDroppedName(a.to());
-      refuseDeclaredName(a.to());
       Field f = fields.get(i);
       // A macro variable of the new name would take the attribute's place in its body.
       List<Rule> using = new ArrayList<>(f.getRules());
@@ -814,12 +813,18 @@ public final class TypeAlter {
       if (sameKind(f.getSchema(), type)) {
         type = withNestedNames(withBranchNameParams(type, f.getSchema()), f.getSchema());
       } else {
-        freeDeclared(previousName(f.getName()));
         params = new LinkedHashMap<>(params);
         params.keySet().removeIf(Schema::isTypeNameParam);
       }
       if (format == SchemaType.AVRO) {
         type = withDefaults(f.getSchema(), type);
+      }
+      // The type it has already: nothing changes, and no version is made of it. One that
+      // names a referenced type is said again to refer to that type's latest version.
+      Set<String> named = new HashSet<>();
+      LogicalType.collectNamedRefs(type, named);
+      if (named.isEmpty() && type.equals(f.getSchema()) && params.equals(f.getParams())) {
+        return false;
       }
       if (format == SchemaType.PROTOBUF) {
         Messages root = new Messages(current, versions);
@@ -1587,24 +1592,6 @@ public final class TypeAlter {
         : target.getFields().stream().map(Field::getName).collect(Collectors.toList());
   }
 
-  // The messages and enums only this attribute's fields were of go with it, or with its kind.
-  private void freeDeclared(String attribute) {
-    Set<String> types = owned.remove(attribute);
-    if (types != null) {
-      types.removeIf(type -> owned.values().stream().anyMatch(of -> of.contains(type)));
-      declared.removeAll(types);
-    }
-  }
-
-  // A Protobuf message's fields share their names with the messages and enums it declares:
-  // given one of those names, the writer would rename the type, or the schema be invalid.
-  private void refuseDeclaredName(String name) {
-    if (declared.contains(name)) {
-      throw new TypeRefusedException("Type " + subject + " cannot have an attribute named "
-          + name + ": its Protobuf message declares a message or enum of that name");
-    }
-  }
-
   private Schema struct() {
     Schema target = target();
     if (target.getType() != Schema.Type.STRUCT) {
@@ -1636,30 +1623,92 @@ public final class TypeAlter {
     if (!(schema instanceof ProtobufSchema)) {
       return;
     }
-    Descriptor message = ((ProtobufSchema) schema).toDescriptor();
-    if (message != null) {
-      message.getNestedTypes().forEach(type -> declared.add(type.getName()));
-      message.getEnumTypes().forEach(type -> declared.add(type.getName()));
-      for (FieldDescriptor f : message.getFields()) {
-        String type = f.getType() == FieldDescriptor.Type.MESSAGE
-            && f.getMessageType().getContainingType() == message ? f.getMessageType().getName()
-            : f.getType() == FieldDescriptor.Type.ENUM
-              && f.getEnumType().getContainingType() == message ? f.getEnumType().getName()
-              : null;
-        if (type != null) {
-          // A oneof's members are the branches of the attribute of its name.
-          owned.computeIfAbsent(f.getRealContainingOneof() != null
-              ? f.getRealContainingOneof().getName() : f.getName(), a -> new HashSet<>())
-              .add(type);
-        }
-      }
-    }
-    LogicalType named = ProtoToLogicalTypeConverter.toLogicalType((ProtobufSchema) schema, true);
+    pinNames(ProtoToLogicalTypeConverter.toLogicalType((ProtobufSchema) schema, true));
+  }
+
+  // Pins on the type being edited the names another reading of it records, where it has none.
+  private void pinNames(LogicalType named) {
     root = pinned(root, named.getRootSchema());
     for (Map.Entry<String, Schema> type : new ArrayList<>(namedTypes.entrySet())) {
       Schema other = named.getNamedTypes().get(type.getKey());
       if (other != null) {
         namedTypes.put(type.getKey(), pinned(type.getValue(), other));
+      }
+    }
+  }
+
+  /**
+   * Pins the names the Avro types under the attributes have as they stand, wherever the writer
+   * would not derive them again: read back from the schema it writes of the type now, as the
+   * next statement would read it. In another order no attribute then takes another's name.
+   * Returns the attributes.
+   */
+  private List<Field> pinAvroNames() {
+    ParsedSchema written = ColumnIds.nativeOf(subject, format, edited(), refused());
+    try {
+      pinNames(LogicalTypeConversion.toLogicalType(written));
+    } catch (RuntimeException e) {
+      throw new TypeRefusedException(refused() + ": " + e.getMessage(), e);
+    }
+    return new ArrayList<>(struct().getFields());
+  }
+
+  /**
+   * Refuses a version that renames a message or enum the fields of the version before had
+   * because its name is taken: an attribute, a oneof member and the types a message declares
+   * share its names, and the writer gives a type whose name is taken another. The registry
+   * would take it for another type. A file that is no valid Protobuf is refused here too,
+   * where the registry would only say so.
+   */
+  private void refuseTakenNames(SchemaMetadata md, LogicalType edited) {
+    ParsedSchema stored = lookup.parse(md);
+    if (!(stored instanceof ProtobufSchema)) {
+      return;
+    }
+    ParsedSchema written = ColumnIds.nativeOf(subject, format, edited, refused());
+    Descriptor now;
+    try {
+      now = ((ProtobufSchema) written).toDescriptor();
+    } catch (RuntimeException e) {
+      throw new TypeRefusedException(refused() + ": no valid " + format
+          + " schema can be made of it: " + e.getMessage(), e);
+    }
+    Descriptor was = ((ProtobufSchema) stored).toDescriptor();
+    if (was != null && now != null) {
+      refuseTakenNames(was, now);
+    }
+  }
+
+  // By their numbers, which a field keeps: the types declared in the two messages for a field
+  // of both, and so on down.
+  private void refuseTakenNames(Descriptor was, Descriptor now) {
+    for (FieldDescriptor old : was.getFields()) {
+      FieldDescriptor kept = now.findFieldByNumber(old.getNumber());
+      if (kept == null || kept.getType() != old.getType()) {
+        continue;
+      }
+      String before;
+      String after;
+      if (old.getType() == FieldDescriptor.Type.MESSAGE
+          && old.getMessageType().getContainingType() == was
+          && kept.getMessageType().getContainingType() == now) {
+        before = old.getMessageType().getName();
+        after = kept.getMessageType().getName();
+        refuseTakenNames(old.getMessageType(), kept.getMessageType());
+      } else if (old.getType() == FieldDescriptor.Type.ENUM
+          && old.getEnumType().getContainingType() == was
+          && kept.getEnumType().getContainingType() == now) {
+        before = old.getEnumType().getName();
+        after = kept.getEnumType().getName();
+      } else {
+        continue;
+      }
+      if (!before.equals(after) && (now.findFieldByName(before) != null
+          || now.findNestedTypeByName(before) != null
+          || now.findEnumTypeByName(before) != null)) {
+        throw new TypeRefusedException(refused() + ": " + before + ", the type of "
+            + old.getName() + " in Protobuf message " + was.getName() + ", would be renamed "
+            + after + ", as another member or type of the message would have its name");
       }
     }
   }
@@ -1712,13 +1761,14 @@ public final class TypeAlter {
 
   private static Map<String, Object> withName(Map<String, Object> params,
       Map<String, Object> named) {
-    Object name = named.get(Schema.PROTOBUF_NAME);
-    if (name == null || params.containsKey(Schema.PROTOBUF_NAME)) {
-      return params;
+    Map<String, Object> out = null;
+    for (Map.Entry<String, Object> name : named.entrySet()) {
+      if (Schema.isTypeNameParam(name.getKey()) && !params.containsKey(name.getKey())) {
+        out = out != null ? out : new LinkedHashMap<>(params);
+        out.put(name.getKey(), name.getValue());
+      }
     }
-    Map<String, Object> out = new LinkedHashMap<>(params);
-    out.put(Schema.PROTOBUF_NAME, name);
-    return out;
+    return out != null ? out : params;
   }
 
   /**
@@ -2535,7 +2585,6 @@ public final class TypeAlter {
               : copy(f, f.getName(), withNestedNames(f.getSchema(), was.getSchema()),
                   withTypeNames(f.getParams(), was.getParams())));
         }
-        refusePinnedMemberNames(fields);
         result = Schema.createStruct(fields);
         break;
       }
@@ -2566,25 +2615,6 @@ public final class TypeAlter {
         return type;
     }
     return copyMetadata(type, result).setParams(type.getParams());
-  }
-
-  // A Protobuf message's fields share their names with the messages it declares: a member
-  // named as the message a pin keeps for another could not be written.
-  private static void refusePinnedMemberNames(List<Field> fields) {
-    Set<Object> pinned = new HashSet<>();
-    for (Field f : fields) {
-      pinned.add(f.getParams().get(Schema.PROTOBUF_NAME));
-      if (f.getSchema().getType() == Schema.Type.UNION) {
-        f.getSchema().getBranches().forEach(
-            b -> pinned.add(b.getParams().get(Schema.PROTOBUF_NAME)));
-      }
-    }
-    for (Field f : fields) {
-      if (pinned.contains(f.getName())) {
-        throw new TypeRefusedException("A member cannot be named " + f.getName()
-            + ": the Protobuf message it is in declares a message or enum of that name");
-      }
-    }
   }
 
   // Params with the native names another member had, in place of any they give.
