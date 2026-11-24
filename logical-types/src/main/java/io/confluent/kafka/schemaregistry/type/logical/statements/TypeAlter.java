@@ -661,6 +661,18 @@ public final class TypeAlter {
       if (format == SchemaType.PROTOBUF) {
         at = fields.size();
       }
+      // Avro names the types under the attributes in their order too, and keeps the order:
+      // those of the attributes there keep their names by a pin, as on a rename.
+      if (format == SchemaType.AVRO && at < fields.size()) {
+        LogicalType now = edited();
+        for (int i = 0; i < fields.size(); i++) {
+          Field f = fields.get(i);
+          Map<String, Object> pinned = new LinkedHashMap<>(f.getParams());
+          pinned.putAll(Formats.typeNameParams(format, now, subject, f.getName()));
+          fields.set(i, copy(f, f.getName(), withBranchParams(f.getSchema(),
+              Formats.branchTypeNameParams(format, now, subject, f.getName())), pinned));
+        }
+      }
       fields.add(at, new Field(field.getName(), schema, at,
           nullDefault ? null : field.getDefaultValue(),
           nullDefault || field.hasDefaultValue(), field.getDoc(), field.getTags(), params,

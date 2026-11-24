@@ -575,6 +575,41 @@ class LogicalTypeToDdlConverterTest {
     assertRoundTrip(lt);
   }
 
+  // The root is a type of the namespace too: named bare by a trailing TYPE, it would be the
+  // type of no namespace its own name is aliased to.
+  @Test
+  void aRootNamedAsTheTypeOfNoNamespaceItRefersToIsStillTheRoot() {
+    Schema root = Schema.createStruct(List.of(
+        new Schema.Field("boss", Schema.createNamedTypeRef("Person"), 0))).setNullable(true);
+    LogicalType lt = new LogicalType("Person", "shop", root, Map.of(), Set.of("Person"),
+        Map.of(), List.of(), Map.of(), Map.of());
+    String ddl = LogicalTypeToDdlConverter.toDdl(lt, true);
+    assertEquals("NAMESPACE shop; USING TYPE Person FOR Person; "
+        + "STRUCT shop.Person (boss Person); TYPE shop.Person;", ddl);
+    LogicalType read = parse(ddl);
+    assertEquals(Schema.Type.STRUCT, read.getRootSchema().getType(), ddl);
+    assertEquals("Person", read.getName(), ddl);
+    assertEquals(Set.of("Person"), read.getExternalTypes(), ddl);
+    assertEquals("Person",
+        read.getRootSchema().getField("boss").getSchema().getQualifiedName(), ddl);
+    assertRoundTrip(lt);
+  }
+
+  // The root is declared in the script as a named type is: a name that begins with its name
+  // reads as a type nested in it.
+  @Test
+  void aReferredTypeWhoseNameBeginsWithTheRootsReadsBackAsItself() {
+    Schema root = Schema.createStruct(List.of(
+        new Schema.Field("geo", Schema.createNamedTypeRef("Customer.Geo"), 0)));
+    LogicalType lt = new LogicalType("Customer", "shop", root, Map.of(),
+        Set.of("Customer.Geo"), Map.of(), List.of(), Map.of(), Map.of());
+    String ddl = LogicalTypeToDdlConverter.toDdl(lt, true);
+    assertTrue(ddl.startsWith("NAMESPACE shop; USING TYPE Customer.Geo FOR Customer.Geo; "),
+        ddl);
+    assertEquals(Set.of("Customer.Geo"), parse(ddl).getExternalTypes(), ddl);
+    assertRoundTrip(lt);
+  }
+
   @Test
   void anAvroUnionDefaultIsItsFirstBranchsLiteralAndRoundTrips() {
     LogicalType original = AvroToLogicalTypeConverter.toLogicalType(new AvroSchema(

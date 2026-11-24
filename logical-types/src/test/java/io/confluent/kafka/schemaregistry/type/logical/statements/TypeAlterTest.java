@@ -999,6 +999,24 @@ class TypeAlterTest {
         .isInstanceOf(TypeRefusedException.class).hasMessage("Type mv has no attribute z");
   }
 
+  // Avro names the records under the attributes in their order: first, a's record b would
+  // take the name pa_a_b, which the record of a_b has.
+  @Test
+  void anAvroAttributeAddedFirstLeavesTheNamesOfTheOthersRecords() {
+    create("pa", SchemaType.AVRO, "(a_b STRUCT(x STRING), s STRUCT(z INT))");
+    AvroSchema before = (AvroSchema) registry.schema("pa");
+    registry.alter("pa",
+        new AddAttribute("a", "STRUCT(b STRUCT(y INT))", Position.first()));
+    AvroSchema after = (AvroSchema) registry.schema("pa");
+    assertThat(names("pa")).containsExactly("a", "a_b", "s");
+    assertThat(after.isBackwardCompatible(before)).isEmpty();
+    // The attributes there are written as they were, to the letter.
+    for (String attribute : List.of("a_b", "s")) {
+      assertThat(after.rawSchema().getField(attribute).schema().toString())
+          .isEqualTo(before.rawSchema().getField(attribute).schema().toString());
+    }
+  }
+
   // A column's name compares whatever its case, in a position as elsewhere.
   @Test
   void aColumnIsPlacedAfterOneNamedInAnotherCase() {
