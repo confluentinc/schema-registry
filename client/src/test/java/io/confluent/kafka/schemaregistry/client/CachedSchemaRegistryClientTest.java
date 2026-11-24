@@ -1081,6 +1081,26 @@ public class CachedSchemaRegistryClientTest {
   }
 
   @Test
+  public void testLatestReferenceResolvesToALiveVersion() throws Exception {
+    String inner =
+        "{\"type\":\"record\",\"name\":\"Inner\",\"fields\":[{\"name\":\"f\",\"type\":\"string\"}]}";
+    String outer =
+        "{\"type\":\"record\",\"name\":\"Outer\",\"fields\":[{\"name\":\"inner\",\"type\":\"Inner\"}]}";
+    // The registry's answers when latest, version 2, is soft-deleted
+    expect(restService.getVersion("inner", -1, true)).andStubReturn(
+        new Schema("inner", 2, 2, AvroSchema.TYPE, Collections.emptyList(), inner));
+    expect(restService.getVersion("inner", -1, false)).andReturn(
+        new Schema("inner", 1, 1, AvroSchema.TYPE, Collections.emptyList(), inner));
+    replay(restService);
+
+    ParsedSchema parsed = client.parseSchema(new Schema(null, null, null, AvroSchema.TYPE,
+        Collections.singletonList(new SchemaReference("Inner", "inner", -1)), outer)).get();
+    assertEquals(1, (int) parsed.references().get(0).getVersion());
+
+    verify(restService);
+  }
+
+  @Test
   public void testGetSchemaRegistryDeployment() throws Exception {
     List<String> deploymentAttributes = new ArrayList<>(Collections.singleton("deploymentScope:opensource"));
     SchemaRegistryDeployment expectedDeployment = new SchemaRegistryDeployment(deploymentAttributes);
