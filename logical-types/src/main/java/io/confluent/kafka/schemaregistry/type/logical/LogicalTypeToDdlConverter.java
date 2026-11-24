@@ -35,8 +35,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
+import org.antlr.v4.runtime.CharStream;
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.Token;
+import org.antlr.v4.runtime.misc.Interval;
 
 /**
  * Emits a {@link LogicalType} as DDL text — the inverse of
@@ -73,8 +75,10 @@ public final class LogicalTypeToDdlConverter {
   // Schema.quoteIdentifierIfNeeded so this emitter and Schema.toDdl share
   // a single source of truth. Removed the local RESERVED_KEYWORDS list.
 
-  // A line break, with the space around it.
-  private static final Pattern LINE_BREAK = Pattern.compile("[ \\t]*[\\r\\n]+[ \\t\\r\\n]*");
+  // A line break, with the space around it. Space is tried once, from where it starts, so a
+  // long run of it costs no more than its length.
+  private static final Pattern LINE_BREAK =
+      Pattern.compile("(?<![ \\t])[ \\t]*+[\\r\\n]+[ \\t\\r\\n]*");
 
   private LogicalTypeToDdlConverter() {
   }
@@ -85,11 +89,11 @@ public final class LogicalTypeToDdlConverter {
 
   /**
    * The DDL, with {@code oneLine} written with none of the writer's line breaks: statements
-   * follow each other after {@code "; "}, and a struct's body is written inline. It reads back
-   * to the same type either way.
+   * follow each other after {@code "; "}, and a struct's body is written inline.
    *
    * <p>On one line, a CHECK's expression is written without its own line breaks and line
-   * comments, which could not stay on one line. A line break inside a string literal or a
+   * comments, which could not stay on one line. Read back, such a CHECK has that text and means
+   * the same; the rest of the type is as it was. A line break inside a string literal or a
    * quoted name is part of its value and is kept, so only such a script has more than one line.
    */
   public static String toDdl(LogicalType logicalType, boolean oneLine) {
@@ -370,16 +374,19 @@ public final class LogicalTypeToDdlConverter {
           && !sql.contains("//")) {
         return sql;
       }
-      LogicalTypesLexer lexer = new LogicalTypesLexer(CharStreams.fromString(sql));
+      // Read from the stream: a token's indexes count code points, as it does.
+      CharStream chars = CharStreams.fromString(sql);
+      LogicalTypesLexer lexer = new LogicalTypesLexer(chars);
       lexer.removeErrorListeners();
       StringBuilder line = new StringBuilder();
       int at = 0;
       for (Token t = lexer.nextToken(); t.getType() != Token.EOF; t = lexer.nextToken()) {
-        line.append(betweenTokens(sql.substring(at, t.getStartIndex())))
-            .append(sql, t.getStartIndex(), t.getStopIndex() + 1);
+        line.append(betweenTokens(chars.getText(Interval.of(at, t.getStartIndex() - 1))))
+            .append(t.getText());
         at = t.getStopIndex() + 1;
       }
-      return line.append(betweenTokens(sql.substring(at))).toString().strip();
+      return line.append(betweenTokens(chars.getText(Interval.of(at, chars.size() - 1))))
+          .toString().strip();
     }
 
     // What the lexer skips between two tokens: space and comments, and no literal.

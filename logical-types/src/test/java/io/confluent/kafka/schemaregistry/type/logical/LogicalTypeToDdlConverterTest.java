@@ -627,6 +627,34 @@ class LogicalTypeToDdlConverterTest {
     assertEquals("a > 0 AND /* kept, joined */ a < 9 AND note <> 'two\nlines'",
         read.getRules().get(0).getSql());
     assertEquals(oneLine, LogicalTypeToDdlConverter.toDdl(parse(oneLine), true));
+    // And they mean the same.
+    assertEquals(lt.getRootSchema().getFields().get(1).getRules().get(0).getExpr(),
+        read.getFields().get(1).getRules().get(0).getExpr());
+    assertEquals(lt.getRootSchema().getRules().get(0).getExpr(),
+        read.getRules().get(0).getExpr());
+  }
+
+  @Test
+  void oneLineCheckKeepsItsPlaceAfterACharacterOfTwoChars() {
+    // One code point and two chars: token indexes count the first, a string's the second.
+    String smile = "\uD83D\uDE00";
+    String three = smile + smile + smile;
+    LogicalType lt = parse(
+        "STRUCT T (\n"
+            + "  a INT,\n"
+            + "  note STRING,\n"
+            + "  CHECK (note <> '" + three + "' AND note <> 'https://'  AND a > 0),\n"
+            + "  CHECK (note <> '" + smile + smile + "' -- gone OR TRUE\n"
+            + "    AND a < 9)\n"
+            + ");\n");
+    String oneLine = LogicalTypeToDdlConverter.toDdl(lt, true);
+    assertEquals("STRUCT T (a INT, note STRING, "
+        + "CHECK (note <> '" + three + "' AND note <> 'https://'  AND a > 0), "
+        + "CHECK (note <> '" + smile + smile + "' AND a < 9));", oneLine);
+    List<Rule> written = lt.getRootSchema().getRules();
+    List<Rule> read = parse(oneLine).getRootSchema().getRules();
+    assertEquals(written.get(0).getExpr(), read.get(0).getExpr());
+    assertEquals(written.get(1).getExpr(), read.get(1).getExpr());
   }
 
   @Test
