@@ -253,7 +253,10 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
 
     // An alias target may be a local type, but must not be another alias: chains are rejected,
     // which also rules out cycles.
-    Set<String> chained = new LinkedHashSet<>(typeAliases.values());
+    // One aliased to itself names its type directly.
+    Set<String> chained = typeAliases.entrySet().stream()
+        .filter(e -> !e.getKey().equals(e.getValue())).map(Map.Entry::getValue)
+        .collect(Collectors.toCollection(LinkedHashSet::new));
     chained.retainAll(typeAliases.keySet());
     if (!chained.isEmpty()) {
       throw new ValidationException(
@@ -470,7 +473,9 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
     // Target is verbatim: never namespace-qualified, so a single-segment target
     // names a top-level type.
     String target = buildQualifiedName(ctx.qualifiedName(1));
-    if (name.equals(target)) {
+    // Under a NAMESPACE a name aliased to itself is the type of no namespace, which the bare
+    // name would otherwise not be; with none, it says nothing.
+    if (name.equals(target) && (namespace == null || namespace.isEmpty())) {
       throw error(ctx.qualifiedName(1),
           "USING TYPE " + name + " FOR " + target + " aliases a name to itself");
     }

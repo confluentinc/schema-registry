@@ -411,6 +411,7 @@ public final class TypeAlter {
     references.addAll(original.getReferences());
     resolved.putAll(original.getResolvedReferences());
     if (format == SchemaType.PROTOBUF) {
+      pinProtobufNames(md);
       recordProtobufNumbers();
       current = Message.of(target(), namedTypes);
       recordUsedNumbers();
@@ -642,7 +643,8 @@ public final class TypeAlter {
       boolean nullDefault = !field.hasDefaultValue() && field.getSchema().isNullable();
       Schema schema = format == SchemaType.PROTOBUF
           ? numberBranches(field.getSchema(), nextNumber(fields) + 1) : field.getSchema();
-      fields.add(new Field(field.getName(), schema, fields.size(),
+      int at = a.position() == null ? fields.size() : place(fields, a.position());
+      fields.add(at, new Field(field.getName(), schema, at,
           nullDefault ? null : field.getDefaultValue(),
           nullDefault || field.hasDefaultValue(), field.getDoc(), field.getTags(), params,
           namedRules(field)));
@@ -675,6 +677,28 @@ public final class TypeAlter {
       if (find(fields, previous) >= 0) {
         refuseDroppedName(previous);
       }
+      setStruct(fields);
+      return true;
+    } else if (action instanceof AlterAction.MoveAttribute) {
+      AlterAction.MoveAttribute a = (AlterAction.MoveAttribute) action;
+      List<Field> fields = new ArrayList<>(struct().getFields());
+      int i = named(fields, a.name());
+      if (i < 0) {
+        throw new TypeRefusedException("Type " + subject + " has no attribute " + a.name());
+      }
+      Field moved = fields.remove(i);
+      String after = a.position().after();
+      if (after != null && named(List.of(moved), after) >= 0) {
+        throw new TypeRefusedException("Attribute " + moved.getName()
+            + " cannot go after itself");
+      }
+      int at = place(fields, a.position());
+      // Where it already is, the type is as it was; so is a Protobuf message, whose fields are
+      // written in the order of their numbers.
+      if (at == i || format == SchemaType.PROTOBUF) {
+        return false;
+      }
+      fields.add(at, moved);
       setStruct(fields);
       return true;
     } else if (action instanceof AlterAction.RenameAttribute) {
@@ -1542,6 +1566,84 @@ public final class TypeAlter {
   }
 
   /**
+   * Pins the name of every message and enum the version declares for one field, at every level,
+   * that the writer would name otherwise, as it would one Flink named ({@code addr_Row} for
+   * {@code AddrRow}): the registry takes a type of another name for another type, and refuses
+   * the version that loses the first.
+   */
+  private void pinProtobufNames(SchemaMetadata md) {
+    ParsedSchema schema = lookup.parse(md);
+    if (!(schema instanceof ProtobufSchema)) {
+      return;
+    }
+    LogicalType named = ProtoToLogicalTypeConverter.toLogicalType((ProtobufSchema) schema, true);
+    root = pinned(root, named.getRootSchema());
+    for (Map.Entry<String, Schema> type : new ArrayList<>(namedTypes.entrySet())) {
+      Schema other = named.getNamedTypes().get(type.getKey());
+      if (other != null) {
+        namedTypes.put(type.getKey(), pinned(type.getValue(), other));
+      }
+    }
+  }
+
+  // A type with the protobuf.name params another reading of it has, where it has none itself;
+  // where the two differ in shape, as it is.
+  private static Schema pinned(Schema type, Schema named) {
+    if (named == null || type.getType() != named.getType()) {
+      return type;
+    }
+    Schema result;
+    switch (type.getType()) {
+      case STRUCT: {
+        List<Field> fields = new ArrayList<>();
+        for (Field f : type.getFields()) {
+          Field other = named.getField(f.getName());
+          fields.add(other == null ? f : copy(f, f.getName(),
+              pinned(f.getSchema(), other.getSchema()),
+              withName(f.getParams(), other.getParams())));
+        }
+        result = Schema.createStruct(fields);
+        break;
+      }
+      case UNION: {
+        List<UnionBranch> branches = new ArrayList<>();
+        for (UnionBranch b : type.getBranches()) {
+          UnionBranch other = branch(named, b.getName());
+          branches.add(other == null ? b : new UnionBranch(b.getName(),
+              pinned(b.getSchema(), other.getSchema()), b.getDoc(),
+              withName(b.getParams(), other.getParams())));
+        }
+        result = Schema.createUnion(branches);
+        break;
+      }
+      case ARRAY:
+        result = Schema.createArray(pinned(type.getElementType(), named.getElementType()));
+        break;
+      case MULTISET:
+        result = Schema.createMultiset(pinned(type.getElementType(), named.getElementType()));
+        break;
+      case MAP:
+        result = Schema.createMap(pinned(type.getKeyType(), named.getKeyType()),
+            pinned(type.getValueType(), named.getValueType()));
+        break;
+      default:
+        return type;
+    }
+    return copyMetadata(type, result).setParams(type.getParams());
+  }
+
+  private static Map<String, Object> withName(Map<String, Object> params,
+      Map<String, Object> named) {
+    Object name = named.get(Schema.PROTOBUF_NAME);
+    if (name == null || params.containsKey(Schema.PROTOBUF_NAME)) {
+      return params;
+    }
+    Map<String, Object> out = new LinkedHashMap<>(params);
+    out.put(Schema.PROTOBUF_NAME, name);
+    return out;
+  }
+
+  /**
    * Records every top-level field's Protobuf number, so that the writer, which otherwise numbers
    * fields by position, keeps them through drops and additions.
    */
@@ -2261,6 +2363,19 @@ public final class TypeAlter {
   }
 
   // The attribute a statement names; a column is named as the database names it, in any case.
+  // The index an attribute takes among the others at a position.
+  private int place(List<Field> others, AlterAction.Position position) {
+    if (position.after() == null) {
+      return 0;
+    }
+    int i = named(others, position.after());
+    if (i < 0) {
+      throw new TypeRefusedException("Type " + subject + " has no attribute "
+          + position.after());
+    }
+    return i + 1;
+  }
+
   private int named(List<Field> fields, String name) {
     int i = find(fields, name);
     for (int j = 0; i < 0 && columns && j < fields.size(); j++) {
