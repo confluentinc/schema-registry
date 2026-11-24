@@ -21,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.avro.AvroToLogicalTypeConverter;
@@ -497,6 +498,124 @@ class LogicalTypeToDdlConverterTest {
         new ProtobufSchema("syntax = \"proto2\";\nmessage M {\n"
             + "  optional bytes b = 1 [default = \"ab\"];\n}\n")));
     assertTrue(ddl.contains("DEFAULT x'6162'"), ddl);
+  }
+
+  // Written bare under the record's namespace, the referred type would read back as one of it.
+  @Test
+  void aReferredTypeOfNoNamespaceReadsBackAsItselfUnderANamespace() {
+    String address = "{\"type\": \"record\", \"name\": \"PostalAddress\", \"fields\": ["
+        + "{\"name\": \"street\", \"type\": \"string\"}]}";
+    LogicalType original = AvroToLogicalTypeConverter.toLogicalType(new AvroSchema(
+        "{\"type\": \"record\", \"name\": \"Customer\", \"namespace\": \"shop\", "
+            + "\"fields\": [{\"name\": \"id\", \"type\": \"string\"}, "
+            + "{\"name\": \"addr\", \"type\": [\"null\", \"PostalAddress\"], "
+            + "\"default\": null}]}",
+        List.of(new SchemaReference("PostalAddress", "PostalAddress", 1)),
+        Map.of("PostalAddress", address), null));
+    String ddl = LogicalTypeToDdlConverter.toDdl(original);
+    assertTrue(ddl.startsWith("NAMESPACE shop;\nUSING TYPE PostalAddress FOR PostalAddress;\n"),
+        ddl);
+    assertEquals(Set.of("PostalAddress"), parse(ddl).getExternalTypes(), ddl);
+    assertRoundTrip(original);
+
+    // One of the record's namespace is written bare, and needs no such statement.
+    LogicalType same = AvroToLogicalTypeConverter.toLogicalType(new AvroSchema(
+        "{\"type\": \"record\", \"name\": \"Customer\", \"namespace\": \"shop\", "
+            + "\"fields\": [{\"name\": \"addr\", \"type\": \"PostalAddress\"}]}",
+        List.of(new SchemaReference("shop.PostalAddress", "PostalAddress", 1)),
+        Map.of("shop.PostalAddress", address.replace("\"fields\"",
+            "\"namespace\": \"shop\", \"fields\"")), null));
+    assertFalse(LogicalTypeToDdlConverter.toDdl(same).contains("USING TYPE"));
+    assertRoundTrip(same);
+  }
+
+  // Both would be written Person: the namespace's own is then written with its namespace.
+  @Test
+  void aTypeOfNoNamespaceAndTheNamespacesOwnOfItsNameAreToldApart() {
+    Schema root = Schema.createStruct(List.of(
+        new Schema.Field("a", Schema.createNamedTypeRef("Person"), 0),
+        new Schema.Field("b", Schema.createNamedTypeRef("shop.Person"), 1)));
+    LogicalType referred = new LogicalType("Customer", "shop", root, Map.of(),
+        Set.of("Person", "shop.Person"), Map.of(), List.of(), Map.of(), Map.of());
+    String ddl = LogicalTypeToDdlConverter.toDdl(referred, true);
+    assertTrue(ddl.startsWith("NAMESPACE shop; USING TYPE Person FOR Person; "), ddl);
+    assertTrue(ddl.contains("(a Person, b shop.Person)"), ddl);
+    assertEquals(Set.of("Person", "shop.Person"), parse(ddl).getExternalTypes(), ddl);
+    assertRoundTrip(referred);
+
+    // And when the namespace's own is one the script declares.
+    Schema person = Schema.createStruct(List.of(
+        new Schema.Field("name", Schema.createString(), 0)));
+    LogicalType declared = new LogicalType("Customer", "shop", root,
+        Map.of("shop.Person", person), Set.of("Person"), Map.of(), List.of(), Map.of(),
+        Map.of());
+    ddl = LogicalTypeToDdlConverter.toDdl(declared, true);
+    assertTrue(ddl.contains("STRUCT shop.Person (name STRING)"), ddl);
+    LogicalType read = parse(ddl);
+    assertEquals(Set.of("Person"), read.getExternalTypes(), ddl);
+    assertTrue(read.getNamedTypes().containsKey("shop.Person"), ddl);
+    assertRoundTrip(declared);
+  }
+
+  // A dotted name that begins with a declared type's reads as a type nested in it.
+  @Test
+  void aReferredTypeWhoseNameBeginsWithADeclaredTypesReadsBackAsItself() {
+    Schema root = Schema.createStruct(List.of(
+        new Schema.Field("home", Schema.createNamedTypeRef("shop.PostalAddress"), 0),
+        new Schema.Field("geo", Schema.createNamedTypeRef("PostalAddress.Geo"), 1),
+        new Schema.Field("point", Schema.createNamedTypeRef("other.Point"), 2)));
+    Schema address = Schema.createStruct(List.of(
+        new Schema.Field("street", Schema.createString(), 0)));
+    LogicalType lt = new LogicalType("Customer", "shop", root,
+        Map.of("shop.PostalAddress", address), Set.of("PostalAddress.Geo", "other.Point"),
+        Map.of(), List.of(), Map.of(), Map.of());
+    String ddl = LogicalTypeToDdlConverter.toDdl(lt, true);
+    // Only the one that would be misread is aliased.
+    assertTrue(ddl.startsWith("NAMESPACE shop; "
+        + "USING TYPE PostalAddress.Geo FOR PostalAddress.Geo; STRUCT "), ddl);
+    assertFalse(ddl.contains("USING TYPE other.Point"), ddl);
+    LogicalType read = parse(ddl);
+    assertEquals(Set.of("PostalAddress.Geo", "other.Point"), read.getExternalTypes(), ddl);
+    assertTrue(read.getNamedTypes().containsKey("shop.PostalAddress"), ddl);
+    assertRoundTrip(lt);
+  }
+
+  // The root is a type of the namespace too: named bare by a trailing TYPE, it would be the
+  // type of no namespace its own name is aliased to.
+  @Test
+  void aRootNamedAsTheTypeOfNoNamespaceItRefersToIsStillTheRoot() {
+    Schema root = Schema.createStruct(List.of(
+        new Schema.Field("boss", Schema.createNamedTypeRef("Person"), 0))).setNullable(true);
+    // As a type read from a schema has it: the referred type's body is among the named types.
+    Schema referred = Schema.createStruct(List.of(
+        new Schema.Field("name", Schema.createString(), 0)));
+    LogicalType lt = new LogicalType("Person", "shop", root, Map.of("Person", referred),
+        Set.of("Person"), Map.of(), List.of(), Map.of(), Map.of());
+    String ddl = LogicalTypeToDdlConverter.toDdl(lt, true);
+    assertEquals("NAMESPACE shop; USING TYPE Person FOR Person; "
+        + "STRUCT shop.Person (boss Person); TYPE shop.Person;", ddl);
+    LogicalType read = parse(ddl);
+    assertEquals(Schema.Type.STRUCT, read.getRootSchema().getType(), ddl);
+    assertEquals("Person", read.getName(), ddl);
+    assertEquals(Set.of("Person"), read.getExternalTypes(), ddl);
+    assertEquals("Person",
+        read.getRootSchema().getField("boss").getSchema().getQualifiedName(), ddl);
+    assertRoundTrip(lt);
+  }
+
+  // The root is declared in the script as a named type is: a name that begins with its name
+  // reads as a type nested in it.
+  @Test
+  void aReferredTypeWhoseNameBeginsWithTheRootsReadsBackAsItself() {
+    Schema root = Schema.createStruct(List.of(
+        new Schema.Field("geo", Schema.createNamedTypeRef("Customer.Geo"), 0)));
+    LogicalType lt = new LogicalType("Customer", "shop", root, Map.of(),
+        Set.of("Customer.Geo"), Map.of(), List.of(), Map.of(), Map.of());
+    String ddl = LogicalTypeToDdlConverter.toDdl(lt, true);
+    assertTrue(ddl.startsWith("NAMESPACE shop; USING TYPE Customer.Geo FOR Customer.Geo; "),
+        ddl);
+    assertEquals(Set.of("Customer.Geo"), parse(ddl).getExternalTypes(), ddl);
+    assertRoundTrip(lt);
   }
 
   @Test
