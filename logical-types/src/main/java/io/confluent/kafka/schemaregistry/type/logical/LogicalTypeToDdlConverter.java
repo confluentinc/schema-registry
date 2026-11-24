@@ -17,6 +17,7 @@
 package io.confluent.kafka.schemaregistry.type.logical;
 
 import com.google.protobuf.ByteString;
+import io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesLexer;
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.LogicalTypeToProtoConverter;
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTypeConverter;
 import java.time.Instant;
@@ -33,6 +34,9 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
+import org.antlr.v4.runtime.CharStreams;
+import org.antlr.v4.runtime.Token;
 
 /**
  * Emits a {@link LogicalType} as DDL text — the inverse of
@@ -69,11 +73,26 @@ public final class LogicalTypeToDdlConverter {
   // Schema.quoteIdentifierIfNeeded so this emitter and Schema.toDdl share
   // a single source of truth. Removed the local RESERVED_KEYWORDS list.
 
+  // A line break, with the space around it.
+  private static final Pattern LINE_BREAK = Pattern.compile("[ \\t]*[\\r\\n]+[ \\t\\r\\n]*");
+
   private LogicalTypeToDdlConverter() {
   }
 
   public static String toDdl(LogicalType logicalType) {
-    return new Printer(logicalType).script();
+    return new Printer(logicalType, false).script();
+  }
+
+  /**
+   * The DDL with none of the writer's line breaks: statements follow each other after
+   * {@code "; "}, and a struct's body is written inline. It reads back as {@link #toDdl} does.
+   *
+   * <p>A CHECK's expression is written without its own line breaks and line comments, which
+   * could not stay on one line. A line break inside a string literal or a quoted name is part
+   * of its value and is kept, so only such a script has more than one line.
+   */
+  public static String toOneLineDdl(LogicalType logicalType) {
+    return new Printer(logicalType, true).script();
   }
 
   private static final class Printer {
@@ -84,9 +103,11 @@ public final class LogicalTypeToDdlConverter {
     // their output landing in the outer accumulator. Restored in a
     // try/finally.
     private StringBuilder sb = new StringBuilder();
+    private final boolean oneLine;
 
-    Printer(LogicalType lt) {
+    Printer(LogicalType lt, boolean oneLine) {
       this.lt = lt;
+      this.oneLine = oneLine;
       this.localNames = lt.getNamedTypes().keySet();
     }
 
@@ -94,7 +115,7 @@ public final class LogicalTypeToDdlConverter {
       if (lt.getNamespace() != null) {
         sb.append("NAMESPACE ")
             .append(qualifiedName(lt.getNamespace()))
-            .append(";\n");
+            .append(endOfStatement());
       }
 
       // USING TYPE declarations: external-ness is inferred on read-back from
@@ -112,7 +133,7 @@ public final class LogicalTypeToDdlConverter {
         // namespace-qualified, and re-parsing applies the namespace again.
         sb.append("USING TYPE ").append(qualifiedName(displayName(e.getKey())))
             .append(" FOR REF ").append(stringLiteral(e.getValue()))
-            .append(";\n");
+            .append(endOfStatement());
       }
 
       // A named inline root (bare STRUCT/ENUM carrying LogicalType.name — e.g. a Protobuf message
@@ -169,7 +190,7 @@ public final class LogicalTypeToDdlConverter {
       boolean severalStructs = topLevelLocalStructs()
           + (rootIsNamedInline && root.getType() == Schema.Type.STRUCT ? 1 : 0) > 1;
       if (severalMessages) {
-        return sb.toString();
+        return written();
       }
       if (rootIsNamedInline) {
         // Force the root with an explicit trailing TYPE in two cases:
@@ -183,15 +204,24 @@ public final class LogicalTypeToDdlConverter {
           if (!root.isNullable()) {
             sb.append(" NOT NULL");
           }
-          sb.append(";\n");
+          sb.append(endOfStatement());
         }
       } else if (!sugarWouldInferRoot() || severalStructs) {
         // Trailing `TYPE <typeExpr>` for a root not emitted as a named declaration, omitted when
         // the visitor's auto-detect would produce the same root from the declarations alone.
-        sb.append("TYPE ").append(typeExpr(root)).append(";\n");
+        sb.append("TYPE ").append(typeExpr(root)).append(endOfStatement());
       }
 
-      return sb.toString();
+      return written();
+    }
+
+    private String endOfStatement() {
+      return oneLine ? "; " : ";\n";
+    }
+
+    // The script; on one line, without the space after its last statement.
+    private String written() {
+      return oneLine ? sb.toString().stripTrailing() : sb.toString();
     }
 
     // ---------------------------------------------------------------------
@@ -214,7 +244,7 @@ public final class LogicalTypeToDdlConverter {
                   + " for '" + name + "'");
       }
       appendCommentTagsParams(body);
-      sb.append(";\n");
+      sb.append(endOfStatement());
     }
 
     private void appendStructBody(Schema struct, String indent) {
@@ -222,7 +252,7 @@ public final class LogicalTypeToDdlConverter {
       List<Rule> tableRules = struct.getRules();
       // Use the multi-line shape if there are any table-level CHECKs, regardless
       // of field count — table CHECKs read clearly on their own line.
-      boolean multiline = fields.size() > 2 || !tableRules.isEmpty();
+      boolean multiline = !oneLine && (fields.size() > 2 || !tableRules.isEmpty());
       int totalItems = fields.size() + tableRules.size();
       if (!multiline) {
         sb.append("(");
@@ -231,6 +261,13 @@ public final class LogicalTypeToDdlConverter {
             sb.append(", ");
           }
           appendField(fields.get(i));
+        }
+        // Only on one line: a table-level CHECK otherwise makes the body multi-line.
+        for (int i = 0; i < tableRules.size(); i++) {
+          if (i > 0 || !fields.isEmpty()) {
+            sb.append(", ");
+          }
+          appendCheckRule(tableRules.get(i));
         }
         sb.append(")");
       } else {
@@ -309,16 +346,60 @@ public final class LogicalTypeToDdlConverter {
 
     /**
      * Emit one CHECK clause: {@code [CONSTRAINT name] CHECK (sql) [MESSAGE 'doc']}.
-     * Uses {@link Rule#getSql()} verbatim for lossless DDL round-trip.
+     * Uses {@link Rule#getSql()} verbatim for lossless DDL round-trip, unless on one line.
      */
     private void appendCheckRule(Rule rule) {
       if (rule.getName() != null) {
         sb.append("CONSTRAINT ").append(identifier(rule.getName())).append(' ');
       }
-      sb.append("CHECK (").append(rule.getSql()).append(')');
+      sb.append("CHECK (").append(oneLine ? onOneLine(rule.getSql()) : rule.getSql())
+          .append(')');
       if (rule.getDoc() != null) {
         sb.append(" MESSAGE ").append(stringLiteral(rule.getDoc()));
       }
+    }
+
+    /**
+     * A CHECK's expression without line breaks: outside its string literals and quoted names,
+     * which the lexer finds, a line comment goes and a line break with the space around it
+     * becomes one space.
+     */
+    private static String onOneLine(String sql) {
+      if (sql.indexOf('\n') < 0 && sql.indexOf('\r') < 0 && !sql.contains("--")
+          && !sql.contains("//")) {
+        return sql;
+      }
+      LogicalTypesLexer lexer = new LogicalTypesLexer(CharStreams.fromString(sql));
+      lexer.removeErrorListeners();
+      StringBuilder line = new StringBuilder();
+      int at = 0;
+      for (Token t = lexer.nextToken(); t.getType() != Token.EOF; t = lexer.nextToken()) {
+        line.append(betweenTokens(sql.substring(at, t.getStartIndex())))
+            .append(sql, t.getStartIndex(), t.getStopIndex() + 1);
+        at = t.getStopIndex() + 1;
+      }
+      return line.append(betweenTokens(sql.substring(at))).toString().strip();
+    }
+
+    // What the lexer skips between two tokens: space and comments, and no literal.
+    private static String betweenTokens(String gap) {
+      StringBuilder kept = new StringBuilder();
+      for (int i = 0; i < gap.length(); i++) {
+        if (gap.startsWith("/*", i)) {
+          int end = gap.indexOf("*/", i + 2);
+          end = end < 0 ? gap.length() : end + 2;
+          kept.append(gap, i, end);
+          i = end - 1;
+        } else if (gap.startsWith("--", i) || gap.startsWith("//", i)) {
+          // To the end of its line, whose break stays.
+          while (i + 1 < gap.length() && "\r\n".indexOf(gap.charAt(i + 1)) < 0) {
+            i++;
+          }
+        } else {
+          kept.append(gap.charAt(i));
+        }
+      }
+      return LINE_BREAK.matcher(kept).replaceAll(" ");
     }
 
     private void appendBranch(Schema.UnionBranch branch) {
