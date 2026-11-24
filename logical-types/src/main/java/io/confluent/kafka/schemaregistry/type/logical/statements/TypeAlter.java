@@ -411,6 +411,7 @@ public final class TypeAlter {
     references.addAll(original.getReferences());
     resolved.putAll(original.getResolvedReferences());
     if (format == SchemaType.PROTOBUF) {
+      pinProtobufNames(md);
       recordProtobufNumbers();
       current = Message.of(target(), namedTypes);
       recordUsedNumbers();
@@ -1562,6 +1563,84 @@ public final class TypeAlter {
     }
     Schema struct = struct();
     setTarget(copyMetadata(struct, Schema.createStruct(positioned)).setParams(struct.getParams()));
+  }
+
+  /**
+   * Pins the name of every message and enum the version declares for one field, at every level,
+   * that the writer would name otherwise, as it would one Flink named ({@code addr_Row} for
+   * {@code AddrRow}): the registry takes a type of another name for another type, and refuses
+   * the version that loses the first.
+   */
+  private void pinProtobufNames(SchemaMetadata md) {
+    ParsedSchema schema = lookup.parse(md);
+    if (!(schema instanceof ProtobufSchema)) {
+      return;
+    }
+    LogicalType named = ProtoToLogicalTypeConverter.toLogicalType((ProtobufSchema) schema, true);
+    root = pinned(root, named.getRootSchema());
+    for (Map.Entry<String, Schema> type : new ArrayList<>(namedTypes.entrySet())) {
+      Schema other = named.getNamedTypes().get(type.getKey());
+      if (other != null) {
+        namedTypes.put(type.getKey(), pinned(type.getValue(), other));
+      }
+    }
+  }
+
+  // A type with the protobuf.name params another reading of it has, where it has none itself;
+  // where the two differ in shape, as it is.
+  private static Schema pinned(Schema type, Schema named) {
+    if (named == null || type.getType() != named.getType()) {
+      return type;
+    }
+    Schema result;
+    switch (type.getType()) {
+      case STRUCT: {
+        List<Field> fields = new ArrayList<>();
+        for (Field f : type.getFields()) {
+          Field other = named.getField(f.getName());
+          fields.add(other == null ? f : copy(f, f.getName(),
+              pinned(f.getSchema(), other.getSchema()),
+              withName(f.getParams(), other.getParams())));
+        }
+        result = Schema.createStruct(fields);
+        break;
+      }
+      case UNION: {
+        List<UnionBranch> branches = new ArrayList<>();
+        for (UnionBranch b : type.getBranches()) {
+          UnionBranch other = branch(named, b.getName());
+          branches.add(other == null ? b : new UnionBranch(b.getName(),
+              pinned(b.getSchema(), other.getSchema()), b.getDoc(),
+              withName(b.getParams(), other.getParams())));
+        }
+        result = Schema.createUnion(branches);
+        break;
+      }
+      case ARRAY:
+        result = Schema.createArray(pinned(type.getElementType(), named.getElementType()));
+        break;
+      case MULTISET:
+        result = Schema.createMultiset(pinned(type.getElementType(), named.getElementType()));
+        break;
+      case MAP:
+        result = Schema.createMap(pinned(type.getKeyType(), named.getKeyType()),
+            pinned(type.getValueType(), named.getValueType()));
+        break;
+      default:
+        return type;
+    }
+    return copyMetadata(type, result).setParams(type.getParams());
+  }
+
+  private static Map<String, Object> withName(Map<String, Object> params,
+      Map<String, Object> named) {
+    Object name = named.get(Schema.PROTOBUF_NAME);
+    if (name == null || params.containsKey(Schema.PROTOBUF_NAME)) {
+      return params;
+    }
+    Map<String, Object> out = new LinkedHashMap<>(params);
+    out.put(Schema.PROTOBUF_NAME, name);
+    return out;
   }
 
   /**

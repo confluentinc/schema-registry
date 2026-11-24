@@ -1038,4 +1038,40 @@ class TypeAlterTest {
         .contains("\"type\":[\"null\",\"PostalAddress\"]").contains("\"name\":\"nickname\"");
     assertThat(registry.schema("customer").references()).containsExactly(reference);
   }
+
+  // Written from the logical type a message Flink named addr_Row would be AddrRow, which the
+  // registry takes for another type: an alter keeps the names the version has.
+  @Test
+  void aProtobufTypeFlinkWroteKeepsTheNamesOfItsMessages() throws Exception {
+    ProtobufSchema flink = new ProtobufSchema("syntax = \"proto3\";\npackage shop;\n\n"
+        + "message Record {\n"
+        + "  optional string id = 1;\n"
+        + "  optional addr_Row addr = 2;\n"
+        + "  repeated item_Row item = 3;\n\n"
+        + "  message addr_Row {\n"
+        + "    optional string street = 1;\n"
+        + "    optional string zip = 2;\n"
+        + "    optional string city = 3;\n"
+        + "  }\n"
+        + "  message item_Row {\n"
+        + "    optional string sku = 1;\n"
+        + "  }\n"
+        + "}\n");
+    registry.client.register("places", flink);
+    registry.alter("places", new AddAttribute("nickname", "STRING"));
+    ProtobufSchema added = (ProtobufSchema) registry.schema("places");
+    assertThat(added.toDescriptor().findFieldByName("addr").getMessageType().getName())
+        .isEqualTo("addr_Row");
+    assertThat(added.toDescriptor().findFieldByName("item").getMessageType().getName())
+        .isEqualTo("item_Row");
+    assertThat(added.isBackwardCompatible(flink)).isEmpty();
+
+    // Retyped, it is the message it was, its fields at their numbers.
+    registry.alter("places",
+        new AlterAttributeType("addr", "STRUCT(street STRING, city STRING)"));
+    Descriptor addr = message("places").findFieldByName("addr").getMessageType();
+    assertThat(addr.getName()).isEqualTo("addr_Row");
+    assertThat(numbers(addr)).isEqualTo("street=1 city=3");
+    assertThat(version("places")).isEqualTo(3);
+  }
 }
