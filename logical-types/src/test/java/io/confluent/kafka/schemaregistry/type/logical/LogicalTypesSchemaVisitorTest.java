@@ -20,6 +20,7 @@ import io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesPars
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Set;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -786,7 +787,7 @@ class LogicalTypesSchemaVisitorTest {
         lt.getRootSchema().getFields().get(0).getSchema().getQualifiedName());
     assertEquals("com.example.hr.Boss",
         lt.getRootSchema().getFields().get(1).getSchema().getQualifiedName());
-    // Another alias may not go by way of it, nor may it name a type the script declares.
+    // Another alias may not go by way of it.
     assertThrows(ValidationException.class, () -> parseScript(
         "NAMESPACE com.example.hr;"
         + "USING TYPE Person FOR Person;"
@@ -794,13 +795,24 @@ class LogicalTypesSchemaVisitorTest {
         + "STRUCT Employee (person Person, other P);"
         + "TYPE Employee"
     ));
-    assertThrows(ValidationException.class, () -> parseScript(
+  }
+
+  // The namespace's own type of that name is another type, named with its namespace.
+  @Test
+  void testSelfAliasLeavesTheNamespacesTypeOfThatName() {
+    LogicalType lt = parseScript(
         "NAMESPACE com.example.hr;"
         + "USING TYPE Person FOR Person;"
-        + "STRUCT Person (name STRING);"
-        + "STRUCT Employee (person Person);"
+        + "STRUCT com.example.hr.Person (name STRING);"
+        + "STRUCT Employee (person Person, self com.example.hr.Person, "
+        + "boss com.example.hr.Boss);"
         + "TYPE Employee"
-    ));
+    ).toLogicalType();
+    List<Schema.Field> fields = lt.getRootSchema().getFields();
+    assertEquals("Person", fields.get(0).getSchema().getQualifiedName());
+    assertEquals("com.example.hr.Person", fields.get(1).getSchema().getQualifiedName());
+    assertEquals(Set.of("Person", "com.example.hr.Boss"), lt.getExternalTypes());
+    assertTrue(lt.getNamedTypes().containsKey("com.example.hr.Person"));
   }
 
   @Test

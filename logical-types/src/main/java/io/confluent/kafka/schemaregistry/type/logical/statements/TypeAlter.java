@@ -20,6 +20,7 @@ import com.google.protobuf.DescriptorProtos.DescriptorProto;
 import com.google.protobuf.DescriptorProtos.EnumDescriptorProto;
 import com.google.protobuf.DescriptorProtos.FieldDescriptorProto;
 import com.google.protobuf.DescriptorProtos.FileDescriptorProto;
+import com.google.protobuf.Descriptors.Descriptor;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.CompatibilityPolicy;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
@@ -198,6 +199,8 @@ public final class TypeAlter {
   private final Map<String, String> previousNames = new HashMap<>();
   // The attributes this statement adds, by their names in it.
   private final Set<String> added = new HashSet<>();
+  // The messages and enums the Protobuf message of the version being edited declares.
+  private final Set<String> declared = new HashSet<>();
   private final List<Message> versions = new ArrayList<>();
   // The compatibility policy a SET WITH gives the subject, or null to leave it.
   private String policy;
@@ -417,10 +420,18 @@ public final class TypeAlter {
       recordUsedNumbers();
     }
 
+    List<String> order = attributeNames();
     boolean changesSchema = false;
+    boolean moved = false;
     for (AlterAction action : actions) {
-      changesSchema |= apply(action);
+      if (action instanceof AlterAction.MoveAttribute) {
+        moved |= apply(action);
+      } else {
+        changesSchema |= apply(action);
+      }
     }
+    // Moves that leave the attributes in the order they were in change nothing.
+    changesSchema |= moved && !order.equals(attributeNames());
     // A struct of no attributes is no schema in any format; judged on what the actions leave.
     if (target().getType() == Schema.Type.STRUCT && target().getFields().isEmpty()) {
       throw new TypeRefusedException("Type " + subject + " would have no attributes; drop the "
@@ -635,6 +646,7 @@ public final class TypeAlter {
       }
       refuseDroppedName(a.name());
       Formats.refuseUnwritable(format, field);
+      refuseDeclaredName(a.name());
       Map<String, Object> params = new LinkedHashMap<>(field.getParams());
       if (format == SchemaType.PROTOBUF) {
         params.put(Schema.PROTOBUF_FIELD_NUMBER, String.valueOf(nextNumber(fields)));
@@ -644,6 +656,11 @@ public final class TypeAlter {
       Schema schema = format == SchemaType.PROTOBUF
           ? numberBranches(field.getSchema(), nextNumber(fields) + 1) : field.getSchema();
       int at = a.position() == null ? fields.size() : place(fields, a.position());
+      // A Protobuf message's fields are written by their numbers, and its messages are named
+      // in the order of the attributes: before another, a new one could take that one's name.
+      if (format == SchemaType.PROTOBUF) {
+        at = fields.size();
+      }
       fields.add(at, new Field(field.getName(), schema, at,
           nullDefault ? null : field.getDefaultValue(),
           nullDefault || field.hasDefaultValue(), field.getDoc(), field.getTags(), params,
@@ -723,6 +740,7 @@ public final class TypeAlter {
             + fields.get(taken).getName());
       }
       refuseDroppedName(a.to());
+      refuseDeclaredName(a.to());
       Field f = fields.get(i);
       // A macro variable of the new name would take the attribute's place in its body.
       List<Rule> using = new ArrayList<>(f.getRules());
@@ -778,7 +796,7 @@ public final class TypeAlter {
       Map<String, Object> params = f.getParams();
       // A type of the same kind keeps the native names pinned on it; another kind gets new.
       if (sameKind(f.getSchema(), type)) {
-        type = withBranchNameParams(type, f.getSchema());
+        type = withNestedNames(withBranchNameParams(type, f.getSchema()), f.getSchema());
       } else {
         params = new LinkedHashMap<>(params);
         params.keySet().removeIf(Schema::isTypeNameParam);
@@ -1545,6 +1563,22 @@ public final class TypeAlter {
     }
   }
 
+  // The attributes in their order; none for a type that is no struct.
+  private List<String> attributeNames() {
+    Schema target = target();
+    return target.getType() != Schema.Type.STRUCT ? List.of()
+        : target.getFields().stream().map(Field::getName).collect(Collectors.toList());
+  }
+
+  // A Protobuf message's fields share their names with the messages and enums it declares:
+  // given one of those names, the writer would rename the type, or the schema be invalid.
+  private void refuseDeclaredName(String name) {
+    if (declared.contains(name)) {
+      throw new TypeRefusedException("Type " + subject + " cannot have an attribute named "
+          + name + ": its Protobuf message declares a message or enum of that name");
+    }
+  }
+
   private Schema struct() {
     Schema target = target();
     if (target.getType() != Schema.Type.STRUCT) {
@@ -1575,6 +1609,11 @@ public final class TypeAlter {
     ParsedSchema schema = lookup.parse(md);
     if (!(schema instanceof ProtobufSchema)) {
       return;
+    }
+    Descriptor message = ((ProtobufSchema) schema).toDescriptor();
+    if (message != null) {
+      message.getNestedTypes().forEach(type -> declared.add(type.getName()));
+      message.getEnumTypes().forEach(type -> declared.add(type.getName()));
     }
     LogicalType named = ProtoToLogicalTypeConverter.toLogicalType((ProtobufSchema) schema, true);
     root = pinned(root, named.getRootSchema());
@@ -2362,7 +2401,6 @@ public final class TypeAlter {
     }
   }
 
-  // The attribute a statement names; a column is named as the database names it, in any case.
   // The index an attribute takes among the others at a position.
   private int place(List<Field> others, AlterAction.Position position) {
     if (position.after() == null) {
@@ -2376,6 +2414,7 @@ public final class TypeAlter {
     return i + 1;
   }
 
+  // The attribute a statement names; a column is named as the database names it, in any case.
   private int named(List<Field> fields, String name) {
     int i = find(fields, name);
     for (int j = 0; i < 0 && columns && j < fields.size(); j++) {
@@ -2438,6 +2477,67 @@ public final class TypeAlter {
       params.put(b.getName(), names);
     }
     return withBranchParams(type, params);
+  }
+
+  // A replacing type keeps, at every level below it, the native names pinned on the members it
+  // keeps, one of the name and the kind it was; a name the replacement pins itself stays.
+  private static Schema withNestedNames(Schema type, Schema old) {
+    if (old == null || type.getType() != old.getType()) {
+      return type;
+    }
+    Schema result;
+    switch (type.getType()) {
+      case STRUCT: {
+        List<Field> fields = new ArrayList<>();
+        for (Field f : type.getFields()) {
+          Field was = old.getField(f.getName());
+          fields.add(was == null || !sameKind(was.getSchema(), f.getSchema()) ? f
+              : copy(f, f.getName(), withNestedNames(f.getSchema(), was.getSchema()),
+                  withTypeNames(f.getParams(), was.getParams())));
+        }
+        result = Schema.createStruct(fields);
+        break;
+      }
+      case UNION: {
+        List<UnionBranch> branches = new ArrayList<>();
+        for (UnionBranch b : type.getBranches()) {
+          UnionBranch was = branch(old, b.getName());
+          branches.add(was == null || !sameKind(was.getSchema(), b.getSchema()) ? b
+              : new UnionBranch(b.getName(), withNestedNames(b.getSchema(), was.getSchema()),
+                  b.getDoc(), withTypeNames(b.getParams(), was.getParams())));
+        }
+        result = Schema.createUnion(branches);
+        break;
+      }
+      case ARRAY:
+        result = Schema.createArray(
+            withNestedNames(type.getElementType(), old.getElementType()));
+        break;
+      case MULTISET:
+        result = Schema.createMultiset(
+            withNestedNames(type.getElementType(), old.getElementType()));
+        break;
+      case MAP:
+        result = Schema.createMap(withNestedNames(type.getKeyType(), old.getKeyType()),
+            withNestedNames(type.getValueType(), old.getValueType()));
+        break;
+      default:
+        return type;
+    }
+    return copyMetadata(type, result).setParams(type.getParams());
+  }
+
+  // Params with the native names another member had, where they give none of that kind.
+  private static Map<String, Object> withTypeNames(Map<String, Object> params,
+      Map<String, Object> was) {
+    Map<String, Object> out = null;
+    for (Map.Entry<String, Object> name : was.entrySet()) {
+      if (Schema.isTypeNameParam(name.getKey()) && !params.containsKey(name.getKey())) {
+        out = out != null ? out : new LinkedHashMap<>(params);
+        out.put(name.getKey(), name.getValue());
+      }
+    }
+    return out != null ? out : params;
   }
 
   // The same type, down through collections; a struct's or union's members may differ, and so

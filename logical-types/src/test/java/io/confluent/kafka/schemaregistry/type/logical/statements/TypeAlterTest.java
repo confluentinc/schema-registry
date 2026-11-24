@@ -986,6 +986,10 @@ class TypeAlterTest {
     assertThat(registry.alter("mv", new MoveAttribute("c", Position.first()),
         new MoveAttribute("a", Position.after("b"))).edited()).isNull();
     assertThat(version("mv")).isEqualTo(2);
+    // Nor do moves that undo each other.
+    assertThat(registry.alter("mv", new MoveAttribute("a", Position.first()),
+        new MoveAttribute("a", Position.after("b"))).edited()).isNull();
+    assertThat(version("mv")).isEqualTo(2);
     assertThatThrownBy(() -> registry.alter("mv", new MoveAttribute("b", Position.after("b"))))
         .isInstanceOf(TypeRefusedException.class)
         .hasMessage("Attribute b cannot go after itself");
@@ -1017,6 +1021,48 @@ class TypeAlterTest {
     assertThat(version("pp")).isEqualTo(2);
     assertThatThrownBy(() -> registry.alter("pp", new MoveAttribute("z", Position.first())))
         .isInstanceOf(TypeRefusedException.class).hasMessage("Type pp has no attribute z");
+    assertThatThrownBy(() -> registry.alter("pp",
+        new AddAttribute("e", "INT", Position.after("z"))))
+        .isInstanceOf(TypeRefusedException.class).hasMessage("Type pp has no attribute z");
+  }
+
+  // Messages are named in the order of the attributes: first, fooBar would take the name
+  // FooBarRow, which foo_bar's message has.
+  @Test
+  void aProtobufAttributeAddedFirstLeavesTheNamesOfTheOthersMessages() {
+    create("pf", SchemaType.PROTOBUF, "(id INT NOT NULL, foo_bar STRUCT(x STRING))");
+    ProtobufSchema before = (ProtobufSchema) registry.schema("pf");
+    registry.alter("pf", new AddAttribute("fooBar", "STRUCT(y INT)", Position.first()));
+    Descriptor after = message("pf");
+    assertThat(after.findFieldByName("foo_bar").getMessageType().getName())
+        .isEqualTo("FooBarRow");
+    assertThat(after.findFieldByName("fooBar").getMessageType().getName())
+        .isEqualTo("FooBar2Row");
+    assertThat(((ProtobufSchema) registry.schema("pf")).isBackwardCompatible(before)).isEmpty();
+  }
+
+  // A message's fields share their names with the messages it declares: an attribute of such
+  // a name would rename the message, or leave no schema to write.
+  @Test
+  void anAttributeNamedAsAMessageOfItsProtobufTypeIsRefused() throws Exception {
+    create("pn", SchemaType.PROTOBUF, "(id INT NOT NULL, foo STRUCT(x STRING))");
+    assertThatThrownBy(() -> registry.alter("pn", new AddAttribute("FooRow", "INT")))
+        .isInstanceOf(TypeRefusedException.class).hasMessage("Type pn cannot have an attribute "
+            + "named FooRow: its Protobuf message declares a message or enum of that name");
+    assertThatThrownBy(() -> registry.alter("pn", new RenameAttribute("id", "FooRow")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageStartingWith("Type pn cannot have an attribute named FooRow");
+    // One a pin keeps as Flink named it.
+    registry.client.register("pm", new ProtobufSchema("syntax = \"proto3\";\n"
+        + "message Record {\n"
+        + "  optional addr_Row addr = 1;\n"
+        + "  message addr_Row { optional string city = 1; }\n"
+        + "}\n"));
+    assertThatThrownBy(() -> registry.alter("pm", new AddAttribute("addr_Row", "INT")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageStartingWith("Type pm cannot have an attribute named addr_Row");
+    assertThat(version("pn")).isEqualTo(1);
+    assertThat(version("pm")).isEqualTo(1);
   }
 
   // A type of a namespace, registered as Avro, that refers to one of none: the registry's DDL
@@ -1039,6 +1085,29 @@ class TypeAlterTest {
     assertThat(registry.schema("customer").references()).containsExactly(reference);
   }
 
+  // The referred type's name begins with that of a record the type declares, PostalAddress,
+  // and is no type nested in that one.
+  @Test
+  void aTypeReferringToOneNamedLikeANestedTypeOfItsOwnIsAltered() throws Exception {
+    registry.client.register("geo", new AvroSchema("{\"type\":\"record\",\"name\":\"Geo\","
+        + "\"namespace\":\"PostalAddress\",\"fields\":[{\"name\":\"lat\",\"type\":\"double\"}]}"));
+    SchemaReference reference = new SchemaReference("PostalAddress.Geo", "geo", 1);
+    registry.client.register("customer", new AvroSchema("{\"type\":\"record\","
+        + "\"name\":\"Customer\",\"namespace\":\"shop\",\"fields\":["
+        + "{\"name\":\"home\",\"type\":{\"type\":\"record\",\"name\":\"PostalAddress\","
+        + "\"fields\":[{\"name\":\"street\",\"type\":\"string\"}]}},"
+        + "{\"name\":\"geo\",\"type\":\"PostalAddress.Geo\"}]}",
+        List.of(reference), Map.of("PostalAddress.Geo",
+            registry.client.getLatestSchemaMetadata("geo").getSchema()), null));
+    registry.alter("customer", new AddAttribute("nickname", "STRING"));
+    assertThat(version("customer")).isEqualTo(2);
+    org.apache.avro.Schema altered = ((AvroSchema) registry.schema("customer")).rawSchema();
+    assertThat(altered.getField("geo").schema().getFullName()).isEqualTo("PostalAddress.Geo");
+    assertThat(altered.getField("home").schema().getFullName())
+        .isEqualTo("shop.PostalAddress");
+    assertThat(registry.schema("customer").references()).containsExactly(reference);
+  }
+
   // Written from the logical type a message Flink named addr_Row would be AddrRow, which the
   // registry takes for another type: an alter keeps the names the version has.
   @Test
@@ -1047,14 +1116,37 @@ class TypeAlterTest {
         + "message Record {\n"
         + "  optional string id = 1;\n"
         + "  optional addr_Row addr = 2;\n"
-        + "  repeated item_Row item = 3;\n\n"
+        + "  repeated item_Row item = 3;\n"
+        + "  oneof pay {\n"
+        + "    pay_card_Row card = 4;\n"
+        + "    string iban = 5;\n"
+        + "  }\n"
+        + "  optional Shared one = 6;\n"
+        + "  optional Shared other = 7;\n\n"
         + "  message addr_Row {\n"
         + "    optional string street = 1;\n"
         + "    optional string zip = 2;\n"
         + "    optional string city = 3;\n"
+        + "    optional geo_Row geo = 4;\n"
+        + "    message geo_Row {\n"
+        + "      optional double lat = 1;\n"
+        + "    }\n"
         + "  }\n"
         + "  message item_Row {\n"
         + "    optional string sku = 1;\n"
+        + "    optional dim_Row dim = 2;\n"
+        + "    message dim_Row {\n"
+        + "      optional int32 w = 1;\n"
+        + "    }\n"
+        + "  }\n"
+        + "  message pay_card_Row {\n"
+        + "    optional string number = 1;\n"
+        + "  }\n"
+        + "  message Shared {\n"
+        + "    optional in_Row in = 1;\n"
+        + "    message in_Row {\n"
+        + "      optional string x = 1;\n"
+        + "    }\n"
         + "  }\n"
         + "}\n");
     registry.client.register("places", flink);
@@ -1064,14 +1156,19 @@ class TypeAlterTest {
         .isEqualTo("addr_Row");
     assertThat(added.toDescriptor().findFieldByName("item").getMessageType().getName())
         .isEqualTo("item_Row");
+    // At every level: a row in a row and in an array's, a oneof member's, a shared message's.
     assertThat(added.isBackwardCompatible(flink)).isEmpty();
+    assertThat(added.canonicalString()).contains("message geo_Row", "message dim_Row",
+        "message pay_card_Row", "message in_Row");
 
-    // Retyped, it is the message it was, its fields at their numbers.
-    registry.alter("places",
-        new AlterAttributeType("addr", "STRUCT(street STRING, city STRING)"));
+    // Retyped, it is the message it was, its fields at their numbers, and so is the row it
+    // keeps inside.
+    registry.alter("places", new AlterAttributeType("addr",
+        "STRUCT(street STRING, city STRING, geo STRUCT(lat DOUBLE, lon DOUBLE))"));
     Descriptor addr = message("places").findFieldByName("addr").getMessageType();
     assertThat(addr.getName()).isEqualTo("addr_Row");
-    assertThat(numbers(addr)).isEqualTo("street=1 city=3");
+    assertThat(numbers(addr)).isEqualTo("street=1 city=3 geo=4");
+    assertThat(addr.findFieldByName("geo").getMessageType().getName()).isEqualTo("geo_Row");
     assertThat(version("places")).isEqualTo(3);
   }
 }

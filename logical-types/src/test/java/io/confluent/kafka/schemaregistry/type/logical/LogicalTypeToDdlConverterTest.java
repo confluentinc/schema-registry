@@ -524,6 +524,57 @@ class LogicalTypeToDdlConverterTest {
     assertRoundTrip(same);
   }
 
+  // Both would be written Person: the namespace's own is then written with its namespace.
+  @Test
+  void aTypeOfNoNamespaceAndTheNamespacesOwnOfItsNameAreToldApart() {
+    Schema root = Schema.createStruct(List.of(
+        new Schema.Field("a", Schema.createNamedTypeRef("Person"), 0),
+        new Schema.Field("b", Schema.createNamedTypeRef("shop.Person"), 1)));
+    LogicalType referred = new LogicalType("Customer", "shop", root, Map.of(),
+        Set.of("Person", "shop.Person"), Map.of(), List.of(), Map.of(), Map.of());
+    String ddl = LogicalTypeToDdlConverter.toDdl(referred, true);
+    assertTrue(ddl.startsWith("NAMESPACE shop; USING TYPE Person FOR Person; "), ddl);
+    assertTrue(ddl.contains("(a Person, b shop.Person)"), ddl);
+    assertEquals(Set.of("Person", "shop.Person"), parse(ddl).getExternalTypes(), ddl);
+    assertRoundTrip(referred);
+
+    // And when the namespace's own is one the script declares.
+    Schema person = Schema.createStruct(List.of(
+        new Schema.Field("name", Schema.createString(), 0)));
+    LogicalType declared = new LogicalType("Customer", "shop", root,
+        Map.of("shop.Person", person), Set.of("Person"), Map.of(), List.of(), Map.of(),
+        Map.of());
+    ddl = LogicalTypeToDdlConverter.toDdl(declared, true);
+    assertTrue(ddl.contains("STRUCT shop.Person (name STRING)"), ddl);
+    LogicalType read = parse(ddl);
+    assertEquals(Set.of("Person"), read.getExternalTypes(), ddl);
+    assertTrue(read.getNamedTypes().containsKey("shop.Person"), ddl);
+    assertRoundTrip(declared);
+  }
+
+  // A dotted name that begins with a declared type's reads as a type nested in it.
+  @Test
+  void aReferredTypeWhoseNameBeginsWithADeclaredTypesReadsBackAsItself() {
+    Schema root = Schema.createStruct(List.of(
+        new Schema.Field("home", Schema.createNamedTypeRef("shop.PostalAddress"), 0),
+        new Schema.Field("geo", Schema.createNamedTypeRef("PostalAddress.Geo"), 1),
+        new Schema.Field("point", Schema.createNamedTypeRef("other.Point"), 2)));
+    Schema address = Schema.createStruct(List.of(
+        new Schema.Field("street", Schema.createString(), 0)));
+    LogicalType lt = new LogicalType("Customer", "shop", root,
+        Map.of("shop.PostalAddress", address), Set.of("PostalAddress.Geo", "other.Point"),
+        Map.of(), List.of(), Map.of(), Map.of());
+    String ddl = LogicalTypeToDdlConverter.toDdl(lt, true);
+    // Only the one that would be misread is aliased.
+    assertTrue(ddl.startsWith("NAMESPACE shop; "
+        + "USING TYPE PostalAddress.Geo FOR PostalAddress.Geo; STRUCT "), ddl);
+    assertFalse(ddl.contains("USING TYPE other.Point"), ddl);
+    LogicalType read = parse(ddl);
+    assertEquals(Set.of("PostalAddress.Geo", "other.Point"), read.getExternalTypes(), ddl);
+    assertTrue(read.getNamedTypes().containsKey("shop.PostalAddress"), ddl);
+    assertRoundTrip(lt);
+  }
+
   @Test
   void anAvroUnionDefaultIsItsFirstBranchsLiteralAndRoundTrips() {
     LogicalType original = AvroToLogicalTypeConverter.toLogicalType(new AvroSchema(

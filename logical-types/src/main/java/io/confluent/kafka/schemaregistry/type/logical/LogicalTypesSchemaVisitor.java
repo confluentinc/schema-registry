@@ -240,7 +240,10 @@ public class LogicalTypesSchemaVisitor extends LogicalTypesBaseVisitor<Object> {
     // Compare against the namespace-qualified form: a USING TYPE name is written bare, while a
     // local declaration is keyed qualified, so the raw sets never intersect under a NAMESPACE even
     // when both claim the same token.
+    // One aliased to itself is the type of no namespace, which a local type of the namespace
+    // is not; that one is then written with its namespace.
     Set<String> shadowed = declaredUsingNames.stream()
+        .filter(name -> !name.equals(typeAliases.get(name)))
         .map(this::qualifyWithNamespace)
         .filter(namedTypes::containsKey)
         .collect(Collectors.toCollection(LinkedHashSet::new));
