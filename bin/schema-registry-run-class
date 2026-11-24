@@ -95,6 +95,16 @@ else
   JAVA="$JAVA_HOME/bin/java"
 fi
 
+# Detect the JVM implementation (not the CPU): IBM Semeru / Eclipse OpenJ9 prints "Eclipse OpenJ9 VM".
+# OpenJ9 silently ignores HotSpot -XX: GC flags and warns on -Xlog; HotSpot refuses OpenJ9 -X options,
+# so OpenJ9-only options must stay inside this branch. The output is also used for the GC log below.
+JAVA_VERSION_OUTPUT=$("$JAVA" -version 2>&1)
+if [[ "$JAVA_VERSION_OUTPUT" == *"OpenJ9"* ]]; then
+  JAVA_VM_OPENJ9=true
+else
+  JAVA_VM_OPENJ9=false
+fi
+
 # Memory options
 if [ -z "$SCHEMA_REGISTRY_HEAP_OPTS" ]; then
   SCHEMA_REGISTRY_HEAP_OPTS="-Xmx512M"
@@ -102,7 +112,21 @@ fi
 
 # JVM performance options
 if [ -z "$SCHEMA_REGISTRY_JVM_PERFORMANCE_OPTS" ]; then
-  SCHEMA_REGISTRY_JVM_PERFORMANCE_OPTS="-server -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:+ExplicitGCInvokesConcurrent -Djava.awt.headless=true"
+  if [ "$JAVA_VM_OPENJ9" = "true" ]; then
+    # OpenJ9 default GC policy (gencon); the HotSpot GC flags below would be ignored. Tune with
+    # SCHEMA_REGISTRY_JVM_PERFORMANCE_OPTS or OPENJ9_JAVA_OPTIONS.
+    SCHEMA_REGISTRY_JVM_PERFORMANCE_OPTS="-server -Djava.awt.headless=true"
+  else
+    SCHEMA_REGISTRY_JVM_PERFORMANCE_OPTS="-server -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:+ExplicitGCInvokesConcurrent -Djava.awt.headless=true"
+  fi
+fi
+
+# OpenJ9 writes a system core, heap dump, javacore and snap trace on OutOfMemoryError by default,
+# into the working directory or /tmp. Match HotSpot: write nothing on OOM; crash dumps still go
+# to LOG_DIR. Prepended so options in SCHEMA_REGISTRY_OPTS still win, e.g. -XX:+HeapDumpOnOutOfMemoryError
+# to keep OOM dumps, or -Xdump:directory=<dir> to write dumps elsewhere.
+if [ "$JAVA_VM_OPENJ9" = "true" ]; then
+  SCHEMA_REGISTRY_OPTS="-Xdump:directory=$LOG_DIR -XX:-HeapDumpOnOutOfMemoryError $SCHEMA_REGISTRY_OPTS"
 fi
 
 while [ $# -gt 0 ]; do
@@ -155,9 +179,13 @@ if [ "x$GC_LOG_ENABLED" = "xtrue" ]; then
   # 10 -> java version "10" 2018-03-20
   # 10.0.1 -> java version "10.0.1" 2018-04-17
   # We need to match to the end of the line to prevent sed from printing the characters that do not match
-  JAVA_MAJOR_VERSION=$($JAVA -version 2>&1 | sed -E -n 's/.* version "([0-9]*).*$/\1/p')
-  if [[ "$JAVA_MAJOR_VERSION" -ge "9" ]] ; then
-    SCHEMA_REGISTRY_GC_LOG_OPTS="-Xlog:gc*:file=$LOG_DIR/$GC_LOG_FILE_NAME:time,tags:filecount=10,filesize=102400"
+  JAVA_MAJOR_VERSION=$(echo "$JAVA_VERSION_OUTPUT" | sed -E -n 's/.* version "([0-9]*).*$/\1/p')
+  if [ "$JAVA_VM_OPENJ9" = "true" ]; then
+    # OpenJ9 verbose GC log (XML). It rotates by GC cycles, not bytes: 10 files of 10000 cycles,
+    # about 30 MB each at the ~3 KB per cycle measured on a broker.
+    SCHEMA_REGISTRY_GC_LOG_OPTS="-Xverbosegclog:$LOG_DIR/$GC_LOG_FILE_NAME,10,10000"
+  elif [[ "$JAVA_MAJOR_VERSION" -ge "9" ]] ; then
+    SCHEMA_REGISTRY_GC_LOG_OPTS="-Xlog:gc*:file=$LOG_DIR/$GC_LOG_FILE_NAME:time,tags:filecount=10,filesize=100M"
   else
     SCHEMA_REGISTRY_GC_LOG_OPTS="-Xloggc:$LOG_DIR/$GC_LOG_FILE_NAME -verbose:gc -XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:+PrintGCTimeStamps -XX:+UseGCLogFileRotation -XX:NumberOfGCLogFiles=10 -XX:GCLogFileSize=100M"
   fi
