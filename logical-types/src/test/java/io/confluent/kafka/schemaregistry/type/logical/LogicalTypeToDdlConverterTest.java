@@ -24,13 +24,18 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.avro.AvroToLogicalTypeConverter;
+import io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesLexer;
 import io.confluent.kafka.schemaregistry.type.logical.json.JsonToLogicalTypeConverter;
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTypeConverter;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import org.antlr.v4.runtime.CharStreams;
+import org.antlr.v4.runtime.Token;
+import org.antlr.v4.runtime.Vocabulary;
 import org.junit.jupiter.api.Test;
 
 class LogicalTypeToDdlConverterTest {
@@ -563,6 +568,50 @@ class LogicalTypeToDdlConverterTest {
     assertEquals(original.getRootSchema().getFields().get(0).getDefaultValue(),
         parse(ddl).getRootSchema().getFields().get(0).getDefaultValue(), ddl);
     assertRoundTrip(original);
+  }
+
+  @Test
+  void aNonReservedKeywordIsWrittenUnquotedAndAReservedOneQuoted() {
+    // MESSAGE, RETURNING and STRUCT are names as they stand; VARIANT_GET and TRY_VARIANT_GET
+    // are reserved, so a field of that name is written in backticks.
+    LogicalType original = parse("TYPE STRUCT(message STRING, returning INT, struct INT, "
+        + "`variant_get` INT, `try_variant_get` INT) NOT NULL;");
+    String ddl = LogicalTypeToDdlConverter.toDdl(original);
+    for (String name : List.of("message", "returning", "struct")) {
+      assertTrue(ddl.contains(name + " ") && !ddl.contains("`" + name + "`"), ddl);
+    }
+    assertTrue(ddl.contains("`variant_get` ") && ddl.contains("`try_variant_get` "), ddl);
+    assertRoundTrip(original);
+  }
+
+  @Test
+  void aKeywordIsQuotedExactlyWhenItIsNoFieldName() {
+    // Guards the writer's keyword list against the grammar's: a keyword the grammar refuses
+    // as a field name is written in backticks, and one it takes is written as it stands.
+    Vocabulary vocabulary = LogicalTypesLexer.VOCABULARY;
+    int keywords = 0;
+    for (int type = 1; type <= vocabulary.getMaxTokenType(); type++) {
+      String name = vocabulary.getSymbolicName(type);
+      if (name == null || type == LogicalTypesLexer.ID) {
+        continue;
+      }
+      String word = name.toLowerCase(Locale.ROOT);
+      List<? extends Token> tokens =
+          new LogicalTypesLexer(CharStreams.fromString(word)).getAllTokens();
+      if (tokens.size() != 1 || tokens.get(0).getType() != type) {
+        continue;
+      }
+      keywords++;
+      boolean fieldName;
+      try {
+        fieldName = parse("TYPE STRUCT(" + word + " INT) NOT NULL;")
+            .getRootSchema().getField(word) != null;
+      } catch (ValidationException e) {
+        fieldName = false;
+      }
+      assertEquals(!fieldName, !Schema.quoteIdentifierIfNeeded(word).equals(word), word);
+    }
+    assertTrue(keywords > 50, "keywords found: " + keywords);
   }
 
   // -----------------------------------------------------------------------
