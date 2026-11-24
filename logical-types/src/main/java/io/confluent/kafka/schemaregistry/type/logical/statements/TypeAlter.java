@@ -642,7 +642,8 @@ public final class TypeAlter {
       boolean nullDefault = !field.hasDefaultValue() && field.getSchema().isNullable();
       Schema schema = format == SchemaType.PROTOBUF
           ? numberBranches(field.getSchema(), nextNumber(fields) + 1) : field.getSchema();
-      fields.add(new Field(field.getName(), schema, fields.size(),
+      int at = a.position() == null ? fields.size() : place(fields, a.position());
+      fields.add(at, new Field(field.getName(), schema, at,
           nullDefault ? null : field.getDefaultValue(),
           nullDefault || field.hasDefaultValue(), field.getDoc(), field.getTags(), params,
           namedRules(field)));
@@ -675,6 +676,28 @@ public final class TypeAlter {
       if (find(fields, previous) >= 0) {
         refuseDroppedName(previous);
       }
+      setStruct(fields);
+      return true;
+    } else if (action instanceof AlterAction.MoveAttribute) {
+      AlterAction.MoveAttribute a = (AlterAction.MoveAttribute) action;
+      List<Field> fields = new ArrayList<>(struct().getFields());
+      int i = named(fields, a.name());
+      if (i < 0) {
+        throw new TypeRefusedException("Type " + subject + " has no attribute " + a.name());
+      }
+      Field moved = fields.remove(i);
+      String after = a.position().after();
+      if (after != null && named(List.of(moved), after) >= 0) {
+        throw new TypeRefusedException("Attribute " + moved.getName()
+            + " cannot go after itself");
+      }
+      int at = place(fields, a.position());
+      // Where it already is, the type is as it was; so is a Protobuf message, whose fields are
+      // written in the order of their numbers.
+      if (at == i || format == SchemaType.PROTOBUF) {
+        return false;
+      }
+      fields.add(at, moved);
       setStruct(fields);
       return true;
     } else if (action instanceof AlterAction.RenameAttribute) {
@@ -2261,6 +2284,19 @@ public final class TypeAlter {
   }
 
   // The attribute a statement names; a column is named as the database names it, in any case.
+  // The index an attribute takes among the others at a position.
+  private int place(List<Field> others, AlterAction.Position position) {
+    if (position.after() == null) {
+      return 0;
+    }
+    int i = named(others, position.after());
+    if (i < 0) {
+      throw new TypeRefusedException("Type " + subject + " has no attribute "
+          + position.after());
+    }
+    return i + 1;
+  }
+
   private int named(List<Field> fields, String name) {
     int i = find(fields, name);
     for (int j = 0; i < 0 && columns && j < fields.size(); j++) {

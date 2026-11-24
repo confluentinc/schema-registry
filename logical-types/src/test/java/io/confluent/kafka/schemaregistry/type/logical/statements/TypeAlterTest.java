@@ -23,6 +23,8 @@ import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceField;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.Rule;
@@ -35,12 +37,15 @@ import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.Alt
 import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.Check;
 import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.DropAttribute;
 import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.DropConstraint;
+import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.MoveAttribute;
+import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.Position;
 import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.RenameAttribute;
 import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.SetAttributeWith;
 import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.SetDataType;
 import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.SetWith;
 import io.confluent.kafka.schemaregistry.type.logical.statements.TypeScripts.BodyKind;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -922,5 +927,95 @@ class TypeAlterTest {
         .hasMessageStartingWith("Type un cannot be changed so: no AVRO schema can be made of "
             + "it: ");
     assertThat(version("un")).isEqualTo(1);
+  }
+
+  // The attributes of the latest version, in the order they are read in.
+  private List<String> names(String subject) {
+    return registry.logicalType(subject, registry.latest(subject)).getRootSchema().getFields()
+        .stream().map(Schema.Field::getName).collect(Collectors.toList());
+  }
+
+  // The provenance id of each attribute of the latest version, by its name there.
+  private Map<String, Integer> pids(String subject) throws Exception {
+    List<ProvenanceVersion> versions = registry.client
+        .getProvenanceByVersion(subject, "1", "latest", true).getVersions();
+    Map<String, Integer> pids = new LinkedHashMap<>();
+    for (ProvenanceField f : versions.get(versions.size() - 1).getFields()) {
+      if (f.getPath().size() == 1) {
+        pids.put(f.getNames().get(0), f.getPid());
+      }
+    }
+    return pids;
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = SchemaType.class, names = {"AVRO", "JSON"})
+  void anAttributeIsAddedAtAPosition(SchemaType format) {
+    create("ap", format, "(a INT NOT NULL, b STRING)");
+    registry.alter("ap", new AddAttribute("c", "DOUBLE", Position.after("a")),
+        new AddAttribute("d", "DOUBLE", Position.first()), new AddAttribute("e", "DOUBLE"));
+    assertThat(names("ap")).containsExactly("d", "a", "c", "b", "e");
+    // After one this statement adds, and not after one it drops or none has.
+    registry.alter("ap", new AddAttribute("f", "INT"),
+        new AddAttribute("g", "INT", Position.after("f")));
+    assertThat(names("ap")).containsExactly("d", "a", "c", "b", "e", "f", "g");
+    assertThatThrownBy(() -> registry.alter("ap", new DropAttribute("e", false),
+        new AddAttribute("h", "INT", Position.after("e"))))
+        .isInstanceOf(TypeRefusedException.class).hasMessage("Type ap has no attribute e");
+    assertThatThrownBy(() -> registry.alter("ap",
+        new AddAttribute("h", "INT", Position.after("h"))))
+        .isInstanceOf(TypeRefusedException.class).hasMessage("Type ap has no attribute h");
+    assertThat(version("ap")).isEqualTo(3);
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = SchemaType.class, names = {"AVRO", "JSON"})
+  void anAttributeIsMovedAndStaysTheAttributeItWas(SchemaType format) throws Exception {
+    create("mv", format, "(a INT NOT NULL, b STRING COMMENT 'bee', c BIGINT)");
+    Map<String, Integer> before = pids("mv");
+    registry.alter("mv", new MoveAttribute("c", Position.first()),
+        new MoveAttribute("a", Position.after("b")));
+    assertThat(names("mv")).containsExactly("c", "b", "a");
+    assertThat(version("mv")).isEqualTo(2);
+    // Provenance reads each as the attribute it was, and it keeps what it had.
+    assertThat(pids("mv")).containsExactlyInAnyOrderEntriesOf(before);
+    assertThat(registry.logicalType("mv", registry.latest("mv")).getRootSchema().getField("b")
+        .getDoc()).isEqualTo("bee");
+
+    // Where it is already, nothing changes and no version is made.
+    assertThat(registry.alter("mv", new MoveAttribute("c", Position.first()),
+        new MoveAttribute("a", Position.after("b"))).edited()).isNull();
+    assertThat(version("mv")).isEqualTo(2);
+    assertThatThrownBy(() -> registry.alter("mv", new MoveAttribute("b", Position.after("b"))))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessage("Attribute b cannot go after itself");
+    assertThatThrownBy(() -> registry.alter("mv", new MoveAttribute("b", Position.after("z"))))
+        .isInstanceOf(TypeRefusedException.class).hasMessage("Type mv has no attribute z");
+    assertThatThrownBy(() -> registry.alter("mv", new MoveAttribute("z", Position.first())))
+        .isInstanceOf(TypeRefusedException.class).hasMessage("Type mv has no attribute z");
+  }
+
+  // A column's name compares whatever its case, in a position as elsewhere.
+  @Test
+  void aColumnIsPlacedAfterOneNamedInAnotherCase() {
+    create("cs", SchemaType.AVRO, "(a INT NOT NULL, b STRING)");
+    TypeAlter.Options columns = new TypeAlter.Options().columns(true);
+    registry.alter("cs", columns, new AddAttribute("c", "INT", Position.after("A")),
+        new MoveAttribute("B", Position.first()));
+    assertThat(names("cs")).containsExactly("b", "a", "c");
+  }
+
+  // A message's fields are written in the order of their numbers, which a position leaves.
+  @Test
+  void aPositionDoesNothingInProtobuf() {
+    create("pp", SchemaType.PROTOBUF, "(a INT NOT NULL, b STRING, c BIGINT)");
+    registry.alter("pp", new AddAttribute("d", "DOUBLE", Position.after("a")));
+    assertThat(numbers(message("pp"))).isEqualTo("a=1 b=2 c=3 d=4");
+    assertThat(names("pp")).containsExactly("a", "b", "c", "d");
+    assertThat(registry.alter("pp", new MoveAttribute("c", Position.first())).edited())
+        .isNull();
+    assertThat(version("pp")).isEqualTo(2);
+    assertThatThrownBy(() -> registry.alter("pp", new MoveAttribute("z", Position.first())))
+        .isInstanceOf(TypeRefusedException.class).hasMessage("Type pp has no attribute z");
   }
 }

@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.type.logical.statements;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * One action of an {@code ALTER TYPE} statement, as a tool's parser reads it. Types, field
@@ -57,16 +58,50 @@ public abstract class AlterAction {
   }
 
   /**
-   * {@code ADD ATTRIBUTE name field}, where field is a type plus any field clauses.
+   * Where an attribute goes among the others of its type: first, or right after another. It is
+   * the order they are declared and read in, in Avro and JSON Schema; a Protobuf message's
+   * fields are in the order of their numbers, so a position does nothing there.
+   */
+  public static final class Position {
+
+    private final String after;
+
+    private Position(String after) {
+      this.after = after;
+    }
+
+    public static Position first() {
+      return new Position(null);
+    }
+
+    public static Position after(String name) {
+      return new Position(Objects.requireNonNull(name, "name"));
+    }
+
+    /** The attribute this one follows, or null if it goes first. */
+    public String after() {
+      return after;
+    }
+  }
+
+  /**
+   * {@code ADD ATTRIBUTE name field [FIRST | AFTER other]}, where field is a type plus any
+   * field clauses. With no position, the attribute goes last.
    */
   public static final class AddAttribute extends AlterAction {
 
     private final String name;
     private final String field;
+    private final Position position;
 
     public AddAttribute(String name, String field) {
+      this(name, field, null);
+    }
+
+    public AddAttribute(String name, String field, Position position) {
       this.name = name;
       this.field = field;
+      this.position = position;
     }
 
     public String name() {
@@ -75,6 +110,33 @@ public abstract class AlterAction {
 
     public String field() {
       return field;
+    }
+
+    /** Where it goes, or null for last. */
+    public Position position() {
+      return position;
+    }
+  }
+
+  /**
+   * Moves an attribute among the others of its type; it stays the attribute it was.
+   */
+  public static final class MoveAttribute extends AlterAction {
+
+    private final String name;
+    private final Position position;
+
+    public MoveAttribute(String name, Position position) {
+      this.name = name;
+      this.position = Objects.requireNonNull(position, "position");
+    }
+
+    public String name() {
+      return name;
+    }
+
+    public Position position() {
+      return position;
     }
   }
 
