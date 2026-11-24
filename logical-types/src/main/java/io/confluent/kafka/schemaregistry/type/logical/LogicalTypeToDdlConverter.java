@@ -622,11 +622,17 @@ public final class LogicalTypeToDdlConverter {
      * in which case emitting the root as a named declaration would duplicate it on parse.
      */
     private boolean namedTypeKeyExistsForRoot(String rootName) {
-      if (lt.getNamedTypes().containsKey(rootName)) {
+      if (declares(rootName)) {
         return true;
       }
       String ns = lt.getNamespace();
-      return ns != null && lt.getNamedTypes().containsKey(ns + "." + rootName);
+      return ns != null && declares(ns + "." + rootName);
+    }
+
+    // Whether the script declares a type of this name: one it only refers to has its body
+    // among the named types too, and is no declaration the root's could repeat.
+    private boolean declares(String name) {
+      return lt.getNamedTypes().containsKey(name) && !lt.getExternalTypes().contains(name);
     }
 
     /**

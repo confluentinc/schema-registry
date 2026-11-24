@@ -581,8 +581,11 @@ class LogicalTypeToDdlConverterTest {
   void aRootNamedAsTheTypeOfNoNamespaceItRefersToIsStillTheRoot() {
     Schema root = Schema.createStruct(List.of(
         new Schema.Field("boss", Schema.createNamedTypeRef("Person"), 0))).setNullable(true);
-    LogicalType lt = new LogicalType("Person", "shop", root, Map.of(), Set.of("Person"),
-        Map.of(), List.of(), Map.of(), Map.of());
+    // As a type read from a schema has it: the referred type's body is among the named types.
+    Schema referred = Schema.createStruct(List.of(
+        new Schema.Field("name", Schema.createString(), 0)));
+    LogicalType lt = new LogicalType("Person", "shop", root, Map.of("Person", referred),
+        Set.of("Person"), Map.of(), List.of(), Map.of(), Map.of());
     String ddl = LogicalTypeToDdlConverter.toDdl(lt, true);
     assertEquals("NAMESPACE shop; USING TYPE Person FOR Person; "
         + "STRUCT shop.Person (boss Person); TYPE shop.Person;", ddl);

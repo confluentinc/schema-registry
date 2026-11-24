@@ -1081,6 +1081,40 @@ class TypeAlterTest {
         .hasMessageStartingWith("Type pm cannot have an attribute named addr_Row");
     assertThat(version("pn")).isEqualTo(1);
     assertThat(version("pm")).isEqualTo(1);
+
+    // The name is free once the attribute whose message had it is dropped, or is no row.
+    create("pd", SchemaType.PROTOBUF, "(id INT NOT NULL, foo STRUCT(x STRING), bar INT)");
+    registry.alter("pd", new DropAttribute("foo", false), new AddAttribute("FooRow", "INT"));
+    create("pe", SchemaType.PROTOBUF, "(id INT NOT NULL, foo STRUCT(x STRING), bar INT)");
+    registry.alter("pe", new AlterAttributeType("foo", "INT"),
+        new AddAttribute("FooRow", "INT"));
+    assertThat(numbers(message("pe"))).contains("FooRow=");
+    // And not before: the statement's actions are taken in their order.
+    create("pg", SchemaType.PROTOBUF, "(id INT NOT NULL, foo STRUCT(x STRING), bar INT)");
+    assertThatThrownBy(() -> registry.alter("pg", new AddAttribute("FooRow", "INT"),
+        new DropAttribute("foo", false))).isInstanceOf(TypeRefusedException.class);
+  }
+
+  // The referred message has the root's own simple name, PostalAddress, and no package.
+  @Test
+  void aRootNamedAsTheTypeOfNoNamespaceItRefersToKeepsItsName() throws Exception {
+    String common = "syntax = \"proto3\";\n\nmessage PostalAddress {\n  string street = 1;\n}\n";
+    registry.client.register("common", new ProtobufSchema(common));
+    SchemaReference reference = new SchemaReference("common.proto", "common", 1);
+    ProtobufSchema stored = new ProtobufSchema("syntax = \"proto3\";\npackage shop;\n\n"
+        + "import \"common.proto\";\n\n"
+        + "message PostalAddress {\n"
+        + "  string id = 1;\n"
+        + "  optional .PostalAddress billing = 2;\n"
+        + "}\n", List.of(reference), Map.of("common.proto", common), null, null);
+    registry.client.register("pa", stored);
+    registry.alter("pa", new AddAttribute("nickname", "STRING"));
+    ProtobufSchema altered = (ProtobufSchema) registry.schema("pa");
+    assertThat(altered.toDescriptor().getFullName()).isEqualTo("shop.PostalAddress");
+    assertThat(altered.toDescriptor().findFieldByName("billing").getMessageType().getFullName())
+        .isEqualTo("PostalAddress");
+    assertThat(altered.isBackwardCompatible(stored)).isEmpty();
+    assertThat(altered.references()).containsExactly(reference);
   }
 
   // A type of a namespace, registered as Avro, that refers to one of none: the registry's DDL
@@ -1188,5 +1222,33 @@ class TypeAlterTest {
     assertThat(numbers(addr)).isEqualTo("street=1 city=3 geo=4");
     assertThat(addr.findFieldByName("geo").getMessageType().getName()).isEqualTo("geo_Row");
     assertThat(version("places")).isEqualTo(3);
+
+    // The row is the one it was, whatever name the new type pins on it.
+    registry.alter("places", new AlterAttributeType("addr", "STRUCT(street STRING, "
+        + "city STRING, geo STRUCT(lat DOUBLE, lon DOUBLE) WITH ('protobuf.name' = 'MyGeo'), "
+        + "zip STRING)"));
+    assertThat(message("places").findFieldByName("addr").getMessageType()
+        .findFieldByName("geo").getMessageType().getName()).isEqualTo("geo_Row");
+    // A member named as that row's message could not be written beside it.
+    assertThatThrownBy(() -> registry.alter("places", new AlterAttributeType("addr",
+        "STRUCT(street STRING, city STRING, geo STRUCT(lat DOUBLE, lon DOUBLE), zip STRING, "
+            + "geo_Row INT)"))).isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("A member cannot be named geo_Row");
+    assertThat(version("places")).isEqualTo(4);
+  }
+
+  // The names a retyped attribute's members were given are kept in Avro as they are in
+  // Protobuf, where the records are otherwise named anew after the attribute.
+  @Test
+  void aRetypedAvroAttributeKeepsTheNamesPinnedBelowIt() {
+    create("av", SchemaType.AVRO, "(id INT NOT NULL, addr STRUCT(street STRING, "
+        + "geo STRUCT(lat DOUBLE) WITH ('avro.name' = 'GeoPoint')))");
+    AvroSchema before = (AvroSchema) registry.schema("av");
+    assertThat(before.canonicalString()).contains("\"name\":\"GeoPoint\"");
+    registry.alter("av", new AlterAttributeType("addr",
+        "STRUCT(street STRING, geo STRUCT(lat DOUBLE, lon DOUBLE), zip STRING)"));
+    AvroSchema after = (AvroSchema) registry.schema("av");
+    assertThat(after.canonicalString()).contains("\"name\":\"GeoPoint\"");
+    assertThat(after.isBackwardCompatible(before)).isEmpty();
   }
 }

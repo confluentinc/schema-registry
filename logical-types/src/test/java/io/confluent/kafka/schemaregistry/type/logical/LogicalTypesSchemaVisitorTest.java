@@ -813,6 +813,19 @@ class LogicalTypesSchemaVisitorTest {
     assertEquals("com.example.hr.Person", fields.get(1).getSchema().getQualifiedName());
     assertEquals(Set.of("Person", "com.example.hr.Boss"), lt.getExternalTypes());
     assertTrue(lt.getNamedTypes().containsKey("com.example.hr.Person"));
+
+    // Declared bare, it is the namespace's own all the same; the bare name refers to the other.
+    LogicalType bare = parseScript(
+        "NAMESPACE com.example.hr;"
+        + "USING TYPE Person FOR Person;"
+        + "STRUCT Person (name STRING);"
+        + "STRUCT Employee (person Person, self com.example.hr.Person);"
+        + "TYPE Employee"
+    ).toLogicalType();
+    assertEquals("Person",
+        bare.getRootSchema().getFields().get(0).getSchema().getQualifiedName());
+    assertEquals(Set.of("Person"), bare.getExternalTypes());
+    assertTrue(bare.getNamedTypes().containsKey("com.example.hr.Person"));
   }
 
   @Test

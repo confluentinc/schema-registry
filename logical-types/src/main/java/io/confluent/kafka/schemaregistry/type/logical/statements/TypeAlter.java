@@ -21,6 +21,7 @@ import com.google.protobuf.DescriptorProtos.EnumDescriptorProto;
 import com.google.protobuf.DescriptorProtos.FieldDescriptorProto;
 import com.google.protobuf.DescriptorProtos.FileDescriptorProto;
 import com.google.protobuf.Descriptors.Descriptor;
+import com.google.protobuf.Descriptors.FieldDescriptor;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.CompatibilityPolicy;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
@@ -199,8 +200,10 @@ public final class TypeAlter {
   private final Map<String, String> previousNames = new HashMap<>();
   // The attributes this statement adds, by their names in it.
   private final Set<String> added = new HashSet<>();
-  // The messages and enums the Protobuf message of the version being edited declares.
+  // The messages and enums the Protobuf message of the version being edited declares, and
+  // those of them each attribute's fields are of: gone with the attribute, a name is free.
   private final Set<String> declared = new HashSet<>();
+  private final Map<String, Set<String>> owned = new HashMap<>();
   private final List<Message> versions = new ArrayList<>();
   // The compatibility policy a SET WITH gives the subject, or null to leave it.
   private String policy;
@@ -702,6 +705,7 @@ public final class TypeAlter {
       added.remove(name);
       dropped.add(name);
       dropped.add(previous);
+      freeDeclared(previous);
       // Given to another attribute earlier in the statement, as in RENAME a TO b, ADD a.
       if (find(fields, previous) >= 0) {
         refuseDroppedName(previous);
@@ -810,6 +814,7 @@ public final class TypeAlter {
       if (sameKind(f.getSchema(), type)) {
         type = withNestedNames(withBranchNameParams(type, f.getSchema()), f.getSchema());
       } else {
+        freeDeclared(previousName(f.getName()));
         params = new LinkedHashMap<>(params);
         params.keySet().removeIf(Schema::isTypeNameParam);
       }
@@ -1582,6 +1587,15 @@ public final class TypeAlter {
         : target.getFields().stream().map(Field::getName).collect(Collectors.toList());
   }
 
+  // The messages and enums only this attribute's fields were of go with it, or with its kind.
+  private void freeDeclared(String attribute) {
+    Set<String> types = owned.remove(attribute);
+    if (types != null) {
+      types.removeIf(type -> owned.values().stream().anyMatch(of -> of.contains(type)));
+      declared.removeAll(types);
+    }
+  }
+
   // A Protobuf message's fields share their names with the messages and enums it declares:
   // given one of those names, the writer would rename the type, or the schema be invalid.
   private void refuseDeclaredName(String name) {
@@ -1626,6 +1640,19 @@ public final class TypeAlter {
     if (message != null) {
       message.getNestedTypes().forEach(type -> declared.add(type.getName()));
       message.getEnumTypes().forEach(type -> declared.add(type.getName()));
+      for (FieldDescriptor f : message.getFields()) {
+        String type = f.getType() == FieldDescriptor.Type.MESSAGE
+            && f.getMessageType().getContainingType() == message ? f.getMessageType().getName()
+            : f.getType() == FieldDescriptor.Type.ENUM
+              && f.getEnumType().getContainingType() == message ? f.getEnumType().getName()
+              : null;
+        if (type != null) {
+          // A oneof's members are the branches of the attribute of its name.
+          owned.computeIfAbsent(f.getRealContainingOneof() != null
+              ? f.getRealContainingOneof().getName() : f.getName(), a -> new HashSet<>())
+              .add(type);
+        }
+      }
     }
     LogicalType named = ProtoToLogicalTypeConverter.toLogicalType((ProtobufSchema) schema, true);
     root = pinned(root, named.getRootSchema());
@@ -2492,7 +2519,8 @@ public final class TypeAlter {
   }
 
   // A replacing type keeps, at every level below it, the native names pinned on the members it
-  // keeps, one of the name and the kind it was; a name the replacement pins itself stays.
+  // keeps, one of the name and the kind it was, whatever name the replacement pins on it: the
+  // type is the one it was, which another name would not be.
   private static Schema withNestedNames(Schema type, Schema old) {
     if (old == null || type.getType() != old.getType()) {
       return type;
@@ -2507,6 +2535,7 @@ public final class TypeAlter {
               : copy(f, f.getName(), withNestedNames(f.getSchema(), was.getSchema()),
                   withTypeNames(f.getParams(), was.getParams())));
         }
+        refusePinnedMemberNames(fields);
         result = Schema.createStruct(fields);
         break;
       }
@@ -2539,12 +2568,32 @@ public final class TypeAlter {
     return copyMetadata(type, result).setParams(type.getParams());
   }
 
-  // Params with the native names another member had, where they give none of that kind.
+  // A Protobuf message's fields share their names with the messages it declares: a member
+  // named as the message a pin keeps for another could not be written.
+  private static void refusePinnedMemberNames(List<Field> fields) {
+    Set<Object> pinned = new HashSet<>();
+    for (Field f : fields) {
+      pinned.add(f.getParams().get(Schema.PROTOBUF_NAME));
+      if (f.getSchema().getType() == Schema.Type.UNION) {
+        f.getSchema().getBranches().forEach(
+            b -> pinned.add(b.getParams().get(Schema.PROTOBUF_NAME)));
+      }
+    }
+    for (Field f : fields) {
+      if (pinned.contains(f.getName())) {
+        throw new TypeRefusedException("A member cannot be named " + f.getName()
+            + ": the Protobuf message it is in declares a message or enum of that name");
+      }
+    }
+  }
+
+  // Params with the native names another member had, in place of any they give.
   private static Map<String, Object> withTypeNames(Map<String, Object> params,
       Map<String, Object> was) {
     Map<String, Object> out = null;
     for (Map.Entry<String, Object> name : was.entrySet()) {
-      if (Schema.isTypeNameParam(name.getKey()) && !params.containsKey(name.getKey())) {
+      if (Schema.isTypeNameParam(name.getKey())
+          && !name.getValue().equals(params.get(name.getKey()))) {
         out = out != null ? out : new LinkedHashMap<>(params);
         out.put(name.getKey(), name.getValue());
       }
