@@ -618,8 +618,11 @@ public class EncryptionExecutor implements RuleExecutor {
             plaintext = toBytes(type, value);
             if (plaintext == null) {
               if (ctx.currentField() == null || !ctx.currentField().isInCombined()) {
+                String field = ctx.currentField() != null
+                    ? " in field '" + ctx.currentField().getFullName() + "'"
+                    : "";
                 throw new RuleException(
-                    ctx.rule(), "Type '" + type + "' not supported for encryption");
+                    ctx.rule(), "Type '" + type + "'" + field + " not supported for encryption");
               }
               return value;
             }

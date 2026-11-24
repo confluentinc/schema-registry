@@ -407,7 +407,8 @@ public class RuleContext {
     FLOAT(true),
     DOUBLE(true),
     BOOLEAN(true),
-    NULL(true);
+    NULL(true),
+    UNTYPED(false);
 
     private boolean isPrimitive;
 

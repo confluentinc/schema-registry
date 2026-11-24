@@ -24,6 +24,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
@@ -67,6 +68,7 @@ import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.schemaregistry.rules.RuleBase;
+import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.rules.WidgetBytesProto.PiiBytes;
 import io.confluent.kafka.schemaregistry.rules.WidgetBytesProto.WidgetBytes;
 import io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii;
@@ -1869,6 +1871,90 @@ public abstract class FieldEncryptionExecutorTest {
     RecordHeaders headers = new RecordHeaders();
     Cryptor cryptor = addSpyToCryptor(jsonSchemaSerializer3);
     jsonSchemaSerializer5.serialize(topic, headers, data);
+  }
+
+  private static String variantSchema(String profileSchema) {
+    return "{\"type\": \"object\", \"properties\": {"
+        + "\"id\": {\"type\": \"string\"}, \"profile\": " + profileSchema + "}}";
+  }
+
+  private byte[] serializeWithVariantEncryption(String schemaStr, String tag, String message)
+      throws Exception {
+    JsonSchema jsonSchema = new JsonSchema(schemaStr);
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of(tag), null, null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    jsonSchema = jsonSchema.copy(getMetadata("kek1"), ruleSet);
+    schemaRegistry.register(topic + "-value", jsonSchema);
+    return jsonSchemaSerializer5.serialize(
+        topic, new RecordHeaders(), new ObjectMapper().readTree(message));
+  }
+
+  @Test
+  public void testKafkaJsonSchemaSerializerTaggedVariantRejected() throws Exception {
+    String[] schemas = {
+        variantSchema("{\"confluent:tags\": [\"PII\"]}"),
+        variantSchema("{\"anyOf\": [{\"type\": \"null\"}, {}], \"confluent:tags\": [\"PII\"]}")
+    };
+    String[] profiles = {"{\"ssn\": \"123-45-6789\"}", "\"123-45-6789\"", "42", "[1]"};
+    for (String schema : schemas) {
+      for (String profile : profiles) {
+        SerializationException e = assertThrows(SerializationException.class,
+            () -> serializeWithVariantEncryption(
+                schema, "PII", "{\"id\": \"1\", \"profile\": " + profile + "}"));
+        assertRejectedAsUntyped(e, "$.profile");
+      }
+    }
+  }
+
+  private static void assertRejectedAsUntyped(Exception e, String fieldName) {
+    Throwable cause = e;
+    while (cause != null && !(cause instanceof RuleException)) {
+      cause = cause.getCause();
+    }
+    assertNotNull(cause);
+    assertTrue(cause.getMessage(), cause.getMessage().contains(
+        "Type 'UNTYPED' in field '" + fieldName + "' not supported for encryption"));
+  }
+
+  private void assertUntypedInsideTaggedContainerRejected(String profileSchema, String profile) {
+    SerializationException e = assertThrows(SerializationException.class,
+        () -> serializeWithVariantEncryption(
+            variantSchema(profileSchema), "PII", "{\"id\": \"1\", \"profile\": " + profile + "}"));
+    assertRejectedAsUntyped(e, "$.profile");
+  }
+
+  @Test
+  public void testKafkaJsonSchemaSerializerUntypedInTaggedObjectRejected() {
+    assertUntypedInsideTaggedContainerRejected(
+        "{\"type\": \"object\", \"confluent:tags\": [\"PII\"], \"properties\": "
+            + "{\"name\": {\"type\": \"string\"}, \"extra\": {}}}",
+        "{\"name\": \"bob\", \"extra\": {\"ssn\": \"123-45-6789\"}}");
+  }
+
+  @Test
+  public void testKafkaJsonSchemaSerializerUntypedInTaggedArrayRejected() {
+    assertUntypedInsideTaggedContainerRejected(
+        "{\"type\": \"array\", \"confluent:tags\": [\"PII\"], \"items\": {}}",
+        "[{\"ssn\": \"123-45-6789\"}]");
+  }
+
+  @Test
+  public void testKafkaJsonSchemaSerializerTaggedVariantNullAllowed() throws Exception {
+    String message = "{\"id\": \"1\", \"profile\": null}";
+    byte[] bytes = serializeWithVariantEncryption(
+        variantSchema("{\"confluent:tags\": [\"PII\"]}"), "PII", message);
+    assertEquals(new ObjectMapper().readTree(message),
+        jsonSchemaDeserializer.deserialize(topic, new RecordHeaders(), bytes));
+  }
+
+  @Test
+  public void testKafkaJsonSchemaSerializerVariantWithOtherTagAllowed() throws Exception {
+    String message = "{\"id\": \"1\", \"profile\": {\"ssn\": \"123-45-6789\"}}";
+    byte[] bytes = serializeWithVariantEncryption(
+        variantSchema("{\"confluent:tags\": [\"PII\"]}"), "PII2", message);
+    assertEquals(new ObjectMapper().readTree(message),
+        jsonSchemaDeserializer.deserialize(topic, new RecordHeaders(), bytes));
   }
 
   @Test

@@ -2239,6 +2239,25 @@ public class CelExecutorTest {
   }
 
   @Test
+  public void testKafkaJsonSchemaSerializerFieldTransformTaggedVariantUnchanged()
+      throws Exception {
+    String schemaStr = "{\"type\": \"object\", \"properties\": {"
+        + "\"id\": {\"type\": \"string\"}, \"profile\": {\"confluent:tags\": [\"PII\"]}}}";
+    JsonSchema jsonSchema = new JsonSchema(schemaStr);
+    Rule rule = new Rule("myRule", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        CelFieldExecutor.TYPE, ImmutableSortedSet.of("PII"), null, "'masked'", null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    jsonSchema = jsonSchema.copy(null, ruleSet);
+    schemaRegistry.register(topic + "-value", jsonSchema);
+
+    JsonNode data = new ObjectMapper().readTree(
+        "{\"id\": \"1\", \"profile\": {\"a\": 1}}");
+    JsonNode expected = data.deepCopy();
+    byte[] bytes = jsonSchemaSerializer3.serialize(topic, JsonSchemaUtils.envelope(jsonSchema, data));
+    assertEquals(expected, jsonSchemaDeserializer.deserialize(topic, bytes));
+  }
+
+  @Test
   public void testKafkaJsonSchemaSerializerFieldTransform() throws Exception {
     byte[] bytes;
     Object obj;
