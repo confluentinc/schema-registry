@@ -80,19 +80,20 @@ public final class LogicalTypeToDdlConverter {
   }
 
   public static String toDdl(LogicalType logicalType) {
-    return new Printer(logicalType, false).script();
+    return toDdl(logicalType, false);
   }
 
   /**
-   * The DDL with none of the writer's line breaks: statements follow each other after
-   * {@code "; "}, and a struct's body is written inline. It reads back as {@link #toDdl} does.
+   * The DDL, with {@code oneLine} written with none of the writer's line breaks: statements
+   * follow each other after {@code "; "}, and a struct's body is written inline. It reads back
+   * to the same type either way.
    *
-   * <p>A CHECK's expression is written without its own line breaks and line comments, which
-   * could not stay on one line. A line break inside a string literal or a quoted name is part
-   * of its value and is kept, so only such a script has more than one line.
+   * <p>On one line, a CHECK's expression is written without its own line breaks and line
+   * comments, which could not stay on one line. A line break inside a string literal or a
+   * quoted name is part of its value and is kept, so only such a script has more than one line.
    */
-  public static String toOneLineDdl(LogicalType logicalType) {
-    return new Printer(logicalType, true).script();
+  public static String toDdl(LogicalType logicalType, boolean oneLine) {
+    return new Printer(logicalType, oneLine).script();
   }
 
   private static final class Printer {

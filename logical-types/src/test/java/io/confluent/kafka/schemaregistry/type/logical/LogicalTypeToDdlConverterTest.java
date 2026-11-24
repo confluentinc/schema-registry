@@ -62,7 +62,7 @@ class LogicalTypeToDdlConverterTest {
     assertEquals(ddl, reemitted,
         "DDL should be stable across emit -> parse -> emit\nDDL:\n" + ddl);
     // On one line it is the same script.
-    String oneLine = LogicalTypeToDdlConverter.toOneLineDdl(original);
+    String oneLine = LogicalTypeToDdlConverter.toDdl(original, true);
     assertFalse(oneLine.contains("\n"), oneLine);
     assertEquals(ddl, LogicalTypeToDdlConverter.toDdl(parse(oneLine)), oneLine);
   }
@@ -591,7 +591,7 @@ class LogicalTypeToDdlConverterTest {
         + "ENUM Color ('RED', 'GREEN'); "
         + "STRUCT Line (sku STRING NOT NULL, quantity INT NOT NULL, price DECIMAL(8, 2)); "
         + "TYPE Purchase NOT NULL;",
-        LogicalTypeToDdlConverter.toOneLineDdl(lt));
+        LogicalTypeToDdlConverter.toDdl(lt, true));
     assertRoundTrip(lt);
   }
 
@@ -599,7 +599,7 @@ class LogicalTypeToDdlConverterTest {
   void oneLineOfAStructWithOnlyATableCheck() {
     LogicalType lt = parse("STRUCT T (a INT, CHECK (a > 0), CHECK (a < 9));");
     assertEquals("STRUCT T (a INT, CHECK (a > 0), CHECK (a < 9));",
-        LogicalTypeToDdlConverter.toOneLineDdl(lt));
+        LogicalTypeToDdlConverter.toDdl(lt, true));
   }
 
   @Test
@@ -614,7 +614,7 @@ class LogicalTypeToDdlConverterTest {
             + "           joined */ a < 9\n"
             + "    AND note <> 'two\nlines')\n"
             + ");\n");
-    String oneLine = LogicalTypeToDdlConverter.toOneLineDdl(lt);
+    String oneLine = LogicalTypeToDdlConverter.toDdl(lt, true);
     assertEquals("STRUCT T (a INT, "
         + "note STRING CHECK (note <> '-- kept' AND note <> '// kept'), "
         + "CHECK (a > 0 AND /* kept, joined */ a < 9 AND note <> 'two\nlines'));", oneLine);
@@ -626,7 +626,7 @@ class LogicalTypeToDdlConverterTest {
         read.getFields().get(1).getRules().get(0).getSql());
     assertEquals("a > 0 AND /* kept, joined */ a < 9 AND note <> 'two\nlines'",
         read.getRules().get(0).getSql());
-    assertEquals(oneLine, LogicalTypeToDdlConverter.toOneLineDdl(parse(oneLine)));
+    assertEquals(oneLine, LogicalTypeToDdlConverter.toDdl(parse(oneLine), true));
   }
 
   @Test
@@ -637,7 +637,7 @@ class LogicalTypeToDdlConverterTest {
             + "  b STRING DEFAULT 'x\ny',\n"
             + "  c INT\n"
             + ");\n");
-    String oneLine = LogicalTypeToDdlConverter.toOneLineDdl(lt);
+    String oneLine = LogicalTypeToDdlConverter.toDdl(lt, true);
     assertEquals("STRUCT T (a INT COMMENT 'first\nsecond', b STRING DEFAULT 'x\ny', c INT);",
         oneLine);
     assertEquals("first\nsecond", parse(oneLine).getRootSchema().getFields().get(0).getDoc());
