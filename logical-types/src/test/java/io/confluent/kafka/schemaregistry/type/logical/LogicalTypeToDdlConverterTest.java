@@ -61,6 +61,10 @@ class LogicalTypeToDdlConverterTest {
     String reemitted = LogicalTypeToDdlConverter.toDdl(parse(ddl));
     assertEquals(ddl, reemitted,
         "DDL should be stable across emit -> parse -> emit\nDDL:\n" + ddl);
+    // On one line it is the same script.
+    String oneLine = LogicalTypeToDdlConverter.toDdl(original, true);
+    assertFalse(oneLine.contains("\n"), oneLine);
+    assertEquals(ddl, LogicalTypeToDdlConverter.toDdl(parse(oneLine)), oneLine);
   }
 
   // -----------------------------------------------------------------------
@@ -559,5 +563,111 @@ class LogicalTypeToDdlConverterTest {
     assertEquals(original.getRootSchema().getFields().get(0).getDefaultValue(),
         parse(ddl).getRootSchema().getFields().get(0).getDefaultValue(), ddl);
     assertRoundTrip(original);
+  }
+
+  // -----------------------------------------------------------------------
+  // On one line
+  // -----------------------------------------------------------------------
+
+  @Test
+  void oneLineHasNoneOfTheWritersLineBreaks() {
+    LogicalType lt = parse(
+        "NAMESPACE com.acme;\n"
+            + "ENUM Color ('RED', 'GREEN');\n"
+            + "STRUCT Line (sku STRING NOT NULL, quantity INT NOT NULL, price DECIMAL(8, 2));\n"
+            + "STRUCT Purchase (\n"
+            + "  id BIGINT NOT NULL,\n"
+            + "  color Color,\n"
+            + "  lines ARRAY<Line>,\n"
+            + "  total DECIMAL(10, 2),\n"
+            + "  CONSTRAINT positive CHECK (total > 0) MESSAGE 'must be positive'\n"
+            + ") COMMENT 'A purchase';\n");
+    assertTrue(LogicalTypeToDdlConverter.toDdl(lt).contains("(\n  id BIGINT NOT NULL,\n"));
+    // The root's declaration comes first, as the writer orders them.
+    assertEquals("NAMESPACE com.acme; "
+        + "STRUCT Purchase (id BIGINT NOT NULL, color Color, lines ARRAY<Line>, "
+        + "total DECIMAL(10, 2), CONSTRAINT positive CHECK (total > 0) "
+        + "MESSAGE 'must be positive') COMMENT 'A purchase'; "
+        + "ENUM Color ('RED', 'GREEN'); "
+        + "STRUCT Line (sku STRING NOT NULL, quantity INT NOT NULL, price DECIMAL(8, 2)); "
+        + "TYPE Purchase NOT NULL;",
+        LogicalTypeToDdlConverter.toDdl(lt, true));
+    assertRoundTrip(lt);
+  }
+
+  @Test
+  void oneLineOfAStructWithOnlyATableCheck() {
+    LogicalType lt = parse("STRUCT T (a INT, CHECK (a > 0), CHECK (a < 9));");
+    assertEquals("STRUCT T (a INT, CHECK (a > 0), CHECK (a < 9));",
+        LogicalTypeToDdlConverter.toDdl(lt, true));
+  }
+
+  @Test
+  void oneLineCheckLosesItsLineBreaksAndLineComments() {
+    LogicalType lt = parse(
+        "STRUCT T (\n"
+            + "  a INT,\n"
+            + "  note STRING CHECK (note <> '-- kept' -- gone\n"
+            + "      AND note <> '// kept'),\n"
+            + "  CHECK (a > 0   // gone too\r\n"
+            + "    AND /* kept,\n"
+            + "           joined */ a < 9\n"
+            + "    AND note <> 'two\nlines')\n"
+            + ");\n");
+    String oneLine = LogicalTypeToDdlConverter.toDdl(lt, true);
+    assertEquals("STRUCT T (a INT, "
+        + "note STRING CHECK (note <> '-- kept' AND note <> '// kept'), "
+        + "CHECK (a > 0 AND /* kept, joined */ a < 9 AND note <> 'two\nlines'));", oneLine);
+    // The writer's own form keeps the expressions as they were written.
+    assertTrue(LogicalTypeToDdlConverter.toDdl(lt).contains("-- gone\n      AND"));
+    // Read back, the checks say the same without their comments and line breaks.
+    Schema read = parse(oneLine).getRootSchema();
+    assertEquals("note <> '-- kept' AND note <> '// kept'",
+        read.getFields().get(1).getRules().get(0).getSql());
+    assertEquals("a > 0 AND /* kept, joined */ a < 9 AND note <> 'two\nlines'",
+        read.getRules().get(0).getSql());
+    assertEquals(oneLine, LogicalTypeToDdlConverter.toDdl(parse(oneLine), true));
+    // And they mean the same.
+    assertEquals(lt.getRootSchema().getFields().get(1).getRules().get(0).getExpr(),
+        read.getFields().get(1).getRules().get(0).getExpr());
+    assertEquals(lt.getRootSchema().getRules().get(0).getExpr(),
+        read.getRules().get(0).getExpr());
+  }
+
+  @Test
+  void oneLineCheckKeepsItsPlaceAfterACharacterOfTwoChars() {
+    // One code point and two chars: token indexes count the first, a string's the second.
+    String smile = "\uD83D\uDE00";
+    String three = smile + smile + smile;
+    LogicalType lt = parse(
+        "STRUCT T (\n"
+            + "  a INT,\n"
+            + "  note STRING,\n"
+            + "  CHECK (note <> '" + three + "' AND note <> 'https://'  AND a > 0),\n"
+            + "  CHECK (note <> '" + smile + smile + "' -- gone OR TRUE\n"
+            + "    AND a < 9)\n"
+            + ");\n");
+    String oneLine = LogicalTypeToDdlConverter.toDdl(lt, true);
+    assertEquals("STRUCT T (a INT, note STRING, "
+        + "CHECK (note <> '" + three + "' AND note <> 'https://'  AND a > 0), "
+        + "CHECK (note <> '" + smile + smile + "' AND a < 9));", oneLine);
+    List<Rule> written = lt.getRootSchema().getRules();
+    List<Rule> read = parse(oneLine).getRootSchema().getRules();
+    assertEquals(written.get(0).getExpr(), read.get(0).getExpr());
+    assertEquals(written.get(1).getExpr(), read.get(1).getExpr());
+  }
+
+  @Test
+  void oneLineKeepsALineBreakInsideALiteral() {
+    LogicalType lt = parse(
+        "STRUCT T (\n"
+            + "  a INT COMMENT 'first\nsecond',\n"
+            + "  b STRING DEFAULT 'x\ny',\n"
+            + "  c INT\n"
+            + ");\n");
+    String oneLine = LogicalTypeToDdlConverter.toDdl(lt, true);
+    assertEquals("STRUCT T (a INT COMMENT 'first\nsecond', b STRING DEFAULT 'x\ny', c INT);",
+        oneLine);
+    assertEquals("first\nsecond", parse(oneLine).getRootSchema().getFields().get(0).getDoc());
   }
 }
