@@ -21,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.avro.AvroToLogicalTypeConverter;
@@ -492,6 +493,35 @@ class LogicalTypeToDdlConverterTest {
         new ProtobufSchema("syntax = \"proto2\";\nmessage M {\n"
             + "  optional bytes b = 1 [default = \"ab\"];\n}\n")));
     assertTrue(ddl.contains("DEFAULT x'6162'"), ddl);
+  }
+
+  // Written bare under the record's namespace, the referred type would read back as one of it.
+  @Test
+  void aReferredTypeOfNoNamespaceReadsBackAsItselfUnderANamespace() {
+    String address = "{\"type\": \"record\", \"name\": \"PostalAddress\", \"fields\": ["
+        + "{\"name\": \"street\", \"type\": \"string\"}]}";
+    LogicalType original = AvroToLogicalTypeConverter.toLogicalType(new AvroSchema(
+        "{\"type\": \"record\", \"name\": \"Customer\", \"namespace\": \"shop\", "
+            + "\"fields\": [{\"name\": \"id\", \"type\": \"string\"}, "
+            + "{\"name\": \"addr\", \"type\": [\"null\", \"PostalAddress\"], "
+            + "\"default\": null}]}",
+        List.of(new SchemaReference("PostalAddress", "PostalAddress", 1)),
+        Map.of("PostalAddress", address), null));
+    String ddl = LogicalTypeToDdlConverter.toDdl(original);
+    assertTrue(ddl.startsWith("NAMESPACE shop;\nUSING TYPE PostalAddress FOR PostalAddress;\n"),
+        ddl);
+    assertEquals(Set.of("PostalAddress"), parse(ddl).getExternalTypes(), ddl);
+    assertRoundTrip(original);
+
+    // One of the record's namespace is written bare, and needs no such statement.
+    LogicalType same = AvroToLogicalTypeConverter.toLogicalType(new AvroSchema(
+        "{\"type\": \"record\", \"name\": \"Customer\", \"namespace\": \"shop\", "
+            + "\"fields\": [{\"name\": \"addr\", \"type\": \"PostalAddress\"}]}",
+        List.of(new SchemaReference("shop.PostalAddress", "PostalAddress", 1)),
+        Map.of("shop.PostalAddress", address.replace("\"fields\"",
+            "\"namespace\": \"shop\", \"fields\"")), null));
+    assertFalse(LogicalTypeToDdlConverter.toDdl(same).contains("USING TYPE"));
+    assertRoundTrip(same);
   }
 
   @Test

@@ -773,6 +773,36 @@ class LogicalTypesSchemaVisitorTest {
     ));
   }
 
+  // Under a NAMESPACE a bare name is one of its types; aliased to itself, it is as written.
+  @Test
+  void testSelfAliasUnderANamespaceIsTheTypeOfNoNamespace() {
+    LogicalType lt = parseScript(
+        "NAMESPACE com.example.hr;"
+        + "USING TYPE Person FOR Person;"
+        + "STRUCT Employee (person Person, boss Boss);"
+        + "TYPE Employee"
+    ).toLogicalType();
+    assertEquals("Person",
+        lt.getRootSchema().getFields().get(0).getSchema().getQualifiedName());
+    assertEquals("com.example.hr.Boss",
+        lt.getRootSchema().getFields().get(1).getSchema().getQualifiedName());
+    // Another alias may not go by way of it, nor may it name a type the script declares.
+    assertThrows(ValidationException.class, () -> parseScript(
+        "NAMESPACE com.example.hr;"
+        + "USING TYPE Person FOR Person;"
+        + "USING TYPE P FOR Person;"
+        + "STRUCT Employee (person Person, other P);"
+        + "TYPE Employee"
+    ));
+    assertThrows(ValidationException.class, () -> parseScript(
+        "NAMESPACE com.example.hr;"
+        + "USING TYPE Person FOR Person;"
+        + "STRUCT Person (name STRING);"
+        + "STRUCT Employee (person Person);"
+        + "TYPE Employee"
+    ));
+  }
+
   @Test
   void testDanglingLocalAliasRejected() {
     // Substitution removes the alias name, so usage is tracked as it happens rather than

@@ -140,6 +140,17 @@ public final class LogicalTypeToDdlConverter {
             .append(" FOR REF ").append(stringLiteral(e.getValue()))
             .append(endOfStatement());
       }
+      // A type of no namespace, named in a script that has one, would read back as a type of
+      // the script's namespace. Aliased to itself, its name is taken as written.
+      if (lt.getNamespace() != null && !lt.getNamespace().isEmpty()) {
+        for (String external : externalRefs) {
+          if (!external.contains(".") && !lt.getExternalImports().containsKey(external)) {
+            sb.append("USING TYPE ").append(qualifiedName(external))
+                .append(" FOR ").append(qualifiedName(external))
+                .append(endOfStatement());
+          }
+        }
+      }
 
       // A named inline root (bare STRUCT/ENUM carrying LogicalType.name — e.g. a Protobuf message
       // unwrapped to a struct, or a JSON root object's title) is emitted as a named declaration so

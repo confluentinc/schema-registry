@@ -1018,4 +1018,24 @@ class TypeAlterTest {
     assertThatThrownBy(() -> registry.alter("pp", new MoveAttribute("z", Position.first())))
         .isInstanceOf(TypeRefusedException.class).hasMessage("Type pp has no attribute z");
   }
+
+  // A type of a namespace, registered as Avro, that refers to one of none: the registry's DDL
+  // names the referred type as itself, so the type can be altered and keeps its reference.
+  @Test
+  void aTypeReferringToOneOfNoNamespaceIsAltered() throws Exception {
+    registry.client.register("PostalAddress", new AvroSchema("{\"type\":\"record\","
+        + "\"name\":\"PostalAddress\",\"fields\":[{\"name\":\"street\",\"type\":\"string\"}]}"));
+    SchemaReference reference = new SchemaReference("PostalAddress", "PostalAddress", 1);
+    registry.client.register("customer", new AvroSchema("{\"type\":\"record\","
+        + "\"name\":\"Customer\",\"namespace\":\"shop\",\"fields\":["
+        + "{\"name\":\"id\",\"type\":\"string\"},"
+        + "{\"name\":\"addr\",\"type\":[\"null\",\"PostalAddress\"],\"default\":null}]}",
+        List.of(reference), Map.of("PostalAddress",
+            registry.client.getLatestSchemaMetadata("PostalAddress").getSchema()), null));
+    registry.alter("customer", new AddAttribute("nickname", "STRING"));
+    assertThat(version("customer")).isEqualTo(2);
+    assertThat(registry.schema("customer").canonicalString())
+        .contains("\"type\":[\"null\",\"PostalAddress\"]").contains("\"name\":\"nickname\"");
+    assertThat(registry.schema("customer").references()).containsExactly(reference);
+  }
 }
