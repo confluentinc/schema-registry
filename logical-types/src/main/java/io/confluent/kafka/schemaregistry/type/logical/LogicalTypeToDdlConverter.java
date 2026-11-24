@@ -632,10 +632,15 @@ public final class LogicalTypeToDdlConverter {
       if (lt.getNamedTypes().containsKey(own) || lt.getExternalTypes().contains(own)) {
         return true;
       }
-      // Under a namespace the bare name is another type's. One the script declares takes it;
-      // one it refers to is aliased to itself, and the root is named with its namespace.
-      return !own.equals(rootName) && lt.getNamedTypes().containsKey(rootName)
-          && !lt.getExternalTypes().contains(rootName);
+      if (own.equals(rootName)) {
+        return false;
+      }
+      // Under a namespace the bare name is another type's. One the script declares takes it,
+      // and so does one bound to a reference, whose name is read with the namespace; any
+      // other it refers to is aliased to itself, and the root is named with its namespace.
+      return lt.getNamedTypes().containsKey(rootName) && !lt.getExternalTypes().contains(rootName)
+          || lt.getExternalImports().containsKey(rootName)
+            && collectExternalRefs().contains(rootName);
     }
 
     /**

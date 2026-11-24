@@ -1644,13 +1644,32 @@ public final class TypeAlter {
    * Returns the attributes.
    */
   private List<Field> pinAvroNames() {
-    ParsedSchema written = ColumnIds.nativeOf(subject, format, edited(), refused());
+    ParsedSchema written = ColumnIds.nativeOf(subject, format, withoutChecks(), refused());
     try {
       pinNames(LogicalTypeConversion.toLogicalType(written));
     } catch (RuntimeException e) {
       throw new TypeRefusedException(refused() + ": " + e.getMessage(), e);
     }
     return new ArrayList<>(struct().getFields());
+  }
+
+  // The type as it stands with no CHECK on its struct or attributes: one may only hold of the
+  // attributes the statement leaves, and no name depends on it.
+  private LogicalType withoutChecks() {
+    Schema struct = struct();
+    List<Field> fields = new ArrayList<>();
+    for (Field f : struct.getFields()) {
+      fields.add(Constraints.withRules(f, List.of()));
+    }
+    Schema bare = copyMetadata(struct, Schema.createStruct(fields))
+        .setParams(struct.getParams()).setRules(List.of());
+    Map<String, Schema> types = new LinkedHashMap<>(namedTypes);
+    boolean named = struct != root;
+    if (named) {
+      types.put(root.getQualifiedName(), bare);
+    }
+    return new LogicalType(original.getName(), original.getNamespace(), named ? root : bare,
+        types, externalTypes, externalImports, references, resolved, Map.of());
   }
 
   /**

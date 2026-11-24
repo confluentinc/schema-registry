@@ -32,6 +32,7 @@ import io.confluent.kafka.schemaregistry.type.logical.Rule;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
 import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.AddAttribute;
+import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.AddAttributeCheck;
 import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.AddConstraint;
 import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.AddValue;
 import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.AlterAttributeType;
@@ -1052,6 +1053,61 @@ class TypeAlterTest {
     assertThat(names("mr")).containsExactly("z", "a_b", "a", "s");
   }
 
+  // The record a map's entries are written as has a name too: m's would take m_Entry's.
+  @Test
+  void anAvroMapPlacedFirstLeavesTheNamesOfTheOthersRecords() {
+    create("me", SchemaType.AVRO,
+        "(a INT NOT NULL, m_Entry STRUCT(q INT), m_value STRUCT(r INT))");
+    AvroSchema before = (AvroSchema) registry.schema("me");
+    registry.alter("me", new AddAttribute("m", "MAP<INT NOT NULL, STRUCT(x INT)>"),
+        new MoveAttribute("m", Position.first()));
+    AvroSchema after = (AvroSchema) registry.schema("me");
+    assertThat(names("me")).containsExactly("m", "a", "m_Entry", "m_value");
+    assertThat(after.isBackwardCompatible(before)).isEmpty();
+    for (String attribute : List.of("m_Entry", "m_value")) {
+      assertThat(after.rawSchema().getField(attribute).schema().toString())
+          .isEqualTo(before.rawSchema().getField(attribute).schema().toString());
+    }
+  }
+
+  // A CHECK is judged on the attributes the statement leaves, a position in it or not: the
+  // names are read from the type as it stands, where the CHECK may not hold yet.
+  @Test
+  void anAvroCheckIsJudgedOnWhatAStatementWithAPositionLeaves() {
+    Check later = new Check("ck", "z > 0", null);
+    List<AlterAction[]> statements = List.of(
+        new AlterAction[] {new AddConstraint(later), new MoveAttribute("b", Position.first()),
+            new AddAttribute("z", "INT")},
+        new AlterAction[] {new AddConstraint(later),
+            new AddAttribute("y", "INT", Position.after("a")), new AddAttribute("z", "INT")},
+        new AlterAction[] {new AddConstraint(new Check("ck", "bb > 0", null)),
+            new MoveAttribute("a", Position.after("b")), new RenameAttribute("b", "bb")},
+        new AlterAction[] {new AddAttributeCheck("b", new Check("ck", "b > 0", null)),
+            new AddAttribute("y", "INT", Position.first())});
+    for (int i = 0; i < statements.size(); i++) {
+      String type = "pc" + i;
+      create(type, SchemaType.AVRO, "(a INT NOT NULL, b INT)");
+      registry.alter(type, statements.get(i));
+      assertThat(version(type)).as("statement %d", i).isEqualTo(2);
+      Schema struct = registry.struct(type);
+      List<Rule> rules = new ArrayList<>(struct.getRules());
+      struct.getFields().forEach(f -> rules.addAll(f.getRules()));
+      assertThat(rules).as("statement %d", i).extracting(Rule::getName).containsExactly("ck");
+    }
+    // One that held of the type the attribute had, dropped after the attribute is retyped.
+    create("pd", SchemaType.AVRO, "(a STRUCT(x INT), b INT, CONSTRAINT c1 CHECK (a.x > 0))");
+    registry.alter("pd", new AlterAttributeType("a", "INT"),
+        new AddAttribute("w", "INT", Position.first()), new DropConstraint("c1", false));
+    assertThat(names("pd")).containsExactly("w", "a", "b");
+    assertThat(registry.struct("pd").getRules()).isEmpty();
+    // One that does not hold of what the statement leaves is refused as it was.
+    create("pe", SchemaType.AVRO, "(a INT NOT NULL, b INT)");
+    assertThatThrownBy(() -> registry.alter("pe", new AddConstraint(later),
+        new MoveAttribute("b", Position.first()))).isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("Unknown column in CHECK: 'z'");
+    assertThat(version("pe")).isEqualTo(1);
+  }
+
   // A column's name compares whatever its case, in a position as elsewhere.
   @Test
   void aColumnIsPlacedAfterOneNamedInAnotherCase() {
@@ -1128,8 +1184,8 @@ class TypeAlterTest {
         + "  message addr_Row { optional string city = 1; }\n"
         + "}\n"));
     assertThatThrownBy(() -> registry.alter("pm", new AddAttribute("addr_Row", "INT")))
-        .isInstanceOf(TypeRefusedException.class)
-        .hasMessageContaining("schema can be made of it");
+        .isInstanceOf(TypeRefusedException.class).hasMessageContaining("no PROTOBUF schema "
+            + "can be made of it: Protobuf name 'addr_Row' is defined twice in Record");
     assertThat(version("pn")).isEqualTo(1);
     assertThat(version("pm")).isEqualTo(1);
 
@@ -1154,6 +1210,38 @@ class TypeAlterTest {
     registry.alter("po", new AlterAttributeType("u", "UNION(iban STRING, bic STRING)"),
         new AddAttribute(card, "INT"));
     assertThat(numbers(message("po"))).contains(card + "=");
+  }
+
+  // An enum's name is one of the message's as a nested message's is.
+  @Test
+  void anAttributeNamedAsAnEnumOfItsProtobufTypeIsRefused() {
+    create("en", SchemaType.PROTOBUF, "(id INT NOT NULL, e ENUM('A', 'B'), bar INT)");
+    String name = message("en").findFieldByName("e").getEnumType().getName();
+    for (String type : List.of("INT", "UNION(p INT, q STRING)")) {
+      assertThatThrownBy(() -> registry.alter("en", new AddAttribute(name, type)))
+          .isInstanceOf(TypeRefusedException.class).hasMessageContaining(name
+              + ", the type of e in Protobuf message en, would be renamed");
+    }
+    assertThat(version("en")).isEqualTo(1);
+  }
+
+  // A reference to a whole document is given a name, Ref1, that is read with the namespace:
+  // a document so titled is written with no name, as its declaration would be that type.
+  @Test
+  void aNamespacedJsonTypeTitledAsItsWholeDocumentReferenceIsAltered() throws Exception {
+    String common = "{\"type\": \"object\", \"properties\": "
+        + "{\"x\": {\"type\": \"string\"}}}";
+    registry.client.register("common", new JsonSchema(common));
+    SchemaReference reference = new SchemaReference("common.json", "common", 1);
+    registry.client.register("jr", new JsonSchema("{\"type\": \"object\", \"title\": "
+        + "\"Ref1\", \"confluent:namespace\": \"shop\", \"properties\": {\"id\": "
+        + "{\"type\": \"string\"}, \"prev\": {\"$ref\": \"common.json\"}}}",
+        List.of(reference), Map.of("common.json", common), null));
+    registry.alter("jr", new AddAttribute("nick", "STRING"));
+    assertThat(version("jr")).isEqualTo(2);
+    assertThat(registry.schema("jr").canonicalString()).contains(
+        "\"$ref\":\"common.json\"", "\"nick\"", "\"confluent:namespace\":\"shop\"");
+    assertThat(registry.schema("jr").references()).containsExactly(reference);
   }
 
   // A JSON document titled as the definition it refers to: they are two types of one name,
@@ -1321,7 +1409,8 @@ class TypeAlterTest {
     assertThatThrownBy(() -> registry.alter("places", new AlterAttributeType("addr",
         "STRUCT(street STRING, city STRING, geo STRUCT(lat DOUBLE, lon DOUBLE), zip STRING, "
             + "geo_Row INT)"))).isInstanceOf(TypeRefusedException.class)
-        .hasMessageContaining("schema can be made of it");
+        .hasMessageContaining("no PROTOBUF schema can be made of it: Protobuf name 'geo_Row' "
+            + "is defined twice in Record.addr_Row");
     assertThat(version("places")).isEqualTo(4);
   }
 
@@ -1350,6 +1439,12 @@ class TypeAlterTest {
         new MoveAttribute("a", Position.first()),
         new AlterAttributeType("s", "STRUCT(x INT)")).edited()).isNull();
     assertThat(version("same")).isEqualTo(1);
+    // A move with it is still made, where the format keeps an order.
+    registry.alter("same", new AlterAttributeType("b", "STRING"),
+        new MoveAttribute("b", Position.first()));
+    assertThat(version("same")).isEqualTo(format == SchemaType.PROTOBUF ? 1 : 2);
+    assertThat(names("same")).containsExactly(format == SchemaType.PROTOBUF
+        ? new String[] {"a", "b", "s"} : new String[] {"b", "a", "s"});
   }
 
   // The names a retyped attribute's members were given are kept in Avro as they are in

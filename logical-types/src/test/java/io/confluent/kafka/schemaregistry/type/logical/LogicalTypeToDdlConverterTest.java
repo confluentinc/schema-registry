@@ -622,6 +622,25 @@ class LogicalTypeToDdlConverterTest {
     }
   }
 
+  // A referred type bound to a reference is not aliased to itself: its name is read with the
+  // namespace, as the root's would be, so the root is written with no name.
+  @Test
+  void aRootIsNotDeclaredByTheNameOfATypeBoundToAReference() {
+    Schema referred = Schema.createStruct(List.of(
+        new Schema.Field("x", Schema.createString(), 0)));
+    Schema root = Schema.createStruct(List.of(
+        new Schema.Field("id", Schema.createString(), 0),
+        new Schema.Field("prev", Schema.createNamedTypeRef("Order"), 1)));
+    LogicalType lt = new LogicalType("Order", "shop", root, Map.of("Order", referred),
+        Set.of("Order"), Map.of("Order", "common.json"), List.of(), Map.of(), Map.of());
+    String ddl = LogicalTypeToDdlConverter.toDdl(lt, true);
+    assertTrue(ddl.contains("USING TYPE Order FOR REF 'common.json'"), ddl);
+    assertFalse(ddl.contains("STRUCT Order "), ddl);
+    LogicalType read = parse(ddl);
+    assertEquals(Set.of("shop.Order"), read.getExternalTypes(), ddl);
+    assertEquals(ddl, LogicalTypeToDdlConverter.toDdl(read, true));
+  }
+
   // The root is declared in the script as a named type is: a name that begins with its name
   // reads as a type nested in it.
   @Test
