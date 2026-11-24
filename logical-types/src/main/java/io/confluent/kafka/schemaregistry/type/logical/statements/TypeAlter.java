@@ -461,6 +461,7 @@ public final class TypeAlter {
       if (writesWhatIsStored(md, stored, written)) {
         edited = null;
       } else {
+        TypeReferences.refuseTwoVersions(lookup, subject, references, refused());
         if (format == SchemaType.PROTOBUF) {
           refuseTakenNames(stored, written);
         }

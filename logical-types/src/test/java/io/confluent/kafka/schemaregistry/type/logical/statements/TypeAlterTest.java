@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.type.logical.statements;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
@@ -859,6 +860,69 @@ class TypeAlterTest {
     registry.alter("o", new SetWith(Map.of("compatibility.policy", "LOGICAL")),
         new AddAttribute("n", "INT"));
     assertThat(registry.latest("o").getReferences().get(0).getVersion()).isEqualTo(1);
+  }
+
+  // A schema holds one version of a name, the first its references are read to, and they are
+  // stored in another order than the statement gives them: the version would be checked as
+  // one schema and stored as another.
+  @ParameterizedTest
+  @EnumSource(SchemaType.class)
+  void aVersionReferringToTwoVersionsOfATypeIsRefused(SchemaType format) {
+    create("inner", format, "(x STRING, y STRING)");
+    create("pair", format, "(a STRING, i inner)");
+    create("o", format, "(id INT NOT NULL, p pair)");
+    // By two ways at one version, a type is one type.
+    create("d", format, "(id INT NOT NULL, p pair, j inner)");
+    registry.alter("inner", new AddAttribute("z", "INT"));
+
+    assertThatThrownBy(() -> registry.alter("o", new AddAttribute("j", "inner")))
+        .isInstanceOf(TypeRefusedException.class).hasMessage("Type o cannot be changed so: it "
+            + "would refer to two versions of type inner, version 1 through version 1 of type "
+            + "pair and version 2; a schema has one version of a type, so name the type again "
+            + "to move it to its latest version, or first move the types that refer to it");
+    assertThat(version("o")).isEqualTo(1);
+
+    // The type that refers to it is moved first, and named again where it is used.
+    registry.alter("pair", new AlterAttributeType("i", "inner"));
+    assertThatThrownBy(() -> registry.alter("d", new AlterAttributeType("p", "pair")))
+        .isInstanceOf(TypeRefusedException.class).hasMessageContaining("it would refer to two "
+            + "versions of type inner, version 1 and version 2 through version 2 of type pair");
+    for (String type : List.of("o", "d")) {
+      List<AlterAction> actions = new ArrayList<>(List.of(new AlterAttributeType("p", "pair")));
+      actions.add(type.equals("o") ? new AddAttribute("j", "inner")
+          : new AlterAttributeType("j", "inner"));
+      registry.alter(type, actions.toArray(new AlterAction[0]));
+      assertThat(registry.latest(type).getReferences())
+          .extracting(SchemaReference::getSubject, SchemaReference::getVersion)
+          .containsExactlyInAnyOrder(tuple("inner", 2), tuple("pair", 2));
+    }
+  }
+
+  // A version stored so, as another tool registers one, is altered only by a statement that
+  // leaves it one version of the type.
+  @Test
+  void aVersionStoredWithTwoVersionsOfATypeIsRepairedByNamingItsTypeAgain() throws Exception {
+    create("inner", SchemaType.AVRO, "(x STRING, y STRING)");
+    create("pair", SchemaType.AVRO, "(a STRING, i inner)");
+    registry.alter("inner", new AddAttribute("z", "INT"));
+    Map<String, String> resolved = new LinkedHashMap<>();
+    resolved.put("inner", registry.version("inner", 2).getSchema());
+    resolved.put("pair", registry.version("pair", 1).getSchema());
+    registry.client.register("m", new AvroSchema("{\"type\": \"record\", \"name\": \"m\", "
+        + "\"fields\": [{\"name\": \"id\", \"type\": \"int\"}, {\"name\": \"p\", \"type\": "
+        + "[\"null\", \"pair\"]}, {\"name\": \"j\", \"type\": [\"null\", \"inner\"], "
+        + "\"default\": null}]}", List.of(new SchemaReference("inner", "inner", 2),
+            new SchemaReference("pair", "pair", 1)), resolved, null));
+    registry.alter("pair", new AlterAttributeType("i", "inner"));
+
+    assertThatThrownBy(() -> registry.alter("m", new AddAttribute("n", "INT")))
+        .isInstanceOf(TypeRefusedException.class).hasMessageContaining("it would refer to two "
+            + "versions of type inner, version 2 and version 1 through version 1 of type pair");
+    registry.alter("m", new AlterAttributeType("p", "pair"), new AddAttribute("n", "INT"));
+    assertThat(version("m")).isEqualTo(2);
+    assertThat(registry.latest("m").getReferences())
+        .extracting(SchemaReference::getSubject, SchemaReference::getVersion)
+        .containsExactlyInAnyOrder(tuple("inner", 2), tuple("pair", 2));
   }
 
   // A Protobuf type created again over its dropped versions is numbered as an ALTER of the
