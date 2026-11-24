@@ -42,6 +42,7 @@ import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.Dro
 import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.MoveAttribute;
 import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.Position;
 import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.RenameAttribute;
+import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.SetAttributeComment;
 import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.SetAttributeWith;
 import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.SetDataType;
 import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.SetWith;
@@ -1445,6 +1446,68 @@ class TypeAlterTest {
     assertThat(version("same")).isEqualTo(format == SchemaType.PROTOBUF ? 1 : 2);
     assertThat(names("same")).containsExactly(format == SchemaType.PROTOBUF
         ? new String[] {"a", "b", "s"} : new String[] {"b", "a", "s"});
+  }
+
+  // What makes a version is what the statement leaves, set beside what is stored: a type read
+  // back otherwise than it is said, as a union's branches or a map's key, is the type it was.
+  @ParameterizedTest
+  @EnumSource(SchemaType.class)
+  void aStatementThatLeavesTheTypeAsItIsStoredMakesNoVersion(SchemaType format) {
+    Map<String, String> types = new LinkedHashMap<>();
+    types.put("u", "UNION(i INT, t STRING)");
+    types.put("m", "MAP<STRING, INT>");
+    types.put("e", "MULTISET<STRING>");
+    types.put("s", "STRUCT(v UNION(i INT, t STRING), w MAP<STRING, STRUCT(k INT)>)");
+    StringBuilder body = new StringBuilder("(a INT NOT NULL");
+    types.forEach((name, type) -> body.append(", ").append(name).append(' ').append(type));
+    create("kept", format, body.append(", p STRUCT(x INT, y STRING))").toString());
+    // Each said as it was created, moved first and back after the attribute before it.
+    String before = "a";
+    for (Map.Entry<String, String> type : types.entrySet()) {
+      assertThat(registry.alter("kept", new AlterAttributeType(type.getKey(), type.getValue()),
+          new MoveAttribute(type.getKey(), Position.first()),
+          new MoveAttribute(type.getKey(), Position.after(before))).edited())
+          .as(type.getKey()).isNull();
+      before = type.getKey();
+    }
+    // An attribute added and dropped, and a comment set and taken away.
+    assertThat(registry.alter("kept", new AddAttribute("z", "INT", Position.first()),
+        new DropAttribute("z", false)).edited()).isNull();
+    assertThat(registry.alter("kept", new SetAttributeComment("a", "the key"),
+        new SetAttributeComment("a", null)).edited()).isNull();
+    if (format == SchemaType.PROTOBUF) {
+      // A message's fields are written by their numbers, in whatever order they are said.
+      assertThat(registry.alter("kept",
+          new AlterAttributeType("p", "STRUCT(y STRING, x INT)")).edited()).isNull();
+    }
+    assertThat(version("kept")).isEqualTo(1);
+
+    // What changes only a comment or a CHECK is still a version.
+    registry.alter("kept", new AlterAttributeType("u", types.get("u")),
+        new SetAttributeComment("a", "the key"));
+    assertThat(version("kept")).isEqualTo(2);
+    registry.alter("kept", new AddConstraint(new Check("ck", "a > 0", null)));
+    assertThat(version("kept")).isEqualTo(3);
+  }
+
+  // The properties the writer sets are part of what is stored: a schema registered without
+  // them, as another tool's is, is not yet what a statement would write of it.
+  @Test
+  void aSchemaStoredWithoutTheWritersPropertiesIsWrittenWithThem() throws Exception {
+    create("np", SchemaType.AVRO, "(a INT NOT NULL, u UNION(i INT, t STRING))");
+    String text = registry.schema("np").canonicalString();
+    registry.client.deleteSubject("np");
+    registry.client.deleteSubject("np", true);
+    registry.client.register("np", new AvroSchema(text));
+    assertThat(registry.latest("np").getMetadata()).isNull();
+
+    registry.alter("np", new AlterAttributeType("u", "UNION(i INT, t STRING)"));
+    assertThat(version("np")).isEqualTo(2);
+    assertThat(registry.schema("np").canonicalString()).isEqualTo(text);
+    assertThat(registry.latest("np").getMetadata().getProperties())
+        .containsEntry("confluent:edition", "2");
+    assertThat(registry.alter("np",
+        new AlterAttributeType("u", "UNION(i INT, t STRING)")).edited()).isNull();
   }
 
   // The names a retyped attribute's members were given are kept in Avro as they are in

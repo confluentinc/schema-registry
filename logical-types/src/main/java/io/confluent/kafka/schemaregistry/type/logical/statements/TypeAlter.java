@@ -149,7 +149,10 @@ public final class TypeAlter {
       return version;
     }
 
-    /** The new version, or null if the statement changes only the subject's settings. */
+    /**
+     * The new version, or null if the statement makes none: it changes only the subject's
+     * settings, or leaves the type as it is stored.
+     */
     public LogicalType edited() {
       return edited;
     }
@@ -453,15 +456,37 @@ public final class TypeAlter {
       refuseOlderReferences(lookup, subject, original.getReferences(), references, policy,
           "Type " + subject + " cannot be changed so", "drop");
       edited = edited();
-      if (format == SchemaType.PROTOBUF) {
-        refuseTakenNames(md, edited);
+      ParsedSchema stored = lookup.parse(md);
+      ParsedSchema written = ColumnIds.nativeOf(subject, format, edited, refused());
+      if (writesWhatIsStored(md, stored, written)) {
+        edited = null;
+      } else {
+        if (format == SchemaType.PROTOBUF) {
+          refuseTakenNames(stored, written);
+        }
+        refuseOtherColumns(md, edited, version);
+        refuseIncompatible(lookup, subject, format, md, softDeleted, versions, edited, policy,
+            refused(), v -> "version " + v + " of type " + subject);
+        check.accept(edited);
       }
-      refuseOtherColumns(md, edited, version);
-      refuseIncompatible(lookup, subject, format, md, softDeleted, versions, edited, policy,
-          refused(), v -> "version " + v + " of type " + subject);
-      check.accept(edited);
     }
     return new Result(format, md, version, edited, policy);
+  }
+
+  // Whether the statement leaves the version edited as it is stored: the same schema, the same
+  // references, and each property the writer sets. Such a statement makes no version, however
+  // its actions came to it: a type said as it is read, or an attribute added and dropped.
+  private static boolean writesWhatIsStored(SchemaMetadata md, ParsedSchema stored,
+      ParsedSchema written) {
+    if (!written.canonicalString().equals(stored.canonicalString())
+        || !new HashSet<>(written.references()).equals(new HashSet<>(stored.references()))) {
+      return false;
+    }
+    Map<String, String> had = md.getMetadata() == null ? null : md.getMetadata().getProperties();
+    Map<String, String> sets = written.metadata() == null ? null
+        : written.metadata().getProperties();
+    return sets == null || sets.isEmpty()
+        || had != null && had.entrySet().containsAll(sets.entrySet());
   }
 
   // A new version is written from the logical type, which carries neither what only a proto2
@@ -1679,12 +1704,10 @@ public final class TypeAlter {
    * would take it for another type. A file that is no valid Protobuf is refused here too,
    * where the registry would only say so.
    */
-  private void refuseTakenNames(SchemaMetadata md, LogicalType edited) {
-    ParsedSchema stored = lookup.parse(md);
+  private void refuseTakenNames(ParsedSchema stored, ParsedSchema written) {
     if (!(stored instanceof ProtobufSchema)) {
       return;
     }
-    ParsedSchema written = ColumnIds.nativeOf(subject, format, edited, refused());
     Descriptor now;
     try {
       now = ((ProtobufSchema) written).toDescriptor();
