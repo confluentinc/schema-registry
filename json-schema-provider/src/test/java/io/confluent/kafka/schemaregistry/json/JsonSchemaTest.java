@@ -40,9 +40,14 @@ import io.confluent.kafka.schemaregistry.CompatibilityPolicy;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.rules.FieldRedactionExecutor;
+import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.json.diff.Difference;
 import io.confluent.kafka.schemaregistry.json.diff.SchemaDiff;
 import java.net.URI;
@@ -61,6 +66,35 @@ import org.junit.Test;
 public class JsonSchemaTest {
 
   private static final ObjectMapper objectMapper = new ObjectMapper();
+
+  private static JsonNode redactTaggedVariant(RuleMode mode, String message) throws Exception {
+    JsonSchema schema = new JsonSchema("{\"type\": \"object\", \"properties\": {"
+        + "\"id\": {\"type\": \"string\"}, \"profile\": {\"confluent:tags\": [\"PII\"]}}}");
+    Rule rule = new Rule("redact", null, RuleKind.TRANSFORM, mode, FieldRedactionExecutor.TYPE,
+        Collections.singleton("PII"), null, null, null, null, false);
+    RuleContext ctx = new RuleContext(Collections.emptyMap(), null, schema, schema,
+        "test-value", "test", null, null, null, false,
+        mode, rule, 0, Collections.singletonList(rule), false);
+    return (JsonNode) new FieldRedactionExecutor().transform(ctx, objectMapper.readTree(message));
+  }
+
+  @Test
+  public void testRedactTaggedVariantField() throws Exception {
+    for (RuleMode mode : new RuleMode[] {RuleMode.WRITE, RuleMode.READ}) {
+      for (String profile : new String[] {"{\"ssn\": \"1\"}", "\"1\"", "42", "[1]"}) {
+        JsonNode result = redactTaggedVariant(mode,
+            "{\"id\": \"1\", \"profile\": " + profile + "}");
+        assertEquals("<REDACTED>", result.get("profile").asText());
+        assertEquals("1", result.get("id").asText());
+      }
+    }
+  }
+
+  @Test
+  public void testRedactTaggedVariantFieldNull() throws Exception {
+    JsonNode result = redactTaggedVariant(RuleMode.READ, "{\"id\": \"1\", \"profile\": null}");
+    assertTrue(result.get("profile").isNull());
+  }
 
   private static final String recordSchemaString = "{\"properties\": {\n"
       + "     \"null\": {\"type\": \"null\"},\n"

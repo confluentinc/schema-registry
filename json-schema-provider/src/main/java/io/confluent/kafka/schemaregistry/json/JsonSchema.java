@@ -1333,6 +1333,16 @@ public class JsonSchema implements ParsedSchema {
       }
       return toTransformedMessage(ctx, ((ReferenceSchema)schema).getReferredSchema(),
           path, message, transform);
+    } else if (schema instanceof EmptySchema && isTaggedForRule(ctx, fieldCtx)) {
+      if (message == null) {
+        return null;
+      }
+      fieldCtx.setType(Type.UNTYPED);
+      try {
+        return transform.transform(ctx, fieldCtx, message);
+      } catch (RuleException e) {
+        throw new RuntimeException(e);
+      }
     } else if (schema instanceof ConditionalSchema
         || schema instanceof EmptySchema
         || schema instanceof FalseSchema
@@ -1355,6 +1365,14 @@ public class JsonSchema implements ParsedSchema {
       }
       return message;
     }
+  }
+
+  private static boolean isTaggedForRule(RuleContext ctx, FieldContext fieldCtx) {
+    if (fieldCtx == null || fieldCtx.isInCombined()) {
+      return false;
+    }
+    Set<String> ruleTags = ctx.rule().getTags();
+    return !ruleTags.isEmpty() && !RuleContext.disjoint(fieldCtx.getTags(), ruleTags);
   }
 
   private Object getValue(Object message) {

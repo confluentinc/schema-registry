@@ -58,6 +58,8 @@ public class FieldRedactionExecutor extends FieldRuleExecutor {
           return REDACTED_STRING;
         case BYTES:
           return REDACTED_BYTES;
+        case UNTYPED:
+          return REDACTED_STRING;
         default:
           return fieldValue;
       }
