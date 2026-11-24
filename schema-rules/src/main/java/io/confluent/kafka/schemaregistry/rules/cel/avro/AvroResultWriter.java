@@ -19,6 +19,7 @@ package io.confluent.kafka.schemaregistry.rules.cel.avro;
 import dev.cel.common.values.CelByteString;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.apache.avro.AvroTypeException;
@@ -202,7 +203,7 @@ public final class AvroResultWriter {
       throw typeMismatch(celValue, schema);
     }
     Map<?, ?> in = (Map<?, ?>) celValue;
-    java.util.Map<String, Object> out = new java.util.LinkedHashMap<>(in.size());
+    Map<String, Object> out = new LinkedHashMap<>(in.size());
     for (Map.Entry<?, ?> e : in.entrySet()) {
       out.put(String.valueOf(e.getKey()), convert(e.getValue(), schema.getValueType()));
     }

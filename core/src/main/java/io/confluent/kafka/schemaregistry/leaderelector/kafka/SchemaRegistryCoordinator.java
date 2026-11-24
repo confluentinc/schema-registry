@@ -81,6 +81,7 @@ final class SchemaRegistryCoordinator extends AbstractCoordinator implements Clo
             heartbeatIntervalMs,
             groupId,
             Optional.empty(),
+            "",
             retryBackoffMs,
             retryBackoffMaxMs,
             true

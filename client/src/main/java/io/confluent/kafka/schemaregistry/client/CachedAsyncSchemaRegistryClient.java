@@ -450,7 +450,8 @@ public class CachedAsyncSchemaRegistryClient implements AsyncSchemaRegistryClien
       SubjectAndInt key =
           new SubjectAndInt(refSubject.toQualifiedSubject(), reference.getVersion());
       if (visited.add(key)) {
-        fetches.add(getSchemaByVersion(key.subject(), key.id(), true)
+        // Latest is looked up without deleted versions, as AbstractSchemaProvider does
+        fetches.add(getSchemaByVersion(key.subject(), key.id(), key.id() != -1)
             .thenCompose(s -> {
               prefetched.put(key, s);
               return prefetchReferences(s.getSubject(), s.getReferences(), visited, prefetched);
@@ -605,7 +606,7 @@ public class CachedAsyncSchemaRegistryClient implements AsyncSchemaRegistryClien
     @Override
     public Schema getByVersion(String subject, int version, boolean lookupDeletedSchema) {
       Map<SubjectAndInt, Schema> prefetched = prefetchedReferences.get();
-      Schema schema = prefetched != null && lookupDeletedSchema
+      Schema schema = prefetched != null && (lookupDeletedSchema || version == -1)
           ? prefetched.get(new SubjectAndInt(subject, version))
           : null;
       if (schema != null) {

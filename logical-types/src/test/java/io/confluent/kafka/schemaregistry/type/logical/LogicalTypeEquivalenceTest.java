@@ -115,7 +115,7 @@ class LogicalTypeEquivalenceTest {
     // Read as the file names it, all its messages; read as one, that message
     assertThat(ab.equivalent(PROTOBUF, lt(file(a + b)))).isTrue();
     assertThat(ab.equivalent(PROTOBUF,
-        ProtoToLogicalTypeConverter.toLogicalType(file(a + b), false))).isFalse();
+        ProtoToLogicalTypeConverter.toLogicalType(file(a + b), "p.A"))).isFalse();
   }
 
   @Test
@@ -338,7 +338,7 @@ class LogicalTypeEquivalenceTest {
   }
 
   private static LogicalType multi(ProtobufSchema schema) {
-    return ProtoToLogicalTypeConverter.toLogicalType(schema, true);
+    return ProtoToLogicalTypeConverter.toMultiMessageLogicalType(schema);
   }
 
   private static LogicalType lt(ParsedSchema schema) {

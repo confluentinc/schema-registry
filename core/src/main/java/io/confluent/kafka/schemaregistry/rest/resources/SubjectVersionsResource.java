@@ -296,7 +296,15 @@ public class SubjectVersionsResource {
       @Parameter(description = "Pagination size for results. Ignored if negative")
       @DefaultValue("-1") @QueryParam("limit") int limit) {
 
-    Schema schema = getSchemaByVersion(subject, version, "", "", true, null);
+    VersionId requestedVersionId;
+    try {
+      requestedVersionId = new VersionId(version);
+    } catch (InvalidVersionException e) {
+      throw Errors.invalidVersionException(e.getMessage());
+    }
+    // A numbered target is found even if deleted; "latest" honors the request's deleted flag.
+    Schema schema = getSchemaByVersion(subject, version, "", "",
+        requestedVersionId.isLatest() ? lookupDeletedSchema : true, null);
     if (schema == null) {
       return new ArrayList<>();
     }

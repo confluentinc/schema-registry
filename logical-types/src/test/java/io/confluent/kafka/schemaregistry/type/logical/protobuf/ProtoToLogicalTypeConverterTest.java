@@ -428,7 +428,7 @@ class ProtoToLogicalTypeConverterTest {
 
     // Read as Order: a file of several naming no root is otherwise read as all of them.
     LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(
-        new ProtobufSchema(fd).copy("Order"), false);
+        new ProtobufSchema(fd), "Order");
     // Root: bare STRUCT carrying its name.
     assertEquals(Schema.Type.STRUCT, lt.getRootSchema().getType());
     assertEquals("Order", lt.getName());
@@ -1068,7 +1068,7 @@ class ProtoToLogicalTypeConverterTest {
         + "message Bar {\n  string f2 = 1;\n}\n"
         + "message Foo {\n  string f1 = 1;\n}\n";
     LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(
-        new ProtobufSchema(proto).copy("Bar"), false);
+        new ProtobufSchema(proto), "Bar");
 
     assertThat(lt.getName()).isEqualTo("Bar");
     assertThat(lt.getRootSchema().getType()).isEqualTo(Schema.Type.STRUCT);
@@ -1094,7 +1094,7 @@ class ProtoToLogicalTypeConverterTest {
         + "message Order {\n  string id = 1;\n}\n"
         + "message Wrapper {\n  Order order = 1;\n}\n";
     LogicalType lt = ProtoToLogicalTypeConverter.toLogicalType(
-        new ProtobufSchema(proto).copy("Order"), false);
+        new ProtobufSchema(proto), "Order");
 
     assertThat(lt.getName()).isNull();
     assertThat(lt.getRootSchema().getType()).isEqualTo(Schema.Type.NAMED_TYPE_REF);

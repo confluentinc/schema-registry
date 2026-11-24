@@ -28,11 +28,13 @@ import io.confluent.kafka.schemaregistry.type.logical.avro.AvroToLogicalTypeConv
 import io.confluent.kafka.schemaregistry.type.logical.common.LogicalTypeVersion;
 import io.confluent.kafka.schemaregistry.type.logical.common.ToLogicalContext;
 import io.confluent.kafka.schemaregistry.type.logical.json.JsonToLogicalTypeConverter;
+import io.confluent.kafka.schemaregistry.type.logical.policy.FieldPairing;
 import io.confluent.kafka.schemaregistry.type.logical.policy.Incompatibility;
 import io.confluent.kafka.schemaregistry.type.logical.policy.Incompatibility.Rule;
 import io.confluent.kafka.schemaregistry.type.logical.policy.Invalidity;
 import io.confluent.kafka.schemaregistry.type.logical.policy.LogicalTypeChecker;
 import io.confluent.kafka.schemaregistry.type.logical.policy.LogicalTypeChecker.Mode;
+import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoPublicImportWrappers;
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTypeConverter;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -64,7 +66,7 @@ public final class LogicalPolicyChecker {
 
   private static final Logger log = LoggerFactory.getLogger(LogicalPolicyChecker.class);
 
-  private static final Mode[] MODES = {Mode.FLINK, Mode.ICEBERG_V2};
+  static final Mode[] MODES = {Mode.FLINK, Mode.ICEBERG_V2};
 
   private LogicalPolicyChecker() {
   }
@@ -120,13 +122,14 @@ public final class LogicalPolicyChecker {
   }
 
   /**
-   * A Protobuf file as its records are read: one message when it names its root or declares just
-   * one, and otherwise each message wrapped, in file order, as the converter's multi-message
-   * reading does. So every message a record may carry is checked, and a file changing between one
-   * and several is seen as the reshaping it is.
+   * A Protobuf file as its records are read, as provenance reads it too: one message when it names
+   * its root or declares just one, and otherwise each message wrapped, in file order. So every
+   * message a record may carry is checked, and a file changing between one and several is seen as
+   * the reshaping it is. A file declaring nothing but a public import is read as the file it
+   * re-exports, its root param kept, rather than as the reference format=logical shows.
    */
   private static LogicalType protobufLogicalType(ProtobufSchema schema) {
-    return ProtoToLogicalTypeConverter.toLogicalType(schema);
+    return ProtoPublicImportWrappers.asRead(schema);
   }
 
 
@@ -201,22 +204,31 @@ public final class LogicalPolicyChecker {
             + "converted to a logical type: {}", e.getMessage());
         continue;
       }
-      // Renames are recognised by format, so only between two versions of the same one.
-      SchemaType schemaType = newSchema.schemaType().equals(holder.schema().schemaType())
-          ? SchemaType.of(newSchema.schemaType()) : null;
+      SchemaType schemaType = sharedSchemaType(newSchema, holder.schema());
       if (checksBackward) {
         // BACKWARD: the new schema must read data written with the previous schema.
-        addCompareErrors(errors, previousLogical, newLogical, enabledRules, schemaType);
+        addCompareErrors(errors, previousLogical, newLogical, FieldPairing.byName(),
+            enabledRules, schemaType);
       }
       if (checksForward) {
         // FORWARD: the previous schema must read data written with the new schema.
-        addCompareErrors(errors, newLogical, previousLogical, enabledRules, schemaType);
+        addCompareErrors(errors, newLogical, previousLogical, FieldPairing.byName(),
+            enabledRules, schemaType);
       }
     }
     return errors;
   }
 
-  private static List<String> describeValidity(LogicalType newLogical) {
+  /**
+   * The format both schemas are in, or {@code null}: renames are recognised by format, so only
+   * between two versions of the same one.
+   */
+  static SchemaType sharedSchemaType(ParsedSchema schema, ParsedSchema other) {
+    return schema.schemaType().equals(other.schemaType())
+        ? SchemaType.of(schema.schemaType()) : null;
+  }
+
+  static List<String> describeValidity(LogicalType newLogical) {
     Map<FindingKey, Map<Mode, String>> byFinding = new LinkedHashMap<>();
     for (Mode mode : MODES) {
       for (Invalidity invalidity
@@ -235,12 +247,12 @@ public final class LogicalPolicyChecker {
     return errors;
   }
 
-  private static void addCompareErrors(List<String> errors, LogicalType original,
-      LogicalType update, Set<Rule> enabledRules, SchemaType schemaType) {
+  static void addCompareErrors(List<String> errors, LogicalType original, LogicalType update,
+      FieldPairing pairing, Set<Rule> enabledRules, SchemaType schemaType) {
     Map<FindingKey, Map<Mode, String>> byFinding = new LinkedHashMap<>();
     for (Mode mode : MODES) {
       for (Incompatibility incompatibility
-          : LogicalTypeChecker.compare(mode, original, update, enabledRules, schemaType)
+          : LogicalTypeChecker.compare(mode, original, update, pairing, enabledRules, schemaType)
               .getIncompatibilities()) {
         byFinding
             .computeIfAbsent(
@@ -272,7 +284,7 @@ public final class LogicalPolicyChecker {
    * text, which was never written to be customer-facing and is the one message in this package
    * not fully conformed to that spec.
    */
-  private static String describeUnconvertible(RuntimeException e) {
+  static String describeUnconvertible(RuntimeException e) {
     String description = e instanceof TypeTooDeepException
         ? "The schema nesting exceeds '" + ToLogicalContext.MAX_TYPE_DEPTH + "' levels. Flatten "
             + "it to '" + ToLogicalContext.MAX_TYPE_DEPTH + "' levels or fewer."
@@ -282,6 +294,19 @@ public final class LogicalPolicyChecker {
         .collect(Collectors.joining(", "));
     return "{errorType:\"" + Invalidity.Rule.UNREPRESENTABLE_TYPE + "\", category:[" + modes
         + "], description:\"" + description + "\", additionalInfo:\"\"}";
+  }
+
+  /**
+   * {@code version} carrying the schema id {@code id} of {@code earlierVersion}, in the shape of
+   * the other findings, every mode named.
+   */
+  public static String describeRepeatedId(int version, int id, int earlierVersion) {
+    String modes = Arrays.stream(MODES)
+        .map(mode -> "\"" + mode + "\"")
+        .collect(Collectors.joining(", "));
+    return "{errorType:\"SCHEMA_ID_REPEATED\", category:[" + modes + "], description:\"Version "
+        + version + " has schema id " + id + ", as version " + earlierVersion + " does\", "
+        + "additionalInfo:\"\"}";
   }
 
   /**
@@ -397,20 +422,20 @@ public final class LogicalPolicyChecker {
     return List.of(previousSchemas.get(previousSchemas.size() - 1));
   }
 
-  private static boolean isTransitive(CompatibilityLevel level) {
+  static boolean isTransitive(CompatibilityLevel level) {
     return level == CompatibilityLevel.BACKWARD_TRANSITIVE
         || level == CompatibilityLevel.FORWARD_TRANSITIVE
         || level == CompatibilityLevel.FULL_TRANSITIVE;
   }
 
-  private static boolean checksBackward(CompatibilityLevel level) {
+  static boolean checksBackward(CompatibilityLevel level) {
     return level == CompatibilityLevel.BACKWARD
         || level == CompatibilityLevel.BACKWARD_TRANSITIVE
         || level == CompatibilityLevel.FULL
         || level == CompatibilityLevel.FULL_TRANSITIVE;
   }
 
-  private static boolean checksForward(CompatibilityLevel level) {
+  static boolean checksForward(CompatibilityLevel level) {
     return level == CompatibilityLevel.FORWARD
         || level == CompatibilityLevel.FORWARD_TRANSITIVE
         || level == CompatibilityLevel.FULL

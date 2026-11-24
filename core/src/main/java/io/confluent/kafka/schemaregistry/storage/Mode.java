@@ -23,5 +23,9 @@ public enum Mode {
    */
   @Deprecated
   READONLY_OVERRIDE,
-  IMPORT
+  IMPORT,
+  FORWARD;
+  public boolean isImportOrForwardMode() {
+    return this == IMPORT || this == FORWARD;
+  }
 }

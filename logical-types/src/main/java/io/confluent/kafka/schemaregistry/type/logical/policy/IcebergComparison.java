@@ -23,6 +23,7 @@ import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTyp
 
 import io.confluent.kafka.schemaregistry.type.logical.policy.CompatibilityChecker.FieldView;
 import io.confluent.kafka.schemaregistry.type.logical.policy.CompatibilityChecker.Kind;
+import io.confluent.kafka.schemaregistry.type.logical.policy.FieldPairing.IndexPath;
 import io.confluent.kafka.schemaregistry.type.logical.policy.Incompatibility.Rule;
 
 import static io.confluent.kafka.schemaregistry.type.logical.policy.CompatibilityChecker.childPath;
@@ -142,6 +143,9 @@ final class IcebergComparison {
   /** Iceberg table format version being targeted. */
   private final int formatVersion;
 
+  /** Which writer member each reader member is compared with. */
+  private final FieldPairing pairing;
+
   private final Set<Rule> enabledRules;
 
   /**
@@ -157,8 +161,9 @@ final class IcebergComparison {
   private final Map<Object, Integer> impliedNumbers = new IdentityHashMap<>();
 
   IcebergComparison(LogicalType original, LogicalType update, int formatVersion,
-      Set<Rule> enabledRules, SchemaType schemaType) {
+      FieldPairing pairing, Set<Rule> enabledRules, SchemaType schemaType) {
     this.formatVersion = formatVersion;
+    this.pairing = pairing;
     this.enabledRules = enabledRules;
     this.schemaType = schemaType;
     this.originalRoot = original.getRootSchema();
@@ -168,7 +173,7 @@ final class IcebergComparison {
   }
 
   CompatibilityResult run() {
-    compareTypes(originalRoot, updateRoot, "");
+    compareTypes(originalRoot, updateRoot, "", IndexPath.ROOT, IndexPath.ROOT);
     return CompatibilityResult.of(findings);
   }
 
@@ -185,6 +190,9 @@ final class IcebergComparison {
    *     compared at an earlier (and therefore shallower) path
    */
   private boolean claimStructPair(Schema original, Schema update) {
+    if (!pairing.comparesSharedTypesOnce()) {
+      return true;
+    }
     return comparedStructPairs
         .computeIfAbsent(original, key -> Collections.newSetFromMap(new IdentityHashMap<>()))
         .add(update);
@@ -192,13 +200,13 @@ final class IcebergComparison {
 
   // -- dispatch --------------------------------------------------------------------------------
 
-  private void compareTypes(
-      Schema original, Schema update, String path) {
+  private void compareTypes(Schema original, Schema update, String path,
+      IndexPath originalPath, IndexPath updatePath) {
     if (isRef(original) || isRef(update)) {
       // Dedup only when BOTH sides are refs. refKey returns "" for a non-ref, so a one-sided
       // ref would collapse every inline counterpart onto one key and silently drop findings after
       // the first. Inline-to-$ref is ordinary JSON Schema evolution.
-      if (isRef(original) && isRef(update)) {
+      if (isRef(original) && isRef(update) && pairing.comparesSharedTypesOnce()) {
         final String pairKey = refKey(original) + ' ' + refKey(update);
         if (!comparedRefPairs.add(pairKey)) {
           return;
@@ -207,14 +215,14 @@ final class IcebergComparison {
       checkCompatibilityRecursive(
           resolve(original, originalNamedTypes),
           resolve(update, updateNamedTypes),
-          path);
+          path, originalPath, updatePath);
       return;
     }
-    checkCompatibilityRecursive(original, update, path);
+    checkCompatibilityRecursive(original, update, path, originalPath, updatePath);
   }
 
-  private void checkCompatibilityRecursive(
-      Schema original, Schema update, String path) {
+  private void checkCompatibilityRecursive(Schema original, Schema update, String path,
+      IndexPath originalPath, IndexPath updatePath) {
     // An unresolvable reference (e.g. an external type) can only be compared by name.
     if (isRef(original) || isRef(update)) {
       if (!isRef(original) || !isRef(update)
@@ -238,14 +246,15 @@ final class IcebergComparison {
         if (claimStructPair(original, update)) {
           noteImpliedNumbers(original);
           noteImpliedNumbers(update);
-          validateStructs(fieldViews(original), fieldViews(update), path);
+          validateStructs(fieldViews(original), fieldViews(update), path, originalPath,
+              updatePath);
         }
         break;
       case LIST:
-        validateLists(original, update, path);
+        validateLists(original, update, path, originalPath, updatePath);
         break;
       case MAP:
-        validateMaps(original, update, path);
+        validateMaps(original, update, path, originalPath, updatePath);
         break;
       case PRIMITIVE:
         validatePrimitives(original, update, path);
@@ -260,31 +269,35 @@ final class IcebergComparison {
   /**
    * Mirrors the Iceberg-schema implementation's {@code validateStructs}, with three intentional
    * departures: findings accumulate instead of throwing, the nullability relaxation is folded in
-   * via {@link #isEffectivelyOptional} rather than applied as a pre-pass, and fields are paired as
-   * their format decodes them (see {@link #pair}) rather than only by name.
+   * via {@link #isEffectivelyOptional} rather than applied as a pre-pass, and fields are paired by
+   * {@link #pairing}, which by name pairs them as their format decodes them (see {@link #pair}).
    */
-  private void validateStructs(
-      List<FieldView> originalFields, List<FieldView> updateFields, String path) {
+  private void validateStructs(List<FieldView> originalFields, List<FieldView> updateFields,
+      String path, IndexPath originalPath, IndexPath updatePath) {
 
-    // Guarding the whole reorder block, not just the finding, avoids paying its O(n^2) index
-    // lookups on every struct comparison while FIELD_REORDERED is off.
+    // By name, the format decides: an Avro alias or a Protobuf number pairs a rename.
+    final boolean pairsByFormat = pairing.pairsByName() && schemaType != null;
+    final int[] partners = pairsByFormat
+        ? partnersOf(pair(originalFields, updateFields), originalFields, updateFields)
+        : pairing.partners(originalPath, originalFields, updatePath, updateFields);
+    final boolean[] paired = new boolean[originalFields.size()];
+
     final boolean checkFieldOrder = enabledRules.contains(Rule.FIELD_REORDERED);
     int lastSeenOriginalIndex = -1;
     String lastSeenFieldName = null;
-    final List<String> originalFieldOrder = checkFieldOrder
-        ? originalFields.stream().map(field -> field.name).collect(Collectors.toList())
-        : null;
 
-    // Each update field paired with the original field it reads, by identity.
-    final Map<FieldView, FieldView> pairs = pair(originalFields, updateFields);
     final Set<String> originalNames = new HashSet<>();
     originalFields.forEach(field -> originalNames.add(field.name));
     final Set<String> updateNames = new HashSet<>();
     updateFields.forEach(field -> updateNames.add(field.name));
-    for (FieldView updateField : updateFields) {
+    for (int updateIndex = 0; updateIndex < updateFields.size(); updateIndex++) {
+      final FieldView updateField = updateFields.get(updateIndex);
       final String fieldPath = childPath(path, updateField.name);
-      final FieldView originalField = pairs.get(updateField);
-      if (originalField != null && !originalField.name.equals(updateField.name)) {
+      final int originalIndex = partners[updateIndex];
+      final FieldView originalField = originalIndex < 0 ? null : originalFields.get(originalIndex);
+      // By ids, a rename is one continuing column.
+      if (pairsByFormat && originalField != null
+          && !originalField.name.equals(updateField.name)) {
         add(Rule.FIELD_RENAMED, fieldPath,
             renameMessage(originalField, updateField, originalNames, updateNames));
       }
@@ -298,6 +311,7 @@ final class IcebergComparison {
         // Do not descend into a field the original schema never had.
         continue;
       }
+      paired[originalIndex] = true;
 
       if (checkFieldOrder) {
         // Existing fields keep their relative order. The watermark advances even on a
@@ -308,7 +322,6 @@ final class IcebergComparison {
         // lastSeenFieldName (the previous one processed) -- naming both, and which preceded
         // which in which schema, is what keeps this correct once wording no longer gets to lean
         // on "original"/"update" implying "old"/"new" (see CompatibilityChecker's javadoc).
-        final int originalIndex = originalFieldOrder.indexOf(originalField.name);
         if (originalIndex < lastSeenOriginalIndex) {
           add(Rule.FIELD_REORDERED, fieldPath,
               "The order of fields '" + lastSeenFieldName + "' and '" + updateField.name
@@ -325,15 +338,15 @@ final class IcebergComparison {
                 + "null values. Keep the field nullable.");
       }
 
-      compareTypes(originalField.schema, updateField.schema, fieldPath);
+      compareTypes(originalField.schema, updateField.schema, fieldPath,
+          originalPath.child(originalIndex), updatePath.child(updateIndex));
     }
 
-    final Set<FieldView> pairedOriginals = Collections.newSetFromMap(new IdentityHashMap<>());
-    pairedOriginals.addAll(pairs.values());
-    for (FieldView originalField : originalFields) {
-      if (!pairedOriginals.contains(originalField)) {
-        add(Rule.FIELD_DELETED, childPath(path, originalField.name),
-            "Schema no longer includes field '" + originalField.name + "'. Restore the field.");
+    for (int originalIndex = 0; originalIndex < originalFields.size(); originalIndex++) {
+      if (!paired[originalIndex]) {
+        add(Rule.FIELD_DELETED, childPath(path, originalFields.get(originalIndex).name),
+            "Schema no longer includes field '" + originalFields.get(originalIndex).name
+                + "'. Restore the field.");
       }
     }
   }
@@ -422,6 +435,20 @@ final class IcebergComparison {
     return pairs;
   }
 
+  private static int[] partnersOf(Map<FieldView, FieldView> pairs,
+      List<FieldView> originalFields, List<FieldView> updateFields) {
+    final Map<FieldView, Integer> originalIndexes = new IdentityHashMap<>();
+    for (int i = 0; i < originalFields.size(); i++) {
+      originalIndexes.put(originalFields.get(i), i);
+    }
+    final int[] partners = new int[updateFields.size()];
+    for (int i = 0; i < partners.length; i++) {
+      final FieldView original = pairs.get(updateFields.get(i));
+      partners[i] = original == null ? -1 : originalIndexes.get(original);
+    }
+    return partners;
+  }
+
   private static boolean claim(Map<FieldView, FieldView> pairs, Set<FieldView> claimed,
       FieldView update, FieldView original) {
     if (original == null || pairs.containsKey(update) || !claimed.add(original)) {
@@ -496,16 +523,17 @@ final class IcebergComparison {
   /**
    * Mirrors the Iceberg-schema implementation's {@code validateLists}.
    */
-  private void validateLists(
-      Schema original, Schema update, String path) {
-    compareTypes(elementOf(original), elementOf(update), path + "[]");
+  private void validateLists(Schema original, Schema update, String path,
+      IndexPath originalPath, IndexPath updatePath) {
+    compareTypes(elementOf(original), elementOf(update), path + "[]", originalPath.child(0),
+        updatePath.child(0));
   }
 
   /**
    * Mirrors the Iceberg-schema implementation's {@code validateMaps}.
    */
-  private void validateMaps(
-      Schema original, Schema update, String path) {
+  private void validateMaps(Schema original, Schema update, String path,
+      IndexPath originalPath, IndexPath updatePath) {
     if (!erasedEquals(keyOf(original), keyOf(update))) {
       add(Rule.MAP_KEY_TYPE_MISMATCH, path,
           "The key type of map '" + fieldNameOf(path) + "' changed from '"
@@ -517,7 +545,8 @@ final class IcebergComparison {
       impliedNumbers.putAll(ProtoToLogicalTypeConverter.impliedMapEntryNumbers(original));
       impliedNumbers.putAll(ProtoToLogicalTypeConverter.impliedMapEntryNumbers(update));
     }
-    compareTypes(valueOf(original), valueOf(update), path + "{}");
+    compareTypes(valueOf(original), valueOf(update), path + "{}", originalPath.child(1),
+        updatePath.child(1));
   }
 
   // -- primitives ------------------------------------------------------------------------------

@@ -72,7 +72,7 @@ final class CompatibilityChecker {
   }
 
   /**
-   * Compares {@code original} against {@code update} under {@code mode}.
+   * Compares {@code original} against {@code update} under {@code mode}, pairing members by name.
    *
    * @param mode     which consumer's rules to apply
    * @param original the schema data was written under (the writer's schema)
@@ -82,7 +82,16 @@ final class CompatibilityChecker {
    */
   public static CompatibilityResult compare(
       Mode mode, LogicalType original, LogicalType update) {
-    return compare(mode, original, update, Rule.defaults());
+    return compare(mode, original, update, FieldPairing.byName(), Rule.defaults());
+  }
+
+  /**
+   * Compares {@code original} against {@code update} under {@code mode}, pairing members by
+   * {@code pairing}.
+   */
+  public static CompatibilityResult compare(
+      Mode mode, LogicalType original, LogicalType update, FieldPairing pairing) {
+    return compare(mode, original, update, pairing, Rule.defaults());
   }
 
   /**
@@ -90,7 +99,7 @@ final class CompatibilityChecker {
    */
   public static CompatibilityResult compare(
       Mode mode, LogicalType original, LogicalType update, Set<Rule> enabledRules) {
-    return compare(mode, original, update, enabledRules, null);
+    return compare(mode, original, update, FieldPairing.byName(), enabledRules, null);
   }
 
   /**
@@ -99,18 +108,40 @@ final class CompatibilityChecker {
    */
   public static CompatibilityResult compare(Mode mode, LogicalType original, LogicalType update,
       Set<Rule> enabledRules, SchemaType schemaType) {
+    return compare(mode, original, update, FieldPairing.byName(), enabledRules, schemaType);
+  }
+
+  /**
+   * Compares {@code original} against {@code update} under {@code mode}, pairing members by
+   * {@code pairing} and reporting only {@code enabledRules}.
+   */
+  public static CompatibilityResult compare(Mode mode, LogicalType original, LogicalType update,
+      FieldPairing pairing, Set<Rule> enabledRules) {
+    return compare(mode, original, update, pairing, enabledRules, null);
+  }
+
+  /**
+   * As {@link #compare(Mode, LogicalType, LogicalType, FieldPairing, Set)}, given the format both
+   * schemas were read from. By name, it decides how a renamed field is recognised, and
+   * {@code null} recognises none; by ids, the ids decide.
+   */
+  public static CompatibilityResult compare(Mode mode, LogicalType original, LogicalType update,
+      FieldPairing pairing, Set<Rule> enabledRules, SchemaType schemaType) {
     Objects.requireNonNull(mode, "mode");
     Objects.requireNonNull(original, "original");
     Objects.requireNonNull(update, "update");
+    Objects.requireNonNull(pairing, "pairing");
     Objects.requireNonNull(enabledRules, "enabledRules");
 
     switch (mode) {
       case FLINK:
-        return new FlinkComparison(original, update, enabledRules).run();
+        return new FlinkComparison(original, update, pairing, enabledRules).run();
       case ICEBERG_V2:
-        return new IcebergComparison(original, update, 2, enabledRules, schemaType).run();
+        return new IcebergComparison(original, update, 2, pairing, enabledRules, schemaType)
+            .run();
       case ICEBERG_V3:
-        return new IcebergComparison(original, update, 3, enabledRules, schemaType).run();
+        return new IcebergComparison(original, update, 3, pairing, enabledRules, schemaType)
+            .run();
       default:
         throw new IllegalArgumentException("Unknown mode: " + mode);
     }
