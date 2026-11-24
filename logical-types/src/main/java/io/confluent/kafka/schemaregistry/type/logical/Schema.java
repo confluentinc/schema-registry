@@ -589,24 +589,22 @@ public abstract class Schema {
   }
 
   /**
-   * Lexer-level keywords from {@code LogicalTypes.g4} that must be backtick-
-   * quoted when used as user-supplied identifiers in DDL. Excludes the
-   * {@code nonReservedKeyword} set ({@code ENUM, MAP, NAMESPACE, REFERENCE,
-   * REGISTER, TAGS, TYPE, VARIANT, ZONE}) which the grammar accepts as
-   * identifiers without quoting.
+   * The keywords of {@code LogicalTypes.g4} that need backticks as a name in DDL: every one
+   * but those of its {@code nonReservedKeyword} rule, which the grammar takes unquoted.
    */
   private static final java.util.Set<String> SQL_KEYWORDS_NEEDING_QUOTING =
       Collections.unmodifiableSet(new java.util.HashSet<>(java.util.Arrays.asList(
           "AND", "ARRAY", "AS", "BETWEEN", "BIGINT", "BINARY", "BOOLEAN", "BOTH",
           "BYTES", "CASE", "CAST", "CHARACTER", "CHAR", "CHECK", "COMMENT",
-          "CONSTRAINT", "CREATE", "CURRENT_TIMESTAMP", "DATE", "DEC", "DECIMAL",
+          "CONSTRAINT", "CURRENT_TIMESTAMP", "DATE", "DEC", "DECIMAL",
           "DEFAULT", "DOUBLE", "ELSE", "END", "ESCAPE", "EXTRACT",
           "FALSE", "FLOAT", "FOR", "FROM", "IN", "INT", "INTEGER", "IS",
-          "LEADING", "LIKE", "LOCAL", "MESSAGE", "MULTISET", "NOT", "NULL",
-          "NUMERIC", "OR", "POSITION", "PRECISION", "REAL", "ROW", "STRUCT", "SMALLINT",
+          "LEADING", "LIKE", "LOCAL", "MULTISET", "NOT", "NULL",
+          "NUMERIC", "OR", "POSITION", "PRECISION", "REAL", "ROW", "SMALLINT",
           "STRING", "SUBSTRING", "SYMMETRIC", "THEN", "TIME",
-          "TIMESTAMP", "TIMESTAMP_LTZ", "TINYINT", "TRAILING", "TRIM", "TRUE",
-          "UNION", "USING", "VARBINARY", "VARCHAR", "VARYING", "WHEN", "WITH", "WITHOUT")));
+          "TIMESTAMP", "TIMESTAMP_LTZ", "TINYINT", "TRAILING", "TRIM", "TRUE", "TRY_VARIANT_GET",
+          "UNION", "USING", "VARBINARY", "VARCHAR", "VARIANT_GET", "VARYING", "WHEN", "WITH",
+          "WITHOUT")));
 
   /**
    * Quote {@code name} as a DDL identifier if it would otherwise fail to
