@@ -23,7 +23,10 @@ import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceField;
+import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceVersion;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.Rule;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
@@ -35,18 +38,22 @@ import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.Alt
 import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.Check;
 import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.DropAttribute;
 import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.DropConstraint;
+import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.MoveAttribute;
+import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.Position;
 import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.RenameAttribute;
 import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.SetAttributeWith;
 import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.SetDataType;
 import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.SetWith;
 import io.confluent.kafka.schemaregistry.type.logical.statements.TypeScripts.BodyKind;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class TypeAlterTest {
 
@@ -922,5 +929,437 @@ class TypeAlterTest {
         .hasMessageStartingWith("Type un cannot be changed so: no AVRO schema can be made of "
             + "it: ");
     assertThat(version("un")).isEqualTo(1);
+  }
+
+  // The attributes of the latest version, in the order they are read in.
+  private List<String> names(String subject) {
+    return registry.logicalType(subject, registry.latest(subject)).getRootSchema().getFields()
+        .stream().map(Schema.Field::getName).collect(Collectors.toList());
+  }
+
+  // The provenance id of each attribute of the latest version, by its name there.
+  private Map<String, Integer> pids(String subject) throws Exception {
+    List<ProvenanceVersion> versions = registry.client
+        .getProvenanceByVersion(subject, "1", "latest", true).getVersions();
+    Map<String, Integer> pids = new LinkedHashMap<>();
+    for (ProvenanceField f : versions.get(versions.size() - 1).getFields()) {
+      if (f.getPath().size() == 1) {
+        pids.put(f.getNames().get(0), f.getPid());
+      }
+    }
+    return pids;
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = SchemaType.class, names = {"AVRO", "JSON"})
+  void anAttributeIsAddedAtAPosition(SchemaType format) {
+    create("ap", format, "(a INT NOT NULL, b STRING)");
+    registry.alter("ap", new AddAttribute("c", "DOUBLE", Position.after("a")),
+        new AddAttribute("d", "DOUBLE", Position.first()), new AddAttribute("e", "DOUBLE"));
+    assertThat(names("ap")).containsExactly("d", "a", "c", "b", "e");
+    // After one this statement adds, and not after one it drops or none has.
+    registry.alter("ap", new AddAttribute("f", "INT"),
+        new AddAttribute("g", "INT", Position.after("f")));
+    assertThat(names("ap")).containsExactly("d", "a", "c", "b", "e", "f", "g");
+    assertThatThrownBy(() -> registry.alter("ap", new DropAttribute("e", false),
+        new AddAttribute("h", "INT", Position.after("e"))))
+        .isInstanceOf(TypeRefusedException.class).hasMessage("Type ap has no attribute e");
+    assertThatThrownBy(() -> registry.alter("ap",
+        new AddAttribute("h", "INT", Position.after("h"))))
+        .isInstanceOf(TypeRefusedException.class).hasMessage("Type ap has no attribute h");
+    assertThat(version("ap")).isEqualTo(3);
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = SchemaType.class, names = {"AVRO", "JSON"})
+  void anAttributeIsMovedAndStaysTheAttributeItWas(SchemaType format) throws Exception {
+    create("mv", format, "(a INT NOT NULL, b STRING COMMENT 'bee', c BIGINT)");
+    Map<String, Integer> before = pids("mv");
+    registry.alter("mv", new MoveAttribute("c", Position.first()),
+        new MoveAttribute("a", Position.after("b")));
+    assertThat(names("mv")).containsExactly("c", "b", "a");
+    assertThat(version("mv")).isEqualTo(2);
+    // Provenance reads each as the attribute it was, and it keeps what it had.
+    assertThat(pids("mv")).containsExactlyInAnyOrderEntriesOf(before);
+    assertThat(registry.logicalType("mv", registry.latest("mv")).getRootSchema().getField("b")
+        .getDoc()).isEqualTo("bee");
+
+    // Where it is already, nothing changes and no version is made.
+    assertThat(registry.alter("mv", new MoveAttribute("c", Position.first()),
+        new MoveAttribute("a", Position.after("b"))).edited()).isNull();
+    assertThat(version("mv")).isEqualTo(2);
+    // Nor do moves that undo each other.
+    assertThat(registry.alter("mv", new MoveAttribute("a", Position.first()),
+        new MoveAttribute("a", Position.after("b"))).edited()).isNull();
+    assertThat(version("mv")).isEqualTo(2);
+    assertThatThrownBy(() -> registry.alter("mv", new MoveAttribute("b", Position.after("b"))))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessage("Attribute b cannot go after itself");
+    assertThatThrownBy(() -> registry.alter("mv", new MoveAttribute("b", Position.after("z"))))
+        .isInstanceOf(TypeRefusedException.class).hasMessage("Type mv has no attribute z");
+    assertThatThrownBy(() -> registry.alter("mv", new MoveAttribute("z", Position.first())))
+        .isInstanceOf(TypeRefusedException.class).hasMessage("Type mv has no attribute z");
+  }
+
+  // Avro names the records under the attributes in their order: first, a's record b would
+  // take the name pa_a_b, which the record of a_b has.
+  @Test
+  void anAvroAttributeAddedFirstLeavesTheNamesOfTheOthersRecords() {
+    create("pa", SchemaType.AVRO, "(a_b STRUCT(x STRING), s STRUCT(z INT))");
+    AvroSchema before = (AvroSchema) registry.schema("pa");
+    registry.alter("pa",
+        new AddAttribute("a", "STRUCT(b STRUCT(y INT))", Position.first()));
+    AvroSchema after = (AvroSchema) registry.schema("pa");
+    assertThat(names("pa")).containsExactly("a", "a_b", "s");
+    assertThat(after.isBackwardCompatible(before)).isEmpty();
+    // The attributes there are written as they were, to the letter.
+    for (String attribute : List.of("a_b", "s")) {
+      assertThat(after.rawSchema().getField(attribute).schema().toString())
+          .isEqualTo(before.rawSchema().getField(attribute).schema().toString());
+    }
+  }
+
+  // The names are those of the statement so far, taken before an attribute is placed: one it
+  // added or retyped before keeps the name it had there, as an attribute that is moved does.
+  @Test
+  void anAvroStatementThatAddsAndPlacesKeepsEachRecordsName() {
+    String start = "(x_b STRUCT(q STRING), s INT)";
+    List<AlterAction[]> statements = List.of(
+        new AlterAction[] {new AddAttribute("x", "STRUCT(b STRUCT(y INT))"),
+            new AddAttribute("z", "INT", Position.first())},
+        new AlterAction[] {new AddAttribute("x", "STRUCT(b STRUCT(y INT))", Position.first()),
+            new AddAttribute("y", "STRUCT(k INT)", Position.first())},
+        new AlterAction[] {new AddAttribute("x", "STRUCT(b STRUCT(y INT))"),
+            new MoveAttribute("x", Position.first())},
+        new AlterAction[] {new AddAttribute("x", "STRUCT(b STRUCT(y INT))"),
+            new MoveAttribute("x_b", Position.after("x"))});
+    for (int i = 0; i < statements.size(); i++) {
+      String type = "mx" + i;
+      create(type, SchemaType.AVRO, start);
+      AvroSchema before = (AvroSchema) registry.schema(type);
+      registry.alter(type, statements.get(i));
+      AvroSchema after = (AvroSchema) registry.schema(type);
+      assertThat(after.isBackwardCompatible(before)).as("statement %d", i).isEmpty();
+      assertThat(after.rawSchema().getField("x_b").schema().toString())
+          .isEqualTo(before.rawSchema().getField("x_b").schema().toString());
+    }
+    // A retyped attribute's new member, too.
+    create("mr", SchemaType.AVRO, "(a_b STRUCT(q STRING), a STRUCT(c INT), s INT)");
+    AvroSchema before = (AvroSchema) registry.schema("mr");
+    registry.alter("mr", new AlterAttributeType("a", "STRUCT(c INT, b STRUCT(y INT))"),
+        new AddAttribute("z", "INT", Position.first()));
+    assertThat(((AvroSchema) registry.schema("mr")).isBackwardCompatible(before)).isEmpty();
+    assertThat(names("mr")).containsExactly("z", "a_b", "a", "s");
+  }
+
+  // A column's name compares whatever its case, in a position as elsewhere.
+  @Test
+  void aColumnIsPlacedAfterOneNamedInAnotherCase() {
+    create("cs", SchemaType.AVRO, "(a INT NOT NULL, b STRING)");
+    TypeAlter.Options columns = new TypeAlter.Options().columns(true);
+    registry.alter("cs", columns, new AddAttribute("c", "INT", Position.after("A")),
+        new MoveAttribute("B", Position.first()));
+    assertThat(names("cs")).containsExactly("b", "a", "c");
+  }
+
+  // A message's fields are written in the order of their numbers, which a position leaves.
+  @Test
+  void aPositionDoesNothingInProtobuf() {
+    create("pp", SchemaType.PROTOBUF, "(a INT NOT NULL, b STRING, c BIGINT)");
+    registry.alter("pp", new AddAttribute("d", "DOUBLE", Position.after("a")));
+    assertThat(numbers(message("pp"))).isEqualTo("a=1 b=2 c=3 d=4");
+    assertThat(names("pp")).containsExactly("a", "b", "c", "d");
+    assertThat(registry.alter("pp", new MoveAttribute("c", Position.first())).edited())
+        .isNull();
+    assertThat(version("pp")).isEqualTo(2);
+    assertThatThrownBy(() -> registry.alter("pp", new MoveAttribute("z", Position.first())))
+        .isInstanceOf(TypeRefusedException.class).hasMessage("Type pp has no attribute z");
+    assertThatThrownBy(() -> registry.alter("pp",
+        new AddAttribute("e", "INT", Position.after("z"))))
+        .isInstanceOf(TypeRefusedException.class).hasMessage("Type pp has no attribute z");
+  }
+
+  // Messages are named in the order of the attributes: first, fooBar would take the name
+  // FooBarRow, which foo_bar's message has.
+  @Test
+  void aProtobufAttributeAddedFirstLeavesTheNamesOfTheOthersMessages() {
+    create("pf", SchemaType.PROTOBUF, "(id INT NOT NULL, foo_bar STRUCT(x STRING))");
+    ProtobufSchema before = (ProtobufSchema) registry.schema("pf");
+    registry.alter("pf", new AddAttribute("fooBar", "STRUCT(y INT)", Position.first()));
+    Descriptor after = message("pf");
+    assertThat(after.findFieldByName("foo_bar").getMessageType().getName())
+        .isEqualTo("FooBarRow");
+    assertThat(after.findFieldByName("fooBar").getMessageType().getName())
+        .isEqualTo("FooBar2Row");
+    assertThat(((ProtobufSchema) registry.schema("pf")).isBackwardCompatible(before)).isEmpty();
+  }
+
+  // A message's fields share their names with the messages it declares: an attribute of such
+  // a name would rename the message, or leave no schema to write.
+  @Test
+  void anAttributeNamedAsAMessageOfItsProtobufTypeIsRefused() throws Exception {
+    create("pn", SchemaType.PROTOBUF, "(id INT NOT NULL, foo STRUCT(x STRING), bar INT)");
+    ProtobufSchema before = (ProtobufSchema) registry.schema("pn");
+    assertThatThrownBy(() -> registry.alter("pn", new AddAttribute("FooRow", "INT")))
+        .isInstanceOf(TypeRefusedException.class).hasMessage("Type pn cannot be changed so: "
+            + "FooRow, the type of foo in Protobuf message pn, would be renamed Foo2Row, as "
+            + "another member or type of the message would have its name");
+    // However the name comes to be taken: by a rename, a oneof's member, or a new attribute
+    // beside the row of an attribute that is now an array of that row.
+    for (AlterAction[] taking : List.of(
+        new AlterAction[] {new RenameAttribute("id", "FooRow")},
+        new AlterAction[] {new AddAttribute("u", "UNION(FooRow INT, c STRING)")},
+        new AlterAction[] {
+            new AlterAttributeType("foo", "ARRAY<STRUCT(x STRING) NOT NULL> NOT NULL"),
+            new AddAttribute("FooRow", "INT")})) {
+      assertThatThrownBy(() -> registry.alter("pn", taking))
+          .isInstanceOf(TypeRefusedException.class).hasMessageContaining("would be renamed");
+    }
+    // A renamed attribute's message keeps its name by a pin, and so has no other to take.
+    assertThatThrownBy(() -> registry.alter("pn", new RenameAttribute("foo", "baz"),
+        new AddAttribute("foo", "INT"), new DropAttribute("foo", false),
+        new AddAttribute("FooRow", "INT"))).isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("'FooRow' is defined twice");
+    // One a pin keeps as Flink named it has no other name to take: no file can be written.
+    registry.client.register("pm", new ProtobufSchema("syntax = \"proto3\";\n"
+        + "message Record {\n"
+        + "  optional addr_Row addr = 1;\n"
+        + "  message addr_Row { optional string city = 1; }\n"
+        + "}\n"));
+    assertThatThrownBy(() -> registry.alter("pm", new AddAttribute("addr_Row", "INT")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("schema can be made of it");
+    assertThat(version("pn")).isEqualTo(1);
+    assertThat(version("pm")).isEqualTo(1);
+
+    // The name is free once no field is of the message: its attribute dropped or no longer a
+    // row, in whatever order the statement says it, or a oneof's member gone.
+    for (AlterAction[] freeing : List.of(
+        new AlterAction[] {new DropAttribute("foo", false), new AddAttribute("FooRow", "INT")},
+        new AlterAction[] {new AddAttribute("FooRow", "INT"), new DropAttribute("foo", false)},
+        new AlterAction[] {new AlterAttributeType("foo", "INT"),
+            new AddAttribute("FooRow", "INT")})) {
+      registry.client.register("pf", before);
+      registry.alter("pf", freeing);
+      ProtobufSchema after = (ProtobufSchema) registry.schema("pf");
+      assertThat(numbers(after.toDescriptor())).contains("FooRow=");
+      assertThat(after.toDescriptor().getNestedTypes()).isEmpty();
+      registry.client.deleteSubject("pf");
+      registry.client.deleteSubject("pf", true);
+    }
+    create("po", SchemaType.PROTOBUF,
+        "(id INT NOT NULL, u UNION(card STRUCT(n STRING), iban STRING))");
+    String card = message("po").findFieldByName("card").getMessageType().getName();
+    registry.alter("po", new AlterAttributeType("u", "UNION(iban STRING, bic STRING)"),
+        new AddAttribute(card, "INT"));
+    assertThat(numbers(message("po"))).contains(card + "=");
+  }
+
+  // A JSON document titled as the definition it refers to: they are two types of one name,
+  // which only the reference tells apart.
+  @ParameterizedTest
+  @ValueSource(strings = {"", "\"confluent:namespace\": \"shop\", "})
+  void aJsonTypeTitledAsTheDefinitionItRefersToIsAltered(String namespace) throws Exception {
+    String common = "{\"$defs\": {\"Order\": {\"type\": \"object\", \"properties\": "
+        + "{\"x\": {\"type\": \"string\"}}}, \"shop.Order\": {\"type\": \"object\", "
+        + "\"properties\": {\"y\": {\"type\": \"string\"}}}}}";
+    registry.client.register("common", new JsonSchema(common));
+    SchemaReference reference = new SchemaReference("common.json", "common", 1);
+    for (String definition : List.of("Order", "shop.Order")) {
+      String subject = "js" + definition.length() + namespace.length();
+      registry.client.register(subject, new JsonSchema("{\"type\": \"object\", \"title\": "
+          + "\"Order\", " + namespace + "\"properties\": {\"id\": {\"type\": \"string\"}, "
+          + "\"prev\": {\"$ref\": \"common.json#/$defs/" + definition + "\"}}}",
+          List.of(reference), Map.of("common.json", common), null));
+      registry.alter(subject, new AddAttribute("nick", "STRING"));
+      assertThat(version(subject)).isEqualTo(2);
+      assertThat(registry.schema(subject).canonicalString())
+          .contains("common.json#/$defs/" + definition, "\"nick\"");
+      assertThat(registry.schema(subject).references()).containsExactly(reference);
+    }
+  }
+
+  // The referred message has the root's own simple name, PostalAddress, and no package.
+  @Test
+  void aRootNamedAsTheTypeOfNoNamespaceItRefersToKeepsItsName() throws Exception {
+    String common = "syntax = \"proto3\";\n\nmessage PostalAddress {\n  string street = 1;\n}\n";
+    registry.client.register("common", new ProtobufSchema(common));
+    SchemaReference reference = new SchemaReference("common.proto", "common", 1);
+    ProtobufSchema stored = new ProtobufSchema("syntax = \"proto3\";\npackage shop;\n\n"
+        + "import \"common.proto\";\n\n"
+        + "message PostalAddress {\n"
+        + "  string id = 1;\n"
+        + "  optional .PostalAddress billing = 2;\n"
+        + "}\n", List.of(reference), Map.of("common.proto", common), null, null);
+    registry.client.register("pa", stored);
+    registry.alter("pa", new AddAttribute("nickname", "STRING"));
+    ProtobufSchema altered = (ProtobufSchema) registry.schema("pa");
+    assertThat(altered.toDescriptor().getFullName()).isEqualTo("shop.PostalAddress");
+    assertThat(altered.toDescriptor().findFieldByName("billing").getMessageType().getFullName())
+        .isEqualTo("PostalAddress");
+    assertThat(altered.isBackwardCompatible(stored)).isEmpty();
+    assertThat(altered.references()).containsExactly(reference);
+  }
+
+  // A type of a namespace, registered as Avro, that refers to one of none: the registry's DDL
+  // names the referred type as itself, so the type can be altered and keeps its reference.
+  @Test
+  void aTypeReferringToOneOfNoNamespaceIsAltered() throws Exception {
+    registry.client.register("PostalAddress", new AvroSchema("{\"type\":\"record\","
+        + "\"name\":\"PostalAddress\",\"fields\":[{\"name\":\"street\",\"type\":\"string\"}]}"));
+    SchemaReference reference = new SchemaReference("PostalAddress", "PostalAddress", 1);
+    registry.client.register("customer", new AvroSchema("{\"type\":\"record\","
+        + "\"name\":\"Customer\",\"namespace\":\"shop\",\"fields\":["
+        + "{\"name\":\"id\",\"type\":\"string\"},"
+        + "{\"name\":\"addr\",\"type\":[\"null\",\"PostalAddress\"],\"default\":null}]}",
+        List.of(reference), Map.of("PostalAddress",
+            registry.client.getLatestSchemaMetadata("PostalAddress").getSchema()), null));
+    registry.alter("customer", new AddAttribute("nickname", "STRING"));
+    assertThat(version("customer")).isEqualTo(2);
+    assertThat(registry.schema("customer").canonicalString())
+        .contains("\"type\":[\"null\",\"PostalAddress\"]").contains("\"name\":\"nickname\"");
+    assertThat(registry.schema("customer").references()).containsExactly(reference);
+  }
+
+  // The referred type's name begins with that of a record the type declares, PostalAddress,
+  // and is no type nested in that one.
+  @Test
+  void aTypeReferringToOneNamedLikeANestedTypeOfItsOwnIsAltered() throws Exception {
+    registry.client.register("geo", new AvroSchema("{\"type\":\"record\",\"name\":\"Geo\","
+        + "\"namespace\":\"PostalAddress\",\"fields\":[{\"name\":\"lat\",\"type\":\"double\"}]}"));
+    SchemaReference reference = new SchemaReference("PostalAddress.Geo", "geo", 1);
+    registry.client.register("customer", new AvroSchema("{\"type\":\"record\","
+        + "\"name\":\"Customer\",\"namespace\":\"shop\",\"fields\":["
+        + "{\"name\":\"home\",\"type\":{\"type\":\"record\",\"name\":\"PostalAddress\","
+        + "\"fields\":[{\"name\":\"street\",\"type\":\"string\"}]}},"
+        + "{\"name\":\"geo\",\"type\":\"PostalAddress.Geo\"}]}",
+        List.of(reference), Map.of("PostalAddress.Geo",
+            registry.client.getLatestSchemaMetadata("geo").getSchema()), null));
+    registry.alter("customer", new AddAttribute("nickname", "STRING"));
+    assertThat(version("customer")).isEqualTo(2);
+    org.apache.avro.Schema altered = ((AvroSchema) registry.schema("customer")).rawSchema();
+    assertThat(altered.getField("geo").schema().getFullName()).isEqualTo("PostalAddress.Geo");
+    assertThat(altered.getField("home").schema().getFullName())
+        .isEqualTo("shop.PostalAddress");
+    assertThat(registry.schema("customer").references()).containsExactly(reference);
+  }
+
+  // Written from the logical type a message Flink named addr_Row would be AddrRow, which the
+  // registry takes for another type: an alter keeps the names the version has.
+  @Test
+  void aProtobufTypeFlinkWroteKeepsTheNamesOfItsMessages() throws Exception {
+    ProtobufSchema flink = new ProtobufSchema("syntax = \"proto3\";\npackage shop;\n\n"
+        + "message Record {\n"
+        + "  optional string id = 1;\n"
+        + "  optional addr_Row addr = 2;\n"
+        + "  repeated item_Row item = 3;\n"
+        + "  oneof pay {\n"
+        + "    pay_card_Row card = 4;\n"
+        + "    string iban = 5;\n"
+        + "  }\n"
+        + "  optional Shared one = 6;\n"
+        + "  optional Shared other = 7;\n\n"
+        + "  message addr_Row {\n"
+        + "    optional string street = 1;\n"
+        + "    optional string zip = 2;\n"
+        + "    optional string city = 3;\n"
+        + "    optional geo_Row geo = 4;\n"
+        + "    message geo_Row {\n"
+        + "      optional double lat = 1;\n"
+        + "    }\n"
+        + "  }\n"
+        + "  message item_Row {\n"
+        + "    optional string sku = 1;\n"
+        + "    optional dim_Row dim = 2;\n"
+        + "    message dim_Row {\n"
+        + "      optional int32 w = 1;\n"
+        + "    }\n"
+        + "  }\n"
+        + "  message pay_card_Row {\n"
+        + "    optional string number = 1;\n"
+        + "  }\n"
+        + "  message Shared {\n"
+        + "    optional in_Row in = 1;\n"
+        + "    message in_Row {\n"
+        + "      optional string x = 1;\n"
+        + "    }\n"
+        + "  }\n"
+        + "}\n");
+    registry.client.register("places", flink);
+    registry.alter("places", new AddAttribute("nickname", "STRING"));
+    ProtobufSchema added = (ProtobufSchema) registry.schema("places");
+    assertThat(added.toDescriptor().findFieldByName("addr").getMessageType().getName())
+        .isEqualTo("addr_Row");
+    assertThat(added.toDescriptor().findFieldByName("item").getMessageType().getName())
+        .isEqualTo("item_Row");
+    // At every level: a row in a row and in an array's, a oneof member's, a shared message's.
+    assertThat(added.isBackwardCompatible(flink)).isEmpty();
+    assertThat(added.canonicalString()).contains("message geo_Row", "message dim_Row",
+        "message pay_card_Row", "message in_Row");
+
+    // Retyped, it is the message it was, its fields at their numbers, and so is the row it
+    // keeps inside.
+    registry.alter("places", new AlterAttributeType("addr",
+        "STRUCT(street STRING, city STRING, geo STRUCT(lat DOUBLE, lon DOUBLE))"));
+    Descriptor addr = message("places").findFieldByName("addr").getMessageType();
+    assertThat(addr.getName()).isEqualTo("addr_Row");
+    assertThat(numbers(addr)).isEqualTo("street=1 city=3 geo=4");
+    assertThat(addr.findFieldByName("geo").getMessageType().getName()).isEqualTo("geo_Row");
+    assertThat(version("places")).isEqualTo(3);
+
+    // The row is the one it was, whatever name the new type pins on it.
+    registry.alter("places", new AlterAttributeType("addr", "STRUCT(street STRING, "
+        + "city STRING, geo STRUCT(lat DOUBLE, lon DOUBLE) WITH ('protobuf.name' = 'MyGeo'), "
+        + "zip STRING)"));
+    assertThat(message("places").findFieldByName("addr").getMessageType()
+        .findFieldByName("geo").getMessageType().getName()).isEqualTo("geo_Row");
+    // A member named as that row's message could not be written beside it.
+    assertThatThrownBy(() -> registry.alter("places", new AlterAttributeType("addr",
+        "STRUCT(street STRING, city STRING, geo STRUCT(lat DOUBLE, lon DOUBLE), zip STRING, "
+            + "geo_Row INT)"))).isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("schema can be made of it");
+    assertThat(version("places")).isEqualTo(4);
+  }
+
+  // Below the root as at it: a member named as the message this writer derives for another.
+  @Test
+  void aMemberNamedAsAMessageOfANestedProtobufRowIsRefused() {
+    create("pr", SchemaType.PROTOBUF,
+        "(id INT NOT NULL, addr STRUCT(street STRING, geo STRUCT(lat DOUBLE)))");
+    assertThatThrownBy(() -> registry.alter("pr", new AlterAttributeType("addr",
+        "STRUCT(street STRING, geo STRUCT(lat DOUBLE), GeoRow INT)")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("GeoRow, the type of geo in Protobuf message AddrRow, would be "
+            + "renamed Geo2Row");
+    assertThatThrownBy(() -> registry.alter("pr", new AlterAttributeType("addr",
+        "STRUCT(street STRING, geo STRUCT(lat DOUBLE), u UNION(GeoRow INT, s STRING))")))
+        .isInstanceOf(TypeRefusedException.class).hasMessageContaining("would be renamed");
+    assertThat(version("pr")).isEqualTo(1);
+  }
+
+  // A type the attribute has already makes no version, a position with it or not.
+  @ParameterizedTest
+  @EnumSource(SchemaType.class)
+  void anAttributeRetypedAsItIsMakesNoVersion(SchemaType format) {
+    create("same", format, "(a INT, b STRING, s STRUCT(x INT))");
+    assertThat(registry.alter("same", new AlterAttributeType("a", "INT"),
+        new MoveAttribute("a", Position.first()),
+        new AlterAttributeType("s", "STRUCT(x INT)")).edited()).isNull();
+    assertThat(version("same")).isEqualTo(1);
+  }
+
+  // The names a retyped attribute's members were given are kept in Avro as they are in
+  // Protobuf, where the records are otherwise named anew after the attribute.
+  @Test
+  void aRetypedAvroAttributeKeepsTheNamesPinnedBelowIt() {
+    create("av", SchemaType.AVRO, "(id INT NOT NULL, addr STRUCT(street STRING, "
+        + "geo STRUCT(lat DOUBLE) WITH ('avro.name' = 'GeoPoint')))");
+    AvroSchema before = (AvroSchema) registry.schema("av");
+    assertThat(before.canonicalString()).contains("\"name\":\"GeoPoint\"");
+    registry.alter("av", new AlterAttributeType("addr",
+        "STRUCT(street STRING, geo STRUCT(lat DOUBLE, lon DOUBLE), zip STRING)"));
+    AvroSchema after = (AvroSchema) registry.schema("av");
+    assertThat(after.canonicalString()).contains("\"name\":\"GeoPoint\"");
+    assertThat(after.isBackwardCompatible(before)).isEmpty();
   }
 }
