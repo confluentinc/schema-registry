@@ -21,6 +21,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -1631,40 +1632,38 @@ class LogicalTypesSchemaVisitorTest {
   // Non-reserved keywords usable as identifiers
   // =========================================================================
 
-  /**
-   * The grammar's nonReservedKeyword rule permits these 9 keywords to be used
-   * as field names without backtick quoting: ENUM, MAP, NAMESPACE, REFERENCE,
-   * SCHEMA, TAGS, TYPE, VARIANT, ZONE. This test exercises each in a struct
-   * body to ensure the demotion holds and the parser correctly disambiguates
-   * keyword-as-identifier from keyword-as-grammar-token.
-   */
   @Test
   void testNonReservedKeywordsAsFieldNames() {
-    Schema s = parseTypeExpr(
-        "STRUCT("
-            + "enum INT, "
-            + "map STRING, "
-            + "namespace STRING, "
-            + "reference STRING, "
-            + "schema STRING, "
-            + "tags STRING, "
-            + "type STRING, "
-            + "variant STRING, "
-            + "zone STRING"
-            + ")");
+    // Each word of the grammar's nonReservedKeyword rule is a field name with no backticks.
+    List<String> names = List.of("enum", "interval", "map", "message", "namespace", "ref",
+        "returning", "struct", "tags", "type", "variant", "zone");
+    Schema s = parseTypeExpr("STRUCT(" + String.join(" STRING, ", names) + " STRING)");
     assertEquals(Schema.Type.STRUCT, s.getType());
-    assertEquals(9, s.getFields().size());
-    assertNotNull(s.getField("enum"));
-    assertNotNull(s.getField("map"));
-    assertNotNull(s.getField("namespace"));
-    assertNotNull(s.getField("reference"));
-    assertNotNull(s.getField("schema"));
-    assertNotNull(s.getField("tags"));
-    assertNotNull(s.getField("type"));
-    assertNotNull(s.getField("variant"));
-    assertNotNull(s.getField("zone"));
-    assertEquals(Schema.Type.INT, s.getField("enum").getSchema().getType());
-    assertEquals(Schema.Type.VARCHAR, s.getField("schema").getSchema().getType());
+    assertEquals(names, s.getFields().stream().map(Schema.Field::getName)
+        .collect(Collectors.toList()));
+  }
+
+  @Test
+  void aNonReservedKeywordIsANameBesideItsKeywordUse() {
+    // MESSAGE, RETURNING and STRUCT name a type, a field and a CHECK's column, and stay keywords
+    // where the grammar expects them.
+    LogicalTypesSchemaVisitor visitor = parseScript(
+        "STRUCT struct (message STRING, returning INT, v VARIANT, "
+            + "CHECK (message = 'x') MESSAGE 'bad', "
+            + "CHECK (VARIANT_GET(v, '$.a' RETURNING INT) > returning)); "
+            + "STRUCT T (struct struct, r STRUCT<message STRING>); TYPE T;");
+    Schema struct = visitor.getNamedTypes().get("struct");
+    assertNotNull(struct.getField("message"));
+    assertNotNull(struct.getField("returning"));
+    assertEquals(2, struct.getRules().size());
+    assertEquals("bad", struct.getRules().get(0).getDoc());
+    assertEquals("message = 'x'", struct.getRules().get(0).getSql());
+    assertEquals("VARIANT_GET(v, '$.a' RETURNING INT) > returning",
+        struct.getRules().get(1).getSql());
+    Schema root = visitor.getRootSchema();
+    assertEquals(Schema.Type.NAMED_TYPE_REF, root.getField("struct").getSchema().getType());
+    assertEquals(Schema.Type.STRUCT, root.getField("r").getSchema().getType());
+    assertNotNull(root.getField("r").getSchema().getField("message"));
   }
 
   // =========================================================================
