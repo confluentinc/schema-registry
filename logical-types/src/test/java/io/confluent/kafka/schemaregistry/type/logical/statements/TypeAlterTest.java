@@ -1109,6 +1109,7 @@ class TypeAlterTest {
     for (AlterAction[] taking : List.of(
         new AlterAction[] {new RenameAttribute("id", "FooRow")},
         new AlterAction[] {new AddAttribute("u", "UNION(FooRow INT, c STRING)")},
+        new AlterAction[] {new AddAttribute("FooRow", "UNION(a INT, b STRING)")},
         new AlterAction[] {
             new AlterAttributeType("foo", "ARRAY<STRUCT(x STRING) NOT NULL> NOT NULL"),
             new AddAttribute("FooRow", "INT")})) {
@@ -1165,11 +1166,14 @@ class TypeAlterTest {
         + "\"properties\": {\"y\": {\"type\": \"string\"}}}}}";
     registry.client.register("common", new JsonSchema(common));
     SchemaReference reference = new SchemaReference("common.json", "common", 1);
-    for (String definition : List.of("Order", "shop.Order")) {
-      String subject = "js" + definition.length() + namespace.length();
-      registry.client.register(subject, new JsonSchema("{\"type\": \"object\", \"title\": "
-          + "\"Order\", " + namespace + "\"properties\": {\"id\": {\"type\": \"string\"}, "
-          + "\"prev\": {\"$ref\": \"common.json#/$defs/" + definition + "\"}}}",
+    // The title may give the namespace too.
+    for (String[] titled : List.of(new String[] {"Order", "Order"},
+        new String[] {"Order", "shop.Order"}, new String[] {"shop.Order", "shop.Order"})) {
+      String definition = titled[1];
+      String subject = "js" + titled[0].length() + definition.length() + namespace.length();
+      registry.client.register(subject, new JsonSchema("{\"type\": \"object\", \"title\": \""
+          + titled[0] + "\", " + namespace + "\"properties\": {\"id\": {\"type\": "
+          + "\"string\"}, \"prev\": {\"$ref\": \"common.json#/$defs/" + definition + "\"}}}",
           List.of(reference), Map.of("common.json", common), null));
       registry.alter(subject, new AddAttribute("nick", "STRING"));
       assertThat(version(subject)).isEqualTo(2);

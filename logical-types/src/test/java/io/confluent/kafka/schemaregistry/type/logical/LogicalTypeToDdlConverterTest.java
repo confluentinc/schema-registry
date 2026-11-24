@@ -604,12 +604,15 @@ class LogicalTypeToDdlConverterTest {
   void aRootIsNotDeclaredByTheNameOfATypeItRefersTo() {
     Schema referred = Schema.createStruct(List.of(
         new Schema.Field("x", Schema.createString(), 0)));
-    for (String namespace : new String[] {null, "shop"}) {
+    // With no namespace, with one, and with one that the root's name gives too.
+    for (String[] named : new String[][] {{"Order", null}, {"Order", "shop"},
+        {"shop.Order", "shop"}}) {
+      String namespace = named[1];
       String key = namespace == null ? "Order" : namespace + ".Order";
       Schema root = Schema.createStruct(List.of(
           new Schema.Field("id", Schema.createString(), 0),
           new Schema.Field("prev", Schema.createNamedTypeRef(key), 1)));
-      LogicalType lt = new LogicalType("Order", namespace, root, Map.of(key, referred),
+      LogicalType lt = new LogicalType(named[0], namespace, root, Map.of(key, referred),
           Set.of(key), Map.of(), List.of(), Map.of(), Map.of());
       String ddl = LogicalTypeToDdlConverter.toDdl(lt, true);
       assertFalse(ddl.contains("STRUCT Order ") || ddl.contains("STRUCT shop.Order "), ddl);

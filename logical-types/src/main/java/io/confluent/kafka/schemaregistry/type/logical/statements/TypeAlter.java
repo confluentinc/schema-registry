@@ -1703,9 +1703,11 @@ public final class TypeAlter {
       } else {
         continue;
       }
+      // A oneof's name is one of the message's too.
       if (!before.equals(after) && (now.findFieldByName(before) != null
           || now.findNestedTypeByName(before) != null
-          || now.findEnumTypeByName(before) != null)) {
+          || now.findEnumTypeByName(before) != null
+          || now.getOneofs().stream().anyMatch(oneof -> oneof.getName().equals(before)))) {
         throw new TypeRefusedException(refused() + ": " + before + ", the type of "
             + old.getName() + " in Protobuf message " + was.getName() + ", would be renamed "
             + after + ", as another member or type of the message would have its name");

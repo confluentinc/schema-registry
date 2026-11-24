@@ -624,15 +624,17 @@ public final class LogicalTypeToDdlConverter {
     private boolean namedTypeKeyExistsForRoot(String rootName) {
       String ns = lt.getNamespace();
       boolean namespaced = ns != null && !ns.isEmpty();
-      // The name the root's declaration would have: a type of it, declared or only referred
-      // to, is that very type to the reader.
-      String own = namespaced ? ns + "." + rootName : rootName;
+      // The name the root's declaration would have, which a name that has the namespace
+      // already is: a type of it, declared or only referred to, is that very type to the
+      // reader.
+      String own = namespaced && !rootName.startsWith(ns + ".") ? ns + "." + rootName
+          : rootName;
       if (lt.getNamedTypes().containsKey(own) || lt.getExternalTypes().contains(own)) {
         return true;
       }
       // Under a namespace the bare name is another type's. One the script declares takes it;
       // one it refers to is aliased to itself, and the root is named with its namespace.
-      return namespaced && lt.getNamedTypes().containsKey(rootName)
+      return !own.equals(rootName) && lt.getNamedTypes().containsKey(rootName)
           && !lt.getExternalTypes().contains(rootName);
     }
 
