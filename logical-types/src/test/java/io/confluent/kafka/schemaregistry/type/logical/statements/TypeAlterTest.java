@@ -26,6 +26,7 @@ import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceField;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceVersion;
+import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
@@ -268,6 +269,14 @@ class TypeAlterTest {
     assertThat(aliases).containsExactly(Map.entry("id", List.of()),
         Map.entry("zz", List.of()), Map.entry("b", List.of()), Map.entry("t", List.of("a")));
     assertThat(registry.schema("da").isBackwardCompatible(v2)).isEmpty();
+
+    // An attribute the statement adds was stored under no name: the alias stays.
+    create("db", SchemaType.AVRO, "(id INT NOT NULL, a INT)");
+    registry.alter("db", new RenameAttribute("a", "zz"));
+    registry.alter("db", new AddAttribute("a", "INT"), new RenameAttribute("a", "t"));
+    assertThat(registry.struct("db").getFields()).extracting(Schema.Field::getName,
+        Schema.Field::getAliases).containsExactly(tuple("id", List.of()),
+            tuple("zz", List.of("a")), tuple("t", List.of()));
   }
 
   // A swap back in one statement after a swap is refused, as the aliases would read it as no
@@ -999,6 +1008,10 @@ class TypeAlterTest {
         + "[\"null\", \"pair\"]}, {\"name\": \"j\", \"type\": [\"null\", \"inner\"], "
         + "\"default\": null}]}", List.of(new SchemaReference("inner", "inner", 2),
             new SchemaReference("pair", "pair", 1)), resolved, null));
+    // A type that refers to it reads it as it is read alone, whatever it is.
+    create("top", SchemaType.AVRO, "(id INT NOT NULL, t m)");
+    registry.alter("top", new AddAttribute("j", "inner"));
+    assertThat(version("top")).isEqualTo(2);
     registry.alter("pair", new AlterAttributeType("i", "inner"));
 
     assertThatThrownBy(() -> registry.alter("m", new AddAttribute("n", "INT")))
@@ -1010,6 +1023,30 @@ class TypeAlterTest {
     assertThat(registry.latest("m").getReferences())
         .extracting(SchemaReference::getSubject, SchemaReference::getVersion)
         .containsExactlyInAnyOrder(tuple("inner", 2), tuple("pair", 2));
+  }
+
+  // A statement that makes no version of a type stored so is not refused: nothing is written.
+  @Test
+  void aStatementThatLeavesAVersionOfTwoVersionsOfATypeAsItIsMakesNone() throws Exception {
+    create("inner", SchemaType.AVRO, "(x STRING, y STRING)");
+    create("pair", SchemaType.AVRO, "(a STRING, i inner)");
+    create("w", SchemaType.AVRO, "(id INT NOT NULL, p pair, j inner)");
+    registry.alter("inner", new AddAttribute("z", "INT"));
+    // The type as this writer writes it, stored with the newer inner beside the older pair.
+    SchemaMetadata written = registry.latest("w");
+    Map<String, String> resolved = new LinkedHashMap<>();
+    resolved.put("inner", registry.version("inner", 2).getSchema());
+    resolved.put("pair", registry.version("pair", 1).getSchema());
+    registry.client.register("m", new AvroSchema(written.getSchema().replace("\"w\"", "\"m\""),
+        List.of(new SchemaReference("inner", "inner", 2),
+            new SchemaReference("pair", "pair", 1)), resolved, written.getMetadata(), null,
+        null, false));
+
+    assertThat(registry.alter("m", new AddAttribute("q", "INT"),
+        new DropAttribute("q", false)).edited()).isNull();
+    assertThatThrownBy(() -> registry.alter("m", new AddAttribute("q", "INT")))
+        .isInstanceOf(TypeRefusedException.class).hasMessageContaining("two versions of type");
+    assertThat(version("m")).isEqualTo(1);
   }
 
   // A Protobuf type created again over its dropped versions is numbered as an ALTER of the
@@ -1559,7 +1596,10 @@ class TypeAlterTest {
       registry.alter(subject, new AddAttribute("nick", "STRING"));
       assertThat(version(subject)).as(c[0]).isEqualTo(2);
       String altered = registry.schema(subject).canonicalString();
-      assertThat(altered).as(c[0]).contains("\"nick\"");
+      assertThat(altered).as(c[0]).contains("\"nick\"", "\"m\"");
+      // Each definition it referred to is one it still refers to.
+      assertThat(altered.split("\"\\$ref\":\"#/\\$defs/", -1).length - 1).as(c[0])
+          .isGreaterThanOrEqualTo(c.length - 2);
       // The first two keep their name: the root is the definition of that name.
       if (i < 2) {
         assertThat(altered).contains("\"" + c[0] + "\":{").doesNotContain("\"title\":\"dt");

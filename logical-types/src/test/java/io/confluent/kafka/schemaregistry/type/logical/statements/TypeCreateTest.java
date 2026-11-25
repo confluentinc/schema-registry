@@ -408,6 +408,13 @@ class TypeCreateTest {
     registry.alter("pair", new AlterAttributeType("i", "inner"));
     create("o", format, "(id INT NOT NULL, p pair, j inner)");
     assertThat(registry.versions("o", true)).containsExactly(1);
+
+    // Created again over its dropped version, it is told so.
+    registry.drop("o");
+    registry.alter("inner", new AddAttribute("w", "INT"));
+    assertThatThrownBy(() -> create("o", format, "(id INT NOT NULL, p pair, j inner)"))
+        .isInstanceOf(TypeRefusedException.class).hasMessageStartingWith("Type o cannot be "
+            + "created again so: it would refer to two versions of type inner, version ");
   }
 
   // Its dropped version referred to a version of a type that is soft-deleted since, so the new

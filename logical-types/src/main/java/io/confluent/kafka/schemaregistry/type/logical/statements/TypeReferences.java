@@ -274,31 +274,37 @@ public final class TypeReferences {
    * Refuses references that reach two types by one name, or two versions of one, their own or
    * those of the types they refer to. A schema holds one type and one version of a name, the
    * first its references are read to, and they are stored in another order than a statement
-   * gives them: the version checked would not be the one stored. A refusal of two versions
-   * starts with {@code refused}.
+   * gives them: the version checked would not be the one stored. Two met below one of the
+   * references are left: a type stored so is read through it as it is read alone. A refusal
+   * of two versions starts with {@code refused}.
    */
   static void requireOneOfEach(TypeLookup lookup, String referrer,
       List<SchemaReference> references, String refused) {
-    oneOfEach(lookup, referrer, null, references, new HashMap<>(), refused);
+    oneOfEach(lookup, referrer, null, null, references, new HashMap<>(), refused);
   }
 
-  // Each name at the type and version, and through the type, it was first met; via is null
-  // for the statement's own references, and else the referring type and its version.
-  private static void oneOfEach(TypeLookup lookup, String referrer, String via,
+  // Each name at the type and version, and through the type, it was first met, and below
+  // which of the statement's own references; via and below are null for those themselves.
+  private static void oneOfEach(TypeLookup lookup, String referrer, String via, String below,
       List<SchemaReference> references, Map<String, String[]> met, String refused) {
     if (references == null) {
       return;
     }
+    int own = 0;
     for (SchemaReference ref : references) {
       String subject = referenced(referrer, ref.getSubject());
+      String under = below != null ? below : String.valueOf(own++);
       String[] first = met.get(ref.getName());
       if (first == null) {
-        met.put(ref.getName(), new String[] {subject, String.valueOf(ref.getVersion()), via});
+        met.put(ref.getName(),
+            new String[] {subject, String.valueOf(ref.getVersion()), via, under});
         SchemaMetadata md = lookup.version(subject, ref.getVersion());
         if (md != null) {
           oneOfEach(lookup, subject, "version " + ref.getVersion() + " of type " + subject,
-              md.getReferences(), met, refused);
+              under, md.getReferences(), met, refused);
         }
+      } else if (first[3].equals(under)) {
+        continue;
       } else if (!first[0].equals(subject)) {
         throw twoTypes(first[0], subject, ref.getName());
       } else if (!first[1].equals(String.valueOf(ref.getVersion()))) {
