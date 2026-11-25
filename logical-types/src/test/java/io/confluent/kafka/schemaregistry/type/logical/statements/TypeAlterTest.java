@@ -1374,6 +1374,9 @@ class TypeAlterTest {
     registry.alter("uk", new RenameAttribute("t", "tt"), new RenameAttribute("a", "x"),
         new RenameAttribute("c", "a"), new RenameAttribute("x", "c"));
     assertThat(numbers(message("uk"))).contains("b=2", "c=3", "a=4", "tt_a=5");
+    // The name a member had under its union's name before is free for a new attribute.
+    registry.alter("uk", new RenameAttribute("tt", "u"), new AddAttribute("tt_a", "INT"));
+    assertThat(numbers(message("uk"))).contains("b=2", "c=3", "a=4", "u_a=5", "tt_a=6");
   }
 
   // An enum's name is one of the message's as a nested message's is.
