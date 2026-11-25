@@ -385,8 +385,8 @@ public final class Formats {
       met = comparing.met.size();
       comparing.settle();
       pairs.clear();
-      for (int j = 1; j < branches.size() && !(first && !pairs.isEmpty()); j++) {
-        for (int i = 0; i < j && !(first && !pairs.isEmpty()); i++) {
+      for (int j = 1; j < branches.size() && !told(first, pairs, comparing, met); j++) {
+        for (int i = 0; i < j && !told(first, pairs, comparing, met); i++) {
           if (matchBoth(written.get(i), written.get(j), comparing)) {
             pairs.add(new String[] {branches.get(i).getName(), branches.get(j).getName()});
           }
@@ -394,6 +394,13 @@ public final class Formats {
       }
     } while (comparing.met.size() > met);
     return pairs;
+  }
+
+  // Whether the first two are told and no more is asked: not while rows are met for the
+  // first time, which are taken to match until they are judged. Two found then may be none,
+  // and a union of rows would be gone through again for each two of them.
+  private static boolean told(boolean first, List<String[]> pairs, Pairs comparing, int met) {
+    return first && !pairs.isEmpty() && comparing.met.size() == met;
   }
 
   /**

@@ -93,7 +93,8 @@ public final class TypeAlter {
   private static final Set<String> BY_NAME = Set.of("properties", "$defs", "definitions",
       "patternProperties", "dependentSchemas");
   private static final Set<String> SAYS_NOTHING = Set.of("$ref", "title", "description",
-      "$comment", "logical.ref");
+      "$comment", "default", "examples", "deprecated", "readOnly", "writeOnly",
+      "contentMediaType", "contentEncoding", "connect.index", "logical.ref");
   private static final String KEY_SUFFIX = "-key";
   private static final String VALUE_SUFFIX = "-value";
 

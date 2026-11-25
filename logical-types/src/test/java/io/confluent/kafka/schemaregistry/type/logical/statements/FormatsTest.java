@@ -363,6 +363,25 @@ class FormatsTest {
             .hasMessageContaining("cannot have branches b0 and b1"));
   }
 
+  // A union of hundreds of rows is gone through once the rows are judged, and not again
+  // for each two of them: whether none of them is another, or the last two are.
+  @Test
+  void aJsonUnionOfManyRowsIsJudgedOnce() {
+    StringBuilder apart = new StringBuilder("(u UNION(");
+    for (int i = 0; i < 400; i++) {
+      apart.append(i > 0 ? ", " : "").append("b").append(i).append(" STRUCT<k").append(i)
+          .append(" INT NOT NULL>");
+    }
+    LogicalType told = struct(apart + "))");
+    LogicalType alike = struct(apart + ", b400 STRUCT<k399 INT NOT NULL>))");
+    assertTimeoutPreemptively(Duration.ofSeconds(20), () -> {
+      Formats.refuseUnwritable(SchemaType.JSON, told);
+      assertThatThrownBy(() -> Formats.refuseUnwritable(SchemaType.JSON, alike))
+          .isInstanceOf(TypeRefusedException.class)
+          .hasMessageContaining("cannot have branches b399 and b400");
+    });
+  }
+
   // Rows, arrays and maps are written as objects and arrays: two branches are refused where
   // a value of one would be a value of the other.
   @Test

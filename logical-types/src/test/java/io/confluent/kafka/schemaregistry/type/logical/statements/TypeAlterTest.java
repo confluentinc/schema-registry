@@ -3042,6 +3042,8 @@ class TypeAlterTest {
     written.put("dlr", "{\"$ref\":\"o5s\",\"logical.ref\":true}");
     written.put("dds", "{\"$ref\":\"o5s\",\"description\":\"the same\"}");
     written.put("dtc", "{\"$ref\":\"o5s\",\"title\":\"O\",\"$comment\":\"as is\"}");
+    written.put("dan", "{\"$ref\":\"o5s\",\"default\":{\"q\":\"x\"},\"examples\":[{\"q\":"
+        + "\"y\"}],\"deprecated\":true,\"readOnly\":true,\"connect.index\":0}");
     for (Map.Entry<String, String> type : written.entrySet()) {
       registry.client.register(type.getKey(), new JsonSchema(String.format(head
           + "\"x\":{\"$ref\":\"#/$defs/o5s\"}},\"additionalProperties\":false,\"$defs\":"
