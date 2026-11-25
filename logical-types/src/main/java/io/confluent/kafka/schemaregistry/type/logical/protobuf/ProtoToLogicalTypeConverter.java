@@ -188,7 +188,20 @@ public class ProtoToLogicalTypeConverter {
    * public-import wrapper is read by the file it re-exports.
    */
   public static LogicalType toLogicalType(final ProtobufSchema schema) {
-    return read(schema, schema.readsAsSeveralMessages());
+    return read(schema, schema.readsAsSeveralMessages(), false);
+  }
+
+  /**
+   * {@code schema} read as {@link #toLogicalType(ProtobufSchema)} reads it, and with
+   * {@code namesAsWritten}, with the name of each message and enum declared for one field
+   * recorded on it unless the writer would derive that very name. Read otherwise, a name Flink's
+   * writer derives ({@code addr_Row}) is not recorded, and written from the logical type the
+   * type takes the name this writer derives ({@code AddrRow}): for a schema Flink wrote,
+   * another type to the registry.
+   */
+  public static LogicalType toLogicalType(final ProtobufSchema schema,
+      final boolean namesAsWritten) {
+    return read(schema, schema.readsAsSeveralMessages(), namesAsWritten);
   }
 
   /**
@@ -196,7 +209,7 @@ public class ProtoToLogicalTypeConverter {
    * whatever else it declares.
    */
   public static LogicalType toLogicalType(final ProtobufSchema schema, final String message) {
-    return read(schema.copy(message), false);
+    return read(schema.copy(message), false, false);
   }
 
   /**
@@ -206,17 +219,18 @@ public class ProtoToLogicalTypeConverter {
    * message is wrapped all the same, and a root it names is not singled out.
    */
   public static LogicalType toMultiMessageLogicalType(final ProtobufSchema schema) {
-    return read(schema, true);
+    return read(schema, true, false);
   }
 
   private static LogicalType read(
-      final ProtobufSchema schema, final boolean includeMultipleMessages) {
+      final ProtobufSchema schema, final boolean includeMultipleMessages,
+      final boolean namesAsWritten) {
     if (includeMultipleMessages && schema.rawSchema() != null
         && schema.rawSchema().getTypes().isEmpty() && !isPublicImportWrapper(schema)) {
       throw new ValidationException("Protobuf file has no top-level messages");
     }
     try {
-      return toLogicalTypeInternal(schema, includeMultipleMessages)
+      return toLogicalTypeInternal(schema, includeMultipleMessages, namesAsWritten)
           .withSourceFormat(SchemaType.PROTOBUF);
     } catch (StackOverflowError e) {
       throw new TypeTooDeepException("Protobuf schema nests types too deeply to convert");
@@ -257,7 +271,8 @@ public class ProtoToLogicalTypeConverter {
   }
 
   private static LogicalType toLogicalTypeInternal(
-      final ProtobufSchema schema, final boolean includeMultipleMessages) {
+      final ProtobufSchema schema, final boolean includeMultipleMessages,
+      final boolean namesAsWritten) {
     // Re-export-only file: the local proto has no types of its own, just
     // `import public "..."`. Detect this BEFORE toDescriptor(), because
     // toDescriptor() resolves through the public import to the imported file
@@ -291,6 +306,7 @@ public class ProtoToLogicalTypeConverter {
     }
     final ToLogicalContext<String> ctx =
         new ToLogicalContext<>(schema);
+    ctx.setNamesAsWritten(namesAsWritten);
     // Extend reference names with all nested message/enum full names from
     // each resolved external schema, so nested external types are recognized.
     // An enum-only file's enums are too, since its reference may be named for the file.
@@ -801,7 +817,10 @@ public class ProtoToLogicalTypeConverter {
     // otherwise we record every one — regular fields and oneof members alike. Recording all-or-
     // nothing guarantees a reader/writer round-trip never mixes recorded and omitted numbers, the
     // mix that would otherwise let the writer's positional fallback corrupt an omitted number.
-    final boolean recordNumbers = !messageNumbersAreSequential(schema);
+    // A map's entry is written from its key and value, a union's members where it stands,
+    // which is not always the order read here: numbers the writer would not give are recorded.
+    final boolean recordNumbers = !messageNumbersAreSequential(schema)
+        || asMapEntry && !entryNumbersAreAsWritten(schema);
     final List<Field> fields = new ArrayList<>();
     int index = 0;
     for (FieldDescriptor fieldDescriptor : schema.getFields()) {
@@ -840,6 +859,34 @@ public class ProtoToLogicalTypeConverter {
     final List<Integer> newList = new ArrayList<>(list);
     newList.add(value);
     return newList;
+  }
+
+  /**
+   * True if a map entry's field numbers are those the writer gives one with none recorded:
+   * {@code 1..N} over its key and then its value, a union's members in the place of its field.
+   */
+  private static boolean entryNumbersAreAsWritten(Descriptor entry) {
+    int expected = 1;
+    for (String part : Arrays.asList(CommonConstants.KEY_FIELD, CommonConstants.VALUE_FIELD)) {
+      FieldDescriptor field = entry.findFieldByName(part);
+      if (field != null && field.getRealContainingOneof() == null) {
+        if (field.getNumber() != expected++) {
+          return false;
+        }
+        continue;
+      }
+      for (OneofDescriptor oneof : entry.getRealOneofs()) {
+        if (!oneof.getName().equals(part)) {
+          continue;
+        }
+        for (FieldDescriptor member : oneof.getFields()) {
+          if (member.getNumber() != expected++) {
+            return false;
+          }
+        }
+      }
+    }
+    return true;
   }
 
   /**
@@ -917,8 +964,15 @@ public class ProtoToLogicalTypeConverter {
       final String branchName = getMeta(fieldDescriptor)
           .flatMap(getParam(CommonConstants.LOGICAL_BRANCH_PROP))
           .orElse(fieldDescriptor.getName());
-      final String typeName = typeNameParam(
-          fieldDescriptor, oneOfDescriptor.getName() + "_" + branchName, fieldSchema);
+      if (ctx.namesAsWritten()) {
+        // Which of the two names a member has turns on the fields before it: as written, it
+        // is the one it has.
+        branchParams = branchParams != null
+            ? new LinkedHashMap<>(branchParams) : new LinkedHashMap<>();
+        branchParams.put(Schema.PROTOBUF_FIELD_NAME, fieldDescriptor.getName());
+      }
+      final String typeName = typeNameParam(fieldDescriptor,
+          oneOfDescriptor.getName() + "_" + branchName, fieldSchema, ctx.namesAsWritten());
       if (typeName != null) {
         branchParams = branchParams != null
             ? new LinkedHashMap<>(branchParams) : new LinkedHashMap<>();
@@ -1038,7 +1092,8 @@ public class ProtoToLogicalTypeConverter {
           ? new LinkedHashMap<>(fieldParams) : new LinkedHashMap<>();
       effectiveParams.put(Schema.PROTOBUF_FIELD_NUMBER, String.valueOf(field.getNumber()));
     }
-    final String typeName = typeNameParam(field, field.getName(), fieldSchema);
+    final String typeName = typeNameParam(field, field.getName(), fieldSchema,
+        ctx.namesAsWritten());
     if (typeName != null) {
       effectiveParams = effectiveParams != null
           ? new LinkedHashMap<>(effectiveParams) : new LinkedHashMap<>();
@@ -1155,12 +1210,15 @@ public class ProtoToLogicalTypeConverter {
    * The protobuf.name param of a field or oneof member whose own message or enum, inlined and
    * declared in the field's message, is not named as the writer derives it from
    * {@code derivedFrom}, or is shared with another field, which only a pin on each keeps; null
-   * otherwise. A type declared elsewhere keeps no name.
+   * otherwise. A type declared elsewhere keeps no name. The name Flink's writer derives is
+   * taken as derived too. Read {@code asWritten}, every such type's name is told: which name
+   * the writer derives for one turns on the attributes before it, whose order may change.
    */
-  static String typeNameParam(FieldDescriptor field, String derivedFrom, Schema fieldSchema) {
+  static String typeNameParam(FieldDescriptor field, String derivedFrom, Schema fieldSchema,
+      boolean asWritten) {
     final String name = fieldSchema.getType() == Schema.Type.NAMED_TYPE_REF
         ? null : ownTypeName(field);
-    if (name == null || isShared(field)) {
+    if (name == null || isShared(field) || asWritten) {
       return name;
     }
     String suffix = typeSuffix(field, fieldSchema);

@@ -28,6 +28,7 @@ import io.confluent.kafka.schemaregistry.type.logical.LogicalTypeToDdlConverter;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
 import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.AddAttribute;
+import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.AlterAttributeType;
 import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.DropAttribute;
 import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.RenameAttribute;
 import io.confluent.kafka.schemaregistry.type.logical.statements.TypeScripts.BodyKind;
@@ -389,6 +390,45 @@ class TypeCreateTest {
             + "provenance would pair its attributes otherwise than versions 1 to 3 of address "
             + "do");
     assertThat(registry.versions("o", true)).containsExactly(1);
+  }
+
+  // A member's field name given by hand is a Protobuf field name, as its number is a number.
+  @Test
+  void aProtobufMemberFieldNameThatIsNoNameIsRefused() {
+    for (String name : List.of("x y", "9x", "")) {
+      assertThatThrownBy(() -> create("fn", SchemaType.PROTOBUF, "(id INT NOT NULL, "
+          + "u UNION(d INT WITH ('protobuf.field.name' = '" + name + "')))"))
+          .isInstanceOf(TypeRefusedException.class).hasMessage("Property protobuf.field.name "
+              + "of branch d is not a valid field name: '" + name + "'");
+    }
+    create("fn", SchemaType.PROTOBUF,
+        "(id INT NOT NULL, u UNION(d INT WITH ('protobuf.field.name' = 'u_d')))");
+    assertThat(registry.schema("fn").canonicalString()).contains("int32 u_d = 2");
+  }
+
+  // A type created over a type that still refers to an earlier version of one it names too.
+  @ParameterizedTest
+  @EnumSource(SchemaType.class)
+  void aTypeCreatedReferringToTwoVersionsOfATypeIsRefused(SchemaType format) {
+    create("inner", format, "(x STRING, y STRING)");
+    create("pair", format, "(a STRING, i inner)");
+    registry.alter("inner", new AddAttribute("z", "INT"));
+
+    assertThatThrownBy(() -> create("o", format, "(id INT NOT NULL, p pair, j inner)"))
+        .isInstanceOf(TypeRefusedException.class).hasMessageStartingWith("Type o cannot be "
+            + "created so: it would refer to two versions of type inner, version ");
+    assertThat(registry.versions("o", true)).isEmpty();
+
+    registry.alter("pair", new AlterAttributeType("i", "inner"));
+    create("o", format, "(id INT NOT NULL, p pair, j inner)");
+    assertThat(registry.versions("o", true)).containsExactly(1);
+
+    // Created again over its dropped version, it is told so.
+    registry.drop("o");
+    registry.alter("inner", new AddAttribute("w", "INT"));
+    assertThatThrownBy(() -> create("o", format, "(id INT NOT NULL, p pair, j inner)"))
+        .isInstanceOf(TypeRefusedException.class).hasMessageStartingWith("Type o cannot be "
+            + "created again so: it would refer to two versions of type inner, version ");
   }
 
   // Its dropped version referred to a version of a type that is soft-deleted since, so the new

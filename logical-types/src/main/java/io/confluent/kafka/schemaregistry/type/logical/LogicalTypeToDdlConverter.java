@@ -109,11 +109,27 @@ public final class LogicalTypeToDdlConverter {
     // try/finally.
     private StringBuilder sb = new StringBuilder();
     private final boolean oneLine;
+    // The types a script with a namespace refers to whose names it would read as its own, each
+    // aliased to itself so that its name is read as written: one of no namespace, and one
+    // whose name begins with that of a type the script declares, which reads as nested in it.
+    private final Set<String> topLevel = new LinkedHashSet<>();
 
     Printer(LogicalType lt, boolean oneLine) {
       this.lt = lt;
       this.oneLine = oneLine;
       this.localNames = lt.getNamedTypes().keySet();
+      String ns = lt.getNamespace();
+      if (ns != null && !ns.isEmpty()) {
+        for (String external : collectExternalRefs()) {
+          if (lt.getExternalImports().containsKey(external)) {
+            continue;
+          }
+          if (!external.contains(".")
+              || !external.startsWith(ns + ".") && readsAsNested(external, ns)) {
+            topLevel.add(external);
+          }
+        }
+      }
     }
 
     String script() {
@@ -138,6 +154,13 @@ public final class LogicalTypeToDdlConverter {
         // namespace-qualified, and re-parsing applies the namespace again.
         sb.append("USING TYPE ").append(qualifiedName(displayName(e.getKey())))
             .append(" FOR REF ").append(stringLiteral(e.getValue()))
+            .append(endOfStatement());
+      }
+      // A type of no namespace, named in a script that has one, would read back as a type of
+      // the script's namespace. Aliased to itself, its name is taken as written.
+      for (String external : topLevel) {
+        sb.append("USING TYPE ").append(qualifiedName(external))
+            .append(" FOR ").append(qualifiedName(external))
             .append(endOfStatement());
       }
 
@@ -172,7 +195,7 @@ public final class LogicalTypeToDdlConverter {
               && lt.getName() != null;
       boolean rootIsNamedInline = rootIsBareNamed && !namedTypeKeyExistsForRoot(lt.getName());
       if (rootIsNamedInline) {
-        printCreateType(lt.getName(), root);
+        printCreateType(rootName(), root);
       }
 
       // Peer named-type declarations (`STRUCT <name> (...)` / `ENUM <name> (...)`), LOCAL types
@@ -205,7 +228,7 @@ public final class LogicalTypeToDdlConverter {
         //     (ambient), so without the explicit TYPE the root's nullability would be lost.
         // The trailing TYPE carries the nullability marker the bare declaration cannot.
         if (inlineRootReferencedByPeer() || root.isNullable() || severalStructs) {
-          sb.append("TYPE ").append(qualifiedName(lt.getName()));
+          sb.append("TYPE ").append(qualifiedName(rootName()));
           if (!root.isNullable()) {
             sb.append(" NOT NULL");
           }
@@ -599,11 +622,31 @@ public final class LogicalTypeToDdlConverter {
      * in which case emitting the root as a named declaration would duplicate it on parse.
      */
     private boolean namedTypeKeyExistsForRoot(String rootName) {
-      if (lt.getNamedTypes().containsKey(rootName)) {
+      String ns = lt.getNamespace();
+      boolean namespaced = ns != null && !ns.isEmpty();
+      // The name the root is declared by, without the namespace it may carry, and the name
+      // that declaration reads as: a dotted one as written, any other in the namespace. A
+      // type of that name, declared or only referred to, is that very type to the reader.
+      String bare = namespaced && rootName.startsWith(ns + ".")
+          ? rootName.substring(ns.length() + 1) : rootName;
+      // A dotted name under a type the script declares reads as nested in it, which no root is.
+      if (bare.contains(".") && hasLocalParentPrefix(bare, ns)) {
         return true;
       }
-      String ns = lt.getNamespace();
-      return ns != null && lt.getNamedTypes().containsKey(ns + "." + rootName);
+      String own = namespaced && !bare.contains(".") ? ns + "." + bare : rootName;
+      if (lt.getNamedTypes().containsKey(own) || lt.getExternalTypes().contains(own)) {
+        return true;
+      }
+      // Only a bare name is read with the namespace, and so set beside the bare names.
+      if (!namespaced || bare.contains(".")) {
+        return false;
+      }
+      // Under a namespace the bare name is another type's. One the script declares takes it,
+      // and so does one bound to a reference, whose name is read with the namespace; any
+      // other it refers to is aliased to itself, and the root is named with its namespace.
+      return lt.getNamedTypes().containsKey(bare) && !lt.getExternalTypes().contains(bare)
+          || lt.getExternalImports().containsKey(bare)
+            && collectExternalRefs().contains(bare);
     }
 
     /**
@@ -748,10 +791,40 @@ public final class LogicalTypeToDdlConverter {
         return fqn;
       }
       String relative = fqn.substring(ns.length() + 1);
+      // Bare, the name is the type of no namespace that is aliased to itself.
+      if (topLevel.contains(relative)) {
+        return fqn;
+      }
       if (!relative.contains(".") || hasLocalParentPrefix(relative, ns)) {
         return relative;
       }
       return fqn;
+    }
+
+    // Whether the reader takes a dotted name for a type nested in one the script declares: a
+    // local named type, or the root written as a declaration, which is in neither map.
+    private boolean readsAsNested(String name, String ns) {
+      if (hasLocalParentPrefix(name, ns)) {
+        return true;
+      }
+      Schema root = lt.getRootSchema();
+      if (lt.getName() == null || root == null || root.getType() != Schema.Type.STRUCT
+          && root.getType() != Schema.Type.ENUM) {
+        return false;
+      }
+      // The root's name as its declaration is read: without the namespace it may carry.
+      String rootName = lt.getName();
+      if (ns != null && !ns.isEmpty() && rootName.startsWith(ns + ".")) {
+        rootName = rootName.substring(ns.length() + 1);
+      }
+      return name.startsWith(rootName + ".");
+    }
+
+    // The name the root is declared by and named by a trailing TYPE: with its namespace when
+    // its bare name is aliased to the type of no namespace.
+    private String rootName() {
+      return topLevel.contains(lt.getName()) ? lt.getNamespace() + "." + lt.getName()
+          : lt.getName();
     }
 
     /**
