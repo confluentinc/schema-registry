@@ -186,7 +186,13 @@ class FormatsTest {
         "UNION(r1 MAP<STRING, INT>, r2 STRUCT<a INT>)",
         "UNION(r1 MAP<STRING, INT>, r2 STRUCT<a INT NOT NULL>)",
         "UNION(r1 MAP<STRING, INT>, r2 MAP<STRING, STRING>)",
-        "UNION(r1 MULTISET<STRING>, r2 STRUCT<a INT>)"}) {
+        "UNION(r1 MULTISET<STRING>, r2 STRUCT<a INT>)",
+        // A row's attribute that may be null does not tell it from a map, nor one of the
+        // type of a multiset's counts, nor one of a name no type is known by.
+        "UNION(r1 STRUCT<k STRING>, r2 MAP<STRING, INT>)",
+        "UNION(r1 STRUCT<k INT NOT NULL>, r2 MULTISET<STRING>)",
+        "UNION(r1 STRUCT<k Missing NOT NULL>, r2 STRUCT<k INT NOT NULL>)",
+        "UNION(r1 STRUCT<k Missing NOT NULL>, r2 MAP<STRING, INT>)"}) {
       assertThatThrownBy(() -> Formats.refuseUnwritable(SchemaType.JSON,
           struct("(u " + union + ")"))).as(union)
           .isInstanceOf(TypeRefusedException.class)
@@ -209,6 +215,7 @@ class FormatsTest {
         "UNION(r1 STRUCT<a STRUCT<x INT NOT NULL> NOT NULL>, "
             + "r2 STRUCT<a STRUCT<y STRING NOT NULL> NOT NULL>)",
         "UNION(r1 MAP<STRING, STRING>, r2 STRUCT<a INT NOT NULL>)",
+        "UNION(r1 STRUCT<k BOOLEAN NOT NULL>, r2 MULTISET<STRING>)",
         "UNION(r1 STRUCT<a INT>, r2 ARRAY<INT>, r3 INT)",
         "UNION(r1 MAP<STRING, INT>, r2 ARRAY<INT>)",
         "UNION(r1 MAP<STRING, INT>, r2 MAP<INT, STRING>)"}) {

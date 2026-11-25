@@ -16,10 +16,14 @@
 
 package io.confluent.kafka.schemaregistry.type.logical.statements;
 
+import com.google.protobuf.Descriptors.Descriptor;
+import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
+import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTypeConverter;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -120,7 +124,9 @@ public final class TypeReferences {
           aliases.put(name, refName);
         }
       } else {
-        String fullName = lookup.parse(md).name();
+        ParsedSchema parsed = lookup.parse(md);
+        refuseWrappedValue(name, parsed);
+        String fullName = parsed.name();
         if (fullName != null && !fullName.equals(name)) {
           aliases.put(name, fullName);
         }
@@ -133,6 +139,24 @@ public final class TypeReferences {
       nameAsBound(referrer, references, resolved, bound);
     }
     return TypeScripts.withReferences(lt, references, resolved);
+  }
+
+  // A Protobuf type that is a value and no row is a google.protobuf wrapper, which a field
+  // of is read as the value it wraps: the type referring to it would be read as one that
+  // does not, and written otherwise than it is stored.
+  private static void refuseWrappedValue(String name, ParsedSchema parsed) {
+    Descriptor root;
+    try {
+      root = parsed instanceof ProtobufSchema ? ((ProtobufSchema) parsed).toDescriptor() : null;
+    } catch (RuntimeException e) {
+      return;
+    }
+    if (root != null && ProtoToLogicalTypeConverter.isScalarWrapper(root)) {
+      throw new TypeRefusedException("Type " + name + " cannot be used in a PROTOBUF type: "
+          + "it is a value and no row, written as a " + root.getFullName() + ", and an "
+          + "attribute of it would be read as that value and not as the type. Give the "
+          + "attribute the value's type");
+    }
   }
 
   // Gives a reference the name a type named beside it refers to its subject by, where it has
@@ -204,9 +228,10 @@ public final class TypeReferences {
    */
   /**
    * The types a type's references are of, by the names the type has for them: each
-   * reference's name, its subject, the referred type's own name and the names imported
-   * from it whole. Each has the names of its own: its named types, and the types it refers
-   * to in turn. A reference that cannot be read is left out.
+   * reference's name and the names imported from it whole. Its subject and the name the
+   * referred type gives itself are no names of the type's, and may be another reference's.
+   * Each has the names of its own: its named types, and the types it refers to in turn. A
+   * reference that cannot be read is left out.
    */
   static KnownTypes referredTypes(TypeLookup lookup, String referrer,
       List<SchemaReference> references, Map<String, String> imports) {
@@ -266,10 +291,7 @@ public final class TypeReferences {
       if (referred == null) {
         continue;
       }
-      Set<String> called = new LinkedHashSet<>(List.of(ref.getName(), ref.getSubject()));
-      if (referred.type.getName() != null) {
-        called.add(referred.type.getName());
-      }
+      Set<String> called = new LinkedHashSet<>(List.of(ref.getName()));
       // A name imported with a fragment is of a part of the document, which is not told.
       imports.forEach((name, from) -> {
         if (ref.getName().equals(from)) {

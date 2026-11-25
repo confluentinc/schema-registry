@@ -156,6 +156,12 @@ public class LogicalTypeToProtoConverter {
   private static final Map<Schema.Type, Descriptor> ROOT_WRAPPER_DESCRIPTORS =
       buildRootWrapperDescriptors();
 
+  // The types a DECIMAL, a TIMESTAMP, a DATE, a TIME and a VARIANT are written as, which a
+  // field of is read by its type's name, whichever file declares that.
+  private static final List<Descriptor> READ_BY_NAME = List.of(Date.getDescriptor(),
+      TimeOfDay.getDescriptor(), Timestamp.getDescriptor(), Decimal.getDescriptor(),
+      io.confluent.protobuf.type.Variant.getDescriptor());
+
   private static Map<Schema.Type, Descriptor> buildRootWrapperDescriptors() {
     Map<Schema.Type, Descriptor> m = new EnumMap<>(Schema.Type.class);
     m.put(Schema.Type.BOOLEAN, com.google.protobuf.BoolValue.getDescriptor());
@@ -845,18 +851,20 @@ public class LogicalTypeToProtoConverter {
       Set<String> dependencies, List<FileDescriptor> external) {
     final Map<String, String> declared = new HashMap<>();
     final Set<String> builtIn = new HashSet<>();
-    // The types a DECIMAL, a TIMESTAMP, a DATE, a TIME and a VARIANT are written as, and the
-    // wrappers, are read by their names, whichever file declares them and imported or not.
-    final List<Descriptor> readByName = new ArrayList<>(ROOT_WRAPPER_DESCRIPTORS.values());
-    Stream.of(Date.getDescriptor(), TimeOfDay.getDescriptor(), Timestamp.getDescriptor(),
-        Decimal.getDescriptor(), io.confluent.protobuf.type.Variant.getDescriptor())
-        .forEach(readByName::add);
-    for (Descriptor type : readByName) {
+    // A wrapper and a VARIANT are read by their names as a root too, imported or not.
+    for (Descriptor type : ROOT_WRAPPER_DESCRIPTORS.values()) {
       declared.putIfAbsent(type.getFullName(), type.getFile().getName());
+    }
+    // The others are read so as a field's type: a file may have a message of such a name
+    // that no field is of, and none it refers to may.
+    final Map<String, String> asField = new HashMap<>();
+    for (Descriptor type : READ_BY_NAME) {
+      asField.putIfAbsent(type.getFullName(), type.getFile().getName());
     }
     final List<FileDescriptor> own = new ArrayList<>();
     own.add(Meta.getDescriptor().getFile());
-    readByName.forEach(type -> own.add(type.getFile()));
+    ROOT_WRAPPER_DESCRIPTORS.values().forEach(type -> own.add(type.getFile()));
+    READ_BY_NAME.forEach(type -> own.add(type.getFile()));
     for (FileDescriptor f : own) {
       builtIn.add(f.getName());
       f.getDependencies().forEach(imported -> builtIn.add(imported.getName()));
@@ -873,19 +881,29 @@ public class LogicalTypeToProtoConverter {
     final List<String> names = new ArrayList<>();
     file.getMessageTypeList().forEach(message -> names.add(prefix + message.getName()));
     file.getEnumTypeList().forEach(enumType -> names.add(prefix + enumType.getName()));
+    for (String name : names) {
+      if (asField.containsKey(name) && fieldOf(file.getMessageTypeList(), "." + name)) {
+        declared.putIfAbsent(name, asField.get(name));
+      }
+    }
     // And the names of the files this one refers to, and of those they import in turn.
+    final List<String> referred = new ArrayList<>();
     final List<FileDescriptor> todo = new ArrayList<>();
     external.stream().filter(f -> dependencies.contains(f.getName())).forEach(todo::add);
     final Set<String> seen = new HashSet<>(builtIn);
     while (!todo.isEmpty()) {
       final FileDescriptor f = todo.remove(todo.size() - 1);
-      // One of the format's own files under a reference's name, as a type whose root is a
-      // scalar is referred to, declares what that file does: it is that file.
-      if (seen.add(f.getName()) && own.stream().noneMatch(o -> declaresTheSame(o, f))) {
-        names.addAll(namesOf(f));
+      // One of the format's own files under a reference's name declares what that file
+      // does, and is that file: unless that file is imported too, and its names twice.
+      if (seen.add(f.getName()) && own.stream().noneMatch(
+          o -> !dependencies.contains(o.getName()) && declaresTheSame(o, f))) {
+        referred.addAll(namesOf(f));
         todo.addAll(f.getDependencies());
       }
     }
+    names.addAll(referred);
+    referred.stream().filter(asField::containsKey)
+        .forEach(name -> declared.putIfAbsent(name, asField.get(name)));
     for (String name : names) {
       if (declared.containsKey(name)) {
         throw new ValidationException("Protobuf name '" + name + "' is defined by "
@@ -895,13 +913,44 @@ public class LogicalTypeToProtoConverter {
     }
   }
 
-  // The same messages and enums, of the same fields and values: what a file is to a reader
-  // of its types, whatever its options and the names its fields have in JSON.
+  // Whether a field of the messages, at any depth, is of the type named.
+  private static boolean fieldOf(List<DescriptorProto> messages, String typeName) {
+    return messages.stream().anyMatch(message -> message.getFieldList().stream()
+        .anyMatch(f -> f.getTypeName().equals(typeName))
+        || fieldOf(message.getNestedTypeList(), typeName));
+  }
+
+  /**
+   * The file of the format's own that declares a message of this one's name, as which a
+   * field of it is read, where this one is not that message; null where it is, or where it
+   * has no such name.
+   */
+  public static String readAsAnother(Descriptor message) {
+    for (Descriptor own : READ_BY_NAME) {
+      if (own.getFullName().equals(message.getFullName())) {
+        return shapeOf(List.of(own.toProto()), List.of())
+            .equals(shapeOf(List.of(message.toProto()), List.of()))
+            ? null : own.getFile().getName();
+      }
+    }
+    return null;
+  }
+
+  // The same messages and enums, of the same fields and values, in the same syntax: what a
+  // file is to a reader of its types, whatever its options and the names its fields have
+  // in JSON.
   private static boolean declaresTheSame(FileDescriptor one, FileDescriptor other) {
     return one.getPackage().equals(other.getPackage())
+        && syntaxOf(one).equals(syntaxOf(other))
         && shapeOf(one.toProto().getMessageTypeList(), one.toProto().getEnumTypeList())
             .equals(shapeOf(other.toProto().getMessageTypeList(),
                 other.toProto().getEnumTypeList()));
+  }
+
+  // A file that says no syntax is proto2.
+  private static String syntaxOf(FileDescriptor file) {
+    final String syntax = file.toProto().getSyntax();
+    return syntax.isEmpty() ? "proto2" : syntax;
   }
 
   private static List<String> shapeOf(List<DescriptorProto> messages,
@@ -909,8 +958,11 @@ public class LogicalTypeToProtoConverter {
     final List<String> shape = new ArrayList<>();
     for (DescriptorProto message : messages) {
       shape.add("message " + message.getName());
+      // With the oneof a field is a member of, and whether it tells that it is set.
       message.getFieldList().forEach(f -> shape.add(f.getName() + " " + f.getNumber() + " "
-          + f.getLabel() + " " + f.getType() + " " + f.getTypeName()));
+          + f.getLabel() + " " + f.getType() + " " + f.getTypeName() + " "
+          + (f.hasOneofIndex() ? message.getOneofDecl(f.getOneofIndex()).getName() : "") + " "
+          + f.getProto3Optional() + " " + f.getDefaultValue()));
       shape.addAll(shapeOf(message.getNestedTypeList(), message.getEnumTypeList()));
       shape.add("end " + message.getName());
     }

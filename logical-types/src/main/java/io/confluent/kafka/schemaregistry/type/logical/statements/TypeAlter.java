@@ -39,6 +39,7 @@ import io.confluent.kafka.schemaregistry.type.logical.Schema.EnumValue;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.Field;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.UnionBranch;
 import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
+import io.confluent.kafka.schemaregistry.type.logical.protobuf.LogicalTypeToProtoConverter;
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTypeConverter;
 import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceReport;
 import java.util.ArrayList;
@@ -77,6 +78,7 @@ public final class TypeAlter {
   // Protobuf keeps these field numbers for its own use, and refuses a schema that has one.
   private static final int RESERVED_FIRST = 19_000;
   private static final int RESERVED_LAST = 19_999;
+  private static final int MAX_NUMBER = 536_870_911;
   private static final String KEY_SUFFIX = "-key";
   private static final String VALUE_SUFFIX = "-value";
 
@@ -656,6 +658,14 @@ public final class TypeAlter {
       if (field.getJavaType() != FieldDescriptor.JavaType.MESSAGE) {
         continue;
       }
+      // A message of the name of one of the format's own that is not that one is read as
+      // that one, and written as it.
+      String own = LogicalTypeToProtoConverter.readAsAnother(field.getMessageType());
+      if (own != null) {
+        return of + " is a " + field.getMessageType().getFullName() + " that is not the one "
+            + own + " declares, which it would be written as, so its stored values would be "
+            + "read wrongly";
+      }
       // A message another file declares, which the field now refers to, is not written.
       Descriptor to = kept.getJavaType() == FieldDescriptor.JavaType.MESSAGE
           ? kept.getMessageType() : null;
@@ -849,13 +859,16 @@ public final class TypeAlter {
       refuseDroppedName(a.name());
       Formats.refuseUnwritable(format, field, knownTypes(field.getSchema()));
       Map<String, Object> params = new LinkedHashMap<>(field.getParams());
+      Counter numbers = format == SchemaType.PROTOBUF ? counter(fields) : null;
       if (format == SchemaType.PROTOBUF) {
-        params.put(Schema.PROTOBUF_FIELD_NUMBER, String.valueOf(numberGiven(field, fields)));
+        refuseUnionNumbers(field);
+        params.put(Schema.PROTOBUF_FIELD_NUMBER,
+            String.valueOf(numberGiven(field, fields, numbers)));
       }
       // A nullable attribute without a default reads as null for existing data.
       boolean nullDefault = !field.hasDefaultValue() && field.getSchema().isNullable();
       Schema schema = format == SchemaType.PROTOBUF
-          ? numberBranches(field.getSchema(), nextNumber(fields) + 1) : field.getSchema();
+          ? numberBranches(field.getSchema(), numbers) : field.getSchema();
       int at = a.position() == null ? fields.size() : place(fields, a.position());
       Field created = new Field(field.getName(), schema, fields.size(),
           nullDefault ? null : field.getDefaultValue(),
@@ -1041,7 +1054,7 @@ public final class TypeAlter {
       if (format == SchemaType.PROTOBUF) {
         Messages root = new Messages(current, versions);
         type = type.getType() == Schema.Type.UNION
-            ? renumbered(type, f.getSchema(), root, new int[] {nextNumber(fields)})
+            ? renumbered(type, f.getSchema(), root, counter(fields))
             : renumbered(type, f.getSchema(), numberIn(f.getParams()) > 0
               ? root.field(numberIn(f.getParams())) : root.field(f.getName()), null);
         // A union has no number of its own, only its branches; what replaces it gets a
@@ -1049,7 +1062,8 @@ public final class TypeAlter {
         if (type.getType() != Schema.Type.UNION
             && f.getSchema().getType() == Schema.Type.UNION) {
           params = new LinkedHashMap<>(params);
-          params.put(Schema.PROTOBUF_FIELD_NUMBER, String.valueOf(nextNumber(fields)));
+          params.put(Schema.PROTOBUF_FIELD_NUMBER,
+              String.valueOf(counter(fields).take()));
         }
       }
       // A null default does not apply once the attribute is NOT NULL.
@@ -2514,11 +2528,11 @@ public final class TypeAlter {
    * belong to the message holding it, numbered by {@code next}: the enclosing row's counter, or
    * for a oneof in a wrapper message, null for one of its own.
    */
-  private Schema renumbered(Schema type, Schema old, Messages at, int[] next) {
+  private Schema renumbered(Schema type, Schema old, Messages at, Counter next) {
     Schema result;
     switch (type.getType()) {
       case STRUCT: {
-        int[] inner = {at.maxUsed() + 1};
+        Counter inner = new Counter(at.maxUsed() + 1);
         List<Field> fields = new ArrayList<>();
         for (Field f : type.getFields()) {
           Field was = old != null && old.getType() == Schema.Type.STRUCT
@@ -2532,7 +2546,7 @@ public final class TypeAlter {
           if (s.getType() != Schema.Type.UNION) {
             int n = at.number(f.getName());
             params.put(Schema.PROTOBUF_FIELD_NUMBER,
-                String.valueOf(n > 0 ? n : take(inner)));
+                String.valueOf(n > 0 ? n : inner.take()));
           }
           fields.add(copy(f, f.getName(), s, params));
         }
@@ -2540,7 +2554,7 @@ public final class TypeAlter {
         break;
       }
       case UNION: {
-        int[] counter = next != null ? next : new int[] {at.maxUsed() + 1};
+        Counter counter = next != null ? next : new Counter(at.maxUsed() + 1);
         List<UnionBranch> branches = new ArrayList<>();
         for (UnionBranch b : type.getBranches()) {
           // A branch's member may be named <oneof>_<branch>, so it is found by the
@@ -2552,7 +2566,7 @@ public final class TypeAlter {
               ? numberIn(was.getParams()) : at.number(memberName(was));
           Map<String, Object> params = new LinkedHashMap<>(b.getParams());
           params.put(Schema.PROTOBUF_FIELD_NUMBER,
-              String.valueOf(n > 0 ? n : take(counter)));
+              String.valueOf(n > 0 ? n : counter.take()));
           branches.add(new UnionBranch(b.getName(),
               renumbered(b.getSchema(), was != null ? was.getSchema() : null,
                 at.field(n), null), b.getDoc(), params));
@@ -2584,7 +2598,7 @@ public final class TypeAlter {
         boolean wasMap = old != null && old.getType() == Schema.Type.MAP;
         // A key and a value that are unions are oneofs of the one entry message, numbered
         // by one counter.
-        int[] entry = {at.maxUsed() + 1};
+        Counter entry = new Counter(at.maxUsed() + 1);
         result = Schema.createMap(
             renumbered(type.getKeyType(), wasMap ? old.getKeyType() : null,
               entryPart(at, type.getKeyType(), "key"),
@@ -2810,30 +2824,27 @@ public final class TypeAlter {
   }
 
   /**
-   * Numbers the branches of a union added as a oneof, from {@code next} on.
+   * Numbers the branches of a union added as a oneof, as {@code next} counts.
    */
-  private static Schema numberBranches(Schema type, int next) {
+  private static Schema numberBranches(Schema type, Counter next) {
     if (type.getType() != Schema.Type.UNION) {
       return type;
     }
     List<UnionBranch> branches = new ArrayList<>();
     for (UnionBranch b : type.getBranches()) {
       Map<String, Object> params = new LinkedHashMap<>(b.getParams());
-      next = unreserved(next);
-      params.put(Schema.PROTOBUF_FIELD_NUMBER, String.valueOf(next++));
+      params.put(Schema.PROTOBUF_FIELD_NUMBER, String.valueOf(next.take()));
       branches.add(new UnionBranch(b.getName(), b.getSchema(), b.getDoc(), params));
     }
     return copyMetadata(type, Schema.createUnion(branches)).setParams(type.getParams());
   }
 
-  // Above every number any version used, so that a new field never takes the data of a
-  // dropped one.
   // The number a new attribute says, where no field has it and none of a version had; the
   // next free one where it says none, as for a union, whose members are numbered.
-  private int numberGiven(Field field, List<Field> fields) {
+  private int numberGiven(Field field, List<Field> fields, Counter numbers) {
     int given = numberIn(field.getParams());
     if (given <= 0 || field.getSchema().getType() == Schema.Type.UNION) {
-      return nextNumber(fields);
+      return numbers.take();
     }
     String has = null;
     for (Field f : fields) {
@@ -2860,29 +2871,75 @@ public final class TypeAlter {
     return given;
   }
 
-  private int nextNumber(List<Field> fields) {
-    int max = usedNumbers.isEmpty() ? 0 : usedNumbers.last();
-    for (Field f : fields) {
-      max = Math.max(max, numberIn(f.getParams()));
-      if (f.getSchema().getType() == Schema.Type.UNION) {
-        for (UnionBranch b : f.getSchema().getBranches()) {
-          max = Math.max(max, numberIn(b.getParams()));
-        }
+  // A new union is a oneof, which has no number, and its members are numbered as the
+  // type's new fields are: a number said for either is refused, not left out.
+  private static void refuseUnionNumbers(Field field) {
+    if (field.getSchema().getType() != Schema.Type.UNION) {
+      return;
+    }
+    if (field.getParams().containsKey(Schema.PROTOBUF_FIELD_NUMBER)) {
+      throw new TypeRefusedException("Attribute " + field.getName() + " cannot have a "
+          + "Protobuf field number: a UNION is a oneof, which has none; give it none");
+    }
+    for (UnionBranch b : field.getSchema().getBranches()) {
+      if (b.getParams().containsKey(Schema.PROTOBUF_FIELD_NUMBER)) {
+        throw new TypeRefusedException("Branch " + b.getName() + " of attribute "
+            + field.getName() + " cannot be given a Protobuf field number: the members of "
+            + "a new UNION are numbered as the type's new fields are; give it none");
       }
     }
-    return unreserved(max + 1);
+  }
+
+  // The numbers for the type's new fields, with every one a field or a branch has, and
+  // every one a version had.
+  private Counter counter(List<Field> fields) {
+    Set<Integer> taken = new HashSet<>(usedNumbers);
+    for (Field f : fields) {
+      taken.add(numberIn(f.getParams()));
+      if (f.getSchema().getType() == Schema.Type.UNION) {
+        f.getSchema().getBranches().forEach(b -> taken.add(numberIn(b.getParams())));
+      }
+    }
+    int max = 0;
+    for (int number : taken) {
+      max = Math.max(max, number);
+    }
+    return new Counter(max + 1, taken);
+  }
+
+  // The numbers of a message's new fields: above every one used, so that a new field never
+  // takes the data of a dropped one, and where none is left there, the lowest never used.
+  private static final class Counter {
+    private final Set<Integer> taken;
+    private int next;
+    private boolean below;
+
+    Counter(int next) {
+      this(next, null);
+    }
+
+    Counter(int next, Set<Integer> taken) {
+      this.next = next;
+      this.taken = taken;
+    }
+
+    int take() {
+      int number = unreserved(next);
+      if (taken != null && (below || number > MAX_NUMBER)) {
+        number = below ? number : 1;
+        below = true;
+        while (taken.contains(number)) {
+          number = unreserved(number + 1);
+        }
+      }
+      next = number + 1;
+      return number;
+    }
   }
 
   // The number given, or the first after those Protobuf keeps for itself.
   private static int unreserved(int number) {
     return number >= RESERVED_FIRST && number <= RESERVED_LAST ? RESERVED_LAST + 1 : number;
-  }
-
-  // The next number of a counter, past those Protobuf keeps for itself.
-  private static int take(int[] counter) {
-    int number = unreserved(counter[0]);
-    counter[0] = number + 1;
-    return number;
   }
 
   private static int numberIn(Map<String, Object> params) {

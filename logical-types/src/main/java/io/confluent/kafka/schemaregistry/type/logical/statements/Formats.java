@@ -260,11 +260,17 @@ public final class Formats {
     if (format != SchemaType.PROTOBUF || number == null) {
       return;
     }
+    int given;
     try {
-      Integer.parseInt(number.toString());
+      given = Integer.parseInt(number.toString());
     } catch (NumberFormatException e) {
       throw new TypeRefusedException("Property " + property + " of " + of
           + " is not a valid number: '" + number + "'", e);
+    }
+    // A field's number is 1 or more; an enum value's may be 0 or less.
+    if (given < 1 && property.equals(Schema.PROTOBUF_FIELD_NUMBER)) {
+      throw new TypeRefusedException("Property " + property + " of " + of
+          + " is not a field's number, which is 1 or more: '" + number + "'");
     }
   }
 
