@@ -211,7 +211,7 @@ final class TestRegistry implements TypeLookup {
   public ParsedSchema parse(SchemaMetadata md) {
     return client.parseSchema(new Schema(md.getSubject(), md.getVersion(), md.getId(),
         md.getSchemaType() == null ? "AVRO" : md.getSchemaType(), md.getReferences(),
-        md.getSchema())).orElseThrow(() -> new IllegalStateException(
+        md.getMetadata(), md.getRuleSet(), md.getSchema())).orElseThrow(() -> new IllegalStateException(
             "Could not parse schema " + md.getId()));
   }
 }

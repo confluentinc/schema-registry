@@ -57,6 +57,9 @@ public final class TypeReferences {
    * <li>A JSON reference to a type takes the name a reference to it is stored with, if names
    * holds one for its subject; otherwise its name, or for a type in a context, which is no URI
    * a $ref can name, that name encoded.</li>
+   * <li>An Avro or Protobuf reference to a type takes the name names holds for its subject, or
+   * the one a type named beside it refers to it by: referred to by two names, a Protobuf file
+   * would be imported twice.</li>
    * </ul>
    */
   public static LogicalType parse(TypeLookup lookup, SchemaType format, ScriptBuilder builder,
@@ -70,6 +73,8 @@ public final class TypeReferences {
     Map<String, String> resolved = new LinkedHashMap<>();
     // A JSON $ref names one document: a name two types would take is refused.
     Map<String, String> named = format == SchemaType.JSON ? new HashMap<>() : null;
+    // The names the types named refer to their own types by, by subject.
+    Map<String, String> bound = format == SchemaType.JSON ? null : new HashMap<>();
     // The type itself, as a reference would name it; null when it has no subject yet.
     String self = referrer == null ? null : referenced(referrer, referrer);
     for (String name : lt.getExternalTypes()) {
@@ -87,7 +92,7 @@ public final class TypeReferences {
             + ", so it cannot be used in a " + format + " type");
       }
       String stored = names.get(subject);
-      String refName = format != SchemaType.JSON ? name
+      String refName = format != SchemaType.JSON ? stored != null ? stored : name
           : stored != null && nameable(stored) ? stored : jsonReferenceName(name);
       references.add(new SchemaReference(refName, name, md.getVersion()));
       requireOneSubject(named, refName, subject);
@@ -95,7 +100,7 @@ public final class TypeReferences {
       // as the registry's resolver has it: a schema holds one version of a name.
       if (!resolved.containsKey(refName)) {
         try {
-          collectReferences(lookup, subject, md.getReferences(), resolved, named, self);
+          collectReferences(lookup, subject, md.getReferences(), resolved, named, self, bound);
         } catch (RefersBack e) {
           throw new TypeRefusedException("Type " + self + " cannot refer to type " + subject
               + ", which refers to " + self);
@@ -116,7 +121,36 @@ public final class TypeReferences {
     if (!aliases.isEmpty()) {
       lt = TypeScripts.parse(builder.build(aliases));
     }
+    if (bound != null) {
+      nameAsBound(referrer, references, resolved, bound);
+    }
     return TypeScripts.withReferences(lt, references, resolved);
+  }
+
+  // Gives a reference the name a type named beside it refers to its subject by, where it has
+  // another: its schema is then held once, under the one name.
+  private static void nameAsBound(String referrer, List<SchemaReference> references,
+      Map<String, String> resolved, Map<String, String> bound) {
+    for (int i = 0; i < references.size(); i++) {
+      SchemaReference ref = references.get(i);
+      String name = bound.get(referenced(referrer, ref.getSubject()));
+      if (name == null || name.equals(ref.getName()) || !resolved.containsKey(name)) {
+        continue;
+      }
+      references.set(i, new SchemaReference(name, ref.getSubject(), ref.getVersion()));
+      resolved.remove(ref.getName());
+    }
+  }
+
+  /**
+   * The names a subject's references and theirs give the types they refer to, by subject, the
+   * first for each: what {@link #parse} takes as the names stored.
+   */
+  static Map<String, String> boundNames(TypeLookup lookup, String referrer,
+      List<SchemaReference> references) {
+    Map<String, String> bound = new HashMap<>();
+    collectReferences(lookup, referrer, references, new LinkedHashMap<>(), null, null, bound);
+    return bound;
   }
 
   /**
@@ -165,7 +199,7 @@ public final class TypeReferences {
   public static Map<String, String> resolve(TypeLookup lookup, String referrer,
       List<SchemaReference> references) {
     Map<String, String> resolved = new LinkedHashMap<>();
-    collectReferences(lookup, referrer, references, resolved, null, null);
+    collectReferences(lookup, referrer, references, resolved, null, null, null);
     return resolved;
   }
 
@@ -202,7 +236,7 @@ public final class TypeReferences {
   // One that is self, the type these are collected for, would make it refer to itself.
   private static void collectReferences(TypeLookup lookup, String referrer,
       List<SchemaReference> references, Map<String, String> resolved,
-      Map<String, String> named, String self) {
+      Map<String, String> named, String self, Map<String, String> bound) {
     if (references == null) {
       return;
     }
@@ -212,6 +246,9 @@ public final class TypeReferences {
         throw new RefersBack();
       }
       requireOneSubject(named, ref.getName(), subject);
+      if (bound != null) {
+        bound.putIfAbsent(subject, ref.getName());
+      }
       if (resolved.containsKey(ref.getName())) {
         continue;
       }
@@ -221,7 +258,7 @@ public final class TypeReferences {
         throw new TypeRefusedException("Could not resolve reference " + ref.getName()
             + ": type " + subject + " has no version " + ref.getVersion());
       }
-      collectReferences(lookup, subject, md.getReferences(), resolved, named, self);
+      collectReferences(lookup, subject, md.getReferences(), resolved, named, self, bound);
       resolved.put(ref.getName(), md.getSchema());
     }
   }
@@ -233,6 +270,63 @@ public final class TypeReferences {
     }
   }
 
+  /**
+   * Refuses references that reach two types by one name, or two versions of one, their own or
+   * those of the types they refer to. A schema holds one type and one version of a name, the
+   * first its references are read to, and they are stored in another order than a statement
+   * gives them: the version checked would not be the one stored. Two met below one of the
+   * references are left: a type stored so is read through it as it is read alone. A refusal
+   * of two versions starts with {@code refused}.
+   */
+  static void requireOneOfEach(TypeLookup lookup, String referrer,
+      List<SchemaReference> references, String refused) {
+    oneOfEach(lookup, referrer, null, null, references, new HashMap<>(), refused);
+  }
+
+  // Each name at the type and version, and through the type, it was first met, and below
+  // which of the statement's own references; via and below are null for those themselves.
+  private static void oneOfEach(TypeLookup lookup, String referrer, String via, String below,
+      List<SchemaReference> references, Map<String, String[]> met, String refused) {
+    if (references == null) {
+      return;
+    }
+    int own = 0;
+    for (SchemaReference ref : references) {
+      String subject = referenced(referrer, ref.getSubject());
+      String under = below != null ? below : String.valueOf(own++);
+      String[] first = met.get(ref.getName());
+      if (first == null) {
+        met.put(ref.getName(),
+            new String[] {subject, String.valueOf(ref.getVersion()), via, under});
+        SchemaMetadata md = lookup.version(subject, ref.getVersion());
+        if (md != null) {
+          oneOfEach(lookup, subject, "version " + ref.getVersion() + " of type " + subject,
+              under, md.getReferences(), met, refused);
+        }
+      } else if (first[3].equals(under)) {
+        continue;
+      } else if (!first[0].equals(subject)) {
+        throw twoTypes(first[0], subject, ref.getName());
+      } else if (!first[1].equals(String.valueOf(ref.getVersion()))) {
+        throw new TypeRefusedException(refused + ": it would refer to two versions of type "
+            + subject + ", " + met(first[1], first[2]) + " and "
+            + met(String.valueOf(ref.getVersion()), via) + "; a schema has one version of a "
+            + "type, so name the type again to move it to its latest version, or first move "
+            + "the types that refer to it");
+      }
+    }
+  }
+
+  private static String met(String version, String via) {
+    return "version " + version + " (" + (via == null ? "named directly" : "through " + via)
+        + ")";
+  }
+
+  private static TypeRefusedException twoTypes(String one, String other, String name) {
+    return new TypeRefusedException("Types " + one + " and " + other + " would both be "
+        + "referred to as " + name + ", which can name only one of them");
+  }
+
   // Refuses a reference name that, among a type's references and theirs, names another type
   // too: the registry would read one of the two for both.
   private static void requireOneSubject(Map<String, String> named, String name,
@@ -242,8 +336,7 @@ public final class TypeReferences {
     }
     String other = named.putIfAbsent(name, subject);
     if (other != null && !other.equals(subject)) {
-      throw new TypeRefusedException("Types " + other + " and " + subject + " would both be "
-          + "referred to as " + name + ", which can name only one of them");
+      throw twoTypes(other, subject, name);
     }
   }
 }
