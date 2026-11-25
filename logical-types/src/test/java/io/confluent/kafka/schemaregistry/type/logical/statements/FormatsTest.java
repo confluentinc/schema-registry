@@ -103,5 +103,21 @@ class FormatsTest {
         .isInstanceOf(TypeRefusedException.class)
         .hasMessage("A UNION in a JSON type cannot have branches a and b, which are written "
             + "as one JSON type: a value of either would match both");
+
+    // A branch that is a union is written as any of its members is: a value of one of them
+    // that another branch is written as would match both.
+    for (String union : new String[] {"UNION(a INT, b UNION(c INT, d STRING))",
+        "UNION(b UNION(c BOOLEAN, d STRING), a VARCHAR(3))",
+        "UNION(a INT, b UNION(c BOOLEAN, d UNION(e STRING, f DOUBLE)))",
+        "UNION(a UNION(p INT, q STRING), b UNION(c BOOLEAN, d STRING))",
+        "UNION(a INT, b UNION(c BOOLEAN, v VARIANT))"}) {
+      assertThatThrownBy(() -> Formats.refuseUnwritable(SchemaType.JSON,
+          struct("(u " + union + ")"))).as(union)
+          .isInstanceOf(TypeRefusedException.class)
+          .hasMessageContaining("which are written as one JSON type");
+      Formats.refuseUnwritable(SchemaType.PROTOBUF, struct("(u " + union + ")"));
+    }
+    Formats.refuseUnwritable(SchemaType.JSON,
+        struct("(u UNION(a INT, b UNION(c BOOLEAN, d STRING)))"));
   }
 }

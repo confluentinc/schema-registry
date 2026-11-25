@@ -31,9 +31,12 @@ import io.confluent.kafka.schemaregistry.type.logical.avro.LogicalTypeToAvroConv
 import io.confluent.kafka.schemaregistry.type.logical.json.LogicalTypeToJsonConverter;
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.LogicalTypeToProtoConverter;
 import java.util.Collection;
-import java.util.HashMap;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 /** What depends on the schema format a type is registered in. */
 public final class Formats {
@@ -248,31 +251,44 @@ public final class Formats {
   // Refuses a JSON UNION two of whose branches are written as one JSON type, as BIGINT and
   // DOUBLE both are numbers: a value of either would match both, which its oneOf refuses.
   private static void refuseOverlappingBranches(Schema union) {
-    Map<String, String> kinds = new HashMap<>();
+    Map<String, Set<String>> kinds = new LinkedHashMap<>();
     String first = null;
     String variant = null;
     for (UnionBranch b : union.getBranches()) {
-      String kind = jsonKind(b.getSchema());
+      Set<String> kind = jsonKinds(b.getSchema());
       // A VARIANT is written as any JSON value, so a value of any other branch, a struct or
       // a collection as much as a scalar, matches it too.
-      String other = "any".equals(kind) ? first : variant;
+      boolean any = kind.contains("any");
+      String other = any ? first : variant;
       if (other != null) {
         throw overlapping(other, b.getName());
       }
       if (first == null) {
         first = b.getName();
       }
-      if ("any".equals(kind)) {
+      if (any) {
         variant = b.getName();
-      } else if (kind != null) {
-        for (Map.Entry<String, String> e : kinds.entrySet()) {
-          if (kind.equals(e.getValue())) {
+      } else if (!kind.isEmpty()) {
+        for (Map.Entry<String, Set<String>> e : kinds.entrySet()) {
+          if (!Collections.disjoint(e.getValue(), kind)) {
             throw overlapping(e.getKey(), b.getName());
           }
         }
         kinds.put(b.getName(), kind);
       }
     }
+  }
+
+  // The JSON types a value of a branch may be written as: of a branch that is a union, those
+  // of its members, a value of any of which is a value of the branch.
+  private static Set<String> jsonKinds(Schema type) {
+    Set<String> kinds = new HashSet<>();
+    if (type.getType() == Schema.Type.UNION) {
+      type.getBranches().forEach(b -> kinds.addAll(jsonKinds(b.getSchema())));
+    } else if (jsonKind(type) != null) {
+      kinds.add(jsonKind(type));
+    }
+    return kinds;
   }
 
   private static TypeRefusedException overlapping(String one, String other) {
