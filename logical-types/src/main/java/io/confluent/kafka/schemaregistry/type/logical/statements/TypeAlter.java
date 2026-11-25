@@ -467,7 +467,14 @@ public final class TypeAlter {
           "Type " + subject + " cannot be changed so", "drop");
       edited = edited();
       ParsedSchema stored = lookup.parse(md);
-      ParsedSchema written = ColumnIds.nativeOf(subject, format, edited, refused());
+      ParsedSchema written;
+      try {
+        written = ColumnIds.nativeOf(subject, format, edited, refused());
+      } catch (TypeRefusedException e) {
+        // No schema can be made of a name that is two types or two versions: say that.
+        TypeReferences.requireOneOfEach(lookup, subject, references, refused());
+        throw e;
+      }
       if (writesWhatIsStored(md, stored, written)) {
         edited = null;
       } else {
@@ -913,7 +920,7 @@ public final class TypeAlter {
       Field f = fields.get(i);
       Map<String, Object> params = f.getParams();
       // A type of the same kind keeps the native names pinned on it; another kind gets new.
-      if (sameKind(f.getSchema(), type)) {
+      if (keepsNames(f.getSchema(), type)) {
         type = withNestedNames(type, f.getSchema());
       } else {
         params = new LinkedHashMap<>(params);
@@ -1520,7 +1527,15 @@ public final class TypeAlter {
         found |= format != SchemaType.JSON || r.getName().equals(ref.getName());
       }
       if (!found) {
-        references.add(ref);
+        // One the statement dropped and names again is the reference it was, by the name it
+        // had: a file another tool wrote imports it by that name.
+        SchemaReference had = format == SchemaType.JSON ? null
+            : original.getReferences().stream()
+                .filter(r -> TypeReferences.referenced(subject, r.getSubject())
+                    .equals(TypeReferences.referenced(subject, ref.getSubject())))
+                .findFirst().orElse(null);
+        references.add(had == null ? ref
+            : new SchemaReference(had.getName(), had.getSubject(), ref.getVersion()));
       }
     }
     // Read anew from the references: a type the statement names otherwise than its reference
@@ -2774,7 +2789,7 @@ public final class TypeAlter {
         List<Field> fields = new ArrayList<>();
         for (Field f : type.getFields()) {
           Field was = old.getField(f.getName());
-          fields.add(was == null || !sameKind(was.getSchema(), f.getSchema()) ? f
+          fields.add(was == null || !keepsNames(was.getSchema(), f.getSchema()) ? f
               : copy(f, f.getName(), withNestedNames(f.getSchema(), was.getSchema()),
                   withTypeNames(f.getParams(), was.getParams())));
         }
@@ -2786,7 +2801,7 @@ public final class TypeAlter {
         for (UnionBranch b : type.getBranches()) {
           UnionBranch was = branch(old, b.getName());
           // A member is the field it was whatever its type becomes: its field name stays.
-          branches.add(was == null ? b : !sameKind(was.getSchema(), b.getSchema())
+          branches.add(was == null ? b : !keepsNames(was.getSchema(), b.getSchema())
               ? new UnionBranch(b.getName(), b.getSchema(), b.getDoc(),
                   withFieldName(b.getParams(), was.getParams()))
               : new UnionBranch(b.getName(), withNestedNames(b.getSchema(), was.getSchema()),
@@ -2851,6 +2866,25 @@ public final class TypeAlter {
       case MAP:
         return sameKind(a.getKeyType(), b.getKeyType())
             && sameKind(a.getValueType(), b.getValueType());
+      default:
+        return true;
+    }
+  }
+
+  // Whether a member keeps the native names pinned on it: its type is of the same kind, and
+  // the Protobuf writer generates the same sort of type for it. A collection that may be null
+  // is wrapped, one that may not is its entries or elements, and a nullable element is wrapped.
+  private static boolean keepsNames(Schema a, Schema b) {
+    if (!sameKind(a, b)) {
+      return false;
+    }
+    switch (a.getType()) {
+      case ARRAY:
+        return a.isNullable() == b.isNullable()
+            && a.getElementType().isNullable() == b.getElementType().isNullable();
+      case MAP:
+      case MULTISET:
+        return a.isNullable() == b.isNullable();
       default:
         return true;
     }

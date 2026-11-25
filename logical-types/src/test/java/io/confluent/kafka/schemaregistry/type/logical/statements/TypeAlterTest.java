@@ -1038,6 +1038,24 @@ class TypeAlterTest {
         .extracting(SchemaReference::getSubject).hasSize(1);
   }
 
+  // A reference the statement drops and names again is the one it was, by the name another
+  // tool gave it: a file of that tool imports the type by that name.
+  @Test
+  void aReferenceDroppedAndNamedAgainKeepsItsName() throws Exception {
+    String common = "syntax = \"proto3\";\n\nmessage PostalAddress {\n  string street = 1;\n}\n";
+    registry.client.register("common", new ProtobufSchema(common));
+    registry.client.register("cust", new ProtobufSchema("syntax = \"proto3\";\n\n"
+        + "import \"common.proto\";\n\nmessage Cust {\n  string id = 1;\n"
+        + "  optional .PostalAddress billing = 2;\n  optional .PostalAddress home = 3;\n}\n",
+        List.of(new SchemaReference("common.proto", "common", 1)),
+        Map.of("common.proto", common), null, null));
+    registry.alter("cust", new DropAttribute("billing", false), new DropAttribute("home", false),
+        new AddAttribute("shipping", "common"));
+    assertThat(registry.latest("cust").getReferences()).extracting(SchemaReference::getName,
+        SchemaReference::getSubject).containsExactly(tuple("common.proto", "common"));
+    assertThat(registry.schema("cust").canonicalString()).contains("import \"common.proto\";");
+  }
+
   // A type is named in a statement otherwise than its reference is: by its subject where
   // another tool gave an import path, with its context or without, or after the reference
   // took the name the types beside it use. Named again, it is the type already referred to.
@@ -1362,6 +1380,25 @@ class TypeAlterTest {
     }
   }
 
+  // The names are pinned again once an action has brought a record of its own: placed before
+  // a's record b, a record added or given since does not take the name pa_a_b from it.
+  @Test
+  void anAvroRecordBroughtBetweenTwoMovesLeavesTheNamesOfTheOthers() {
+    create("pm", SchemaType.AVRO, "(a STRUCT(b STRUCT(x INT)), c INT)");
+    registry.alter("pm", new MoveAttribute("c", Position.first()),
+        new AddAttribute("a_b", "STRUCT(y STRING)"), new MoveAttribute("a_b", Position.first()));
+    create("pn", SchemaType.AVRO, "(a STRUCT(b STRUCT(x INT)), c INT, a_b INT)");
+    registry.alter("pn", new MoveAttribute("c", Position.first()),
+        new AlterAttributeType("a_b", "STRUCT(y STRING)"),
+        new MoveAttribute("a_b", Position.first()));
+    for (String type : List.of("pm", "pn")) {
+      assertThat(names(type)).as(type).containsExactly("a_b", "c", "a");
+      assertThat(registry.schema(type).canonicalString()).as(type)
+          .contains("\"name\":\"" + type + "_a_b\",\"fields\":[{\"name\":\"x\"")
+          .contains("\"name\":\"" + type + "_a_b_2\",\"fields\":[{\"name\":\"y\"");
+    }
+  }
+
   // The names are those of the statement so far, taken before an attribute is placed: one it
   // added or retyped before keeps the name it had there, as an attribute that is moved does.
   @Test
@@ -1572,6 +1609,21 @@ class TypeAlterTest {
     assertThatThrownBy(() -> registry.alter("pp", new MoveAttribute("z", Position.first())))
         .isInstanceOf(TypeRefusedException.class).hasMessage("Type pp has no attribute z");
     assertThat(version("pp")).isEqualTo(4);
+  }
+
+  // Each attribute a statement adds is placed among those before it as they then stand:
+  // one with no position after the last that is no union, and the next after that one.
+  @Test
+  void aProtobufAttributeIsPlacedAfterOneTheStatementAdds() {
+    create("pg", SchemaType.PROTOBUF, "(a INT, u UNION(x INT, y STRING))");
+    registry.alter("pg", new AddAttribute("e", "INT"),
+        new AddAttribute("f", "INT", Position.after("e")));
+    assertThat(names("pg")).containsExactly("a", "e", "f", "u");
+    // And one given a union's type goes among the unions, for the others to be placed by.
+    create("ph3", SchemaType.PROTOBUF, "(a INT, b INT, c INT)");
+    registry.alter("ph3", new AlterAttributeType("a", "UNION(x INT, y STRING)"),
+        new MoveAttribute("b", Position.after("c")));
+    assertThat(names("ph3")).containsExactly("c", "b", "a");
   }
 
   // The order a message declares its fields in is the order of the type's attributes, and
@@ -1843,7 +1895,7 @@ class TypeAlterTest {
   // A map's entry is a message of its key and value, a union's members among them. Whatever
   // order they were numbered in, a later statement leaves the numbers its records are read by.
   @Test
-  void aProtobufMapEntryKeepsItsNumbers() {
+  void aProtobufMapEntryKeepsItsNumbers() throws Exception {
     List<String> types = List.of("MAP<UNION(d INT, e INT), STRING>",
         "MAP<STRING, UNION(d INT, e INT)>", "MAP<UNION(d INT, e INT), UNION(f INT, g STRING)>",
         "MULTISET<UNION(d INT, e INT)>", "ARRAY<MAP<UNION(d INT), STRUCT(x INT)>>");
@@ -1862,10 +1914,58 @@ class TypeAlterTest {
         assertThat(numbers(nested(message(type), "ValueEntry"))).as(type).isEqualTo(entry);
       }
     }
+    // An entry written by hand with its value's members numbered before its key's.
+    registry.client.register("mh", new ProtobufSchema("syntax = \"proto3\";\n\nmessage R {\n"
+        + "  int32 id = 1;\n  repeated NEntry n = 2;\n\n  message NEntry {\n"
+        + "    oneof value {\n      int32 f = 1;\n      string g = 2;\n    }\n"
+        + "    oneof key {\n      int32 d = 3;\n      int32 e = 4;\n    }\n  }\n}\n"));
+    registry.alter("mh", new AddAttribute("zz", "INT"));
+    assertThat(numbers(nested(message("mh"), "NEntry")).split(" "))
+        .containsExactlyInAnyOrder("f=1", "g=2", "d=3", "e=4");
     // Read for display, a type created so is as it was: its numbers told only where the
     // writer would not give them.
     assertThat(LogicalTypeToDdlConverter.toDdl(registry.logicalType("me1false",
         registry.latest("me1false")), true)).doesNotContain("protobuf.field.number");
+  }
+
+  // A name is pinned on the sort of type the writer generates: a collection that may be null
+  // is wrapped, one that may not is its entries or elements. Given the other nullability, it
+  // is named as a type created so is.
+  @Test
+  void aProtobufCollectionGivenAnotherNullabilityIsNamedAnew() {
+    String[][] cases = {
+        {"MAP<STRING, INT>", "MAP<STRING, INT> NOT NULL"},
+        {"MULTISET<STRING>", "MULTISET<STRING> NOT NULL"},
+        {"ARRAY<INT>", "ARRAY<INT> NOT NULL"},
+        {"ARRAY<STRUCT(k INT)>", "ARRAY<STRUCT(k INT) NOT NULL> NOT NULL"},
+        {"ARRAY<STRUCT(k INT)> NOT NULL", "ARRAY<STRUCT(k INT) NOT NULL> NOT NULL"},
+        {"STRUCT(k INT, m MAP<STRING, INT>)", "STRUCT(k INT, m MAP<STRING, INT> NOT NULL)"}};
+    for (int i = 0; i < cases.length; i++) {
+      for (int from = 0; from < 2; from++) {
+        String type = "cn" + i + from;
+        String fresh = "cf" + i + from;
+        create(type, SchemaType.PROTOBUF, "(id INT NOT NULL, a " + cases[i][from] + ", z INT)");
+        registry.alter(type, new AlterAttributeType("a", cases[i][1 - from]));
+        create(fresh, SchemaType.PROTOBUF,
+            "(id INT NOT NULL, a " + cases[i][1 - from] + ", z INT)");
+        assertThat(typeNames(message(type))).as(type).isEqualTo(typeNames(message(fresh)));
+        // And a later statement finds it so.
+        registry.alter(type, new AddAttribute("zz", "INT"));
+        assertThat(version(type)).as(type).isEqualTo(3);
+        assertThat(registry.alter(type, new AddAttribute("q", "INT"),
+            new DropAttribute("q", false)).edited()).as(type).isNull();
+      }
+    }
+  }
+
+  // The names of the messages a message declares, at every level, with their fields' numbers.
+  private static List<String> typeNames(Descriptor message) {
+    List<String> names = new ArrayList<>();
+    for (Descriptor inner : message.getNestedTypes()) {
+      names.add(inner.getName() + "{" + numbers(inner) + "}");
+      names.addAll(typeNames(inner));
+    }
+    return names;
   }
 
   // An enum's name is one of the message's as a nested message's is.
