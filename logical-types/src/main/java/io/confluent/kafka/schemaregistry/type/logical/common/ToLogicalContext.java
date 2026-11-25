@@ -84,6 +84,10 @@ public final class ToLogicalContext<T> extends CycleContext<T> {
   // walk runs) so a synthesized name never silently shadows an authored one.
   private int nextRefIndex = 1;
 
+  // Whether a type's native name is recorded unless this version's writer would derive that
+  // very name. Unset, a name either version's writer derives is taken as derived.
+  private boolean namesAsWritten;
+
   public ToLogicalContext(ParsedSchema parsedSchema) {
     this(parsedSchema, Map.of(), LogicalTypeVersion.V2);
   }
@@ -127,6 +131,14 @@ public final class ToLogicalContext<T> extends CycleContext<T> {
 
   public LogicalTypeVersion getVersion() {
     return version;
+  }
+
+  public boolean namesAsWritten() {
+    return namesAsWritten;
+  }
+
+  public void setNamesAsWritten(boolean namesAsWritten) {
+    this.namesAsWritten = namesAsWritten;
   }
 
   public boolean isV1() {
