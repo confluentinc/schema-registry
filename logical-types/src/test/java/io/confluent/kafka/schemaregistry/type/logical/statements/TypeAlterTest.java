@@ -27,9 +27,11 @@ import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceField;
 import io.confluent.kafka.schemaregistry.client.rest.entities.ProvenanceVersion;
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
+import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalTypeToDdlConverter;
 import io.confluent.kafka.schemaregistry.type.logical.Rule;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
@@ -1479,6 +1481,56 @@ class TypeAlterTest {
     registry.alter("cs", columns, new AddAttribute("c", "INT", Position.after("A")),
         new MoveAttribute("B", Position.first()));
     assertThat(names("cs")).containsExactly("b", "a", "c");
+  }
+
+  // A move changes nothing in Protobuf and takes no number, so the type's earlier versions,
+  // read for the numbers they used, are not read for a statement of moves alone.
+  @Test
+  void aProtobufStatementOfMovesAloneDoesNotReadTheTypesHistory() {
+    create("ph", SchemaType.PROTOBUF, "(a INT NOT NULL, b STRING, c BIGINT)");
+    registry.alter("ph", new AddAttribute("d", "INT"));
+    registry.alter("ph", new AddAttribute("e", "INT"));
+    List<Integer> read = new ArrayList<>();
+    TypeLookup counting = new TypeLookup() {
+      @Override
+      public SchemaMetadata latest(String subject) {
+        return registry.latest(subject);
+      }
+
+      @Override
+      public SchemaMetadata version(String subject, int version) {
+        read.add(version);
+        return registry.version(subject, version);
+      }
+
+      @Override
+      public ParsedSchema parse(SchemaMetadata version) {
+        return registry.parse(version);
+      }
+
+      @Override
+      public List<Integer> versions(String subject, boolean deleted) {
+        return registry.versions(subject, deleted);
+      }
+
+      @Override
+      public LogicalType logicalType(String subject, SchemaMetadata version) {
+        return registry.logicalType(subject, version);
+      }
+
+      @Override
+      public Config config(String subject) {
+        return registry.config(subject);
+      }
+    };
+    assertThat(TypeAlter.alter(counting, "ph", List.of(new MoveAttribute("c", Position.first()),
+        new MoveAttribute("a", Position.after("b"))), new TypeAlter.Options()).edited())
+        .isNull();
+    assertThat(read).isEmpty();
+    // A statement that may take a number reads them all.
+    TypeAlter.alter(counting, "ph", List.of(new MoveAttribute("c", Position.first()),
+        new AddAttribute("f", "INT")), new TypeAlter.Options());
+    assertThat(read).contains(1, 2, 3);
   }
 
   // A message's fields are written in the order of their numbers, which a position leaves.

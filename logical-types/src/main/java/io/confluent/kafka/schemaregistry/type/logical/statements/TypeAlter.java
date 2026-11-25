@@ -204,6 +204,9 @@ public final class TypeAlter {
   private final Map<String, String> previousNames = new HashMap<>();
   // The attributes this statement adds, by their names in it.
   private final Set<String> added = new HashSet<>();
+  // Whether the Avro names are pinned as the type stands: no action since has given it a type
+  // that could have a name of its own.
+  private boolean avroNamesPinned;
   private final List<Message> versions = new ArrayList<>();
   // The compatibility policy a SET WITH gives the subject, or null to leave it.
   private String policy;
@@ -423,7 +426,11 @@ public final class TypeAlter {
       pinProtobufNames(md);
       recordProtobufNumbers();
       current = Message.of(target(), namedTypes);
-      recordUsedNumbers();
+      // A move changes nothing in Protobuf, and takes no number: every version's numbers are
+      // read only for a statement that may.
+      if (!actions.stream().allMatch(a -> a instanceof AlterAction.MoveAttribute)) {
+        recordUsedNumbers();
+      }
     }
 
     List<String> order = attributeNames();
@@ -699,6 +706,9 @@ public final class TypeAlter {
     if (!(action instanceof AlterAction.SetWith)) {
       refuseSeveralMessages();
     }
+    // Pinned again only after an action that may bring a type with a name of its own.
+    final boolean pinned = avroNamesPinned;
+    avroNamesPinned &= leavesNamesPinned(action);
     if (action instanceof AlterAction.AddAttribute) {
       AlterAction.AddAttribute a = (AlterAction.AddAttribute) action;
       // The text is one attribute's: none follows it after a comma, and after a parenthesis
@@ -712,6 +722,8 @@ public final class TypeAlter {
             + "attribute's type and clauses: " + a.field());
       }
       Field field = one.getFields().get(0);
+      // A type no format names brings no name: those pinned are all there are.
+      avroNamesPinned = pinned && isUnnamedLeaf(field.getSchema());
       List<Field> fields = new ArrayList<>(struct().getFields());
       int same = named(fields, a.name());
       if (same >= 0) {
@@ -1761,13 +1773,30 @@ public final class TypeAlter {
    * Returns the attributes.
    */
   private List<Field> pinAvroNames() {
-    ParsedSchema written = ColumnIds.nativeOf(subject, format, withoutChecks(), refused());
-    try {
-      pinNames(LogicalTypeConversion.toLogicalType(written));
-    } catch (RuntimeException e) {
-      throw new TypeRefusedException(refused() + ": " + e.getMessage(), e);
+    if (!avroNamesPinned) {
+      ParsedSchema written = ColumnIds.nativeOf(subject, format, withoutChecks(), refused());
+      try {
+        pinNames(LogicalTypeConversion.toLogicalType(written));
+      } catch (RuntimeException e) {
+        throw new TypeRefusedException(refused() + ": " + e.getMessage(), e);
+      }
+      avroNamesPinned = true;
     }
     return new ArrayList<>(struct().getFields());
+  }
+
+  // Whether an action gives no attribute a type: a move, a drop, a comment, tags or a CHECK.
+  // An attribute it adds is told in its own place.
+  private static boolean leavesNamesPinned(AlterAction action) {
+    return action instanceof AlterAction.MoveAttribute
+        || action instanceof AlterAction.DropAttribute
+        || action instanceof AlterAction.SetComment
+        || action instanceof AlterAction.SetTags
+        || action instanceof AlterAction.SetAttributeComment
+        || action instanceof AlterAction.SetAttributeTags
+        || action instanceof AlterAction.AddConstraint
+        || action instanceof AlterAction.DropConstraint
+        || action instanceof AlterAction.AddAttributeCheck;
   }
 
   // The type as it stands with no CHECK on its struct or attributes: one may only hold of the
