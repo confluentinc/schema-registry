@@ -559,6 +559,11 @@ public final class TypeAlter {
           ? "it reserves field numbers or names, which would be dropped, and a new field "
             + "could then take one"
         : reencoded(file.getMessageTypeList());
+    if (lost == null) {
+      String entry = ProtoToLogicalTypeConverter.entryFieldRenumbered(
+          ((ProtobufSchema) schema).toDescriptor().getFile().getMessageTypes());
+      lost = entry == null ? null : entry + ", so its stored entries would be read wrongly";
+    }
     if (lost != null) {
       throw new TypeRefusedException("Type " + subject + " cannot be " + done + ": " + lost
           + ". Register its new version as a Protobuf schema");
@@ -909,7 +914,7 @@ public final class TypeAlter {
       Map<String, Object> params = f.getParams();
       // A type of the same kind keeps the native names pinned on it; another kind gets new.
       if (sameKind(f.getSchema(), type)) {
-        type = withNestedNames(withBranchNameParams(type, f.getSchema()), f.getSchema());
+        type = withNestedNames(type, f.getSchema());
       } else {
         params = new LinkedHashMap<>(params);
         params.keySet().removeIf(Schema::isTypeNameParam);
@@ -2754,20 +2759,6 @@ public final class TypeAlter {
       branches.add(new UnionBranch(b.getName(), b.getSchema(), b.getDoc(), merged));
     }
     return copyMetadata(type, Schema.createUnion(branches));
-  }
-
-  // A replacing union keeps the native names pinned on the branches it keeps.
-  private static Schema withBranchNameParams(Schema type, Schema old) {
-    if (type.getType() != Schema.Type.UNION) {
-      return type;
-    }
-    Map<String, Map<String, Object>> params = new LinkedHashMap<>();
-    for (UnionBranch b : old.getBranches()) {
-      Map<String, Object> names = new LinkedHashMap<>(b.getParams());
-      names.keySet().removeIf(key -> !Schema.isTypeNameParam(key));
-      params.put(b.getName(), names);
-    }
-    return withBranchParams(type, params);
   }
 
   // A replacing type keeps, at every level below it, the native names pinned on the members it

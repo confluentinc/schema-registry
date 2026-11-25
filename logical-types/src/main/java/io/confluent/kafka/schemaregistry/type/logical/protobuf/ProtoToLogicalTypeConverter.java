@@ -1875,6 +1875,43 @@ public class ProtoToLogicalTypeConverter {
     return (hasKeyRegular || hasKeyOneof) && (hasValueRegular || hasValueOneof);
   }
 
+  /**
+   * The first map entry among the messages, at any depth, whose key or value field that is no
+   * oneof member has a number the writer would not give it, told as a field that would be
+   * renumbered; null if none. A map has no place for such a number: the writer gives the key
+   * and then the value the lowest numbers their unions' members leave.
+   */
+  public static String entryFieldRenumbered(final List<Descriptor> messages) {
+    for (Descriptor message : messages) {
+      if (isMapEntryShape(message)) {
+        Set<Integer> taken = new HashSet<>();
+        for (OneofDescriptor oneof : message.getRealOneofs()) {
+          oneof.getFields().forEach(member -> taken.add(member.getNumber()));
+        }
+        int next = 1;
+        for (String part : Arrays.asList(CommonConstants.KEY_FIELD, CommonConstants.VALUE_FIELD)) {
+          FieldDescriptor field = message.findFieldByName(part);
+          if (field == null || field.getRealContainingOneof() != null) {
+            continue;
+          }
+          while (taken.contains(next)) {
+            next++;
+          }
+          if (field.getNumber() != next) {
+            return "field " + part + " of map entry " + message.getName() + " has the number "
+                + field.getNumber() + ", which would be written as " + next;
+          }
+          next++;
+        }
+      }
+      String nested = entryFieldRenumbered(message.getNestedTypes());
+      if (nested != null) {
+        return nested;
+      }
+    }
+    return null;
+  }
+
   private static boolean isMapDescriptor(final FieldDescriptor fieldDescriptor) {
     if (fieldDescriptor.getType() != Type.MESSAGE) {
       return false;

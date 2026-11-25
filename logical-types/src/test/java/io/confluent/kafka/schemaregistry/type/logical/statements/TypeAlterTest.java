@@ -1743,6 +1743,19 @@ class TypeAlterTest {
     registry.alter("ns", new AddAttribute("zz", "INT"));
     assertThat(numbers(message("ns"))).startsWith(stored);
 
+    // A branch given another kind is the field it was, and its type is named anew: an enum
+    // is not named as the row was, and takes the name given for it.
+    create("ub", SchemaType.PROTOBUF, "(id INT NOT NULL, u UNION(r STRUCT(k INT), s STRING))");
+    String rowName = message("ub").findFieldByName("r").getMessageType().getName();
+    registry.alter("ub", new AlterAttributeType("u", "UNION(r ENUM('X', 'Y'), s STRING)"));
+    assertThat(numbers(message("ub"))).contains("r=2", "s=3");
+    assertThat(message("ub").findFieldByName("r").getEnumType().getName())
+        .isNotEqualTo(rowName);
+    create("uc", SchemaType.PROTOBUF, "(id INT NOT NULL, u UNION(r STRUCT(k INT), s STRING))");
+    registry.alter("uc", new AlterAttributeType("u",
+        "UNION(r ENUM('X', 'Y') WITH ('protobuf.name' = 'Kind'), s STRING)"));
+    assertThat(message("uc").findFieldByName("r").getEnumType().getName()).isEqualTo("Kind");
+
     // The name is the member's: no attribute takes it, and its union renamed leaves it.
     create("ut", SchemaType.PROTOBUF, "(id INT NOT NULL, a INT, t UNION(a STRING, b STRING))");
     assertThatThrownBy(() -> registry.alter("ut", new AddAttribute("b", "INT")))
@@ -1767,6 +1780,29 @@ class TypeAlterTest {
     registry.alter("ut", new AlterAttributeType("tt", "UNION(b STRING)"),
         new AddAttribute("t_a", "INT"));
     assertThat(numbers(message("ut"))).isEqualTo("b=4 id=1 t_a=6");
+  }
+
+  // A map has no place for the numbers of a key or value that is no union: an entry that
+  // numbers them otherwise than in turn cannot be written again as it is.
+  @Test
+  void aProtobufMapEntryNumberedOtherwiseIsNotAltered() throws Exception {
+    String entry = "syntax = \"proto3\";\n\nmessage R {\n  int32 id = 1;\n"
+        + "  repeated MEntry m = 2;\n\n  message MEntry {\n    %s\n    %s\n  }\n}\n";
+    registry.client.register("rv", new ProtobufSchema(
+        String.format(entry, "int32 value = 1;", "int32 key = 2;")));
+    assertThat(registry.struct("rv").getField("m").getSchema().getType())
+        .isEqualTo(Schema.Type.MAP);
+    assertThatThrownBy(() -> registry.alter("rv", new AddAttribute("z", "INT")))
+        .isInstanceOf(TypeRefusedException.class).hasMessage("Type rv cannot be altered: "
+            + "field key of map entry MEntry has the number 2, which would be written as 1, "
+            + "so its stored entries would be read wrongly. Register its new version as a "
+            + "Protobuf schema");
+    assertThat(version("rv")).isEqualTo(1);
+    // Numbered in turn, it is altered.
+    registry.client.register("ok", new ProtobufSchema(
+        String.format(entry, "int32 key = 1;", "int32 value = 2;")));
+    registry.alter("ok", new AddAttribute("z", "INT"));
+    assertThat(version("ok")).isEqualTo(2);
   }
 
   // A map's entry is a message of its key and value, a union's members among them. Whatever
