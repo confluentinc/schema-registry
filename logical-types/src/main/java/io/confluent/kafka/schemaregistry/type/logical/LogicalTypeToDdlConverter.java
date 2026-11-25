@@ -629,11 +629,16 @@ public final class LogicalTypeToDdlConverter {
       // type of that name, declared or only referred to, is that very type to the reader.
       String bare = namespaced && rootName.startsWith(ns + ".")
           ? rootName.substring(ns.length() + 1) : rootName;
+      // A dotted name under a type the script declares reads as nested in it, which no root is.
+      if (bare.contains(".") && hasLocalParentPrefix(bare, ns)) {
+        return true;
+      }
       String own = namespaced && !bare.contains(".") ? ns + "." + bare : rootName;
       if (lt.getNamedTypes().containsKey(own) || lt.getExternalTypes().contains(own)) {
         return true;
       }
-      if (own.equals(bare)) {
+      // Only a bare name is read with the namespace, and so set beside the bare names.
+      if (!namespaced || bare.contains(".")) {
         return false;
       }
       // Under a namespace the bare name is another type's. One the script declares takes it,

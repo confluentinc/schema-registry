@@ -365,6 +365,9 @@ public final class TypeAlter {
     }
     Set<String> names = target.getFields().stream().map(Field::getName)
         .collect(Collectors.toSet());
+    // And the names the others are stored under, which this statement may have changed.
+    target.getFields().stream().map(Field::getName).filter(n -> !added.contains(n))
+        .map(this::previousName).forEach(names::add);
     List<Field> fields = new ArrayList<>();
     boolean dropped = false;
     for (Field f : target.getFields()) {

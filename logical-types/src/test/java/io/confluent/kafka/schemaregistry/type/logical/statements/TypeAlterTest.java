@@ -255,6 +255,21 @@ class TypeAlterTest {
         Map.entry("c2", List.of("c")), Map.entry("y", List.of()));
   }
 
+  // An alias that is another attribute's stored name is dropped, whatever the statement
+  // names that attribute: two attributes of one alias are one field to a reader.
+  @Test
+  void anAvroAliasOfANameAnotherAttributeIsStoredUnderIsDropped() {
+    create("da", SchemaType.AVRO, "(id INT NOT NULL, a INT, b INT)");
+    registry.alter("da", new RenameAttribute("a", "zz"), new AddAttribute("a", "INT"));
+    AvroSchema v2 = (AvroSchema) registry.schema("da");
+    registry.alter("da", new RenameAttribute("a", "t"));
+    Map<String, List<String>> aliases = new LinkedHashMap<>();
+    registry.struct("da").getFields().forEach(f -> aliases.put(f.getName(), f.getAliases()));
+    assertThat(aliases).containsExactly(Map.entry("id", List.of()),
+        Map.entry("zz", List.of()), Map.entry("b", List.of()), Map.entry("t", List.of("a")));
+    assertThat(registry.schema("da").isBackwardCompatible(v2)).isEmpty();
+  }
+
   // A swap back in one statement after a swap is refused, as the aliases would read it as no
   // rename; the message gives the three statements that make it.
   @Test
@@ -1380,6 +1395,42 @@ class TypeAlterTest {
         .contains("\"$ref\":\"#/$defs/shop.Order\"", "\"nick\"");
   }
 
+  // A title that is dotted beyond its namespace is read as written, and one under a
+  // definition of the document's reads as nested in it, which no root is.
+  @Test
+  void aJsonTypeOfADottedTitleBesideItsDefinitionsIsAltered() throws Exception {
+    String member = "{\"type\": \"object\", \"properties\": {\"m\": {\"type\": \"string\"}}}";
+    // {title, namespace, the definitions it declares and refers to}
+    String[][] cases = {
+        {"shop.Outer.Order", "shop", "Outer.Order"},
+        {"shop.shop.Order", "shop", "shop.Order"},
+        {"Outer.Order", "shop", "Outer", "shop.Outer.Order"},
+        {"Outer.Order", "shop", "Outer"},
+        {"Outer.Order", null, "Outer"}};
+    for (int i = 0; i < cases.length; i++) {
+      String[] c = cases[i];
+      StringBuilder properties = new StringBuilder("\"id\": {\"type\": \"string\"}");
+      StringBuilder defs = new StringBuilder();
+      for (int d = 2; d < c.length; d++) {
+        properties.append(", \"p").append(d).append("\": {\"$ref\": \"#/$defs/")
+            .append(c[d]).append("\"}");
+        defs.append(d > 2 ? ", " : "").append('"').append(c[d]).append("\": ").append(member);
+      }
+      String subject = "dt" + i;
+      registry.client.register(subject, new JsonSchema("{\"type\": \"object\", \"title\": \""
+          + c[0] + "\", " + (c[1] == null ? "" : "\"confluent:namespace\": \"" + c[1] + "\", ")
+          + "\"properties\": {" + properties + "}, \"$defs\": {" + defs + "}}"));
+      registry.alter(subject, new AddAttribute("nick", "STRING"));
+      assertThat(version(subject)).as(c[0]).isEqualTo(2);
+      String altered = registry.schema(subject).canonicalString();
+      assertThat(altered).as(c[0]).contains("\"nick\"");
+      // The first two keep their name: the root is the definition of that name.
+      if (i < 2) {
+        assertThat(altered).contains("\"" + c[0] + "\":{").doesNotContain("\"title\":\"dt");
+      }
+    }
+  }
+
   // A JSON document titled as the definition it refers to: they are two types of one name,
   // which only the reference tells apart.
   @ParameterizedTest
@@ -1652,6 +1703,24 @@ class TypeAlterTest {
     assertThat(registry.alter("pu",
         new AlterAttributeType("u", "UNION(r STRUCT(k INT), s STRING)")).edited()).isNull();
     assertThat(version("pu")).isEqualTo(1);
+
+    // Below the root's own messages too, and for enums.
+    create("pn", SchemaType.PROTOBUF,
+        "(id INT NOT NULL, s STRUCT(u UNION(r STRUCT(k INT), t STRING), w STRUCT(q INT)))");
+    create("pe", SchemaType.PROTOBUF,
+        "(id INT NOT NULL, u UNION(e ENUM('A', 'B'), s STRING), f ENUM('C', 'D'))");
+    for (String type : List.of("pn", "pe")) {
+      assertThat(registry.alter(type, new AddAttribute("d", "INT"),
+          new DropAttribute("d", false)).edited()).as(type).isNull();
+    }
+    // The same lines in other places are another schema: two comments swapped.
+    create("ps", SchemaType.PROTOBUF, "(id INT NOT NULL, a INT COMMENT 'x', b INT COMMENT 'y', "
+        + "u UNION(r STRUCT(k INT), s STRING), w STRUCT(q INT))");
+    String lines = registry.schema("ps").canonicalString();
+    registry.alter("ps", new SetAttributeComment("a", "y"), new SetAttributeComment("b", "x"));
+    assertThat(version("ps")).isEqualTo(2);
+    assertThat(registry.schema("ps").canonicalString().lines().sorted())
+        .containsExactlyElementsOf(lines.lines().sorted().collect(Collectors.toList()));
 
     // What changes a line of it is a version: a comment, a CHECK, a member of a nested row.
     registry.alter("pu", new SetAttributeComment("w", "the weight"));
