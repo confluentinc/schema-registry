@@ -168,6 +168,12 @@ public final class Formats {
     }
     refuseBadNumber(format, Schema.PROTOBUF_FIELD_NUMBER, "attribute " + f.getName(),
         f.getParams());
+    // A union is a oneof, which has no number: one said for it is not left out.
+    if (format == SchemaType.PROTOBUF && f.getSchema().getType() == Schema.Type.UNION
+        && f.getParams().containsKey(Schema.PROTOBUF_FIELD_NUMBER)) {
+      throw new TypeRefusedException("Attribute " + f.getName() + " cannot have a Protobuf "
+          + "field number: a UNION is a oneof, which has none; give it none");
+    }
     refuseReservedParams(format, "attribute " + f.getName(), f.getParams().keySet());
     refuseUnwritable(format, f.getSchema(), named, "attribute " + f.getName());
   }

@@ -222,10 +222,12 @@ public final class TypeAlter {
   // Whether the Avro names are pinned as the type stands: no action since has given it a type
   // that could have a name of its own.
   private boolean avroNamesPinned;
-  // The type an action gives anew, whose names are no more the type's, and the attribute
-  // it is the type of; null outside such an action.
+  // The type an action gives anew, whose names are no more the type's; null outside such
+  // an action.
   private Schema replacing;
-  private String retyping;
+  // Whether a name the type had for a definition is now a document's: the reference that
+  // had the definition may be of no more use, though no name is.
+  private boolean renamed;
   private final List<Message> versions = new ArrayList<>();
   // The compatibility policy a SET WITH gives the subject, or null to leave it.
   private String policy;
@@ -338,7 +340,7 @@ public final class TypeAlter {
     }
     recordUsedNumbers();
     Messages at = new Messages(Message.of(old, last.getNamedTypes()), versions);
-    setStruct(renumbered(target(), old, at, null).getFields());
+    setStruct(renumbered(target(), old, at, null, null).getFields());
     return new LogicalType(lt.getName(), lt.getNamespace(), root, namedTypes,
         lt.getExternalTypes(), lt.getExternalImports(), lt.getReferences(),
         lt.getResolvedReferences(), lt.getDefaultValues());
@@ -963,7 +965,6 @@ public final class TypeAlter {
 
   private boolean apply(AlterAction action) {
     replacing = null;
-    retyping = null;
     if (!(action instanceof AlterAction.SetWith)) {
       refuseSeveralMessages();
     }
@@ -1168,7 +1169,6 @@ public final class TypeAlter {
       }
       Field f = fields.get(i);
       replacing = f.getSchema();
-      retyping = a.name();
       Schema type = parse(aliases -> TypeScripts.typeScript(a.type(), aliases))
           .getRootSchema();
       Formats.refuseUnwritable(format, type, knownTypes(type), "attribute " + a.name());
@@ -1193,9 +1193,10 @@ public final class TypeAlter {
       if (format == SchemaType.PROTOBUF) {
         Messages root = new Messages(current, versions);
         type = type.getType() == Schema.Type.UNION
-            ? renumbered(type, f.getSchema(), root, counter(fields))
+            ? renumbered(type, f.getSchema(), root, counter(fields), a.name())
             : renumbered(type, f.getSchema(), numberIn(f.getParams()) > 0
-              ? root.field(numberIn(f.getParams())) : root.field(f.getName()), null);
+              ? root.field(numberIn(f.getParams())) : root.field(f.getName()), null,
+              a.name());
         // A union has no number of its own, only its branches; what replaces it gets a
         // new one, rather than the lowest free one, a branch's.
         if (type.getType() != Schema.Type.UNION
@@ -1703,7 +1704,7 @@ public final class TypeAlter {
     }
     Set<String> unused = new LinkedHashSet<>(externalTypes);
     unused.removeAll(reachable);
-    if (unused.isEmpty()) {
+    if (unused.isEmpty() && !renamed) {
       return;
     }
     externalTypes.removeAll(unused);
@@ -1882,6 +1883,8 @@ public final class TypeAlter {
     Set<String> defined = namesInUse();
     defined.retainAll(externalTypes);
     references.forEach(r -> defined.remove(r.getName()));
+    Set<String> named = new HashSet<>(externalTypes);
+    references.forEach(r -> named.remove(r.getName()));
     externalTypes.addAll(lt.getExternalTypes());
     boolean moved = false;
     // A hand-written schema may name a reference otherwise than its subject, as Avro by its
@@ -1911,6 +1914,9 @@ public final class TypeAlter {
               ? "as it calls a type it refers to" : "a definition of a type it refers to")
             + ", and would have type " + ref.getSubject() + " by that name as well");
       }
+      // A name the type had for a definition, and has no more a use for as that, is the
+      // new reference's: the reference the definition was of may be of no use.
+      renamed |= !found && format == SchemaType.JSON && named.contains(ref.getName());
       if (!found) {
         // One the statement dropped and names again is the reference it was, by the name it
         // had: a file another tool wrote imports it by that name.
@@ -2750,7 +2756,8 @@ public final class TypeAlter {
    * belong to the message holding it, numbered by {@code next}: the enclosing row's counter, or
    * for a oneof in a wrapper message, null for one of its own.
    */
-  private Schema renumbered(Schema type, Schema old, Messages at, Counter next) {
+  private Schema renumbered(Schema type, Schema old, Messages at, Counter next,
+      String path) {
     Schema result;
     switch (type.getType()) {
       case STRUCT: {
@@ -2760,20 +2767,15 @@ public final class TypeAlter {
           Field was = old != null && old.getType() == Schema.Type.STRUCT
               ? old.getField(f.getName()) : null;
           Schema wasType = was != null ? was.getSchema() : null;
+          String member = path == null ? f.getName() : path + "." + f.getName();
           // A union attribute is a oneof of this row; others are messages of their own.
           Schema s = f.getSchema().getType() == Schema.Type.UNION
-              ? renumbered(f.getSchema(), wasType, at, inner)
-              : renumbered(f.getSchema(), wasType, at.field(f.getName()), null);
+              ? renumbered(f.getSchema(), wasType, at, inner, member)
+              : renumbered(f.getSchema(), wasType, at.field(f.getName()), null, member);
           Map<String, Object> params = new LinkedHashMap<>(f.getParams());
-          if (s.getType() == Schema.Type.UNION
-              && params.containsKey(Schema.PROTOBUF_FIELD_NUMBER)) {
-            throw new TypeRefusedException("Attribute " + f.getName()
-                + (retyping != null ? " of attribute " + retyping : "") + " cannot have a "
-                + "Protobuf field number: a UNION is a oneof, which has none; give it none");
-          }
           if (s.getType() != Schema.Type.UNION) {
             int n = at.number(f.getName());
-            refuseOtherNumber("Attribute " + f.getName(), params, n);
+            refuseOtherNumber("Attribute " + member, params, n);
             params.put(Schema.PROTOBUF_FIELD_NUMBER,
                 String.valueOf(n > 0 ? n : inner.take()));
           }
@@ -2794,12 +2796,14 @@ public final class TypeAlter {
           int n = was == null ? 0 : numberIn(was.getParams()) > 0
               ? numberIn(was.getParams()) : at.number(memberName(was));
           Map<String, Object> params = new LinkedHashMap<>(b.getParams());
-          refuseOtherNumber("Branch " + b.getName(), params, n);
+          refuseOtherNumber("Branch " + b.getName()
+              + (path != null ? " of attribute " + path : ""), params, n);
           params.put(Schema.PROTOBUF_FIELD_NUMBER,
               String.valueOf(n > 0 ? n : counter.take()));
           branches.add(new UnionBranch(b.getName(),
               renumbered(b.getSchema(), was != null ? was.getSchema() : null,
-                at.field(n), null), b.getDoc(), params));
+                at.field(n), null, path == null ? b.getName() : path + "." + b.getName()),
+              b.getDoc(), params));
         }
         result = Schema.createUnion(branches);
         break;
@@ -2807,14 +2811,14 @@ public final class TypeAlter {
       case ARRAY:
         result = Schema.createArray(renumbered(type.getElementType(),
             old != null && old.getType() == Schema.Type.ARRAY ? old.getElementType() : null,
-            at, null));
+            at, null, path));
         break;
       case MULTISET: {
         // Entries of the element, as the key, and its count.
         boolean wasMultiset = old != null && old.getType() == Schema.Type.MULTISET;
         result = Schema.createMultiset(renumbered(type.getElementType(),
             wasMultiset ? old.getElementType() : null,
-            entryPart(at, type.getElementType(), "key"), null));
+            entryPart(at, type.getElementType(), "key"), null, path));
         if (wasMultiset) {
           Message now = entryOf(result);
           refuseMovedEntryField("multiset's count", last(at.current()), last(now));
@@ -2832,10 +2836,10 @@ public final class TypeAlter {
         result = Schema.createMap(
             renumbered(type.getKeyType(), wasMap ? old.getKeyType() : null,
               entryPart(at, type.getKeyType(), "key"),
-              isUnion(type.getKeyType()) ? entry : null),
+              isUnion(type.getKeyType()) ? entry : null, path),
             renumbered(type.getValueType(), wasMap ? old.getValueType() : null,
               entryPart(at, type.getValueType(), VALUE),
-              isUnion(type.getValueType()) ? entry : null));
+              isUnion(type.getValueType()) ? entry : null, path));
         if (wasMap) {
           Message now = entryOf(result);
           if (!isUnion(old.getKeyType()) && !isUnion(type.getKeyType())) {
@@ -3103,26 +3107,23 @@ public final class TypeAlter {
 
   // A member of a type given anew keeps the number it has, and one new to it takes the
   // next its message has free: another number said for it is refused, not left out.
-  private void refuseOtherNumber(String member, Map<String, Object> params, int has) {
+  private static void refuseOtherNumber(String member, Map<String, Object> params,
+      int has) {
     if (!params.containsKey(Schema.PROTOBUF_FIELD_NUMBER) || numberIn(params) == has) {
       return;
     }
     throw new TypeRefusedException(member
-        + (retyping != null ? " of attribute " + retyping : "")
         + " cannot be given the Protobuf field number " + numberIn(params) + ": "
         + (has > 0 ? "it has " + has : "a member new to a type given anew takes the next "
           + "number its message has free") + "; give it none");
   }
 
-  // A new union is a oneof, which has no number, and its members are numbered as the
-  // type's new fields are: a number said for either is refused, not left out.
+  // A new union's members are numbered as the type's new fields are: a number said for
+  // one is refused, not left out. One said for the union itself is refused with every
+  // attribute's, at any depth.
   private static void refuseUnionNumbers(Field field) {
     if (field.getSchema().getType() != Schema.Type.UNION) {
       return;
-    }
-    if (field.getParams().containsKey(Schema.PROTOBUF_FIELD_NUMBER)) {
-      throw new TypeRefusedException("Attribute " + field.getName() + " cannot have a "
-          + "Protobuf field number: a UNION is a oneof, which has none; give it none");
     }
     for (UnionBranch b : field.getSchema().getBranches()) {
       if (b.getParams().containsKey(Schema.PROTOBUF_FIELD_NUMBER)) {

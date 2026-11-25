@@ -2762,6 +2762,9 @@ class TypeAlterTest {
     for (String type : List.of("h", "h2")) {
       assertThat(registry.schema(type).canonicalString()).as(type)
           .contains("{\"$ref\":\"E\"}").doesNotContain("lib#/$defs/E");
+      // The type the definition was of is referred to no more, though the name is in use.
+      assertThat(registry.latest(type).getReferences()).as(type)
+          .extracting(SchemaReference::getName).containsExactly("E");
     }
     // A name the type as read has for a type it refers to is no other type's either.
     registry.create("fhu", SchemaType.JSON, BodyKind.OTHER, "INT");
@@ -3347,6 +3350,23 @@ class TypeAlterTest {
             + "be given a Protobuf field number: the members of a new UNION are numbered as "
             + "the type's new fields are; give it none");
     assertThat(version("pnu")).isEqualTo(2);
+    // As one said for a union in a row, a map or an array, of a new attribute as of a
+    // type that is made.
+    String numbered = "w UNION(c INT, d STRING) WITH ('protobuf.field.number' = '9')";
+    for (String type : List.of("STRUCT(x INT, " + numbered + ")",
+        "MAP<STRING, STRUCT(" + numbered + ")>", "ARRAY<STRUCT(x INT, " + numbered + ")>")) {
+      for (Runnable statement : List.<Runnable>of(
+          () -> registry.alter("pnu", new AddAttribute("n", type)),
+          () -> create("pnc", SchemaType.PROTOBUF, "(a INT, n " + type + ")"))) {
+        assertThatThrownBy(statement::run).as(type).isInstanceOf(TypeRefusedException.class)
+            .hasMessage("Attribute w cannot have a Protobuf field number: a UNION is a oneof, "
+                + "which has none; give it none");
+      }
+    }
+    assertThatThrownBy(() -> create("pnc", SchemaType.PROTOBUF, "(a INT, " + numbered + ")"))
+        .isInstanceOf(TypeRefusedException.class).hasMessageContaining("a UNION is a oneof");
+    assertThat(registry.latest("pnc")).isNull();
+    assertThat(version("pnu")).isEqualTo(2);
     // The last number there is leaves none above it: the next are the lowest never used,
     // for a field and for a union's members.
     create("pnm", SchemaType.PROTOBUF, "(a INT, b STRING)");
@@ -3420,20 +3440,25 @@ class TypeAlterTest {
     assertThat(version("pnt")).isEqualTo(2);
     String[][] others = {
         {"r", "STRUCT(m INT, n STRING, k INT, j INT WITH ('protobuf.field.number' = '50'))",
-            "Attribute j of attribute r cannot be given the Protobuf field number 50: a "
-            + "member new to a type given anew takes the next number its message has free; "
-            + "give it none"},
+            "Attribute r.j cannot be given the Protobuf field number 50: a member new to a "
+            + "type given anew takes the next number its message has free; give it none"},
         {"r", "STRUCT(m INT WITH ('protobuf.field.number' = '51'), n STRING, k INT)",
-            "Attribute m of attribute r cannot be given the Protobuf field number 51: it has "
-            + "1; give it none"},
+            "Attribute r.m cannot be given the Protobuf field number 51: it has 1; give it "
+            + "none"},
         {"u", "UNION(x INT, y STRING, z BIGINT WITH ('protobuf.field.number' = '80'))",
             "Branch z of attribute u cannot be given the Protobuf field number 80: a member "
             + "new to a type given anew takes the next number its message has free; give it "
             + "none"},
         {"r", "STRUCT(m INT, n STRING, k INT, "
             + "v UNION(p INT, q STRING) WITH ('protobuf.field.number' = '7'))",
-            "Attribute v of attribute r cannot have a Protobuf field number: a UNION is a "
-            + "oneof, which has none; give it none"},
+            "Attribute v cannot have a Protobuf field number: a UNION is a oneof, which has "
+            + "none; give it none"},
+        // A member of a union in the row is told as the union's, which is told as the row's.
+        {"r", "STRUCT(m INT, n STRING, k INT, "
+            + "v UNION(p INT WITH ('protobuf.field.number' = '60'), q STRING))",
+            "Branch p of attribute r.v cannot be given the Protobuf field number 60: a member "
+            + "new to a type given anew takes the next number its message has free; give it "
+            + "none"},
         {"a", "UNION(p INT WITH ('protobuf.field.number' = '70'), q STRING)",
             "Branch p of attribute a cannot be given the Protobuf field number 70: a member "
             + "new to a type given anew takes the next number its message has free; give it "
