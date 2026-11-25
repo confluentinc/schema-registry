@@ -22,7 +22,9 @@ import static io.confluent.kafka.schemaregistry.rules.RuleBase.DEFAULT_NAME;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
@@ -64,6 +66,7 @@ import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.schemaregistry.rules.RuleBase;
+import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.rules.WidgetBytesProto.PiiBytes;
 import io.confluent.kafka.schemaregistry.rules.WidgetBytesProto.WidgetBytes;
 import io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii;
@@ -130,6 +133,7 @@ public abstract class FieldEncryptionExecutorTest {
   protected final KafkaJsonSchemaDeserializer<JsonNode> jsonSchemaDeserializer;
   protected final KafkaProtobufSerializer<Widget> protobufSerializer;
   protected final KafkaProtobufSerializer<WidgetBytes> protobufSerializerBytes;
+  protected final KafkaProtobufSerializer<DynamicMessage> protobufSerializerDynamic;
   protected final KafkaProtobufDeserializer<DynamicMessage> protobufDeserializer;
   protected final KafkaAvroSerializer badSerializer;
   protected final KafkaAvroDeserializer badDeserializer;
@@ -193,6 +197,7 @@ public abstract class FieldEncryptionExecutorTest {
 
     protobufSerializer = new KafkaProtobufSerializer<>(schemaRegistry, clientProps);
     protobufSerializerBytes = new KafkaProtobufSerializer<>(schemaRegistry, clientProps);
+    protobufSerializerDynamic = new KafkaProtobufSerializer<>(schemaRegistry, clientProps);
     protobufDeserializer = new KafkaProtobufDeserializer<>(schemaRegistry, clientProps);
 
     Map<String, Object> badClientProps = new HashMap<>(clientProps);
@@ -1470,6 +1475,83 @@ public abstract class FieldEncryptionExecutorTest {
   }
 
   @Test
+  public void testKafkaAvroSerializerVariant() throws Exception {
+    String userSchema = "{\"namespace\": \"example.avro\", \"type\": \"record\", "
+        + "\"name\": \"User\","
+        + "\"fields\": ["
+        + "{\"name\": \"payload\", \"confluent:tags\": [\"PII\"], \"type\": "
+        + "{\"type\": \"record\", \"name\": \"confluent.type.Variant\", "
+        + "\"logicalType\": \"variant\", \"fields\": ["
+        + "{\"name\": \"metadata\", \"type\": \"bytes\"},"
+        + "{\"name\": \"value\", \"type\": \"bytes\"}]}}"
+        + "]}";
+    Schema schema = new Schema.Parser().parse(userSchema);
+    GenericRecord variant = new GenericData.Record(schema.getField("payload").schema());
+    variant.put("metadata", ByteBuffer.wrap(new byte[] {1, 0, 0}));
+    variant.put("value", ByteBuffer.wrap(new byte[] {0}));
+    GenericRecord avroRecord = new GenericData.Record(schema);
+    avroRecord.put("payload", variant);
+    AvroSchema avroSchema = new AvroSchema(schema);
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
+    Metadata metadata = getMetadata("kek1");
+    avroSchema = avroSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    int expectedEncryptions = 2;
+    RecordHeaders headers = new RecordHeaders();
+    Cryptor cryptor = addSpyToCryptor(avroSerializer);
+    byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
+    cryptor = addSpyToCryptor(avroDeserializer);
+    GenericRecord record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
+    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
+    GenericRecord payload = (GenericRecord) record.get("payload");
+    assertEquals(ByteBuffer.wrap(new byte[] {1, 0, 0}), payload.get("metadata"));
+    assertEquals(ByteBuffer.wrap(new byte[] {0}), payload.get("value"));
+  }
+
+  @Test
+  public void testKafkaAvroSerializerVariantInUnion() throws Exception {
+    String userSchema = "{\"namespace\": \"example.avro\", \"type\": \"record\", "
+        + "\"name\": \"User\","
+        + "\"fields\": ["
+        + "{\"name\": \"payload\", \"confluent:tags\": [\"PII\"], \"type\": [\"null\", \"string\", "
+        + "{\"type\": \"record\", \"name\": \"confluent.type.Variant\", "
+        + "\"logicalType\": \"variant\", \"fields\": ["
+        + "{\"name\": \"metadata\", \"type\": \"bytes\"},"
+        + "{\"name\": \"value\", \"type\": \"bytes\"}]}]}"
+        + "]}";
+    Schema schema = new Schema.Parser().parse(userSchema);
+    GenericRecord variant =
+        new GenericData.Record(schema.getField("payload").schema().getTypes().get(2));
+    variant.put("metadata", ByteBuffer.wrap(new byte[] {1, 0, 0}));
+    variant.put("value", ByteBuffer.wrap(new byte[] {0}));
+    GenericRecord avroRecord = new GenericData.Record(schema);
+    avroRecord.put("payload", variant);
+    AvroSchema avroSchema = new AvroSchema(schema);
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
+    Metadata metadata = getMetadata("kek1");
+    avroSchema = avroSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    int expectedEncryptions = 2;
+    RecordHeaders headers = new RecordHeaders();
+    Cryptor cryptor = addSpyToCryptor(avroSerializer);
+    byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
+    cryptor = addSpyToCryptor(avroDeserializer);
+    GenericRecord record = (GenericRecord) avroDeserializer.deserialize(topic, headers, bytes);
+    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
+    GenericRecord payload = (GenericRecord) record.get("payload");
+    assertEquals(ByteBuffer.wrap(new byte[] {1, 0, 0}), payload.get("metadata"));
+    assertEquals(ByteBuffer.wrap(new byte[] {0}), payload.get("value"));
+  }
+
+  @Test
   public void testKafkaJsonSchemaSerializer() throws Exception {
     OldWidget widget = new OldWidget("alice");
     widget.setSize(123);
@@ -1868,6 +1950,166 @@ public abstract class FieldEncryptionExecutorTest {
   }
 
   @Test
+  public void testKafkaJsonSchemaSerializerVariant() throws Exception {
+    String json = "{\n"
+        + "    \"payload\": {\"name\": \"alice\"}\n"
+        + "}";
+    JsonNode data = new ObjectMapper().readTree(json);
+
+    String schemaStr = "{\n" +
+        "  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n" +
+        "  \"properties\": {\n" +
+        "    \"payload\": {\n" +
+        "      \"confluent:tags\": [\n" +
+        "        \"PII\"\n" +
+        "      ]\n" +
+        "    }\n" +
+        "  },\n" +
+        "  \"title\": \"Doc\",\n" +
+        "  \"type\": \"object\"\n" +
+        "}";
+
+    JsonSchema jsonSchema = new JsonSchema(schemaStr);
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    Metadata metadata = getMetadata("kek1");
+    jsonSchema = jsonSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", jsonSchema);
+
+    RecordHeaders headers = new RecordHeaders();
+    try {
+      jsonSchemaSerializer5.serialize(topic, headers, data);
+      fail();
+    } catch (Exception e) {
+      assertTrue(e instanceof SerializationException);
+    }
+  }
+
+  private static String variantSchema(String profileSchema) {
+    return "{\"type\": \"object\", \"properties\": {"
+        + "\"id\": {\"type\": \"string\"}, \"profile\": " + profileSchema + "}}";
+  }
+
+  private byte[] serializeWithVariantEncryption(String profileSchema, String tag, String message)
+      throws Exception {
+    return serializeWithEncryption(variantSchema(profileSchema), tag, message);
+  }
+
+  private byte[] serializeWithEncryption(String schemaStr, String tag, String message)
+      throws Exception {
+    JsonSchema jsonSchema = new JsonSchema(schemaStr);
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of(tag), null, null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    jsonSchema = jsonSchema.copy(getMetadata("kek1"), ruleSet);
+    schemaRegistry.register(topic + "-value", jsonSchema);
+    return jsonSchemaSerializer5.serialize(
+        topic, new RecordHeaders(), new ObjectMapper().readTree(message));
+  }
+
+  private void assertVariantEncryptionRejected(String profileSchema, String profile) {
+    SerializationException e = assertThrows(SerializationException.class,
+        () -> serializeWithVariantEncryption(
+            profileSchema, "PII", "{\"id\": \"1\", \"profile\": " + profile + "}"));
+    assertTypeNotSupported(e, "ANY");
+  }
+
+  private static void assertTypeNotSupported(Exception e, String type) {
+    Throwable cause = e;
+    while (cause != null && !(cause instanceof RuleException)) {
+      cause = cause.getCause();
+    }
+    assertNotNull(cause);
+    assertTrue(cause.getMessage(),
+        cause.getMessage().contains("Type '" + type + "' not supported for encryption"));
+  }
+
+  @Test
+  public void testKafkaJsonSchemaSerializerNullableVariant() throws Exception {
+    // The nullable shape Flink emits for VARIANT
+    String schema = "{\"anyOf\": [{\"type\": \"null\"}, {}], \"confluent:tags\": [\"PII\"]}";
+    String[] profiles = {"{\"ssn\": \"123-45-6789\"}", "\"123-45-6789\"", "42", "[1]"};
+    for (String profile : profiles) {
+      assertVariantEncryptionRejected(schema, profile);
+    }
+  }
+
+  @Test
+  public void testKafkaJsonSchemaSerializerVariantInTaggedObject() throws Exception {
+    assertVariantEncryptionRejected(
+        "{\"type\": \"object\", \"confluent:tags\": [\"PII\"], \"properties\": "
+            + "{\"name\": {\"type\": \"string\"}, \"extra\": {}}}",
+        "{\"name\": \"bob\", \"extra\": {\"ssn\": \"123-45-6789\"}}");
+  }
+
+  @Test
+  public void testKafkaJsonSchemaSerializerVariantInTaggedArray() throws Exception {
+    assertVariantEncryptionRejected(
+        "{\"type\": \"array\", \"confluent:tags\": [\"PII\"], \"items\": {}}",
+        "[{\"ssn\": \"123-45-6789\"}]");
+  }
+
+  @Test
+  public void testKafkaJsonSchemaSerializerVariantInCombined() throws Exception {
+    assertVariantEncryptionRejected(
+        "{\"anyOf\": [{}, {\"type\": \"string\"}], \"confluent:tags\": [\"PII\"]}",
+        "{\"ssn\": \"123-45-6789\"}");
+  }
+
+  @Test
+  public void testKafkaJsonSchemaSerializerEmptyConjunct() throws Exception {
+    String message = "{\"id\": \"1\", \"profile\": \"secret\"}";
+    Cryptor cryptor = addSpyToCryptor(jsonSchemaSerializer5);
+    byte[] bytes = serializeWithVariantEncryption(
+        "{\"allOf\": [{}, {\"type\": \"string\"}], \"confluent:tags\": [\"PII\"]}",
+        "PII", message);
+    verify(cryptor, times(1)).encrypt(any(), any(), any());
+    assertEquals(new ObjectMapper().readTree(message),
+        jsonSchemaDeserializer.deserialize(topic, new RecordHeaders(), bytes));
+  }
+
+  @Test
+  public void testKafkaJsonSchemaSerializerEmptyConjunctByReference() throws Exception {
+    String schemaStr = "{\"type\": \"object\", \"definitions\": {\"Any\": {}}, "
+        + "\"properties\": {\"id\": {\"type\": \"string\"}, \"profile\": "
+        + "{\"allOf\": [{\"$ref\": \"#/definitions/Any\"}, {\"type\": \"string\"}], "
+        + "\"confluent:tags\": [\"PII\"]}}}";
+    String message = "{\"id\": \"1\", \"profile\": \"secret\"}";
+    Cryptor cryptor = addSpyToCryptor(jsonSchemaSerializer5);
+    byte[] bytes = serializeWithEncryption(schemaStr, "PII", message);
+    verify(cryptor, times(1)).encrypt(any(), any(), any());
+    assertEquals(new ObjectMapper().readTree(message),
+        jsonSchemaDeserializer.deserialize(topic, new RecordHeaders(), bytes));
+  }
+
+  @Test
+  public void testKafkaJsonSchemaSerializerVariantAllOfNotNull() throws Exception {
+    // Neither conjunct gives a type, so the field is still a variant
+    assertVariantEncryptionRejected(
+        "{\"allOf\": [{}, {\"not\": {\"type\": \"null\"}}], \"confluent:tags\": [\"PII\"]}",
+        "{\"ssn\": \"123-45-6789\"}");
+  }
+
+  @Test
+  public void testKafkaJsonSchemaSerializerVariantNullAllowed() throws Exception {
+    String message = "{\"id\": \"1\", \"profile\": null}";
+    byte[] bytes = serializeWithVariantEncryption(
+        "{\"confluent:tags\": [\"PII\"]}", "PII", message);
+    assertEquals(new ObjectMapper().readTree(message),
+        jsonSchemaDeserializer.deserialize(topic, new RecordHeaders(), bytes));
+  }
+
+  @Test
+  public void testKafkaJsonSchemaSerializerVariantWithOtherTagAllowed() throws Exception {
+    String message = "{\"id\": \"1\", \"profile\": {\"ssn\": \"123-45-6789\"}}";
+    byte[] bytes = serializeWithVariantEncryption(
+        "{\"confluent:tags\": [\"PII\"]}", "PII2", message);
+    assertEquals(new ObjectMapper().readTree(message),
+        jsonSchemaDeserializer.deserialize(topic, new RecordHeaders(), bytes));
+  }
+
+  @Test
   public void testKafkaJsonSchemaSerializerMissingProperty() throws Exception {
     Address address = new Address();
     address.doornumber = 1234;
@@ -2093,6 +2335,49 @@ public abstract class FieldEncryptionExecutorTest {
         ImmutableList.of(ByteString.copyFromUtf8("789"), ByteString.copyFromUtf8("012")),
         ssnArrayValues
     );
+  }
+
+  @Test
+  public void testKafkaProtobufSerializerVariant() throws Exception {
+    String schemaString = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "import \"confluent/type/variant.proto\";\n"
+        + "message Doc {\n"
+        + "  confluent.type.Variant payload = 1 [(confluent.field_meta) = { tags: [\"PII\"] }];\n"
+        + "}\n";
+    ProtobufSchema protobufSchema = new ProtobufSchema(schemaString);
+    Descriptor docDesc = protobufSchema.toDescriptor();
+    Descriptor variantDesc = docDesc.findFieldByName("payload").getMessageType();
+    DynamicMessage variant = DynamicMessage.newBuilder(variantDesc)
+        .setField(variantDesc.findFieldByName("metadata"), ByteString.copyFrom(new byte[] {1, 0, 0}))
+        .setField(variantDesc.findFieldByName("value"), ByteString.copyFrom(new byte[] {0}))
+        .build();
+    DynamicMessage doc = DynamicMessage.newBuilder(docDesc)
+        .setField(docDesc.findFieldByName("payload"), variant)
+        .build();
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    Metadata metadata = getMetadata("kek1");
+    protobufSchema = protobufSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", protobufSchema);
+
+    int expectedEncryptions = 2;
+    RecordHeaders headers = new RecordHeaders();
+    Cryptor cryptor = addSpyToCryptor(protobufSerializerDynamic);
+    byte[] bytes = protobufSerializerDynamic.serialize(topic, headers, doc);
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
+    cryptor = addSpyToCryptor(protobufDeserializer);
+    DynamicMessage obj = protobufDeserializer.deserialize(topic, headers, bytes);
+    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
+    Descriptor dynamicDesc = obj.getDescriptorForType();
+    DynamicMessage payload = (DynamicMessage) obj.getField(dynamicDesc.findFieldByName("payload"));
+    Descriptor payloadDesc = payload.getDescriptorForType();
+    assertEquals(ByteString.copyFrom(new byte[] {1, 0, 0}),
+        payload.getField(payloadDesc.findFieldByName("metadata")));
+    assertEquals(ByteString.copyFrom(new byte[] {0}),
+        payload.getField(payloadDesc.findFieldByName("value")));
   }
 
   @Test

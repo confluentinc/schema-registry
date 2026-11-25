@@ -16,11 +16,14 @@
 
 package io.confluent.kafka.schemaregistry.encryption;
 
+import com.google.protobuf.Descriptors.FieldDescriptor;
+import com.google.protobuf.Descriptors.FieldDescriptor.JavaType;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.rules.FieldRuleExecutor;
 import io.confluent.kafka.schemaregistry.rules.FieldTransform;
 import io.confluent.kafka.schemaregistry.rules.RuleContext;
 import io.confluent.kafka.schemaregistry.rules.RuleContext.FieldContext;
+import io.confluent.kafka.schemaregistry.rules.RuleContext.Type;
 import io.confluent.kafka.schemaregistry.rules.RuleException;
 import java.util.Map;
 import org.slf4j.Logger;
@@ -50,6 +53,8 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
   public static final String CACHE_EXPIRY_SECS = EncryptionExecutor.CACHE_EXPIRY_SECS;
   public static final String CACHE_SIZE = EncryptionExecutor.CACHE_SIZE;
   public static final String CLOCK = EncryptionExecutor.CLOCK;
+
+  private static final String VARIANT_TYPE_NAME = "confluent.type.Variant";
 
   private EncryptionExecutor encryptionExecutor = new EncryptionExecutor();
 
@@ -103,7 +108,20 @@ public class FieldEncryptionExecutor extends FieldRuleExecutor {
     @Override
     public Object transform(RuleContext ctx, FieldContext fieldCtx, Object fieldValue)
         throws RuleException {
-      return transform.transform(ctx, fieldCtx.getType(), fieldValue);
+      return transform.transform(ctx, getType(fieldCtx, fieldValue), fieldValue);
+    }
+
+    // The Protobuf walk hands a variant's metadata and value to the transform under the
+    // variant field's own context, whose type is RECORD. They are encrypted as bytes.
+    private Type getType(FieldContext fieldCtx, Object fieldValue) {
+      Object fd = fieldCtx.getFieldDescriptor();
+      if (fieldValue instanceof byte[]
+          && fd instanceof FieldDescriptor
+          && ((FieldDescriptor) fd).getJavaType() == JavaType.MESSAGE
+          && VARIANT_TYPE_NAME.equals(((FieldDescriptor) fd).getMessageType().getFullName())) {
+        return Type.BYTES;
+      }
+      return fieldCtx.getType();
     }
   }
 }
