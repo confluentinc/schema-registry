@@ -509,6 +509,10 @@ public final class TypeAlter {
         || had != null && had.entrySet().containsAll(sets.entrySet());
   }
 
+  // The file that declares the options metadata is written in: a writer before this one
+  // imported it only for the file's own option, and a type stored so is the same type.
+  private static final String META_IMPORT = "import \"confluent/meta.proto\";";
+
   // A Protobuf message's nested messages and enums are written in the order of the attributes
   // they are of, and a oneof is read after the fields beside it: the two files may so declare
   // the same types in another order. The same lines, and the same messages by their names.
@@ -529,11 +533,15 @@ public final class TypeAlter {
   }
 
   private static List<String> sortedLines(ParsedSchema schema) {
-    return schema.canonicalString().lines().sorted().collect(Collectors.toList());
+    return schema.canonicalString().lines()
+        .filter(line -> !line.isBlank() && !line.equals(META_IMPORT))
+        .sorted().collect(Collectors.toList());
   }
 
   private static FileDescriptorProto unordered(FileDescriptorProto file) {
-    FileDescriptorProto.Builder builder = file.toBuilder().clearMessageType();
+    // The files imported are told by the lines.
+    FileDescriptorProto.Builder builder = file.toBuilder().clearMessageType()
+        .clearDependency().clearPublicDependency().clearWeakDependency();
     file.getMessageTypeList().forEach(message -> builder.addMessageType(unordered(message)));
     return builder.build();
   }
@@ -567,22 +575,17 @@ public final class TypeAlter {
           ? "it reserves field numbers or names, which would be dropped, and a new field "
             + "could then take one"
         : reencoded(file.getMessageTypeList());
-    if (lost == null) {
-      String entry = ProtoToLogicalTypeConverter.entryFieldRenumbered(
-          ((ProtobufSchema) schema).toDescriptor().getFile().getMessageTypes());
-      lost = entry == null ? null : entry + ", so its stored entries would be read wrongly";
-    }
     if (lost != null) {
       throw new TypeRefusedException("Type " + subject + " cannot be " + done + ": " + lost
           + ". Register its new version as a Protobuf schema");
     }
   }
 
-  // Two kinds of field are written otherwise than the file declares them. A map is written
+  // Three kinds of field are written otherwise than the file declares them. A map is written
   // as a repeated field of an entry message: the same bytes, and another kind of field to
   // the registry and to generated code. A google.protobuf wrapper is written as the scalar
-  // it wraps, which is other bytes. A version that still has a field of such a field's
-  // number is refused.
+  // it wraps, which is other bytes. And an entry's key and value are numbered as the writer
+  // numbers them. A version that still has a field of such a field's number is refused.
   private void refuseWrittenOtherwise(ParsedSchema stored, ParsedSchema written, String done) {
     if (!(stored instanceof ProtobufSchema) || !(written instanceof ProtobufSchema)) {
       return;
@@ -623,6 +626,10 @@ public final class TypeAlter {
       }
       if (field.getJavaType() != FieldDescriptor.JavaType.MESSAGE) {
         continue;
+      }
+      String entry = ProtoToLogicalTypeConverter.entryFieldRenumbered(field);
+      if (entry != null) {
+        return entry + ", so its stored entries would be read wrongly";
       }
       // A message another file declares that the field still refers to is not written.
       Descriptor to = kept.getJavaType() == FieldDescriptor.JavaType.MESSAGE

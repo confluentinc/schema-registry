@@ -128,6 +128,11 @@ public final class Formats {
       throw new TypeRefusedException("A PROTOBUF type cannot be an ENUM: the root of a "
           + "Protobuf schema is a message");
     }
+    if (lt.getName() != null) {
+      refuseReservedParams(format, "type " + lt.getName(), root.getParams().keySet());
+    }
+    lt.getNamedTypes().forEach((name, s) ->
+        refuseReservedParams(format, "type " + name, s.getParams().keySet()));
     refuseUnwritable(format, lt.getRootSchema());
     lt.getNamedTypes().values().forEach(s -> refuseUnwritable(format, s));
   }

@@ -1941,28 +1941,16 @@ public class ProtoToLogicalTypeConverter {
   }
 
   /**
-   * The first map entry of the messages' fields, at any depth, whose key or value field that is
-   * no oneof member has a number the writer would not give it, told as a field that would be
-   * renumbered; null if none. A map has no place for such a number: the writer gives the key
-   * and then the value the lowest numbers their unions' members leave.
+   * For a field that is read as a map, what would become of its entry if its key or value
+   * field that is no oneof member has a number the writer would not give it, told as a field
+   * that would be renumbered; null otherwise. A map has no place for such a number: the
+   * writer gives the key and then the value the lowest numbers their unions' members leave.
+   * A message of an entry's shape is an entry as a repeated field's, whichever file declares
+   * it: the writer writes an entry of its own.
    */
-  public static String entryFieldRenumbered(final List<Descriptor> messages) {
-    for (Descriptor message : messages) {
-      for (FieldDescriptor field : message.getFields()) {
-        // A message of an entry's shape is an entry as a repeated field's, as it is read.
-        // One another file declares is one too: the writer writes an entry of its own.
-        String entry = field.isRepeated() && isMapDescriptor(field)
-            ? renumbered(field.getMessageType()) : null;
-        if (entry != null) {
-          return entry;
-        }
-      }
-      String nested = entryFieldRenumbered(message.getNestedTypes());
-      if (nested != null) {
-        return nested;
-      }
-    }
-    return null;
+  public static String entryFieldRenumbered(final FieldDescriptor field) {
+    return field.isRepeated() && isMapDescriptor(field)
+        ? renumbered(field.getMessageType()) : null;
   }
 
   private static String renumbered(final Descriptor entry) {
@@ -1980,7 +1968,7 @@ public class ProtoToLogicalTypeConverter {
         next++;
       }
       if (field.getNumber() != next) {
-        return "field " + part + " of map entry " + entry.getName() + " has the number "
+        return part + " of map entry " + entry.getName() + " has the number "
             + field.getNumber() + ", which would be written as " + next;
       }
       next++;

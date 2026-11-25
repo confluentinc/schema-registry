@@ -1734,7 +1734,7 @@ class TypeAlterTest {
   // The options metadata is written in are declared by confluent/meta.proto. A file that has
   // them imports it, as protoc does not know them otherwise; one that has none does not.
   @Test
-  void aProtobufFileThatHasMetadataImportsTheFileThatDeclaresIt() {
+  void aProtobufFileThatHasMetadataImportsTheFileThatDeclaresIt() throws Exception {
     String imports = "import \"confluent/meta.proto\";";
     create("mp", SchemaType.PROTOBUF, "(a INT, b BIGINT)");
     assertThat(registry.schema("mp").canonicalString()).doesNotContain(imports);
@@ -1752,6 +1752,18 @@ class TypeAlterTest {
       // A schema made of the descriptor, as a serializer's is, has it too.
       assertThat(new ProtobufSchema(message(type)).canonicalString()).as(type).isEqualTo(text);
     }
+    // A type stored by a writer that did not import it is the same type: a statement that
+    // changes nothing makes no version of it, and one that changes it writes the import.
+    String without = registry.schema("mi0").canonicalString().replace(imports + "\n", "")
+        .replace("mi0", "mo");
+    assertThat(without).doesNotContain(imports);
+    registry.client.register("mo", new ProtobufSchema(without).copy(
+        registry.latest("mi0").getMetadata(), null));
+    assertThat(registry.alter("mo", new AddAttribute("q", "INT"),
+        new DropAttribute("q", false)).edited()).isNull();
+    registry.alter("mo", new AddAttribute("c", "INT"));
+    assertThat(registry.schema("mo").canonicalString()).contains(imports);
+
     // V1 is written as Flink writes it, which imports none.
     assertThat(LogicalTypeToProtoConverter.fromLogicalType(TypeScripts.parse(
         "STRUCT t (a SMALLINT, d DECIMAL(10, 2));"), "t", LogicalTypeVersion.V1)
@@ -1780,6 +1792,10 @@ class TypeAlterTest {
       assertThatThrownBy(() -> create(type, SchemaType.PROTOBUF, body)).as(body)
           .isInstanceOf(TypeRefusedException.class).hasMessage(bodies[i][1] + kept);
     }
+    // One on the type is told by the type's name.
+    assertThatThrownBy(() -> create("rt", SchemaType.PROTOBUF,
+        "(a INT) WITH ('connect.name' = 'q')")).isInstanceOf(TypeRefusedException.class)
+        .hasMessage("Property connect.name of type rt" + kept);
     create("rq", SchemaType.PROTOBUF, "(a INT, b STRING)");
     assertThatThrownBy(() -> registry.alter("rq",
         new SetAttributeWith("a", Map.of("connect.type", "int8"))))
@@ -2134,9 +2150,12 @@ class TypeAlterTest {
     assertThatThrownBy(() -> registry.alter("rv", new AddAttribute("z", "INT")))
         .isInstanceOf(TypeRefusedException.class).hasMessage("Type rv cannot be altered: "
             + "field key of map entry MEntry has the number 2, which would be written as 1, "
-            + "so its stored entries would be read wrongly. Register its new version as a "
-            + "Protobuf schema");
+            + "so its stored entries would be read wrongly. Drop the attribute, or register "
+            + "its new version as a Protobuf schema");
     assertThat(version("rv")).isEqualTo(1);
+    // A statement that drops the map writes no such entry.
+    registry.alter("rv", new DropAttribute("m", false), new AddAttribute("z", "INT"));
+    assertThat(numbers(message("rv"))).isEqualTo("id=1 z=3");
     // The value as the key.
     registry.client.register("rw", new ProtobufSchema(
         String.format(entry, "int32 key = 1;", "int32 value = 3;")));
