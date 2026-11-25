@@ -481,7 +481,7 @@ public final class TypeAlter {
       } else {
         TypeReferences.requireOneOfEach(lookup, subject, references, refused());
         if (format == SchemaType.PROTOBUF) {
-          refuseMapKept(stored, written, "altered");
+          refuseWrittenOtherwise(stored, written, "altered");
           refuseTakenNames(stored, written);
         }
         refuseOtherColumns(md, edited, version);
@@ -579,42 +579,52 @@ public final class TypeAlter {
     }
   }
 
-  // A field a Protobuf file declares as a map is written as a repeated field of an entry
-  // message: the same bytes, and another kind of field to the registry and to generated
-  // code. A version that still has a field of the map's number is refused.
-  private void refuseMapKept(ParsedSchema stored, ParsedSchema written, String done) {
+  // Two kinds of field are written otherwise than the file declares them. A map is written
+  // as a repeated field of an entry message: the same bytes, and another kind of field to
+  // the registry and to generated code. A google.protobuf wrapper is written as the scalar
+  // it wraps, which is other bytes. A version that still has a field of such a field's
+  // number is refused.
+  private void refuseWrittenOtherwise(ParsedSchema stored, ParsedSchema written, String done) {
     if (!(stored instanceof ProtobufSchema) || !(written instanceof ProtobufSchema)) {
       return;
     }
-    String map = protobufMapKept(((ProtobufSchema) stored).toDescriptor().getFile()
+    String field = writtenOtherwise(((ProtobufSchema) stored).toDescriptor().getFile()
         .getMessageTypes(), ((ProtobufSchema) written).toDescriptor().getFile());
-    if (map != null) {
-      throw new TypeRefusedException("Type " + subject + " cannot be " + done + ": field " + map
-          + " is a Protobuf map, which would be written as a repeated field of an entry "
-          + "message, another kind of field. Drop the attribute, or register its new version "
-          + "as a Protobuf schema");
+    if (field != null) {
+      throw new TypeRefusedException("Type " + subject + " cannot be " + done + ": field "
+          + field + ". Drop the attribute, or register its new version as a Protobuf schema");
     }
   }
 
-  static void refuseMapKeptAfterDrop(TypeLookup lookup, String subject, SchemaMetadata md,
-      LogicalType lt) {
-    new TypeAlter(lookup, subject).refuseMapKept(lookup.parse(md), ColumnIds.nativeOf(subject,
-        SchemaType.PROTOBUF, lt, "Type " + subject + " cannot be created again so"),
-        "created again");
+  static void refuseWrittenOtherwiseAfterDrop(TypeLookup lookup, String subject,
+      SchemaMetadata md, LogicalType lt) {
+    new TypeAlter(lookup, subject).refuseWrittenOtherwise(lookup.parse(md),
+        ColumnIds.nativeOf(subject, SchemaType.PROTOBUF, lt,
+            "Type " + subject + " cannot be created again so"), "created again");
   }
 
-  // The first map among the messages' fields, at any depth, whose message the new file
-  // still has with a field of the map's number.
-  private static String protobufMapKept(List<Descriptor> messages, FileDescriptor written) {
+  // The first such field of the messages, at any depth, whose message the new file still
+  // has with a field of its number, and what would become of it.
+  private static String writtenOtherwise(List<Descriptor> messages, FileDescriptor written) {
     for (Descriptor message : messages) {
       Descriptor now = messageNamed(written.getMessageTypes(), message.getFullName());
       for (FieldDescriptor field : message.getFields()) {
-        if (field.isMapField() && now != null
-            && now.findFieldByNumber(field.getNumber()) != null) {
-          return field.getName() + " of message " + message.getName();
+        if (now == null || now.findFieldByNumber(field.getNumber()) == null) {
+          continue;
+        }
+        String of = field.getName() + " of message " + message.getName();
+        if (field.isMapField()) {
+          return of + " is a Protobuf map, which would be written as a repeated field of an "
+              + "entry message, another kind of field";
+        }
+        if (field.getJavaType() == FieldDescriptor.JavaType.MESSAGE
+            && ProtoToLogicalTypeConverter.isScalarWrapper(field.getMessageType())) {
+          return of + " is a " + field.getMessageType().getFullName() + ", which would be "
+              + "written as the value it wraps and not as that message, so its stored values "
+              + "would be read wrongly";
         }
       }
-      String nested = protobufMapKept(message.getNestedTypes(), written);
+      String nested = writtenOtherwise(message.getNestedTypes(), written);
       if (nested != null) {
         return nested;
       }

@@ -687,6 +687,29 @@ class TypeAlterTest {
         "(a INT NOT NULL, m MAP<STRING, INT NOT NULL> NOT NULL)"))
         .isInstanceOf(TypeRefusedException.class).hasMessageContaining("is a Protobuf map");
 
+    // Nor is a google.protobuf wrapper, which is read as the scalar it wraps and would be
+    // written as that scalar, in other bytes: by a move as by any other statement.
+    String wrapped = "syntax = \"proto3\";\n\nimport \"google/protobuf/wrappers.proto\";\n\n"
+        + "message W {\n  string name = 1;\n  google.protobuf.StringValue sv = 2;\n"
+        + "  repeated google.protobuf.Int32Value w = 3;\n}\n";
+    registry.client.register("gw", new ProtobufSchema(wrapped));
+    for (AlterAction action : List.of(new AddAttribute("c", "INT"),
+        new MoveAttribute("name", Position.after("sv")))) {
+      assertThatThrownBy(() -> registry.alter("gw", action))
+          .isInstanceOf(TypeRefusedException.class)
+          .hasMessage("Type gw cannot be altered: field sv of message W is a "
+              + "google.protobuf.StringValue, which would be written as the value it wraps "
+              + "and not as that message, so its stored values would be read wrongly. Drop "
+              + "the attribute, or register its new version as a Protobuf schema");
+    }
+    assertThatThrownBy(() -> registry.alter("gw", new DropAttribute("sv", false)))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("field w of message W is a google.protobuf.Int32Value");
+    assertThat(version("gw")).isEqualTo(1);
+    registry.alter("gw", new DropAttribute("sv", false), new DropAttribute("w", false),
+        new AddAttribute("c", "INT"));
+    assertThat(numbers(message("gw"))).isEqualTo("name=1 c=4");
+
     // One the logical type carries whole is altered as any other; a uint32 is read as a
     // BIGINT, whose int64 is the same encoding.
     registry.client.register("plain", new ProtobufSchema("syntax = \"proto3\";\n"

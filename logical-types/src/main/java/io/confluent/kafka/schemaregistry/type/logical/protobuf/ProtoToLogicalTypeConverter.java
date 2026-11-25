@@ -1230,6 +1230,27 @@ public class ProtoToLogicalTypeConverter {
   }
 
   /**
+   * True for a google.protobuf wrapper of a scalar, which is read as that scalar, one that may
+   * be null. The writer writes such a scalar as an optional field, not as the wrapper.
+   */
+  public static boolean isScalarWrapper(Descriptor message) {
+    switch (message.getFullName()) {
+      case CommonConstants.PROTOBUF_DOUBLE_WRAPPER_TYPE:
+      case CommonConstants.PROTOBUF_FLOAT_WRAPPER_TYPE:
+      case CommonConstants.PROTOBUF_INT64_WRAPPER_TYPE:
+      case CommonConstants.PROTOBUF_UINT64_WRAPPER_TYPE:
+      case CommonConstants.PROTOBUF_INT32_WRAPPER_TYPE:
+      case CommonConstants.PROTOBUF_UINT32_WRAPPER_TYPE:
+      case CommonConstants.PROTOBUF_BOOL_WRAPPER_TYPE:
+      case CommonConstants.PROTOBUF_STRING_WRAPPER_TYPE:
+      case CommonConstants.PROTOBUF_BYTES_WRAPPER_TYPE:
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  /**
    * True for a Meta.params key this converter keeps for itself: it reads such a key as how a
    * field's type is encoded, and returns none as a param. The writer writes none a type gives.
    */
