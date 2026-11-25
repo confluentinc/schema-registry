@@ -981,7 +981,8 @@ public final class TypeAlter {
       if (one == null || one.getFields().size() != 1 || !one.getParams().isEmpty()
           || one.getDoc() != null || !one.getTags().isEmpty() || !one.getRules().isEmpty()) {
         throw new TypeRefusedException("Attribute " + a.name() + " is given more than one "
-            + "attribute's type and clauses: " + a.field());
+            + "attribute's type and clauses, or clauses out of their order (the type, "
+            + "DEFAULT, CHECK, COMMENT, TAGS, WITH): " + a.field());
       }
       Field field = one.getFields().get(0);
       // A type no format names brings no name: those pinned are all there are.
@@ -1169,7 +1170,7 @@ public final class TypeAlter {
       replacing = f.getSchema();
       Schema type = parse(aliases -> TypeScripts.typeScript(a.type(), aliases))
           .getRootSchema();
-      Formats.refuseUnwritable(format, type, knownTypes(type), "attribute " + a.name());
+      Formats.refuseUnwritable(format, type, knownTypes(type), f.getName());
       Map<String, Object> params = f.getParams();
       // A type of the same kind keeps the native names pinned on it; another kind gets new.
       if (keepsNames(f.getSchema(), type)) {
@@ -1191,10 +1192,10 @@ public final class TypeAlter {
       if (format == SchemaType.PROTOBUF) {
         Messages root = new Messages(current, versions);
         type = type.getType() == Schema.Type.UNION
-            ? renumbered(type, f.getSchema(), root, counter(fields), a.name())
+            ? renumbered(type, f.getSchema(), root, counter(fields), f.getName())
             : renumbered(type, f.getSchema(), numberIn(f.getParams()) > 0
               ? root.field(numberIn(f.getParams())) : root.field(f.getName()), null,
-              a.name());
+              f.getName());
         // A union has no number of its own, only its branches; what replaces it gets a
         // new one, rather than the lowest free one, a branch's.
         if (type.getType() != Schema.Type.UNION

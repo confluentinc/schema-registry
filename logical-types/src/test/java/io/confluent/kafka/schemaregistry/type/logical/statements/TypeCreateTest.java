@@ -417,7 +417,7 @@ class TypeCreateTest {
       assertThatThrownBy(() -> create("fn", SchemaType.PROTOBUF, "(id INT NOT NULL, "
           + "u UNION(d INT WITH ('protobuf.field.name' = '" + name + "')))"))
           .isInstanceOf(TypeRefusedException.class).hasMessage("Property protobuf.field.name "
-              + "of branch d is not a valid field name: '" + name + "'");
+              + "of branch d of attribute u is not a valid field name: '" + name + "'");
     }
     create("fn", SchemaType.PROTOBUF,
         "(id INT NOT NULL, u UNION(d INT WITH ('protobuf.field.name' = 'u_d')))");

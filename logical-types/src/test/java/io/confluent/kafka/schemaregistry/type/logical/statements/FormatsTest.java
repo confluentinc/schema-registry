@@ -311,6 +311,30 @@ class FormatsTest {
         .hasMessageContaining("is not a field's number, which is 1 or more: '0'");
   }
 
+  // A union in an attribute of a row is told by that attribute's path; and one of thousands
+  // of branches of one kind is told by its first two, with no word of the rest.
+  @Test
+  void aJsonUnionIsToldByItsPathAndByItsFirstTwoBranches() {
+    assertThatThrownBy(() -> Formats.refuseUnwritable(SchemaType.JSON,
+        struct("(e STRUCT<a UNION(x INT, y BIGINT), b ARRAY<STRUCT<c UNION(p INT, q INT)>>>)")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageStartingWith("A UNION of attribute e.a in a JSON type cannot have branches "
+            + "x and y");
+    assertThatThrownBy(() -> Formats.refuseUnwritable(SchemaType.JSON,
+        struct("(e STRUCT<b ARRAY<STRUCT<c UNION(p INT, q INT)>>>)")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageStartingWith("A UNION of attribute e.b.c in a JSON type cannot have");
+    StringBuilder many = new StringBuilder("(u UNION(");
+    for (int i = 0; i < 4000; i++) {
+      many.append(i > 0 ? ", " : "").append("b").append(i).append(" INT");
+    }
+    LogicalType lt = struct(many + "))");
+    assertTimeoutPreemptively(Duration.ofSeconds(5), () ->
+        assertThatThrownBy(() -> Formats.refuseUnwritable(SchemaType.JSON, lt))
+            .isInstanceOf(TypeRefusedException.class)
+            .hasMessageContaining("cannot have branches b0 and b1"));
+  }
+
   // Rows, arrays and maps are written as objects and arrays: two branches are refused where
   // a value of one would be a value of the other.
   @Test

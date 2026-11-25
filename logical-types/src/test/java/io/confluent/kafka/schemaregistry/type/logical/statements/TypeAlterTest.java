@@ -815,9 +815,15 @@ class TypeAlterTest {
         "INT, CHECK (b > 0)", "INT); TYPE STRUCT(x STRING", "INT); STRUCT other (y INT")) {
       assertThatThrownBy(() -> registry.alter("one", new AddAttribute("b", text)))
           .isInstanceOf(TypeRefusedException.class)
-          .hasMessage("Attribute b is given more than one attribute's type and clauses: "
+          .hasMessage("Attribute b is given more than one attribute's type and clauses, or "
+              + "clauses out of their order (the type, DEFAULT, CHECK, COMMENT, TAGS, WITH): "
               + text);
     }
+    // Clauses said out of their order are told as that, and not as two attributes.
+    assertThatThrownBy(() -> registry.alter("one",
+        new AddAttribute("b", "INT WITH ('k' = 'v') COMMENT 'c'")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("or clauses out of their order");
     assertThat(version("one")).isEqualTo(1);
 
     registry.alter("one", new AddAttribute("b", "INT CHECK (b > 0) COMMENT 'its own'"));
@@ -907,19 +913,55 @@ class TypeAlterTest {
     assertThatThrownBy(() -> registry.alter("bn", new AlterAttributeType("c",
         "ENUM('RED', 'GREEN', 'BLUE' WITH ('protobuf.enum.number' = 'x'))")))
         .isInstanceOf(TypeRefusedException.class)
-        .hasMessage("Property protobuf.enum.number of value BLUE is not a valid number: 'x'");
+        .hasMessage("Property protobuf.enum.number of value BLUE of attribute c is not a "
+            + "valid number: 'x'");
     assertThatThrownBy(() -> registry.alter("bn", new AddAttribute("e",
         "ENUM('RED', 'GREEN' WITH ('protobuf.enum.number' = '99999999999'))")))
         .isInstanceOf(TypeRefusedException.class)
-        .hasMessageContaining("of value GREEN is not a valid number: '99999999999'");
+        .hasMessageContaining("of value GREEN of attribute e is not a valid number: "
+            + "'99999999999'");
     assertThatThrownBy(() -> registry.alter("bn", new AddAttribute("s",
         "STRUCT<x INT WITH ('protobuf.field.number' = 'x')>")))
         .isInstanceOf(TypeRefusedException.class)
-        .hasMessage("Property protobuf.field.number of attribute x is not a valid number: 'x'");
+        .hasMessage("Property protobuf.field.number of attribute s.x is not a valid number: "
+            + "'x'");
     assertThatThrownBy(() -> registry.alter("bn", new AddAttribute("u",
         "UNION(p INT WITH ('protobuf.field.number' = ''), q STRING)")))
         .isInstanceOf(TypeRefusedException.class)
-        .hasMessage("Property protobuf.field.number of branch p is not a valid number: ''");
+        .hasMessage("Property protobuf.field.number of branch p of attribute u is not a "
+            + "valid number: ''");
+    // A number above the last there is, or one of those Protobuf keeps, is told by the
+    // attribute's path, wherever the attribute is, and not by a message's name.
+    String[][] none = {
+        {"STRUCT<x INT WITH ('protobuf.field.number' = '19000')>", "Attribute r.x cannot have "
+            + "the Protobuf field number 19000: Protobuf keeps it for itself; give it "
+            + "another, or none"},
+        {"ARRAY<STRUCT<y STRUCT<x INT WITH ('protobuf.field.number' = '536870912')>>>",
+            "Attribute r.y.x cannot have the Protobuf field number 536870912: a field's "
+            + "number is 536870911 at most; give it another, or none"},
+        {"STRUCT<v UNION(p INT WITH ('protobuf.field.number' = '19999'), q STRING)>",
+            "Branch p of attribute r.v cannot have the Protobuf field number 19999: Protobuf "
+            + "keeps it for itself; give it another, or none"}};
+    for (String[] number : none) {
+      assertThatThrownBy(() -> registry.alter("bn", new AddAttribute("r", number[0])))
+          .as(number[0]).isInstanceOf(TypeRefusedException.class).hasMessage(number[1]);
+      assertThatThrownBy(() -> create("bn2", SchemaType.PROTOBUF, "(a INT, r " + number[0]
+          + ")")).as(number[0]).isInstanceOf(TypeRefusedException.class).hasMessage(number[1]);
+    }
+    // In a type given anew the path starts at the attribute; a default, and a union that
+    // may not be null, are told by their paths too.
+    assertThatThrownBy(() -> registry.alter("bn", new AlterAttributeType("a",
+        "STRUCT<x INT WITH ('protobuf.field.number' = 'x')>")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageStartingWith("Property protobuf.field.number of attribute a.x is not");
+    assertThatThrownBy(() -> registry.alter("bn",
+        new AddAttribute("r", "STRUCT<x INT DEFAULT 5>")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageStartingWith("Attribute r.x has a DEFAULT");
+    assertThatThrownBy(() -> registry.alter("bn",
+        new AddAttribute("r", "STRUCT<v UNION(p INT, q STRING) NOT NULL>")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageStartingWith("A UNION of attribute r.v cannot be NOT NULL");
     assertThat(version("bn")).isEqualTo(1);
   }
 
@@ -2025,10 +2067,11 @@ class TypeAlterTest {
         {"(s STRING WITH ('flink.maxLength' = '3'))", "Property flink.maxLength of attribute s"},
         {"(a INT WITH ('connect.index' = '1'), b INT)", "Property connect.index of attribute a"},
         {"(r STRUCT(k INT WITH ('flink.notNull' = 'true')))",
-            "Property flink.notNull of attribute k"},
+            "Property flink.notNull of attribute r.k"},
         {"(u UNION(x INT WITH ('logical.branch' = 'z'), y STRING))",
-            "Property logical.branch of branch x"},
-        {"(e ENUM('A' WITH ('connect.x' = '1'), 'B'))", "Property connect.x of value A"}};
+            "Property logical.branch of branch x of attribute u"},
+        {"(e ENUM('A' WITH ('connect.x' = '1'), 'B'))",
+            "Property connect.x of value A of attribute e"}};
     for (int i = 0; i < bodies.length; i++) {
       String type = "rp" + i;
       String body = bodies[i][0];
@@ -3482,8 +3525,8 @@ class TypeAlterTest {
           () -> registry.alter("pnu", new AddAttribute("n", type)),
           () -> create("pnc", SchemaType.PROTOBUF, "(a INT, n " + type + ")"))) {
         assertThatThrownBy(statement::run).as(type).isInstanceOf(TypeRefusedException.class)
-            .hasMessage("Attribute w cannot have a Protobuf field number: a UNION is a oneof, "
-                + "which has none; give it none");
+            .hasMessage("Attribute n.w cannot have a Protobuf field number: a UNION is a "
+                + "oneof, which has none; give it none");
       }
     }
     assertThatThrownBy(() -> create("pnc", SchemaType.PROTOBUF, "(a INT, " + numbered + ")"))
@@ -3574,8 +3617,8 @@ class TypeAlterTest {
             + "none"},
         {"r", "STRUCT(m INT, n STRING, k INT, "
             + "v UNION(p INT, q STRING) WITH ('protobuf.field.number' = '7'))",
-            "Attribute v cannot have a Protobuf field number: a UNION is a oneof, which has "
-            + "none; give it none"},
+            "Attribute r.v cannot have a Protobuf field number: a UNION is a oneof, which "
+            + "has none; give it none"},
         // A member of a union in the row is told as the union's, which is told as the row's.
         {"r", "STRUCT(m INT, n STRING, k INT, "
             + "v UNION(p INT WITH ('protobuf.field.number' = '60'), q STRING))",

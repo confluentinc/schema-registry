@@ -162,22 +162,30 @@ public final class Formats {
 
   // With the types its type may name: a name is judged as the type it is of, where known.
   static void refuseUnwritable(SchemaType format, Field f, KnownTypes named) {
+    refuseUnwritable(format, f, named, null);
+  }
+
+  // under: the attribute the attribute is in the type of, by its path; null if none. An
+  // attribute in another's type is told with that one before it, as e.x: one of its own
+  // name may be the type's own.
+  private static void refuseUnwritable(SchemaType format, Field f, KnownTypes named,
+      String under) {
+    String path = under == null ? f.getName() : under + "." + f.getName();
     if (format != SchemaType.AVRO && f.hasDefaultValue() && !f.hasDerivedDefault()
         && f.getDefaultValue() != null) {
-      throw new TypeRefusedException("Attribute " + f.getName() + " has a DEFAULT, which a "
+      throw new TypeRefusedException("Attribute " + path + " has a DEFAULT, which a "
           + format + " type cannot apply: a record without it reads "
           + (format == SchemaType.PROTOBUF ? "the zero value" : "NULL"));
     }
-    refuseBadNumber(format, Schema.PROTOBUF_FIELD_NUMBER, "attribute " + f.getName(),
-        f.getParams());
+    refuseBadNumber(format, Schema.PROTOBUF_FIELD_NUMBER, "attribute " + path, f.getParams());
     // A union is a oneof, which has no number: one said for it is not left out.
     if (format == SchemaType.PROTOBUF && f.getSchema().getType() == Schema.Type.UNION
         && f.getParams().containsKey(Schema.PROTOBUF_FIELD_NUMBER)) {
-      throw new TypeRefusedException("Attribute " + f.getName() + " cannot have a Protobuf "
+      throw new TypeRefusedException("Attribute " + path + " cannot have a Protobuf "
           + "field number: a UNION is a oneof, which has none; give it none");
     }
-    refuseReservedParams(format, "attribute " + f.getName(), f.getParams().keySet());
-    refuseUnwritable(format, f.getSchema(), named, "attribute " + f.getName());
+    refuseReservedParams(format, "attribute " + path, f.getParams().keySet());
+    refuseUnwritable(format, f.getSchema(), named, path);
   }
 
   /**
@@ -187,35 +195,39 @@ public final class Formats {
     refuseUnwritable(format, schema, KnownTypes.none(), null);
   }
 
-  // within: the attribute the type is the type of, or is in the type of; null if none.
+  // within: the attribute the type is the type of, or is in the type of, by its path; null
+  // if none.
   static void refuseUnwritable(SchemaType format, Schema schema, KnownTypes named,
       String within) {
     refuseReservedParams(format, "a type", schema.getParams().keySet());
+    String of = within != null ? " of attribute " + within : "";
     switch (schema.getType()) {
       case STRUCT:
-        schema.getFields().forEach(f -> refuseUnwritable(format, f, named));
+        schema.getFields().forEach(f -> refuseUnwritable(format, f, named, within));
         break;
       case UNION:
         if (format == SchemaType.PROTOBUF && !schema.isNullable()) {
-          throw new TypeRefusedException("A UNION cannot be NOT NULL in a PROTOBUF type: "
-              + "a Protobuf UNION is a oneof, which is always nullable");
+          throw new TypeRefusedException("A UNION" + of + " cannot be NOT NULL in a PROTOBUF "
+              + "type: a Protobuf UNION is a oneof, which is always nullable");
         }
         if (format == SchemaType.JSON) {
           refuseOverlappingBranches(schema, named, within);
         }
         for (UnionBranch b : schema.getBranches()) {
-          refuseBadNumber(format, Schema.PROTOBUF_FIELD_NUMBER, "branch " + b.getName(),
+          refuseBadNumber(format, Schema.PROTOBUF_FIELD_NUMBER, "branch " + b.getName() + of,
               b.getParams());
-          refuseBadFieldName(format, b);
-          refuseReservedParams(format, "branch " + b.getName(), b.getParams().keySet());
-          refuseUnwritable(format, b.getSchema(), named, within);
+          refuseBadFieldName(format, b, of);
+          refuseReservedParams(format, "branch " + b.getName() + of, b.getParams().keySet());
+          // What is in a member's type is told with the member before it.
+          refuseUnwritable(format, b.getSchema(), named,
+              within == null ? null : within + "." + b.getName());
         }
         break;
       case ENUM:
         for (EnumValue v : schema.getEnumValues()) {
-          refuseBadNumber(format, Schema.PROTOBUF_ENUM_NUMBER, "value " + v.getSymbol(),
+          refuseBadNumber(format, Schema.PROTOBUF_ENUM_NUMBER, "value " + v.getSymbol() + of,
               v.getParams());
-          refuseReservedParams(format, "value " + v.getSymbol(), v.getParams().keySet());
+          refuseReservedParams(format, "value " + v.getSymbol() + of, v.getParams().keySet());
         }
         break;
       case ARRAY:
@@ -250,14 +262,14 @@ public final class Formats {
 
   // A member's field name is a Protobuf identifier; whether another field has it is the
   // writer's to say, which names the fields around it.
-  private static void refuseBadFieldName(SchemaType format, UnionBranch b) {
+  private static void refuseBadFieldName(SchemaType format, UnionBranch b, String of) {
     Object name = b.getParams().get(Schema.PROTOBUF_FIELD_NAME);
     if (format != SchemaType.PROTOBUF || name == null) {
       return;
     }
     if (!name.toString().matches("[A-Za-z_][A-Za-z0-9_]*")) {
       throw new TypeRefusedException("Property " + Schema.PROTOBUF_FIELD_NAME + " of branch "
-          + b.getName() + " is not a valid field name: '" + name + "'");
+          + b.getName() + of + " is not a valid field name: '" + name + "'");
     }
   }
 
@@ -281,6 +293,15 @@ public final class Formats {
       throw new TypeRefusedException("Property " + property + " of " + of
           + " is not a field's number, which is 1 or more: '" + number + "'");
     }
+    // Nor is it above the last there is, or one of those Protobuf keeps: told here by the
+    // attribute's path, and not by the writer by a message's name no statement gave.
+    if (property.equals(Schema.PROTOBUF_FIELD_NUMBER)
+        && (given > MAX_FIELD_NUMBER || given >= KEPT_FIRST && given <= KEPT_LAST)) {
+      throw new TypeRefusedException(Character.toUpperCase(of.charAt(0)) + of.substring(1)
+          + " cannot have the Protobuf field number " + given + ": "
+          + (given > MAX_FIELD_NUMBER ? "a field's number is " + MAX_FIELD_NUMBER + " at most"
+            : "Protobuf keeps it for itself") + "; give it another, or none");
+    }
   }
 
   // Refuses a JSON UNION a value of one of whose branches would match another too, which its
@@ -291,23 +312,31 @@ public final class Formats {
       String within) {
     String[] both = overlappingBranches(union, named);
     if (both != null) {
-      throw new TypeRefusedException("A UNION " + (within != null ? "of " + within + " " : "")
+      throw new TypeRefusedException("A UNION "
+          + (within != null ? "of attribute " + within + " " : "")
           + "in a JSON type cannot have branches " + both[0] + " and " + both[1]
           + OVERLAPPING);
     }
   }
+
+  private static final int MAX_FIELD_NUMBER = 536_870_911;
+  private static final int KEPT_FIRST = 19_000;
+  private static final int KEPT_LAST = 19_999;
 
   private static final String OVERLAPPING =
       ", which are written as one JSON type: a value of either would match both";
 
   // The first two branches of a union a value of one of which would match the other.
   private static String[] overlappingBranches(Schema union, KnownTypes named) {
-    List<String[]> pairs = overlappingPairs(union, named);
+    List<String[]> pairs = overlappingPairs(union, named, true);
     return pairs.isEmpty() ? null : pairs.get(0);
   }
 
-  // Every two branches of a union a value of one of which would match the other.
-  private static List<String[]> overlappingPairs(Schema union, KnownTypes named) {
+  // Every two branches of a union a value of one of which would match the other; or the
+  // first two alone, where no more is asked: a union of thousands of branches of one kind
+  // is told by its first two.
+  private static List<String[]> overlappingPairs(Schema union, KnownTypes named,
+      boolean first) {
     List<UnionBranch> branches = union.getBranches();
     List<List<Written>> written = new ArrayList<>();
     for (UnionBranch b : branches) {
@@ -322,8 +351,8 @@ public final class Formats {
       met = comparing.met.size();
       comparing.settle();
       pairs.clear();
-      for (int j = 1; j < branches.size(); j++) {
-        for (int i = 0; i < j; i++) {
+      for (int j = 1; j < branches.size() && !(first && !pairs.isEmpty()); j++) {
+        for (int i = 0; i < j && !(first && !pairs.isEmpty()); i++) {
           if (matchBoth(written.get(i), written.get(j), comparing)) {
             pairs.add(new String[] {branches.get(i).getName(), branches.get(j).getName()});
           }
@@ -344,7 +373,8 @@ public final class Formats {
     switch (type.getType()) {
       case STRUCT:
         for (Field f : type.getFields()) {
-          String[] found = newlyOverlapping(f.getSchema(), before, after, f.getName());
+          String[] found = newlyOverlapping(f.getSchema(), before, after,
+              within == null ? f.getName() : within + "." + f.getName());
           if (found != null) {
             return found;
           }
@@ -353,14 +383,16 @@ public final class Formats {
       case UNION: {
         // Two that did before are left: a type stored so is altered as it was.
         Set<String> were = new HashSet<>();
-        overlappingPairs(type, before).forEach(pair -> were.add(pair[0] + " " + pair[1]));
-        for (String[] pair : overlappingPairs(type, after)) {
+        overlappingPairs(type, before, false)
+            .forEach(pair -> were.add(pair[0] + " " + pair[1]));
+        for (String[] pair : overlappingPairs(type, after, false)) {
           if (!were.contains(pair[0] + " " + pair[1])) {
             return new String[] {within, pair[0], pair[1]};
           }
         }
         for (UnionBranch b : type.getBranches()) {
-          String[] found = newlyOverlapping(b.getSchema(), before, after, within);
+          String[] found = newlyOverlapping(b.getSchema(), before, after,
+              within == null ? null : within + "." + b.getName());
           if (found != null) {
             return found;
           }
