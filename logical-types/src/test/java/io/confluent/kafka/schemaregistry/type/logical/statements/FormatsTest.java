@@ -245,6 +245,34 @@ class FormatsTest {
         + "u UNION(r1 STRUCT<a N NOT NULL>, r2 STRUCT<a BOOLEAN>) NOT NULL); TYPE t;"));
   }
 
+  // Every two that were judged by two others are judged again when those are told apart,
+  // and not the first of them alone, in whichever order the branches are.
+  @Test
+  void aJsonUnionsRowsJudgedByOthersAreAllJudgedAgain() {
+    String rows = "STRUCT QA (k INT NOT NULL); STRUCT QB (k STRING NOT NULL); "
+        + "STRUCT A1 (q QA NOT NULL, t ENUM('one') NOT NULL); "
+        + "STRUCT B1 (q QB NOT NULL, t ENUM('one') NOT NULL); "
+        + "STRUCT A2 (q QA NOT NULL, t ENUM('two') NOT NULL); "
+        + "STRUCT B2 (q QB NOT NULL, t ENUM('two') NOT NULL); ";
+    for (String union : List.of(
+        "STRUCT t (u UNION(a A1, b B1, c A2, d B2)); TYPE t;",
+        "STRUCT t (u UNION(d B2, c A2, b B1, a A1)); TYPE t;",
+        "STRUCT A3 (q QA NOT NULL, t ENUM('three') NOT NULL, x A1 NOT NULL, y A2 NOT NULL); "
+            + "STRUCT B3 (q QB NOT NULL, t ENUM('three') NOT NULL, x B1 NOT NULL, "
+            + "y B2 NOT NULL); STRUCT t (u UNION(a A1, b B1, c A2, d B2, e A3, f B3)); "
+            + "TYPE t;")) {
+      Formats.refuseUnwritable(SchemaType.JSON, TypeScripts.parse(rows + union));
+    }
+    // A number said for a union is no number of a field only in a Protobuf type.
+    String numbered = "STRUCT t (a INT, r STRUCT<m INT, v UNION(x BOOLEAN, y STRING) WITH "
+        + "('protobuf.field.number' = '7')>); TYPE t;";
+    Formats.refuseUnwritable(SchemaType.AVRO, TypeScripts.parse(numbered));
+    Formats.refuseUnwritable(SchemaType.JSON, TypeScripts.parse(numbered));
+    assertThatThrownBy(() -> Formats.refuseUnwritable(SchemaType.PROTOBUF,
+        TypeScripts.parse(numbered))).isInstanceOf(TypeRefusedException.class)
+        .hasMessageStartingWith("Attribute r.v cannot have a Protobuf field number");
+  }
+
   // Two rings of rows of lengths with no common measure, told apart in one place, and two
   // chains told apart at their ends: each two are judged again only when one they were
   // judged by is told apart.

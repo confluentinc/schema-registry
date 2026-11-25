@@ -2858,6 +2858,50 @@ class TypeAlterTest {
               + "refers to");
     }
     assertThat(version("h3")).isEqualTo(1);
+    // As where a reference of the type has the name as well: what the type as read calls
+    // one type is the name of another it refers to, and the statement names that one.
+    create("a1", SchemaType.JSON, "(id INT, a fhu, b Ref1)");
+    for (AlterAction action : List.of(new AddAttribute("w", "Ref1"),
+        new AlterAttributeType("b", "ARRAY<Ref1>"))) {
+      assertThatThrownBy(() -> registry.alter("a1", action))
+          .isInstanceOf(TypeRefusedException.class)
+          .hasMessageContaining("it has a type named Ref1 already, as it calls a type it "
+              + "refers to");
+    }
+    assertThat(version("a1")).isEqualTo(1);
+    // A type that calls it that itself has it by that name.
+    create("a2", SchemaType.JSON, "(id INT, b Ref1)");
+    registry.alter("a2", new AddAttribute("w", "Ref1"));
+    assertThat(registry.schema("a2").canonicalString().split("\"\\$ref\":\"Ref1\"", -1))
+        .hasSize(3);
+    // A reference added under a name the type had no use for leaves the others as they
+    // are; one that takes a definition's name stays so, whatever is named after it.
+    create("plain", SchemaType.JSON, "(o STRING NOT NULL)");
+    for (String type : List.of("hd5", "hd6")) {
+      registry.client.register(type, new JsonSchema(registry.version("h", 1).getSchema()
+          .replace("\"title\":\"h\"", "\"title\":\"" + type + "\""),
+          List.of(new SchemaReference("lib", "lib", 1)), resolved, null));
+    }
+    registry.alter("hd5", new AddAttribute("w", "plain"));
+    assertThat(registry.latest("hd5").getReferences()).extracting(SchemaReference::getName)
+        .containsExactlyInAnyOrder("lib", "plain");
+    assertThat(registry.schema("hd5").canonicalString()).contains("\"$ref\":\"lib#/$defs/E\"");
+    registry.alter("hd6", new DropAttribute("e", false), new AddAttribute("w", "E"),
+        new AddAttribute("v", "plain"));
+    assertThat(registry.latest("hd6").getReferences()).extracting(SchemaReference::getName)
+        .containsExactlyInAnyOrder("E", "plain");
+    // A definition of the type's own is written whether an attribute is of it or not: the
+    // type it names is referred to while it is.
+    registry.client.register("hout", new JsonSchema("{\"type\":\"object\",\"title\":\"hout\","
+        + "\"properties\":{\"id\":{\"type\":\"integer\"},\"x\":{\"$ref\":\"#/$defs/Outer\"}},"
+        + "\"additionalProperties\":false,\"$defs\":{\"Outer\":{\"type\":\"object\","
+        + "\"properties\":{\"in\":{\"$ref\":\"lib#/$defs/E\"}},\"additionalProperties\":false}}}",
+        List.of(new SchemaReference("lib", "lib", 1)), resolved, null));
+    registry.alter("hout", new DropAttribute("x", false));
+    assertThat(registry.latest("hout").getReferences()).extracting(SchemaReference::getName)
+        .containsExactly("lib");
+    assertThat(registry.schema("hout").canonicalString())
+        .contains("\"$ref\":\"lib#/$defs/E\"").doesNotContain("\"x\"");
     // A definition's name is in use through a type of the document's own, and is freed by
     // SET DATA TYPE as by a retype.
     registry.client.register("viaown", new JsonSchema("{\"type\":\"object\",\"title\":"
@@ -2945,6 +2989,13 @@ class TypeAlterTest {
     written.put("dinto", head + "\"x\":{\"$ref\":\"#/$defs/o5s\"},\"w\":{\"$ref\":"
         + "\"#/$defs/o5s/$defs/inner\"}},\"additionalProperties\":false,\"$defs\":{\"o5s\":"
         + "{\"$ref\":\"o5s\",\"$defs\":{\"inner\":{\"type\":\"integer\"}}}}}");
+    // Nor one that names the document and says more of what a value is.
+    written.put("dreq", head + "\"x\":{\"$ref\":\"#/$defs/o5s\"}},"
+        + "\"additionalProperties\":false,\"$defs\":{\"o5s\":{\"$ref\":\"o5s\","
+        + "\"required\":[\"zz\"]}}}");
+    // An attribute named as a word of a schema is an attribute.
+    written.put("dkey", head + "\"examples\":{\"$ref\":\"#/$defs/o5s\"}},"
+        + "\"additionalProperties\":false,\"$defs\":{\"o5s\":" + object + "}}");
     // One that names another document than that of its name is no name of that one.
     written.put("dother", head + "\"x\":{\"$ref\":\"#/$defs/o5s\"}},"
         + "\"additionalProperties\":false,\"$defs\":{\"o5s\":{\"$ref\":\"E\"}}}");
@@ -2965,6 +3016,7 @@ class TypeAlterTest {
     written.put("dal", "{\"$ref\":\"o5s\"}");
     written.put("dlr", "{\"$ref\":\"o5s\",\"logical.ref\":true}");
     written.put("dds", "{\"$ref\":\"o5s\",\"description\":\"the same\"}");
+    written.put("dtc", "{\"$ref\":\"o5s\",\"title\":\"O\",\"$comment\":\"as is\"}");
     for (Map.Entry<String, String> type : written.entrySet()) {
       registry.client.register(type.getKey(), new JsonSchema(String.format(head
           + "\"x\":{\"$ref\":\"#/$defs/o5s\"}},\"additionalProperties\":false,\"$defs\":"
@@ -2972,6 +3024,37 @@ class TypeAlterTest {
       registry.alter(type.getKey(), new AddAttribute("z", "INT"));
       assertThat(version(type.getKey())).as(type.getKey()).isEqualTo(2);
     }
+    // Wherever it is, and by either word for it.
+    registry.client.register("dx7", new JsonSchema(String.format(head
+        + "\"x\":{\"$ref\":\"#/definitions/o5s\"}},\"additionalProperties\":false,"
+        + "\"definitions\":{\"o5s\":{\"$ref\":\"o5s\"}}}", "dx7"), refs, resolved, null));
+    registry.client.register("dxp", new JsonSchema(String.format(head
+        + "\"x\":{\"$ref\":\"#/properties/y/$defs/o5s\"},\"y\":{\"type\":\"object\","
+        + "\"properties\":{\"k\":{\"type\":\"integer\"}},\"additionalProperties\":false,"
+        + "\"$defs\":{\"o5s\":{\"$ref\":\"o5s\"}}}},\"additionalProperties\":false}", "dxp"),
+        refs, resolved, null));
+    // A $ref in what is data, as an example, is no reference.
+    registry.client.register("dex", new JsonSchema(String.format(head
+        + "\"c\":{\"type\":\"integer\",\"examples\":[{\"$ref\":\"lib#/$defs/o5s\"}]}},"
+        + "\"additionalProperties\":false}", "dex"), refs, resolved, null));
+    for (String type : List.of("dx7", "dxp", "dex")) {
+      registry.alter(type, new AddAttribute("z", "INT"));
+      assertThat(version(type)).as(type).isEqualTo(2);
+    }
+    // Another document's definition of the name is judged as that, whatever the type's
+    // own definition of it says.
+    registry.client.register("lib3", new JsonSchema("{\"type\":\"object\",\"title\":\"lib3\","
+        + "\"properties\":{\"q\":{\"type\":\"integer\"}},\"additionalProperties\":false,"
+        + "\"$defs\":{\"o5s\":{\"enum\":[\"X\",\"Y\"]}}}"));
+    Map<String, String> three = new LinkedHashMap<>(resolved);
+    three.put("lib3", registry.latest("lib3").getSchema());
+    registry.client.register("dl3", new JsonSchema(String.format(head
+        + "\"y\":{\"$ref\":\"#/$defs/o5s\"},\"x\":{\"$ref\":\"lib3#/$defs/o5s\"}},"
+        + "\"additionalProperties\":false,\"$defs\":{\"o5s\":{\"$ref\":\"o5s\"}}}", "dl3"),
+        List.of(refs.get(0), new SchemaReference("lib3", "lib3", 1)), three, null));
+    assertThatThrownBy(() -> registry.alter("dl3", new AddAttribute("z", "INT")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("it has a definition named o5s of lib3");
     nativeJson("dwr", "USING TYPE o5s FOR REF 'o5s'; STRUCT dwr (id INT, x o5s); TYPE dwr;",
         "o5s");
     registry.alter("dwr", new AddAttribute("z", "INT"));
@@ -3631,6 +3714,24 @@ class TypeAlterTest {
     assertThat(numbers(message("pnw").findFieldByName("mm").getMessageType()
         .findFieldByName("value").getMessageType()).split(" "))
         .containsExactlyInAnyOrder("k1=1", "k2=2", "v1=3", "k3=4", "v3=5", "v2=536870911");
+    // Where a member is is told through rows, members, arrays, multisets and maps.
+    create("pnp", SchemaType.PROTOBUF, "(a INT, r STRUCT<m INT, s STRUCT<k INT>>, "
+        + "l ARRAY<STRUCT<k INT>>, ms MULTISET<STRUCT<k INT>>, mk MAP<STRUCT<k INT>, STRING>, "
+        + "mv MAP<STRING, STRUCT<k INT>>, u UNION(p INT, q STRUCT<k INT>))");
+    String nine = " WITH ('protobuf.field.number' = '9')";
+    String[][] paths = {
+        {"r", "STRUCT<m INT, s STRUCT<k INT" + nine + ">>", "Attribute r.s.k "},
+        {"u", "UNION(p INT, q STRUCT<k INT" + nine + ">)", "Attribute u.q.k "},
+        {"l", "ARRAY<STRUCT<k INT" + nine + ">>", "Attribute l.k "},
+        {"ms", "MULTISET<STRUCT<k INT" + nine + ">>", "Attribute ms.k "},
+        {"mk", "MAP<STRUCT<k INT" + nine + ">, STRING>", "Attribute mk.k "},
+        {"mv", "MAP<STRING, STRUCT<k INT" + nine + ">>", "Attribute mv.k "}};
+    for (String[] path : paths) {
+      assertThatThrownBy(() -> registry.alter("pnp", new AlterAttributeType(path[0], path[1])))
+          .as(path[1]).isInstanceOf(TypeRefusedException.class)
+          .hasMessageStartingWith(path[2] + "cannot be given the Protobuf field number 9: "
+              + "it has 1");
+    }
     // A number said for a member of a type given anew is the one it has, or is refused.
     create("pnt", SchemaType.PROTOBUF,
         "(a INT, r STRUCT(m INT, n STRING), u UNION(x INT, y STRING))");

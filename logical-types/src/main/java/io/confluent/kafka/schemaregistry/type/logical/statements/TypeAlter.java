@@ -53,6 +53,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -86,6 +87,13 @@ public final class TypeAlter {
   private static final int RESERVED_FIRST = 19_000;
   private static final int RESERVED_LAST = 19_999;
   private static final int MAX_NUMBER = 536_870_911;
+  // The words of a JSON schema whose values are data, those whose values are schemas by
+  // name, and those that say nothing of what a value is.
+  private static final Set<String> DATA = Set.of("const", "enum", "examples", "default");
+  private static final Set<String> BY_NAME = Set.of("properties", "$defs", "definitions",
+      "patternProperties", "dependentSchemas");
+  private static final Set<String> SAYS_NOTHING = Set.of("$ref", "title", "description",
+      "$comment", "logical.ref");
   private static final String KEY_SUFFIX = "-key";
   private static final String VALUE_SUFFIX = "-value";
 
@@ -1694,6 +1702,15 @@ public final class TypeAlter {
   private void dropUnusedReferences() {
     Set<String> reachable = new LinkedHashSet<>();
     List<Schema> work = new ArrayList<>(List.of(root));
+    // A JSON type's own definitions are written whether an attribute is of them or not,
+    // with the types they name.
+    if (format == SchemaType.JSON) {
+      namedTypes.forEach((name, type) -> {
+        if (!externalTypes.contains(name)) {
+          work.add(type);
+        }
+      });
+    }
     while (!work.isEmpty()) {
       Set<String> refs = new LinkedHashSet<>();
       LogicalType.collectNamedRefs(work.remove(work.size() - 1), refs);
@@ -1872,19 +1889,23 @@ public final class TypeAlter {
     Set<String> documents = new HashSet<>();
     md.getReferences().forEach(r -> documents.add(r.getName()));
     JsonNode schema = ((JsonSchema) stored).toJsonNode();
-    List<JsonNode> refs = schema.findValues("$ref");
-    for (JsonNode ref : refs) {
-      String to = ref.asText("");
+    List<String> refs = new ArrayList<>();
+    collectRefs(schema, refs);
+    for (String to : refs) {
       // The name a definition is read by, wherever in a document it is.
       String name = JsonToLogicalTypeConverter.extractCanonicalDefsKey(to);
       String of = to.contains("#") ? to.substring(0, to.indexOf('#')) : to;
       if (name == null || !documents.contains(name) || name.equals(of)) {
         continue;
       }
-      // A definition that only names the document is that document, whatever else it says:
-      // unless it has definitions of its own that are named, which would be left with it.
-      if (of.isEmpty() && name.equals(definition(schema, to).path("$ref").asText(null))
-          && refs.stream().noneMatch(r -> r.asText("").startsWith(to + "/"))) {
+      // A definition that only names the document is that document: one that says no more
+      // of what a value is, as the writer writes a name the type has for the document.
+      JsonNode own = definition(schema, to);
+      boolean only = true;
+      for (Iterator<String> said = own.fieldNames(); said.hasNext(); ) {
+        only &= SAYS_NOTHING.contains(said.next());
+      }
+      if (of.isEmpty() && only && name.equals(own.path("$ref").asText(null))) {
         continue;
       }
       throw new TypeRefusedException("Type " + subject + " cannot be altered: it has a "
@@ -1893,6 +1914,29 @@ public final class TypeAlter {
           + "definition would be written as that type. Register its new version as a JSON "
           + "schema");
     }
+  }
+
+  // The $refs of a schema and of the schemas in it. What is under a word for a value, as
+  // const or enum, is data and no schema; what is under a word for schemas by name, as
+  // properties, is a schema whatever its name.
+  private static void collectRefs(JsonNode schema, List<String> refs) {
+    if (schema.isArray()) {
+      schema.forEach(item -> collectRefs(item, refs));
+    }
+    if (!schema.isObject()) {
+      return;
+    }
+    schema.fields().forEachRemaining(said -> {
+      if (said.getKey().equals("$ref")) {
+        if (said.getValue().isTextual()) {
+          refs.add(said.getValue().asText());
+        }
+      } else if (BY_NAME.contains(said.getKey()) && said.getValue().isObject()) {
+        said.getValue().forEach(named -> collectRefs(named, refs));
+      } else if (!DATA.contains(said.getKey())) {
+        collectRefs(said.getValue(), refs);
+      }
+    });
   }
 
   // What a $ref to a part of the schema itself is to, or nothing where it is to none.
@@ -1950,7 +1994,11 @@ public final class TypeAlter {
       }
       // A JSON name is one type's: a definition of a type referred to that the type has
       // under a name, and a type of that name, would both be written as the one.
-      if (!found && format == SchemaType.JSON && defined.contains(ref.getName())) {
+      // And one that is what the type as read calls another type is that type's there,
+      // though a reference of the type has the name as well.
+      boolean called = externalImports.containsKey(ref.getName())
+          && !ref.getName().equals(externalImports.get(ref.getName()));
+      if (format == SchemaType.JSON && (called || !found && defined.contains(ref.getName()))) {
         throw new TypeRefusedException(refused() + ": it has a type named " + ref.getName()
             + " already, " + (externalImports.containsKey(ref.getName())
               ? "as it calls a type it refers to" : named.contains(ref.getName())
