@@ -1949,10 +1949,9 @@ public class ProtoToLogicalTypeConverter {
   public static String entryFieldRenumbered(final List<Descriptor> messages) {
     for (Descriptor message : messages) {
       for (FieldDescriptor field : message.getFields()) {
-        // A message of an entry's shape is an entry as a repeated field's, as it is read; one
-        // of another file is not written here.
+        // A message of an entry's shape is an entry as a repeated field's, as it is read.
+        // One another file declares is one too: the writer writes an entry of its own.
         String entry = field.isRepeated() && isMapDescriptor(field)
-            && field.getMessageType().getFile() == message.getFile()
             ? renumbered(field.getMessageType()) : null;
         if (entry != null) {
           return entry;

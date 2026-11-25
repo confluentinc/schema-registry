@@ -1819,6 +1819,15 @@ class TypeAlterTest {
         + ";\n  int32 c = 3" + String.format(place, "0") + ";\n}\n"));
     assertThat(names("ix")).containsExactly("c", "b", "a");
 
+    // The writer's marker stands beside a place only where the field has no other param.
+    create("ik", SchemaType.PROTOBUF, "(a INT WITH ('k' = 'v', 'protobuf.field.number' = '2'), "
+        + "c INT WITH ('k' = 'v', 'l' = 'w', 'protobuf.field.number' = '3'), "
+        + "b INT WITH ('protobuf.field.number' = '1'))");
+    String stored = registry.schema("ik").canonicalString();
+    assertThat(stored.substring(stored.indexOf(" a = 2"))).contains("connect.index")
+        .doesNotContain("flink.version");
+    assertThat(stored.substring(0, stored.indexOf(" a = 2"))).contains("flink.version");
+
     // V1 tells none.
     assertThat(LogicalTypeToProtoConverter.fromLogicalType(TypeScripts.parse(
         "STRUCT t (b INT WITH ('protobuf.field.number' = '2'), "
@@ -2111,6 +2120,25 @@ class TypeAlterTest {
     assertThatThrownBy(() -> registry.alter("rw", new AddAttribute("z", "INT")))
         .isInstanceOf(TypeRefusedException.class).hasMessageContaining("field value of map "
             + "entry MEntry has the number 3, which would be written as 2");
+    // One a nested message's field has, and one another file declares.
+    registry.client.register("rn", new ProtobufSchema("syntax = \"proto3\";\n\nmessage R {\n"
+        + "  int32 id = 1;\n  Inner i = 2;\n\n  message Inner {\n    repeated FooEntry a = 1;\n\n"
+        + "    message FooEntry {\n      string key = 2;\n      int32 value = 1;\n    }\n  }\n}\n"));
+    assertThatThrownBy(() -> registry.alter("rn", new AddAttribute("z", "INT")))
+        .isInstanceOf(TypeRefusedException.class).hasMessageContaining("map entry FooEntry");
+    String pair = "syntax = \"proto3\";\n\npackage o;\n\nmessage PairEntry {\n"
+        + "  string key = 2;\n  int32 value = 1;\n}\n";
+    registry.client.register("ent", new ProtobufSchema(pair));
+    registry.client.register("ri", new ProtobufSchema("syntax = \"proto3\";\n\n"
+        + "import \"ent\";\n\nmessage R {\n  int32 id = 1;\n  repeated o.PairEntry a = 2;\n}\n",
+        List.of(new SchemaReference("ent", "ent", 1)), Map.of("ent", pair), null, null));
+    assertThatThrownBy(() -> registry.alter("ri", new AddAttribute("z", "INT")))
+        .isInstanceOf(TypeRefusedException.class).hasMessageContaining("map entry PairEntry");
+    // A repeated message of a key and a value that is not named as an entry is a row's.
+    registry.client.register("rr", new ProtobufSchema(String.format(entry,
+        "int32 value = 1;", "int32 key = 2;").replace("MEntry", "Item")));
+    registry.alter("rr", new AddAttribute("z", "INT"));
+    assertThat(version("rr")).isEqualTo(2);
     // Numbered in turn, it is altered.
     registry.client.register("ok", new ProtobufSchema(
         String.format(entry, "int32 key = 1;", "int32 value = 2;")));
@@ -2228,6 +2256,27 @@ class TypeAlterTest {
     assertThat(registry.alter("um", new AddAttribute("q", "INT"),
         new DropAttribute("q", false)).edited()).isNull();
 
+    // Whatever its type, it is written as one that may be null, with what it has beside.
+    for (String member : List.of("DECIMAL(10, 2)", "TIMESTAMP(3)", "STRUCT(k INT)", "DATE")) {
+      String said = "un" + member.charAt(0) + member.length();
+      create(said, SchemaType.PROTOBUF,
+          "(id INT NOT NULL, u UNION(x " + member + " NOT NULL, y STRING))");
+      create(said + "p", SchemaType.PROTOBUF,
+          "(id INT NOT NULL, u UNION(x " + member + ", y STRING))");
+      assertThat(registry.schema(said).canonicalString()).as(member).isEqualTo(
+          registry.schema(said + "p").canonicalString().replace(said + "p", said));
+    }
+    create("uc", SchemaType.PROTOBUF,
+        "(id INT NOT NULL, u UNION(x STRUCT(k INT) NOT NULL COMMENT 'mc', y STRING))");
+    assertThat(registry.schema("uc").canonicalString()).contains("doc: \"mc\"");
+    // A renamed union's array of another element nullability is named for the union it is of.
+    create("uk", SchemaType.PROTOBUF, "(id INT NOT NULL, u UNION(p INT, q ARRAY<INT NOT NULL>))");
+    registry.alter("uk", new RenameAttribute("u", "w"));
+    assertThat(registry.schema("uk").canonicalString()).contains("UQRepeatedWrapper");
+    registry.alter("uk", new AlterAttributeType("w", "UNION(p INT, q ARRAY<INT>)"));
+    assertThat(registry.schema("uk").canonicalString()).contains("WQRepeatedWrapper")
+        .doesNotContain("UQRepeatedWrapper");
+
     // An element that may now be null is wrapped, and is named anew.
     create("ue", SchemaType.PROTOBUF,
         "(id BIGINT NOT NULL, a UNION(p INT, q ARRAY<STRUCT(k INT) NOT NULL>))");
@@ -2235,6 +2284,24 @@ class TypeAlterTest {
     create("uf", SchemaType.PROTOBUF,
         "(id BIGINT NOT NULL, a UNION(p INT, q ARRAY<STRUCT(k INT)>))");
     assertThat(typeNames(message("ue"))).isEqualTo(typeNames(message("uf")));
+  }
+
+  // A member said NOT NULL is read as one that may be null, and written as it is read: a
+  // statement that changes nothing makes no version of it.
+  @ParameterizedTest
+  @EnumSource(value = SchemaType.class, names = {"AVRO", "PROTOBUF"})
+  void aUnionMemberSaidNotNullIsWrittenAsItIsRead(SchemaType format) {
+    List<String> members = List.of("INT", "STRUCT(k INT)", "ARRAY<INT>", "MAP<STRING, INT>",
+        "ENUM('A', 'B')");
+    for (int i = 0; i < members.size(); i++) {
+      String type = "mn" + i;
+      create(type, format, "(id INT NOT NULL, u UNION(x " + members.get(i)
+          + " NOT NULL, y STRING))");
+      assertThat(registry.alter(type, new AddAttribute("q", "INT"),
+          new DropAttribute("q", false)).edited()).as(members.get(i)).isNull();
+      assertThat(registry.alter(type, new AlterAttributeType("u", "UNION(x " + members.get(i)
+          + ", y STRING)")).edited()).as(members.get(i)).isNull();
+    }
   }
 
   // The names of the messages a message declares, at every level, with their fields' numbers.
