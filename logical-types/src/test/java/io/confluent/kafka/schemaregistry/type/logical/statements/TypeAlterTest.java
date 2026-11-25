@@ -948,6 +948,42 @@ class TypeAlterTest {
     assertThat(version("o")).isEqualTo(2);
   }
 
+  // A type of another context refers to its own inner as inner, and from here that type is
+  // named with its context: named both ways, a Protobuf file would be imported twice. The one
+  // type is referred to by the one name, and its two versions are told as such.
+  @ParameterizedTest
+  @EnumSource(SchemaType.class)
+  void aTypeNamedWithATypeThatRefersToItIsReferredToByOneName(SchemaType format) {
+    registry.create(":.c:inner", "inner", format, BodyKind.STRUCT, "(x STRING)");
+    registry.create(":.c:pair", "pair", format, BodyKind.STRUCT, "(a STRING, i inner)");
+    // In either order, and added to a type that has the other.
+    create("o1", format, "(id INT NOT NULL, p `:.c:pair`, k `:.c:inner`)");
+    create("o2", format, "(id INT NOT NULL, k `:.c:inner`, p `:.c:pair`)");
+    create("o3", format, "(id INT NOT NULL, p `:.c:pair`)");
+    create("o4", format, "(id INT NOT NULL, p `:.c:pair`)");
+    registry.alter("o3", new AddAttribute("k", "`:.c:inner`", Position.first()));
+    for (String type : List.of("o1", "o2", "o3")) {
+      List<SchemaReference> references = registry.latest(type).getReferences();
+      assertThat(references).as(type).extracting(SchemaReference::getSubject)
+          .containsExactlyInAnyOrder(":.c:inner", ":.c:pair");
+      if (format != SchemaType.JSON) {
+        assertThat(references).as(type).extracting(SchemaReference::getName).contains("inner");
+      }
+    }
+
+    registry.alter(":.c:inner", new AddAttribute("z", "INT"));
+    if (format == SchemaType.JSON) {
+      // A JSON $ref names a document, and two names are two documents, each read as it is.
+      registry.alter("o4", new AddAttribute("k", "`:.c:inner`"));
+      assertThat(version("o4")).isEqualTo(2);
+      return;
+    }
+    assertThatThrownBy(() -> registry.alter("o4", new AddAttribute("k", "`:.c:inner`")))
+        .isInstanceOf(TypeRefusedException.class).hasMessageContaining(
+            "it would refer to two versions of type :.c:inner, version 1 (through version 1 of "
+                + "type :.c:pair) and version 2 (named directly)");
+  }
+
   // A version stored so, as another tool registers one, is altered only by a statement that
   // leaves it one version of the type.
   @Test

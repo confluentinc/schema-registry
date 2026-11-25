@@ -57,6 +57,9 @@ public final class TypeReferences {
    * <li>A JSON reference to a type takes the name a reference to it is stored with, if names
    * holds one for its subject; otherwise its name, or for a type in a context, which is no URI
    * a $ref can name, that name encoded.</li>
+   * <li>An Avro or Protobuf reference to a type takes the name names holds for its subject, or
+   * the one a type named beside it refers to it by: referred to by two names, a Protobuf file
+   * would be imported twice.</li>
    * </ul>
    */
   public static LogicalType parse(TypeLookup lookup, SchemaType format, ScriptBuilder builder,
@@ -70,6 +73,8 @@ public final class TypeReferences {
     Map<String, String> resolved = new LinkedHashMap<>();
     // A JSON $ref names one document: a name two types would take is refused.
     Map<String, String> named = format == SchemaType.JSON ? new HashMap<>() : null;
+    // The names the types named refer to their own types by, by subject.
+    Map<String, String> bound = format == SchemaType.JSON ? null : new HashMap<>();
     // The type itself, as a reference would name it; null when it has no subject yet.
     String self = referrer == null ? null : referenced(referrer, referrer);
     for (String name : lt.getExternalTypes()) {
@@ -87,7 +92,7 @@ public final class TypeReferences {
             + ", so it cannot be used in a " + format + " type");
       }
       String stored = names.get(subject);
-      String refName = format != SchemaType.JSON ? name
+      String refName = format != SchemaType.JSON ? stored != null ? stored : name
           : stored != null && nameable(stored) ? stored : jsonReferenceName(name);
       references.add(new SchemaReference(refName, name, md.getVersion()));
       requireOneSubject(named, refName, subject);
@@ -95,7 +100,7 @@ public final class TypeReferences {
       // as the registry's resolver has it: a schema holds one version of a name.
       if (!resolved.containsKey(refName)) {
         try {
-          collectReferences(lookup, subject, md.getReferences(), resolved, named, self);
+          collectReferences(lookup, subject, md.getReferences(), resolved, named, self, bound);
         } catch (RefersBack e) {
           throw new TypeRefusedException("Type " + self + " cannot refer to type " + subject
               + ", which refers to " + self);
@@ -116,7 +121,36 @@ public final class TypeReferences {
     if (!aliases.isEmpty()) {
       lt = TypeScripts.parse(builder.build(aliases));
     }
+    if (bound != null) {
+      nameAsBound(referrer, references, resolved, bound);
+    }
     return TypeScripts.withReferences(lt, references, resolved);
+  }
+
+  // Gives a reference the name a type named beside it refers to its subject by, where it has
+  // another: its schema is then held once, under the one name.
+  private static void nameAsBound(String referrer, List<SchemaReference> references,
+      Map<String, String> resolved, Map<String, String> bound) {
+    for (int i = 0; i < references.size(); i++) {
+      SchemaReference ref = references.get(i);
+      String name = bound.get(referenced(referrer, ref.getSubject()));
+      if (name == null || name.equals(ref.getName()) || !resolved.containsKey(name)) {
+        continue;
+      }
+      references.set(i, new SchemaReference(name, ref.getSubject(), ref.getVersion()));
+      resolved.remove(ref.getName());
+    }
+  }
+
+  /**
+   * The names a subject's references and theirs give the types they refer to, by subject, the
+   * first for each: what {@link #parse} takes as the names stored.
+   */
+  static Map<String, String> boundNames(TypeLookup lookup, String referrer,
+      List<SchemaReference> references) {
+    Map<String, String> bound = new HashMap<>();
+    collectReferences(lookup, referrer, references, new LinkedHashMap<>(), null, null, bound);
+    return bound;
   }
 
   /**
@@ -165,7 +199,7 @@ public final class TypeReferences {
   public static Map<String, String> resolve(TypeLookup lookup, String referrer,
       List<SchemaReference> references) {
     Map<String, String> resolved = new LinkedHashMap<>();
-    collectReferences(lookup, referrer, references, resolved, null, null);
+    collectReferences(lookup, referrer, references, resolved, null, null, null);
     return resolved;
   }
 
@@ -202,7 +236,7 @@ public final class TypeReferences {
   // One that is self, the type these are collected for, would make it refer to itself.
   private static void collectReferences(TypeLookup lookup, String referrer,
       List<SchemaReference> references, Map<String, String> resolved,
-      Map<String, String> named, String self) {
+      Map<String, String> named, String self, Map<String, String> bound) {
     if (references == null) {
       return;
     }
@@ -212,6 +246,9 @@ public final class TypeReferences {
         throw new RefersBack();
       }
       requireOneSubject(named, ref.getName(), subject);
+      if (bound != null) {
+        bound.putIfAbsent(subject, ref.getName());
+      }
       if (resolved.containsKey(ref.getName())) {
         continue;
       }
@@ -221,7 +258,7 @@ public final class TypeReferences {
         throw new TypeRefusedException("Could not resolve reference " + ref.getName()
             + ": type " + subject + " has no version " + ref.getVersion());
       }
-      collectReferences(lookup, subject, md.getReferences(), resolved, named, self);
+      collectReferences(lookup, subject, md.getReferences(), resolved, named, self, bound);
       resolved.put(ref.getName(), md.getSchema());
     }
   }

@@ -202,6 +202,8 @@ public final class TypeAlter {
   private final Set<String> dropped = new HashSet<>();
   // The names of the previous version of attributes this statement renames, by their new names.
   private final Map<String, String> previousNames = new HashMap<>();
+  // The names this type's references and theirs give their types, by subject; read once.
+  private Map<String, String> boundNames;
   // The attributes this statement adds, by their names in it.
   private final Set<String> added = new HashSet<>();
   private final List<Message> versions = new ArrayList<>();
@@ -1465,6 +1467,12 @@ public final class TypeAlter {
       for (SchemaReference r : references) {
         names.put(TypeReferences.referenced(subject, r.getSubject()), r.getName());
       }
+    } else if (!references.isEmpty()) {
+      // And an Avro or Protobuf type's takes the name the types it refers to already use.
+      if (boundNames == null) {
+        boundNames = TypeReferences.boundNames(lookup, subject, references);
+      }
+      names = boundNames;
     }
     LogicalType lt = parseWithReferences(builder, names);
     externalTypes.addAll(lt.getExternalTypes());
