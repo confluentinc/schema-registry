@@ -19,7 +19,6 @@ package io.confluent.kafka.schemaregistry.type.logical.statements;
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
-import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import java.net.URLEncoder;
@@ -206,24 +205,23 @@ public final class TypeReferences {
   /**
    * The types a type's references are of, by the names the type has for them: each
    * reference's name, its subject, the referred type's own name and the names imported
-   * from it; and the types those refer to in turn, by the names they have for them. A
-   * reference that cannot be read is left out.
+   * from it whole. Each has the names of its own: its named types, and the types it refers
+   * to in turn. A reference that cannot be read is left out.
    */
-  static Map<String, Schema> referredTypes(TypeLookup lookup, String referrer,
+  static KnownTypes referredTypes(TypeLookup lookup, String referrer,
       List<SchemaReference> references, Map<String, String> imports) {
-    Map<String, Schema> types = new HashMap<>();
-    collectReferred(lookup, referrer, references, imports, types, new HashSet<>());
-    return types;
+    return referredTypes(lookup, referrer, references, imports, new HashSet<>());
   }
 
-  private static void collectReferred(TypeLookup lookup, String referrer,
-      List<SchemaReference> references, Map<String, String> imports,
-      Map<String, Schema> types, Set<String> seen) {
+  private static KnownTypes referredTypes(TypeLookup lookup, String referrer,
+      List<SchemaReference> references, Map<String, String> imports, Set<String> within) {
+    KnownTypes types = KnownTypes.none();
+    if (references == null) {
+      return types;
+    }
     for (SchemaReference ref : references) {
       String subject = referenced(referrer, ref.getSubject());
-      if (!seen.add(subject + " " + ref.getVersion())) {
-        continue;
-      }
+      String key = subject + " " + ref.getVersion();
       LogicalType referred;
       try {
         SchemaMetadata md = lookup.version(subject, ref.getVersion());
@@ -231,33 +229,29 @@ public final class TypeReferences {
       } catch (RuntimeException e) {
         referred = null;
       }
-      if (referred == null) {
+      // One that refers back to a type being read is left out.
+      if (referred == null || !within.add(key)) {
         continue;
       }
-      Schema root = referred.getRootSchema();
-      if (root.getType() == Schema.Type.NAMED_TYPE_REF) {
-        root = referred.getNamedTypes().getOrDefault(root.getQualifiedName(), root);
-      }
-      Set<String> names = new LinkedHashSet<>(List.of(ref.getName(), ref.getSubject()));
+      KnownTypes names = referredTypes(lookup, subject, referred.getReferences(),
+          referred.getExternalImports(), within);
+      within.remove(key);
+      referred.getNamedTypes().forEach(names::put);
+      Set<String> called = new LinkedHashSet<>(List.of(ref.getName(), ref.getSubject()));
       if (referred.getName() != null) {
-        names.add(referred.getName());
+        called.add(referred.getName());
       }
-      for (Map.Entry<String, String> imported : imports.entrySet()) {
-        String from = imported.getValue();
-        if (ref.getName().equals(from.contains("#") ? from.substring(0, from.indexOf('#'))
-            : from)) {
-          names.add(imported.getKey());
+      // A name imported with a fragment is of a part of the document, which is not told.
+      imports.forEach((name, from) -> {
+        if (ref.getName().equals(from)) {
+          called.add(name);
         }
-      }
-      for (String name : names) {
-        types.putIfAbsent(name, root);
-      }
-      referred.getNamedTypes().forEach(types::putIfAbsent);
-      if (referred.getReferences() != null) {
-        collectReferred(lookup, subject, referred.getReferences(),
-            referred.getExternalImports(), types, seen);
+      });
+      for (String name : called) {
+        types.putReferred(name, referred.getRootSchema(), names);
       }
     }
+    return types;
   }
 
   public static Set<String> definedNames(TypeLookup lookup, String referrer,

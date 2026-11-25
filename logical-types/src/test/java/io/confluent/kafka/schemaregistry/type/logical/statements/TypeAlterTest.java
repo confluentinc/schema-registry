@@ -2628,6 +2628,90 @@ class TypeAlterTest {
     create("nu4", SchemaType.JSON, "(u UNION(x INT, y nu2))");
   }
 
+  // The names in a type referred to are its own: a type whose root is a name, or a union
+  // with one, is what that name is of there, whatever the type that refers to it calls its
+  // own references.
+  @Test
+  void aJsonUnionsBranchIsJudgedByTheNamesOfTheTypeItIsOf() {
+    registry.create("je", SchemaType.JSON, BodyKind.ENUM, "('A', 'B')");
+    registry.create("jk", SchemaType.JSON, BodyKind.STRUCT, "(k INT)");
+    registry.create("jalias", SchemaType.JSON, BodyKind.OTHER, "je");
+    registry.create("jkalias", SchemaType.JSON, BodyKind.OTHER, "jk");
+    registry.create("jdom", SchemaType.JSON, BodyKind.OTHER, "UNION(p je, q BOOLEAN)");
+    for (String union : List.of("UNION(a STRING, b jalias)",
+        "UNION(a STRUCT(k INT), b jkalias)", "UNION(a STRING, b jdom)",
+        "UNION(a BOOLEAN, b jdom)")) {
+      assertThatThrownBy(() -> create("jc", SchemaType.JSON, "(u " + union + ")")).as(union)
+          .isInstanceOf(TypeRefusedException.class)
+          .hasMessageContaining("cannot have branches a and b");
+    }
+    // A type that refers to the row has the enum's alias beside a row, and not beside a
+    // string; one that refers to the enum, the other way.
+    create("jw1", SchemaType.JSON, "(id INT NOT NULL, e jk)");
+    registry.alter("jw1", new AddAttribute("u", "UNION(a STRUCT(k INT), b jalias)"));
+    assertThatThrownBy(() -> registry.alter("jw1",
+        new AddAttribute("u2", "UNION(a STRING, b jalias)")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("cannot have branches a and b");
+    create("jw2", SchemaType.JSON, "(id INT NOT NULL, e je)");
+    registry.alter("jw2", new AddAttribute("u", "UNION(a STRING, b jkalias)"));
+    assertThatThrownBy(() -> registry.alter("jw2",
+        new AddAttribute("u2", "UNION(a STRUCT(k INT), b jkalias)")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("cannot have branches a and b");
+  }
+
+  // The types references are of are read only for a union with a name in it: a statement
+  // that has none reads no type it refers to.
+  @Test
+  void aJsonStatementWithNoNamedBranchReadsNoReferredType() {
+    registry.create("je", SchemaType.JSON, BodyKind.ENUM, "('A', 'B')");
+    registry.create("jk", SchemaType.JSON, BodyKind.STRUCT, "(k INT)");
+    create("jq", SchemaType.JSON, "(id INT NOT NULL, e je, r jk, u UNION(a INT, b jk))");
+    List<String> read = new ArrayList<>();
+    TypeLookup counting = new TypeLookup() {
+      @Override
+      public SchemaMetadata latest(String subject) {
+        return registry.latest(subject);
+      }
+
+      @Override
+      public SchemaMetadata version(String subject, int version) {
+        return registry.version(subject, version);
+      }
+
+      @Override
+      public ParsedSchema parse(SchemaMetadata version) {
+        return registry.parse(version);
+      }
+
+      @Override
+      public List<Integer> versions(String subject, boolean deleted) {
+        return registry.versions(subject, deleted);
+      }
+
+      @Override
+      public LogicalType logicalType(String subject, SchemaMetadata version) {
+        read.add(subject);
+        return registry.logicalType(subject, version);
+      }
+
+      @Override
+      public Config config(String subject) {
+        return registry.config(subject);
+      }
+    };
+    TypeAlter.alter(counting, "jq", List.of(new AddAttribute("t", "INT"),
+        new AddAttribute("v", "UNION(a INT, b STRING)"),
+        new AlterAttributeType("id", "BIGINT NOT NULL")), new TypeAlter.Options());
+    assertThat(read).doesNotContain("je", "jk");
+    // One with a named branch reads them, once for the statement.
+    read.clear();
+    TypeAlter.alter(counting, "jq", List.of(new AddAttribute("w", "UNION(a INT, b je)"),
+        new AddAttribute("x", "UNION(a BOOLEAN, b jk)")), new TypeAlter.Options());
+    assertThat(read).containsOnlyOnce("je").containsOnlyOnce("jk");
+  }
+
   // A number said for a new Protobuf attribute is its number where no field has it and
   // none of a version had; it is not left out without a word.
   @Test

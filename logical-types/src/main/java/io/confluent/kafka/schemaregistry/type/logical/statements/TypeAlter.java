@@ -52,6 +52,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -191,6 +192,7 @@ public final class TypeAlter {
   // The named types of the type text parsed last, those it refers to among them.
   private Map<String, Schema> parsedTypes = Map.of();
   private Map<String, String> parsedImports = Map.of();
+  private final Map<String, KnownTypes> referredTypes = new HashMap<>();
   private final Set<String> externalTypes = new LinkedHashSet<>();
   private final Map<String, String> externalImports = new LinkedHashMap<>();
   private final List<SchemaReference> references = new ArrayList<>();
@@ -844,7 +846,7 @@ public final class TypeAlter {
             + fields.get(same).getName());
       }
       refuseDroppedName(a.name());
-      Formats.refuseUnwritable(format, field, knownTypes());
+      Formats.refuseUnwritable(format, field, knownTypes(field.getSchema()));
       Map<String, Object> params = new LinkedHashMap<>(field.getParams());
       if (format == SchemaType.PROTOBUF) {
         params.put(Schema.PROTOBUF_FIELD_NUMBER, String.valueOf(numberGiven(field, fields)));
@@ -1015,7 +1017,7 @@ public final class TypeAlter {
       }
       Schema type = parse(aliases -> TypeScripts.typeScript(a.type(), aliases))
           .getRootSchema();
-      Formats.refuseUnwritable(format, type, knownTypes(), "attribute " + a.name());
+      Formats.refuseUnwritable(format, type, knownTypes(type), "attribute " + a.name());
       Field f = fields.get(i);
       Map<String, Object> params = f.getParams();
       // A type of the same kind keeps the native names pinned on it; another kind gets new.
@@ -1072,7 +1074,7 @@ public final class TypeAlter {
       }
       Schema type = parse(aliases -> TypeScripts.typeScript(a.type(), aliases))
           .getRootSchema();
-      Formats.refuseUnwritable(format, type, knownTypes());
+      Formats.refuseUnwritable(format, type, knownTypes(type), null);
       // An enum keeps its nullability, comment and properties, as with ADD VALUE.
       if (target.getType() == Schema.Type.ENUM && type.getType() == Schema.Type.ENUM) {
         type = copyMetadata(target, Schema.createEnum(type.getEnumValues()))
@@ -1594,26 +1596,24 @@ public final class TypeAlter {
    * refers to one version of a subject.
    */
   // The types a name in a type text just parsed may be of: the type's own and the text's.
-  private Map<String, Schema> knownTypes() {
-    Map<String, String> imports = new HashMap<>(externalImports);
-    imports.putAll(parsedImports);
-    Map<String, Schema> known = new HashMap<>(namedTypes);
-    known.putAll(parsedTypes);
-    return withReferred(known, references, imports);
-  }
-
-  // Only a JSON type is judged by what the types it refers to are: those as the references
-  // have them, whatever the type holds under their names.
-  private Map<String, Schema> withReferred(Map<String, Schema> known,
-      List<SchemaReference> to, Map<String, String> imports) {
-    if (format == SchemaType.JSON) {
-      TypeReferences.referredTypes(lookup, subject, to, imports).forEach((name, type) -> {
-        if (externalTypes.contains(name) || !known.containsKey(name)) {
-          known.put(name, type);
-        }
-      });
+  private KnownTypes knownTypes(Schema judged) {
+    KnownTypes known = KnownTypes.of(namedTypes);
+    parsedTypes.forEach(known::put);
+    // Only a JSON type is judged by what the types it refers to are, and only one with a
+    // union and a name in it: they are read for no other.
+    if (format == SchemaType.JSON && Formats.namesInAUnion(judged)) {
+      Map<String, String> imports = new HashMap<>(externalImports);
+      imports.putAll(parsedImports);
+      // As the references have them, whatever the type holds under their names.
+      known.adopt(referred(references, imports), externalTypes::contains);
     }
     return known;
+  }
+
+  // The types references are of, read once for a statement.
+  private KnownTypes referred(List<SchemaReference> to, Map<String, String> imports) {
+    return referredTypes.computeIfAbsent(to + " " + new TreeMap<>(imports),
+        k -> TypeReferences.referredTypes(lookup, subject, to, imports));
   }
 
   // A reference moved to another version of its type gives the union branches of that type
@@ -1623,21 +1623,22 @@ public final class TypeAlter {
     Map<String, Integer> versions = new HashMap<>();
     original.getReferences().forEach(r -> versions.put(
         TypeReferences.referenced(subject, r.getSubject()), r.getVersion()));
-    if (references.stream().allMatch(r -> r.getVersion().equals(versions.getOrDefault(
-        TypeReferences.referenced(subject, r.getSubject()), r.getVersion())))) {
-      return;
-    }
-    Map<String, Schema> before = withReferred(new HashMap<>(original.getNamedTypes()),
-        original.getReferences(), original.getExternalImports());
-    Map<String, Schema> after = knownTypes();
     List<Schema> types = new ArrayList<>(List.of(root));
     namedTypes.forEach((name, type) -> {
       if (!externalTypes.contains(name)) {
         types.add(type);
       }
     });
+    if (types.stream().noneMatch(Formats::namesInAUnion)
+        || references.stream().allMatch(r -> r.getVersion().equals(versions.getOrDefault(
+            TypeReferences.referenced(subject, r.getSubject()), r.getVersion())))) {
+      return;
+    }
+    KnownTypes before = KnownTypes.of(original.getNamedTypes());
+    before.adopt(referred(original.getReferences(), original.getExternalImports()),
+        original.getExternalTypes()::contains);
     for (Schema type : types) {
-      String[] found = Formats.newlyOverlapping(type, before, after, null);
+      String[] found = Formats.newlyOverlapping(type, before, knownTypes(type), null);
       if (found != null) {
         throw Formats.newlyOverlapping(refused(), found);
       }

@@ -133,6 +133,11 @@ class FormatsTest {
         "UNION(r1 STRUCT<a INT>, r2 STRUCT<a INT>)",
         "UNION(r1 STRUCT<a INT>, r2 STRUCT<a STRING>)",
         "UNION(r1 STRUCT<a INT NOT NULL>, r2 STRUCT<a BIGINT NOT NULL>)",
+        "UNION(r1 STRUCT<kind ENUM('circle', 'both') NOT NULL>, "
+            + "r2 STRUCT<kind ENUM('square', 'both') NOT NULL>)",
+        "UNION(r1 STRUCT<kind ENUM('circle')>, r2 STRUCT<kind ENUM('square')>)",
+        "UNION(r1 ENUM('A', 'B'), r2 ENUM('B', 'C'))",
+        "UNION(r1 ENUM('A', 'B'), r2 VARCHAR(3))",
         "UNION(r1 STRUCT<x INT>, r2 UNION(c STRING, d STRUCT<x INT>))",
         // An empty array is a value of any type written as one.
         "UNION(r1 ARRAY<INT>, r2 ARRAY<STRING>)",
@@ -154,6 +159,10 @@ class FormatsTest {
         // An attribute both require, whose value in one is never one in the other, tells
         // two rows apart, and a row from a map of other values.
         "UNION(r1 STRUCT<a INT NOT NULL>, r2 STRUCT<a STRING NOT NULL>)",
+        // As rows tagged by an attribute that is one symbol in each.
+        "UNION(r1 STRUCT<kind ENUM('circle') NOT NULL, r DOUBLE>, "
+            + "r2 STRUCT<kind ENUM('square') NOT NULL, r DOUBLE>)",
+        "UNION(r1 ENUM('A', 'B'), r2 ENUM('C'))",
         "UNION(r1 STRUCT<a STRUCT<x INT NOT NULL> NOT NULL>, "
             + "r2 STRUCT<a STRUCT<y STRING NOT NULL> NOT NULL>)",
         "UNION(r1 MAP<STRING, STRING>, r2 STRUCT<a INT NOT NULL>)",
