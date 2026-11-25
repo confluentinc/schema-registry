@@ -590,8 +590,18 @@ public final class TypeAlter {
     if (!(stored instanceof ProtobufSchema) || !(written instanceof ProtobufSchema)) {
       return;
     }
-    String field = writtenOtherwise(((ProtobufSchema) stored).toDescriptor(),
-        ((ProtobufSchema) written).toDescriptor(), new HashSet<>());
+    Descriptor was = ((ProtobufSchema) stored).toDescriptor();
+    Descriptor now = ((ProtobufSchema) written).toDescriptor();
+    Set<String> seen = new HashSet<>();
+    String field = writtenOtherwise(was, now, seen);
+    // And the messages beside the root that no field of it comes to, which are written by
+    // their names.
+    for (Descriptor peer : was.getFile().getMessageTypes()) {
+      if (field == null) {
+        field = writtenOtherwise(peer, now.getFile().findMessageTypeByName(peer.getName()),
+            seen);
+      }
+    }
     if (field != null) {
       throw new TypeRefusedException("Type " + subject + " cannot be " + done + ": field "
           + field + ". Drop the attribute, or register its new version as a Protobuf schema");

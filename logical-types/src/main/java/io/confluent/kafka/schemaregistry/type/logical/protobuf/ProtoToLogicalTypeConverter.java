@@ -605,8 +605,10 @@ public class ProtoToLogicalTypeConverter {
         evDoc = (doc != null && !doc.trim().isEmpty()) ? doc : null;
         Map<String, String> params = evMeta.getParamsMap();
         if (!params.isEmpty()) {
-          // Native params travel their own slot; ignore any smuggled in through the meta map.
-          evParams = Schema.stripFormatNativeParams(new LinkedHashMap<>(params));
+          // Native params travel their own slot; ignore any smuggled in through the meta map,
+          // and any under a name kept for the converter, as for a field or a message.
+          evParams = new LinkedHashMap<>(params);
+          evParams.keySet().removeIf(key -> !isUserParam(key));
         }
       }
       if (recordNumbers) {

@@ -38,6 +38,7 @@ import io.confluent.kafka.schemaregistry.type.logical.LogicalTypeToDdlConverter;
 import io.confluent.kafka.schemaregistry.type.logical.Rule;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
+import io.confluent.kafka.schemaregistry.type.logical.ValidationException;
 import io.confluent.kafka.schemaregistry.type.logical.common.LogicalTypeVersion;
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.LogicalTypeToProtoConverter;
 import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.AddAttribute;
@@ -710,6 +711,28 @@ class TypeAlterTest {
     registry.alter("gw", new DropAttribute("sv", false), new DropAttribute("w", false),
         new AddAttribute("c", "INT"));
     assertThat(numbers(message("gw"))).isEqualTo("name=1 c=4");
+
+    // Each of the wrappers is one.
+    for (String wrapper : List.of("DoubleValue", "FloatValue", "Int64Value", "UInt64Value",
+        "Int32Value", "UInt32Value", "BoolValue", "StringValue", "BytesValue")) {
+      String type = "gw" + wrapper;
+      registry.client.register(type, new ProtobufSchema("syntax = \"proto3\";\n\n"
+          + "import \"google/protobuf/wrappers.proto\";\n\nmessage R {\n  int32 id = 1;\n"
+          + "  google.protobuf." + wrapper + " w = 2;\n}\n"));
+      assertThatThrownBy(() -> registry.alter(type, new AddAttribute("c", "INT"))).as(wrapper)
+          .isInstanceOf(TypeRefusedException.class)
+          .hasMessageContaining("field w of message R is a google.protobuf." + wrapper);
+    }
+    // And one in a message beside the root that no field of the root comes to, which is
+    // written as the root is.
+    registry.client.register("gu", new ProtobufSchema("syntax = \"proto3\";\n\n"
+        + "import \"confluent/meta.proto\";\nimport \"google/protobuf/wrappers.proto\";\n\n"
+        + "option (confluent.file_meta) = { params: [ { key: \"logical.root\", value: "
+        + "\"Root\" } ] };\n\nmessage Root {\n  int32 id = 1;\n}\nmessage Unused {\n"
+        + "  google.protobuf.FloatValue w = 1;\n}\n"));
+    assertThatThrownBy(() -> registry.alter("gu", new AddAttribute("c", "INT")))
+        .isInstanceOf(TypeRefusedException.class).hasMessageContaining("field w of message "
+            + "Unused is a google.protobuf.FloatValue");
 
     // A wrapper in an entry another file declares, which is written as an entry of this
     // file's, is one too; one in a message that stays another file's is not written at all.
@@ -1764,16 +1787,48 @@ class TypeAlterTest {
     registry.alter("mo", new AddAttribute("c", "INT"));
     assertThat(registry.schema("mo").canonicalString()).contains(imports);
 
+    // Metadata of an enum, of a value of it, of a message, and of a message that is not the
+    // first of several.
+    for (String script : List.of(
+        "ENUM Color ('RED', 'BLUE') COMMENT 'the colors'; STRUCT t (a INT NOT NULL, c Color); "
+            + "TYPE t;",
+        "ENUM Color ('RED' COMMENT 'r', 'BLUE'); STRUCT t (a INT NOT NULL, c Color); TYPE t;",
+        "STRUCT t (a INT NOT NULL, b BIGINT NOT NULL) COMMENT 'the type';")) {
+      assertThat(written(script)).as(script).contains(imports);
+    }
+    assertThat(LogicalTypeToProtoConverter.fromLogicalType(TypeScripts.parse(
+        "STRUCT A (a INT NOT NULL); STRUCT B (k INT NOT NULL COMMENT 'the k');", true), "t",
+        LogicalTypeVersion.V2).canonicalString()).doesNotContain("file_meta").contains(imports);
+    // A comment that says nothing is no metadata, and is not written.
+    assertThat(written("STRUCT t (a INT NOT NULL COMMENT '', b BIGINT NOT NULL) COMMENT '';"))
+        .doesNotContain(imports).doesNotContain("meta");
+    // The file declares messages of its own: a type of one of their names in its package
+    // would be defined twice, and is refused where the file is imported.
+    assertThatThrownBy(() -> written("NAMESPACE confluent; "
+        + "STRUCT Rule (a INT COMMENT 'the a', b BIGINT);"))
+        .isInstanceOf(ValidationException.class).hasMessage("Protobuf name 'confluent.Rule' is "
+            + "defined by confluent/meta.proto, which a Protobuf file imports for its "
+            + "comments, tags, params and root; give the type another name or namespace");
+    assertThat(written("NAMESPACE confluent; STRUCT Rule (a INT, b BIGINT);"))
+        .doesNotContain(imports);
+    assertThat(written("NAMESPACE acme; STRUCT Rule (a INT COMMENT 'the a', b BIGINT);"))
+        .contains(imports);
+
     // V1 is written as Flink writes it, which imports none.
     assertThat(LogicalTypeToProtoConverter.fromLogicalType(TypeScripts.parse(
         "STRUCT t (a SMALLINT, d DECIMAL(10, 2));"), "t", LogicalTypeVersion.V1)
         .canonicalString()).doesNotContain(imports);
   }
 
+  private static String written(String script) {
+    return LogicalTypeToProtoConverter.fromLogicalType(TypeScripts.parse(script), "t",
+        LogicalTypeVersion.V2).canonicalString();
+  }
+
   // The Protobuf reader takes a param under one of its own names for how a type is encoded
   // or where it is. A statement that gives one is refused; the writer writes none.
   @Test
-  void aProtobufParamUnderAReadersNameIsNotGiven() {
+  void aProtobufParamUnderAReadersNameIsNotGiven() throws Exception {
     String kept = " cannot be given in a PROTOBUF type: the format keeps the names flink.*, "
         + "connect.*, logical.*, precision and scale for how it encodes a type";
     String[][] bodies = {
@@ -1824,6 +1879,19 @@ class TypeAlterTest {
                 + "y STRING WITH ('connect.index' = '0')));"), "t", LogicalTypeVersion.V2));
     String ddl = LogicalTypeToDdlConverter.toDdl(read, true);
     assertThat(ddl).contains("(a INT, d DECIMAL(10, 2), u UNION(x INT, y STRING))");
+    // An enum's value and a type alike.
+    assertThat(written("STRUCT t (e ENUM('A' WITH ('connect.x' = '1', 'k' = 'v'), 'B'));"))
+        .contains("\"k\"").doesNotContain("connect.x");
+    assertThat(written("STRUCT t (a INT) WITH ('connect.x' = '1', 'k' = 'v');"))
+        .contains("\"k\"").doesNotContain("connect.x");
+    // And one a file gives a value of an enum is not told as the value's, as one it gives
+    // a field is not.
+    registry.client.register("re", new ProtobufSchema("syntax = \"proto3\";\n\n"
+        + "import \"confluent/meta.proto\";\n\nmessage R {\n  E e = 1;\n\n  enum E {\n"
+        + "    A = 0 [(confluent.enum_value_meta) = { params: [ { key: \"connect.x\", "
+        + "value: \"1\" }, { key: \"owner\", value: \"x\" } ] }];\n    B = 1;\n  }\n}\n"));
+    assertThat(LogicalTypeToDdlConverter.toDdl(registry.logicalType("re",
+        registry.latest("re")), true)).contains("'owner' = 'x'").doesNotContain("connect.x");
   }
 
   // The place of a field is the writer's to tell, wherever a message's fields, its oneofs or

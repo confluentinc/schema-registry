@@ -774,6 +774,9 @@ public class LogicalTypeToProtoConverter {
           dependencies.add(MetaProto.getDescriptor().getName());
         }
       }
+      if (dependencies.contains(MetaProto.getDescriptor().getName())) {
+        refuseMetaNames(packageName, fileBuilder);
+      }
       fileBuilder.addAllDependency(dependencies);
       if (packageName != null && !packageName.isEmpty()) {
         fileBuilder.setPackage(packageName);
@@ -800,23 +803,49 @@ public class LogicalTypeToProtoConverter {
     }
   }
 
-  // Whether a message, a field, an enum or an enum's value has metadata, at any depth.
+  // Whether a message, a field, an enum or an enum's value has metadata, at any depth: one
+  // that says something, which an empty comment does not, and is not written.
   private static boolean usesMeta(List<DescriptorProto> messages,
       List<EnumDescriptorProto> enums) {
     for (EnumDescriptorProto enumType : enums) {
-      if (enumType.getOptions().hasExtension(MetaProto.enumMeta) || enumType.getValueList()
-          .stream().anyMatch(v -> v.getOptions().hasExtension(MetaProto.enumValueMeta))) {
+      if (says(enumType.getOptions().getExtension(MetaProto.enumMeta))
+          || enumType.getValueList().stream()
+              .anyMatch(v -> says(v.getOptions().getExtension(MetaProto.enumValueMeta)))) {
         return true;
       }
     }
     for (DescriptorProto message : messages) {
-      if (message.getOptions().hasExtension(MetaProto.messageMeta) || message.getFieldList()
-          .stream().anyMatch(f -> f.getOptions().hasExtension(MetaProto.fieldMeta))
+      if (says(message.getOptions().getExtension(MetaProto.messageMeta))
+          || message.getFieldList().stream()
+              .anyMatch(f -> says(f.getOptions().getExtension(MetaProto.fieldMeta)))
           || usesMeta(message.getNestedTypeList(), message.getEnumTypeList())) {
         return true;
       }
     }
     return false;
+  }
+
+  private static boolean says(Meta meta) {
+    return !meta.equals(Meta.getDefaultInstance());
+  }
+
+  // The file that declares the metadata declares messages of its own, in its own package: a
+  // type of one of their names there is defined twice in a file that imports it.
+  private static void refuseMetaNames(String packageName, FileDescriptorProto.Builder file) {
+    final FileDescriptor meta = MetaProto.getDescriptor();
+    if (!meta.getPackage().equals(packageName == null ? "" : packageName)) {
+      return;
+    }
+    final List<String> names = new ArrayList<>();
+    file.getMessageTypeList().forEach(message -> names.add(message.getName()));
+    file.getEnumTypeList().forEach(enumType -> names.add(enumType.getName()));
+    for (String name : names) {
+      if (meta.findMessageTypeByName(name) != null || meta.findEnumTypeByName(name) != null) {
+        throw new ValidationException("Protobuf name '" + meta.getPackage() + "." + name
+            + "' is defined by " + meta.getName() + ", which a Protobuf file imports for its "
+            + "comments, tags, params and root; give the type another name or namespace");
+      }
+    }
   }
 
   private static String article(String kind) {
