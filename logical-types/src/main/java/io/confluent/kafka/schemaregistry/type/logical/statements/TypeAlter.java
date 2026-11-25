@@ -46,7 +46,9 @@ import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
 import io.confluent.kafka.schemaregistry.type.logical.json.JsonToLogicalTypeConverter;
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.LogicalTypeToProtoConverter;
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTypeConverter;
+import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceReport;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -1717,13 +1719,41 @@ public final class TypeAlter {
         used.add(uri.contains("#") ? uri.substring(0, uri.indexOf('#')) : uri);
       }
     }
+    // A JSON document is of use as well while an attribute is of one of its definitions,
+    // which the type has by the definition's own name: unless that name is a reference's,
+    // whose document it then is.
+    Set<String> documents = new HashSet<>();
+    references.forEach(r -> documents.add(r.getName()));
+    Set<String> definitions = new HashSet<>(reachable);
+    definitions.retainAll(externalTypes);
+    definitions.removeAll(documents);
     // A reference whose defined name cannot be told is kept.
     references.removeIf(ref -> {
       Set<String> names = TypeReferences.definedNames(lookup, subject, ref);
-      return names != null && names.stream().noneMatch(used::contains);
+      return names != null && names.stream().noneMatch(used::contains)
+          && definitionsOf(ref).stream().noneMatch(definitions::contains);
     });
     resolved.clear();
     resolved.putAll(TypeReferences.resolve(lookup, subject, references));
+  }
+
+  // The names of the definitions a JSON document a reference is to has, wherever in it.
+  private Set<String> definitionsOf(SchemaReference ref) {
+    Set<String> names = new HashSet<>();
+    String text = format == SchemaType.JSON ? resolved.get(ref.getName()) : null;
+    if (text == null) {
+      return names;
+    }
+    try {
+      JsonNode document = JacksonMapper.INSTANCE.readTree(text);
+      for (String word : List.of("$defs", "definitions")) {
+        document.findValues(word).forEach(defs -> defs.fieldNames().forEachRemaining(names::add));
+      }
+    } catch (IOException e) {
+      // One that is no JSON has none.
+      names.clear();
+    }
+    return names;
   }
 
   // A type that may not refer to others, as a topic's own, is refused in the tool's words; any
@@ -1842,7 +1872,8 @@ public final class TypeAlter {
     Set<String> documents = new HashSet<>();
     md.getReferences().forEach(r -> documents.add(r.getName()));
     JsonNode schema = ((JsonSchema) stored).toJsonNode();
-    for (JsonNode ref : schema.findValues("$ref")) {
+    List<JsonNode> refs = schema.findValues("$ref");
+    for (JsonNode ref : refs) {
       String to = ref.asText("");
       // The name a definition is read by, wherever in a document it is.
       String name = JsonToLogicalTypeConverter.extractCanonicalDefsKey(to);
@@ -1850,8 +1881,10 @@ public final class TypeAlter {
       if (name == null || !documents.contains(name) || name.equals(of)) {
         continue;
       }
-      // A definition that only names the document is that document, whatever else it says.
-      if (of.isEmpty() && name.equals(definition(schema, to).path("$ref").asText(null))) {
+      // A definition that only names the document is that document, whatever else it says:
+      // unless it has definitions of its own that are named, which would be left with it.
+      if (of.isEmpty() && name.equals(definition(schema, to).path("$ref").asText(null))
+          && refs.stream().noneMatch(r -> r.asText("").startsWith(to + "/"))) {
         continue;
       }
       throw new TypeRefusedException("Type " + subject + " cannot be altered: it has a "

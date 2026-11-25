@@ -2809,6 +2809,35 @@ class TypeAlterTest {
       assertThat(registry.latest(type).getReferences()).as(type)
           .extracting(SchemaReference::getName).containsExactly("E");
     }
+    // The type the definition was of is referred to still while an attribute is of another
+    // of its definitions, whatever becomes of the attribute that was of the one.
+    registry.client.register("lib2", new JsonSchema("{\"type\":\"object\",\"title\":\"lib2\","
+        + "\"properties\":{\"r\":{\"$ref\":\"E\"}},\"additionalProperties\":false,"
+        + "\"$defs\":{\"E\":{\"enum\":[\"X\",\"Y\"]},\"F\":{\"type\":\"string\"}}}",
+        List.of(new SchemaReference("E", "E", 1)),
+        Map.of("E", registry.version("E", 1).getSchema()), null));
+    Map<String, String> two = new LinkedHashMap<>();
+    two.put("E", registry.version("E", 1).getSchema());
+    two.put("lib2", registry.latest("lib2").getSchema());
+    Map<String, AlterAction[]> kept = new LinkedHashMap<>();
+    kept.put("hf1", new AlterAction[] {new DropAttribute("e", false),
+        new AddAttribute("w", "E")});
+    kept.put("hf2", new AlterAction[] {new AlterAttributeType("e", "E")});
+    kept.put("hf3", new AlterAction[] {new DropAttribute("e", false)});
+    kept.put("hf4", new AlterAction[] {new AlterAttributeType("e", "INT")});
+    for (Map.Entry<String, AlterAction[]> type : kept.entrySet()) {
+      registry.client.register(type.getKey(), new JsonSchema("{\"type\":\"object\",\"title\":\""
+          + type.getKey() + "\",\"properties\":{\"id\":{\"type\":\"integer\"},\"e\":{\"$ref\":"
+          + "\"lib2#/$defs/E\"},\"f\":{\"$ref\":\"lib2#/$defs/F\"}},"
+          + "\"additionalProperties\":false}", List.of(new SchemaReference("lib2", "lib2", 1)),
+          two, null));
+      registry.alter(type.getKey(), type.getValue());
+      assertThat(registry.schema(type.getKey()).canonicalString()).as(type.getKey())
+          .contains("{\"$ref\":\"lib2#/$defs/F\"}").doesNotContain("lib2#/$defs/E");
+      assertThat(registry.latest(type.getKey()).getReferences()).as(type.getKey())
+          .extracting(SchemaReference::getName).contains("lib2")
+          .hasSize(type.getKey().compareTo("hf2") <= 0 ? 2 : 1);
+    }
     // A name the type as read has for a type it refers to is no other type's either.
     registry.create("fhu", SchemaType.JSON, BodyKind.OTHER, "INT");
     create("Ref1", SchemaType.JSON, "(k INT)");
@@ -2912,6 +2941,10 @@ class TypeAlterTest {
         + "\"additionalProperties\":false,\"$defs\":{\"Loc\":{\"type\":\"object\","
         + "\"properties\":{\"in\":{\"$ref\":\"#/$defs/o5s\"}},\"additionalProperties\":false},"
         + "\"o5s\":" + object + "}}");
+    // Nor is one that names the document and has definitions of its own that are named.
+    written.put("dinto", head + "\"x\":{\"$ref\":\"#/$defs/o5s\"},\"w\":{\"$ref\":"
+        + "\"#/$defs/o5s/$defs/inner\"}},\"additionalProperties\":false,\"$defs\":{\"o5s\":"
+        + "{\"$ref\":\"o5s\",\"$defs\":{\"inner\":{\"type\":\"integer\"}}}}}");
     // One that names another document than that of its name is no name of that one.
     written.put("dother", head + "\"x\":{\"$ref\":\"#/$defs/o5s\"}},"
         + "\"additionalProperties\":false,\"$defs\":{\"o5s\":{\"$ref\":\"E\"}}}");
