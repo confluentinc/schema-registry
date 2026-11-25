@@ -708,7 +708,9 @@ public final class TypeAlter {
     }
     // Pinned again only after an action that may bring a type with a name of its own.
     final boolean pinned = avroNamesPinned;
-    avroNamesPinned &= leavesNamesPinned(action);
+    if (!leavesNamesPinned(action)) {
+      avroNamesPinned = false;
+    }
     if (action instanceof AlterAction.AddAttribute) {
       AlterAction.AddAttribute a = (AlterAction.AddAttribute) action;
       // The text is one attribute's: none follows it after a comma, and after a parenthesis
