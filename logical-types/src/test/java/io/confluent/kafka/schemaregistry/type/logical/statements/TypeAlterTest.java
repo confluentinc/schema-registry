@@ -393,6 +393,15 @@ class TypeAlterTest {
         .isInstanceOf(TypeRefusedException.class).hasMessage("Enum color has no value NOPE");
   }
 
+  // An enum has no attributes to add or place: it is told so, and what it takes.
+  @Test
+  void anAttributeOfAnEnumIsRefusedWithWhatAnEnumTakes() {
+    registry.create("hue", SchemaType.AVRO, BodyKind.ENUM, "('RED', 'GREEN')");
+    assertThatThrownBy(() -> registry.alter("hue", new AddAttribute("a", "INT")))
+        .isInstanceOf(TypeRefusedException.class).hasMessage("Type hue is an enum, which has "
+            + "values and no attributes; use ADD VALUE");
+  }
+
   @Test
   void aTypeThatIsOneValueTakesANewDataTypeAndAStructDoesNot() {
     registry.create("id", SchemaType.AVRO, BodyKind.OTHER, "INT NOT NULL");
@@ -892,16 +901,18 @@ class TypeAlterTest {
 
     assertThatThrownBy(() -> registry.alter("o", new AddAttribute("j", "inner")))
         .isInstanceOf(TypeRefusedException.class).hasMessage("Type o cannot be changed so: it "
-            + "would refer to two versions of type inner, version 1 through version 1 of type "
-            + "pair and version 2; a schema has one version of a type, so name the type again "
-            + "to move it to its latest version, or first move the types that refer to it");
+            + "would refer to two versions of type inner, version 1 (through version 1 of "
+            + "type pair) and version 2 (named directly); a schema has one version of a type, "
+            + "so name the type again to move it to its latest version, or first move the "
+            + "types that refer to it");
     assertThat(version("o")).isEqualTo(1);
 
     // The type that refers to it is moved first, and named again where it is used.
     registry.alter("pair", new AlterAttributeType("i", "inner"));
     assertThatThrownBy(() -> registry.alter("d", new AlterAttributeType("p", "pair")))
         .isInstanceOf(TypeRefusedException.class).hasMessageContaining("it would refer to two "
-            + "versions of type inner, version 1 and version 2 through version 2 of type pair");
+            + "versions of type inner, version 1 (named directly) and version 2 (through "
+            + "version 2 of type pair)");
     for (String type : List.of("o", "d")) {
       List<AlterAction> actions = new ArrayList<>(List.of(new AlterAttributeType("p", "pair")));
       actions.add(type.equals("o") ? new AddAttribute("j", "inner")
@@ -911,6 +922,30 @@ class TypeAlterTest {
           .extracting(SchemaReference::getSubject, SchemaReference::getVersion)
           .containsExactlyInAnyOrder(tuple("inner", 2), tuple("pair", 2));
     }
+  }
+
+  // One name is one type too: a type of another context refers to its own inner by the
+  // name this type's inner has, and the registry would read the first of the two for both.
+  @ParameterizedTest
+  @EnumSource(SchemaType.class)
+  void aVersionReferringToTwoTypesByOneNameIsRefused(SchemaType format) {
+    create("inner", format, "(q BIGINT, s STRING)");
+    registry.create(":.c:inner", "inner", format, BodyKind.STRUCT, "(q BIGINT)");
+    registry.create(":.c:pair", "pair", format, BodyKind.STRUCT, "(a STRING, i inner)");
+    create("o", format, "(id INT NOT NULL, d inner)");
+
+    String both = "would both be referred to as inner, which can name only one of them";
+    assertThatThrownBy(() -> registry.alter("o", new AddAttribute("p", "`:.c:pair`")))
+        .isInstanceOf(TypeRefusedException.class).hasMessageEndingWith(both)
+        .hasMessageContaining("inner and :.c:inner");
+    assertThatThrownBy(() -> create("ob", format, "(id INT NOT NULL, d inner, p `:.c:pair`)"))
+        .isInstanceOf(TypeRefusedException.class).hasMessageEndingWith(both);
+    assertThat(version("o")).isEqualTo(1);
+    assertThat(registry.versions("ob", true)).isEmpty();
+
+    // Without the attribute of the one, the other is added.
+    registry.alter("o", new DropAttribute("d", false), new AddAttribute("p", "`:.c:pair`"));
+    assertThat(version("o")).isEqualTo(2);
   }
 
   // A version stored so, as another tool registers one, is altered only by a statement that
@@ -932,7 +967,8 @@ class TypeAlterTest {
 
     assertThatThrownBy(() -> registry.alter("m", new AddAttribute("n", "INT")))
         .isInstanceOf(TypeRefusedException.class).hasMessageContaining("it would refer to two "
-            + "versions of type inner, version 2 and version 1 through version 1 of type pair");
+            + "versions of type inner, version 2 (named directly) and version 1 (through "
+            + "version 1 of type pair)");
     registry.alter("m", new AlterAttributeType("p", "pair"), new AddAttribute("n", "INT"));
     assertThat(version("m")).isEqualTo(2);
     assertThat(registry.latest("m").getReferences())

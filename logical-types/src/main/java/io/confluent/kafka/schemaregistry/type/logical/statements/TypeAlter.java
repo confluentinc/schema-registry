@@ -464,7 +464,7 @@ public final class TypeAlter {
       if (writesWhatIsStored(md, stored, written)) {
         edited = null;
       } else {
-        TypeReferences.refuseTwoVersions(lookup, subject, references, refused());
+        TypeReferences.requireOneOfEach(lookup, subject, references, refused());
         if (format == SchemaType.PROTOBUF) {
           refuseTakenNames(stored, written);
         }
@@ -1671,7 +1671,9 @@ public final class TypeAlter {
   private Schema struct() {
     Schema target = target();
     if (target.getType() != Schema.Type.STRUCT) {
-      throw new TypeRefusedException("Type " + subject + " is not a struct; use SET DATA TYPE");
+      throw new TypeRefusedException("Type " + subject + (target.getType() == Schema.Type.ENUM
+          ? " is an enum, which has values and no attributes; use ADD VALUE"
+          : " is not a struct; use SET DATA TYPE"));
     }
     return target;
   }

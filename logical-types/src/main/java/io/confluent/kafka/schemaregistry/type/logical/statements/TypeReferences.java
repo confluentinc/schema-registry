@@ -234,19 +234,20 @@ public final class TypeReferences {
   }
 
   /**
-   * Refuses references that reach two versions of one name, their own or those of the types
-   * they refer to. A schema holds one version of a name, the first its references are read to,
-   * and they are stored in another order than a statement gives them: the version checked would
-   * not be the one stored. A refusal starts with {@code refused}.
+   * Refuses references that reach two types by one name, or two versions of one, their own or
+   * those of the types they refer to. A schema holds one type and one version of a name, the
+   * first its references are read to, and they are stored in another order than a statement
+   * gives them: the version checked would not be the one stored. A refusal of two versions
+   * starts with {@code refused}.
    */
-  static void refuseTwoVersions(TypeLookup lookup, String referrer,
+  static void requireOneOfEach(TypeLookup lookup, String referrer,
       List<SchemaReference> references, String refused) {
-    twoVersions(lookup, referrer, null, references, new HashMap<>(), refused);
+    oneOfEach(lookup, referrer, null, references, new HashMap<>(), refused);
   }
 
-  // Each name at the version and through the type it was first met; via is null for the
-  // statement's own references, and else the referring type and its version.
-  private static void twoVersions(TypeLookup lookup, String referrer, String via,
+  // Each name at the type and version, and through the type, it was first met; via is null
+  // for the statement's own references, and else the referring type and its version.
+  private static void oneOfEach(TypeLookup lookup, String referrer, String via,
       List<SchemaReference> references, Map<String, String[]> met, String refused) {
     if (references == null) {
       return;
@@ -258,11 +259,12 @@ public final class TypeReferences {
         met.put(ref.getName(), new String[] {subject, String.valueOf(ref.getVersion()), via});
         SchemaMetadata md = lookup.version(subject, ref.getVersion());
         if (md != null) {
-          twoVersions(lookup, subject, "version " + ref.getVersion() + " of type " + subject,
+          oneOfEach(lookup, subject, "version " + ref.getVersion() + " of type " + subject,
               md.getReferences(), met, refused);
         }
-      } else if (first[0].equals(subject)
-          && !first[1].equals(String.valueOf(ref.getVersion()))) {
+      } else if (!first[0].equals(subject)) {
+        throw twoTypes(first[0], subject, ref.getName());
+      } else if (!first[1].equals(String.valueOf(ref.getVersion()))) {
         throw new TypeRefusedException(refused + ": it would refer to two versions of type "
             + subject + ", " + met(first[1], first[2]) + " and "
             + met(String.valueOf(ref.getVersion()), via) + "; a schema has one version of a "
@@ -273,7 +275,13 @@ public final class TypeReferences {
   }
 
   private static String met(String version, String via) {
-    return "version " + version + (via == null ? "" : " through " + via);
+    return "version " + version + " (" + (via == null ? "named directly" : "through " + via)
+        + ")";
+  }
+
+  private static TypeRefusedException twoTypes(String one, String other, String name) {
+    return new TypeRefusedException("Types " + one + " and " + other + " would both be "
+        + "referred to as " + name + ", which can name only one of them");
   }
 
   // Refuses a reference name that, among a type's references and theirs, names another type
@@ -285,8 +293,7 @@ public final class TypeReferences {
     }
     String other = named.putIfAbsent(name, subject);
     if (other != null && !other.equals(subject)) {
-      throw new TypeRefusedException("Types " + other + " and " + subject + " would both be "
-          + "referred to as " + name + ", which can name only one of them");
+      throw twoTypes(other, subject, name);
     }
   }
 }
