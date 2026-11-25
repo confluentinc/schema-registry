@@ -3029,7 +3029,21 @@ class TypeAlterTest {
           + map.getKey() + "\",\"properties\":{\"id\":{\"type\":\"integer\"},\"x\":"
           + map.getValue() + ",\"n\":{\"type\":\"integer\"}},\"additionalProperties\":false}"));
     }
-    for (String type : List.of("jem", "jes", "jeu", "jea")) {
+    // One in a type the document defines is told as the attribute that is of that type, and
+    // is no more in the way when that attribute is dropped or given another type.
+    String defined = "{\"type\":\"object\",\"title\":\"%s\",\"properties\":{\"id\":{\"type\":"
+        + "\"integer\"},\"x\":{\"$ref\":\"#/$defs/D\"},\"n\":{\"type\":\"integer\"}},"
+        + "\"additionalProperties\":false,\"$defs\":{\"D\":{\"type\":\"object\",\"properties\":"
+        + "{\"m\":" + entries + "}},\"additionalProperties\":false}}}";
+    for (String type : List.of("jed", "jet")) {
+      registry.client.register(type, new JsonSchema(String.format(defined, type)));
+    }
+    assertThatThrownBy(() -> registry.alter("jet", new AddAttribute("z", "INT")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageStartingWith("Type jet cannot be altered: attribute x has a map stored as");
+    registry.alter("jet", new AlterAttributeType("x", "INT"));
+    assertThat(version("jet")).isEqualTo(2);
+    for (String type : List.of("jem", "jes", "jeu", "jea", "jed")) {
       for (AlterAction action : List.of(new MoveAttribute("n", Position.first()),
           new AddAttribute("z", "INT"))) {
         assertThatThrownBy(() -> registry.alter(type, action)).as(type)

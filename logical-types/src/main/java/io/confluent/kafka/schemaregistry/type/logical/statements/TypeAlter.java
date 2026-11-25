@@ -659,13 +659,7 @@ public final class TypeAlter {
       // A schema that cannot be read is refused as that.
       return;
     }
-    String in = entriesAsObject(was.getRootSchema(), now.getRootSchema(), null);
-    for (Map.Entry<String, Schema> named : was.getNamedTypes().entrySet()) {
-      if (in == null) {
-        in = entriesAsObject(named.getValue(), now.getNamedTypes().get(named.getKey()),
-            "type " + named.getKey());
-      }
-    }
+    String in = new EntriesWalk(was, now).find(was.getRootSchema(), now.getRootSchema(), null);
     if (in != null) {
       throw new TypeRefusedException("Type " + subject + " cannot be " + done + ": " + in
           + " has a map stored as an array of key and value entries, which would be written "
@@ -674,47 +668,72 @@ public final class TypeAlter {
     }
   }
 
-  // Where the first such map is that the type written in its place still has as a map: the
-  // attribute it is in, or the type given. One given another kind of type is written anew.
-  private static String entriesAsObject(Schema was, Schema now, String in) {
-    if (was == null || now == null || was.getType() != now.getType()) {
-      return null;
+  // Finds the first such map that the type written in its place still has as a map, and
+  // tells the attribute it is in. A named type is come to from the attributes that are of
+  // it: one that none is of any more is written as no value is, and is not judged.
+  private static final class EntriesWalk {
+    private final Map<String, Schema> wasNamed;
+    private final Map<String, Schema> nowNamed;
+    private final Set<String> seen = new HashSet<>();
+
+    EntriesWalk(LogicalType was, LogicalType now) {
+      this.wasNamed = was.getNamedTypes();
+      this.nowNamed = now.getNamedTypes();
     }
-    String found = null;
-    switch (was.getType()) {
-      case STRUCT:
-        for (Field f : was.getFields()) {
-          Field kept = now.getField(f.getName());
-          if (found == null && kept != null) {
-            found = entriesAsObject(f.getSchema(), kept.getSchema(),
-                in != null ? in : "attribute " + f.getName());
-          }
+
+    // One given another kind of type is written anew.
+    String find(Schema was, Schema now, String in) {
+      if (was != null && was.getType() == Schema.Type.NAMED_TYPE_REF) {
+        String name = was.getQualifiedName();
+        was = wasNamed.get(name);
+        now = now != null && now.getType() == Schema.Type.NAMED_TYPE_REF
+            ? nowNamed.get(now.getQualifiedName()) : now;
+        // A type that names itself is come to again while it is walked.
+        if (!seen.add(name + " " + System.identityHashCode(now))) {
+          return null;
         }
-        return found;
-      case UNION:
-        for (UnionBranch b : was.getBranches()) {
-          UnionBranch kept = branch(now, b.getName());
-          if (found == null && kept != null) {
-            found = entriesAsObject(b.getSchema(), kept.getSchema(), in);
-          }
-        }
-        return found;
-      case ARRAY:
-        return entriesAsObject(was.getElementType(), now.getElementType(), in);
-      case MULTISET:
-        if (isEntries(was.getElementNativeNames()) && !isEntries(now.getElementNativeNames())) {
-          return in != null ? in : "it";
-        }
-        return entriesAsObject(was.getElementType(), now.getElementType(), in);
-      case MAP:
-        if (isEntries(was.getKeyNativeNames()) && !isEntries(now.getKeyNativeNames())) {
-          return in != null ? in : "it";
-        }
-        found = entriesAsObject(was.getKeyType(), now.getKeyType(), in);
-        return found != null ? found
-            : entriesAsObject(was.getValueType(), now.getValueType(), in);
-      default:
+      } else if (now != null && now.getType() == Schema.Type.NAMED_TYPE_REF) {
+        now = nowNamed.get(now.getQualifiedName());
+      }
+      if (was == null || now == null || was.getType() != now.getType()) {
         return null;
+      }
+      String found = null;
+      switch (was.getType()) {
+        case STRUCT:
+          for (Field f : was.getFields()) {
+            Field kept = now.getField(f.getName());
+            if (found == null && kept != null) {
+              found = find(f.getSchema(), kept.getSchema(),
+                  in != null ? in : "attribute " + f.getName());
+            }
+          }
+          return found;
+        case UNION:
+          for (UnionBranch b : was.getBranches()) {
+            UnionBranch kept = branch(now, b.getName());
+            if (found == null && kept != null) {
+              found = find(b.getSchema(), kept.getSchema(), in);
+            }
+          }
+          return found;
+        case ARRAY:
+          return find(was.getElementType(), now.getElementType(), in);
+        case MULTISET:
+          if (isEntries(was.getElementNativeNames())
+              && !isEntries(now.getElementNativeNames())) {
+            return in != null ? in : "it";
+          }
+          return find(was.getElementType(), now.getElementType(), in);
+        case MAP:
+          if (isEntries(was.getKeyNativeNames()) && !isEntries(now.getKeyNativeNames())) {
+            return in != null ? in : "it";
+          }
+          found = find(was.getKeyType(), now.getKeyType(), in);
+          return found != null ? found : find(was.getValueType(), now.getValueType(), in);
+        default:
+          return null;
+      }
     }
   }
 
