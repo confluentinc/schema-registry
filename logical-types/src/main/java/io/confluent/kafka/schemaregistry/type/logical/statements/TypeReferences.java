@@ -233,6 +233,49 @@ public final class TypeReferences {
     }
   }
 
+  /**
+   * Refuses references that reach two versions of one name, their own or those of the types
+   * they refer to. A schema holds one version of a name, the first its references are read to,
+   * and they are stored in another order than a statement gives them: the version checked would
+   * not be the one stored. A refusal starts with {@code refused}.
+   */
+  static void refuseTwoVersions(TypeLookup lookup, String referrer,
+      List<SchemaReference> references, String refused) {
+    twoVersions(lookup, referrer, null, references, new HashMap<>(), refused);
+  }
+
+  // Each name at the version and through the type it was first met; via is null for the
+  // statement's own references, and else the referring type and its version.
+  private static void twoVersions(TypeLookup lookup, String referrer, String via,
+      List<SchemaReference> references, Map<String, String[]> met, String refused) {
+    if (references == null) {
+      return;
+    }
+    for (SchemaReference ref : references) {
+      String subject = referenced(referrer, ref.getSubject());
+      String[] first = met.get(ref.getName());
+      if (first == null) {
+        met.put(ref.getName(), new String[] {subject, String.valueOf(ref.getVersion()), via});
+        SchemaMetadata md = lookup.version(subject, ref.getVersion());
+        if (md != null) {
+          twoVersions(lookup, subject, "version " + ref.getVersion() + " of type " + subject,
+              md.getReferences(), met, refused);
+        }
+      } else if (first[0].equals(subject)
+          && !first[1].equals(String.valueOf(ref.getVersion()))) {
+        throw new TypeRefusedException(refused + ": it would refer to two versions of type "
+            + subject + ", " + met(first[1], first[2]) + " and "
+            + met(String.valueOf(ref.getVersion()), via) + "; a schema has one version of a "
+            + "type, so name the type again to move it to its latest version, or first move "
+            + "the types that refer to it");
+      }
+    }
+  }
+
+  private static String met(String version, String via) {
+    return "version " + version + (via == null ? "" : " through " + via);
+  }
+
   // Refuses a reference name that, among a type's references and theirs, names another type
   // too: the registry would read one of the two for both.
   private static void requireOneSubject(Map<String, String> named, String name,
