@@ -191,7 +191,7 @@ if [ "x$GC_LOG_ENABLED" = "xtrue" ]; then
     # about 30 MB each at the ~3 KB per cycle measured on a broker.
     SCHEMA_REGISTRY_GC_LOG_OPTS="-Xverbosegclog:$LOG_DIR/$GC_LOG_FILE_NAME,10,10000"
   elif [[ "$JAVA_MAJOR_VERSION" -ge "9" ]] ; then
-    SCHEMA_REGISTRY_GC_LOG_OPTS="-Xlog:gc*:file=$LOG_DIR/$GC_LOG_FILE_NAME:time,tags:filecount=10,filesize=100M"
+    SCHEMA_REGISTRY_GC_LOG_OPTS="-Xlog:gc*:file=$LOG_DIR/$GC_LOG_FILE_NAME:time,tags:filecount=10,filesize=102400"
   else
     SCHEMA_REGISTRY_GC_LOG_OPTS="-Xloggc:$LOG_DIR/$GC_LOG_FILE_NAME -verbose:gc -XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:+PrintGCTimeStamps -XX:+UseGCLogFileRotation -XX:NumberOfGCLogFiles=10 -XX:GCLogFileSize=100M"
   fi
