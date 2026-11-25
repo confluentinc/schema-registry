@@ -120,4 +120,39 @@ class FormatsTest {
     Formats.refuseUnwritable(SchemaType.JSON,
         struct("(u UNION(a INT, b UNION(c BOOLEAN, d STRING)))"));
   }
+
+  // Rows, arrays and maps are written as objects and arrays: two branches are refused where
+  // a value of one would be a value of the other.
+  @Test
+  void aJsonUnionsRowsArraysAndMapsAreToldApart() {
+    for (String union : new String[] {
+        // A row's value, written with each of its attributes, is another row's: it has no
+        // attribute the other lacks, and each the other requires.
+        "UNION(r1 STRUCT<a INT>, r2 STRUCT<a INT, b STRING>)",
+        "UNION(r1 STRUCT<a INT, b STRING>, r2 STRUCT<b STRING>)",
+        "UNION(r1 STRUCT<a INT>, r2 STRUCT<a INT>)",
+        "UNION(r1 STRUCT<a INT>, r2 STRUCT<a STRING>)",
+        "UNION(r1 STRUCT<x INT>, r2 UNION(c STRING, d STRUCT<x INT>))",
+        // An empty array is a value of any type written as one.
+        "UNION(r1 ARRAY<INT>, r2 ARRAY<STRING>)",
+        "UNION(r1 ARRAY<INT>, r2 MAP<INT, STRING>)",
+        // A map written as an object takes any property.
+        "UNION(r1 MAP<STRING, INT>, r2 STRUCT<a INT>)",
+        "UNION(r1 MAP<STRING, INT>, r2 MAP<STRING, STRING>)",
+        "UNION(r1 MULTISET<STRING>, r2 STRUCT<a INT>)"}) {
+      assertThatThrownBy(() -> Formats.refuseUnwritable(SchemaType.JSON,
+          struct("(u " + union + ")"))).as(union)
+          .isInstanceOf(TypeRefusedException.class)
+          .hasMessageContaining("cannot have branches r1 and r2");
+      Formats.refuseUnwritable(SchemaType.AVRO, struct("(u " + union + ")"));
+    }
+    for (String union : new String[] {
+        "UNION(r1 STRUCT<a INT>, r2 STRUCT<b STRING>)",
+        "UNION(r1 STRUCT<a INT>, r2 STRUCT<a INT, b STRING NOT NULL>)",
+        "UNION(r1 STRUCT<a INT>, r2 ARRAY<INT>, r3 INT)",
+        "UNION(r1 MAP<STRING, INT>, r2 ARRAY<INT>)",
+        "UNION(r1 MAP<STRING, INT>, r2 MAP<INT, STRING>)"}) {
+      Formats.refuseUnwritable(SchemaType.JSON, struct("(u " + union + ")"));
+    }
+  }
 }

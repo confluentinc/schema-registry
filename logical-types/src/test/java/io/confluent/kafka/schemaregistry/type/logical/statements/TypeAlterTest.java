@@ -2523,6 +2523,48 @@ class TypeAlterTest {
     create("ax", SchemaType.AVRO, "(u UNION(a STRING, b ae))");
   }
 
+  // Two fields of one message have one type: given another alone, one of them would need a
+  // message of the name the other's has, and the way out is told.
+  @Test
+  void aProtobufMessageTwoFieldsShareIsRetypedForBoth() throws Exception {
+    registry.client.register("sh", new ProtobufSchema("syntax = \"proto3\";\n\nmessage R {\n"
+        + "  int32 a = 4;\n  N n1 = 9;\n  N n2 = 2;\n\n  message N {\n    int32 k = 7;\n"
+        + "    string t = 3;\n  }\n}\n"));
+    String type = "STRUCT(k INT NOT NULL, t STRING NOT NULL, u INT)";
+    assertThatThrownBy(() -> registry.alter("sh", new AlterAttributeType("n1", type)))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("Protobuf name 'N' is defined twice in R")
+        .hasMessageContaining("or where they share the message, give them its new type in "
+            + "one statement");
+    registry.alter("sh", new AlterAttributeType("n1", type),
+        new AlterAttributeType("n2", type));
+    assertThat(version("sh")).isEqualTo(2);
+  }
+
+  // A statement that would have a value of one row read as another's is refused: the rows
+  // stored under the one would be read as the other's.
+  @Test
+  void aJsonUnionsRowIsNotGivenTheAttributesOfAnother() {
+    create("jf", SchemaType.JSON,
+        "(id BIGINT NOT NULL, u UNION(r1 STRUCT(a INT), r2 STRUCT(b STRING)))");
+    assertThatThrownBy(() -> registry.alter("jf", new AlterAttributeType("u",
+        "UNION(r1 STRUCT(a INT, b STRING), r2 STRUCT(b STRING))")))
+        .isInstanceOf(TypeRefusedException.class).hasMessage("A UNION in a JSON type cannot "
+            + "have branches r1 and r2, which are written as one JSON type: a value of "
+            + "either would match both");
+    assertThat(version("jf")).isEqualTo(1);
+    // A row that is a name is the row it is of.
+    registry.create("jg", SchemaType.JSON, BodyKind.STRUCT, "(a INT)");
+    assertThatThrownBy(() -> registry.alter("jf",
+        new AddAttribute("v", "UNION(x jg, y STRUCT(a INT, b STRING))")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("cannot have branches x and y");
+    // Rows neither of which has all the other's attributes are told apart.
+    registry.alter("jf", new AlterAttributeType("u",
+        "UNION(r1 STRUCT(a INT, c INT), r2 STRUCT(b STRING))"));
+    assertThat(version("jf")).isEqualTo(2);
+  }
+
   // A JSON union's null is one of its alternatives, beside its members, as in Avro: one
   // beside each member too would have a null value match them all, which a oneOf refuses.
   @Test

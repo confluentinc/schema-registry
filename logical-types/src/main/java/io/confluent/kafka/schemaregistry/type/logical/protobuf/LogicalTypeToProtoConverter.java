@@ -995,7 +995,8 @@ public class LogicalTypeToProtoConverter {
         + (users.isEmpty() ? "" : " (used by fields " + String.join(", ", users) + ")")
         + (priorIsType != kindIsType
             ? "; give the " + (priorIsType ? kind : prior) + " another name"
-            : "; rename one of the fields it is generated from"));
+            : "; rename one of the fields it is generated from, or where they share the "
+              + "message, give them its new type in one statement"));
   }
 
   // A oneof member's field, whose type is named by the member's pin.

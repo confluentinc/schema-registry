@@ -30,11 +30,11 @@ import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTyp
 import io.confluent.kafka.schemaregistry.type.logical.avro.LogicalTypeToAvroConverter;
 import io.confluent.kafka.schemaregistry.type.logical.json.LogicalTypeToJsonConverter;
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.LogicalTypeToProtoConverter;
+import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -276,56 +276,96 @@ public final class Formats {
     }
   }
 
-  // Refuses a JSON UNION two of whose branches are written as one JSON type, as BIGINT and
-  // DOUBLE both are numbers: a value of either would match both, which its oneOf refuses.
+  // Refuses a JSON UNION a value of one of whose branches would match another too, which its
+  // oneOf refuses: two written as one scalar JSON type, as BIGINT and DOUBLE both are
+  // numbers; two written as arrays, as an empty one is either's; a map written as an object
+  // beside a row or another such map; and two rows one of whose values is the other's.
   private static void refuseOverlappingBranches(Schema union, Map<String, Schema> named) {
-    Map<String, Set<String>> kinds = new LinkedHashMap<>();
-    String first = null;
-    String variant = null;
-    for (UnionBranch b : union.getBranches()) {
-      Set<String> kind = jsonKinds(b.getSchema(), named, new HashSet<>());
-      // A VARIANT is written as any JSON value, so a value of any other branch, a struct or
-      // a collection as much as a scalar, matches it too.
-      boolean any = kind.contains("any");
-      String other = any ? first : variant;
-      if (other != null) {
-        throw overlapping(other, b.getName());
-      }
-      if (first == null) {
-        first = b.getName();
-      }
-      if (any) {
-        variant = b.getName();
-      } else if (!kind.isEmpty()) {
-        for (Map.Entry<String, Set<String>> e : kinds.entrySet()) {
-          if (!Collections.disjoint(e.getValue(), kind)) {
-            throw overlapping(e.getKey(), b.getName());
-          }
+    List<UnionBranch> branches = union.getBranches();
+    List<List<Schema>> written = new ArrayList<>();
+    for (UnionBranch b : branches) {
+      List<Schema> types = new ArrayList<>();
+      collectWritten(b.getSchema(), named, new HashSet<>(), types);
+      written.add(types);
+    }
+    for (int j = 1; j < branches.size(); j++) {
+      for (int i = 0; i < j; i++) {
+        if (matchBoth(written.get(i), written.get(j))) {
+          throw overlapping(branches.get(i).getName(), branches.get(j).getName());
         }
-        kinds.put(b.getName(), kind);
       }
     }
   }
 
-  // The JSON types a value of a branch may be written as: of a branch that is a union, those
-  // of its members, a value of any of which is a value of the branch; of one that is a name,
+  // The types a value of a branch may be written as: of a branch that is a union, those of
+  // its members, a value of any of which is a value of the branch; of one that is a name,
   // those of the type it is of, where that is known.
-  private static Set<String> jsonKinds(Schema type, Map<String, Schema> named,
-      Set<String> within) {
-    Set<String> kinds = new HashSet<>();
+  private static void collectWritten(Schema type, Map<String, Schema> named,
+      Set<String> within, List<Schema> types) {
     if (type.getType() == Schema.Type.NAMED_TYPE_REF) {
       String name = type.getQualifiedName();
       Schema of = named.get(name);
       if (of != null && within.add(name)) {
-        kinds.addAll(jsonKinds(of, named, within));
+        collectWritten(of, named, within, types);
         within.remove(name);
       }
     } else if (type.getType() == Schema.Type.UNION) {
-      type.getBranches().forEach(b -> kinds.addAll(jsonKinds(b.getSchema(), named, within)));
-    } else if (jsonKind(type) != null) {
-      kinds.add(jsonKind(type));
+      type.getBranches().forEach(b -> collectWritten(b.getSchema(), named, within, types));
+    } else {
+      types.add(type);
     }
-    return kinds;
+  }
+
+  private static boolean matchBoth(List<Schema> one, List<Schema> other) {
+    // A VARIANT is written as any JSON value, so a value of any other branch, a struct or
+    // a collection as much as a scalar, matches it too.
+    if (one.stream().anyMatch(t -> "any".equals(jsonKind(t)))
+        || other.stream().anyMatch(t -> "any".equals(jsonKind(t)))) {
+      return true;
+    }
+    return one.stream().anyMatch(a -> other.stream().anyMatch(b -> matchBoth(a, b)));
+  }
+
+  private static boolean matchBoth(Schema a, Schema b) {
+    if (jsonKind(a) != null || jsonKind(b) != null) {
+      return jsonKind(a) != null && jsonKind(a).equals(jsonKind(b));
+    }
+    if (isJsonArray(a) || isJsonArray(b)) {
+      // An empty array is a value of any of them.
+      return isJsonArray(a) && isJsonArray(b);
+    }
+    boolean rows = a.getType() == Schema.Type.STRUCT && b.getType() == Schema.Type.STRUCT;
+    // A map written as an object takes any property, a row's among them.
+    return rows ? readsAs(a, b) || readsAs(b, a) : isJsonObject(a) && isJsonObject(b);
+  }
+
+  // Whether a value of one row, written with each of its attributes, is a value of the
+  // other: it has no attribute the other lacks, and each the other requires.
+  private static boolean readsAs(Schema row, Schema other) {
+    Set<String> names = new HashSet<>();
+    row.getFields().forEach(f -> names.add(f.getName()));
+    return other.getFields().stream().allMatch(f -> names.contains(f.getName())
+        || f.getSchema().isNullable()) && names.stream().allMatch(n -> other.getField(n) != null);
+  }
+
+  // A map or multiset is written as an object where its keys are character strings, and as
+  // an array of its entries otherwise.
+  private static boolean isJsonObject(Schema type) {
+    return type.getType() == Schema.Type.STRUCT || isMapLike(type) && hasStringKeys(type);
+  }
+
+  private static boolean isJsonArray(Schema type) {
+    return type.getType() == Schema.Type.ARRAY || isMapLike(type) && !hasStringKeys(type);
+  }
+
+  private static boolean isMapLike(Schema type) {
+    return type.getType() == Schema.Type.MAP || type.getType() == Schema.Type.MULTISET;
+  }
+
+  private static boolean hasStringKeys(Schema type) {
+    Schema.Type key = (type.getType() == Schema.Type.MAP ? type.getKeyType()
+        : type.getElementType()).getType();
+    return key == Schema.Type.VARCHAR || key == Schema.Type.CHAR;
   }
 
   private static TypeRefusedException overlapping(String one, String other) {
