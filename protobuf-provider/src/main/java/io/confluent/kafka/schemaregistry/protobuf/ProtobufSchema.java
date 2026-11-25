@@ -2760,20 +2760,7 @@ public class ProtobufSchema implements ParsedSchema {
 
   @Override
   public ProtobufSchema normalize() {
-    return normalized(false);
-  }
-
-  /**
-   * As {@link #normalize()}, with the fields of each message, its oneofs and their members left
-   * in the order they are declared in: for a writer whose reader takes that order as the
-   * order of a type's attributes.
-   */
-  public ProtobufSchema normalizeKeepingOrder() {
-    return normalized(true);
-  }
-
-  private ProtobufSchema normalized(boolean keepOrder) {
-    String normalized = ProtobufSchemaUtils.toNormalizedString(this, keepOrder);
+    String normalized = ProtobufSchemaUtils.toNormalizedString(this);
     return new ProtobufSchema(
         toProtoFile(normalized),
         this.version,

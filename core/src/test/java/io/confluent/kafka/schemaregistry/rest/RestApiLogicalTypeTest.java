@@ -106,6 +106,29 @@ public abstract class RestApiLogicalTypeTest {
    * without regard to case.
    */
   @Test
+  public void testProtobufAttributeOrderSurvivesNormalization() throws Exception {
+    String subject = "order-value";
+    String ddl = "TYPE STRUCT(b BIGINT WITH ('protobuf.field.number' = '2'), "
+        + "a BIGINT WITH ('protobuf.field.number' = '1'), "
+        + "u UNION(y STRING WITH ('protobuf.field.number' = '4'), "
+        + "x INT WITH ('protobuf.field.number' = '3')))";
+    restApp.restClient.registerSchema(
+        ddl, ProtobufSchema.TYPE, Collections.emptyList(), subject, true);
+
+    // Normalized, the message declares its fields by number.
+    String stored = restApp.restClient.getVersion(
+        RestService.DEFAULT_REQUEST_PROPERTIES, subject, 1).getSchema();
+    assertTrue(stored.indexOf(" a = 1") < stored.indexOf(" b = 2"), stored);
+    assertTrue(stored.indexOf(" x = 3") < stored.indexOf(" y = 4"), stored);
+    // The type has its attributes, and the union its branches, as they were said.
+    String logical = restApp.restClient.getVersion(
+        RestService.DEFAULT_REQUEST_PROPERTIES, subject, 1, LOGICAL, false, null).getSchema();
+    assertTrue(logical.indexOf("b BIGINT") < logical.indexOf("a BIGINT"), logical);
+    assertTrue(logical.indexOf("y STRING") < logical.indexOf("x INT"), logical);
+    assertTrue(!logical.contains("connect.index"), logical);
+  }
+
+  @Test
   public void testLowerCaseSchemaTypeStillConverts() throws Exception {
     String subject = "lowercase-value";
 

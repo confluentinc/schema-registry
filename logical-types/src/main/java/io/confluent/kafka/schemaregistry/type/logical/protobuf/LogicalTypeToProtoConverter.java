@@ -70,6 +70,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -315,11 +316,10 @@ public class LogicalTypeToProtoConverter {
         logicalType.getReferences());
     // V1 must stay byte-equivalent to Flink's writer output, which does not
     // normalize. Normalize would expand type-name references to fully-qualified
-    // form and reorder imports — both visible deviations from Flink's
-    // raw descriptor emission. Fields, oneofs and their members stay as the type has
-    // them: the reader takes their order as the order of its attributes.
+    // form and reorder fields/imports — both visible deviations from Flink's
+    // raw descriptor emission. The order of a type's attributes is told apart (indexFields).
     if (version != LogicalTypeVersion.V1) {
-      result = result.normalizeKeepingOrder();
+      result = result.normalize();
     }
     return applyEditionMetadata(result, version);
   }
@@ -770,6 +770,9 @@ public class LogicalTypeToProtoConverter {
       if (packageName != null && !packageName.isEmpty()) {
         fileBuilder.setPackage(packageName);
       }
+      if (!ctx.isV1()) {
+        fileBuilder.getMessageTypeBuilderList().forEach(LogicalTypeToProtoConverter::indexFields);
+      }
       final FileDescriptorProto fileDescriptorProto = fileBuilder.build();
       checkDistinctNames(fileDescriptorProto);
       return FileDescriptor.buildFrom(
@@ -790,6 +793,48 @@ public class LogicalTypeToProtoConverter {
       throw new ValidationException(
           "Failed to translate the provided schema to a Protobuf descriptor", e);
     }
+  }
+
+  /**
+   * Tells the order of a message's attributes where normalizing loses it. Normalized, a message
+   * declares its fields, its oneofs and their members by number; where the type has them
+   * otherwise, each field says its place in {@link CommonConstants#CONNECT_INDEX_PROP}.
+   */
+  private static void indexFields(DescriptorProto.Builder message) {
+    message.getNestedTypeBuilderList().forEach(LogicalTypeToProtoConverter::indexFields);
+    // As the reader takes them: the fields in no oneof, then each oneof's members.
+    final List<FieldDescriptorProto.Builder> plain = new ArrayList<>();
+    final Map<Integer, List<FieldDescriptorProto.Builder>> members = new TreeMap<>();
+    for (FieldDescriptorProto.Builder field : message.getFieldBuilderList()) {
+      if (field.hasOneofIndex() && !field.getProto3Optional()) {
+        members.computeIfAbsent(field.getOneofIndex(), k -> new ArrayList<>()).add(field);
+      } else {
+        plain.add(field);
+      }
+    }
+    final List<FieldDescriptorProto.Builder> first = new ArrayList<>();
+    members.values().forEach(oneof -> first.add(oneof.get(0)));
+    if (inNumberOrder(plain) && inNumberOrder(first)
+        && members.values().stream().allMatch(LogicalTypeToProtoConverter::inNumberOrder)) {
+      return;
+    }
+    final List<FieldDescriptorProto.Builder> fields = new ArrayList<>(plain);
+    members.values().forEach(fields::addAll);
+    for (int i = 0; i < fields.size(); i++) {
+      final FieldDescriptorProto.Builder field = fields.get(i);
+      field.getOptionsBuilder().setExtension(MetaProto.fieldMeta,
+          field.getOptions().getExtension(MetaProto.fieldMeta).toBuilder()
+              .putParams(CommonConstants.CONNECT_INDEX_PROP, String.valueOf(i)).build());
+    }
+  }
+
+  private static boolean inNumberOrder(List<FieldDescriptorProto.Builder> fields) {
+    for (int i = 1; i < fields.size(); i++) {
+      if (fields.get(i - 1).getNumber() > fields.get(i).getNumber()) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /**

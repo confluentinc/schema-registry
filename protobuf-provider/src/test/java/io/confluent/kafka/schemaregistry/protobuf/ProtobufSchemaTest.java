@@ -1738,31 +1738,6 @@ public class ProtobufSchemaTest {
 
 
   @Test
-  public void testNormalizationKeepingOrder() {
-    String schemaString = "syntax = \"proto3\";\npackage my.pkg;\n\nmessage R {\n"
-        + "  int64 a = 2;\n  int64 b = 1;\n  Inner i = 5;\n\n"
-        + "  oneof v {\n    int32 q = 7;\n  }\n"
-        + "  oneof u {\n    int32 y = 4;\n    int32 x = 3;\n  }\n\n"
-        + "  message Inner {\n    string s = 1;\n  }\n}\n";
-    ProtobufSchema schema = new ProtobufSchema(schemaString);
-    String sorted = schema.normalize().canonicalString();
-    String kept = schema.normalizeKeepingOrder().canonicalString();
-    // Sorted by number as ever: fields, a oneof's members, and the oneofs.
-    assertTrue(sorted, sorted.indexOf("b = 1") < sorted.indexOf("a = 2"));
-    assertTrue(sorted, sorted.indexOf("x = 3") < sorted.indexOf("y = 4"));
-    assertTrue(sorted, sorted.indexOf("oneof u") < sorted.indexOf("oneof v"));
-    // Kept as declared.
-    assertTrue(kept, kept.indexOf("a = 2") < kept.indexOf("b = 1"));
-    assertTrue(kept, kept.indexOf("y = 4") < kept.indexOf("x = 3"));
-    assertTrue(kept, kept.indexOf("oneof v") < kept.indexOf("oneof u"));
-    // Normalized alike otherwise, and to the same form when said again.
-    assertTrue(kept, kept.contains(".my.pkg.R.Inner i = 5"));
-    assertTrue(sorted, sorted.contains(".my.pkg.R.Inner i = 5"));
-    assertEquals(kept, new ProtobufSchema(kept).normalizeKeepingOrder().canonicalString());
-    assertEquals(sorted, new ProtobufSchema(kept).normalize().canonicalString());
-  }
-
-  @Test
   public void testNormalization() {
     String schemaString = "syntax = \"proto3\";\n"
         + "package my.package;\n"

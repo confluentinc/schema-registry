@@ -42,6 +42,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -53,6 +54,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.function.ToIntFunction;
+import java.util.stream.Collectors;
 
 /**
  * Converts Protobuf {@link Descriptor} to logical type {@link Schema}.
@@ -823,14 +826,11 @@ public class ProtoToLogicalTypeConverter {
         || asMapEntry && !entryNumbersAreAsWritten(schema);
     final List<Field> fields = new ArrayList<>();
     int index = 0;
-    for (FieldDescriptor fieldDescriptor : schema.getFields()) {
-      if (fieldDescriptor.getRealContainingOneof() != null) {
-        continue;
-      }
+    for (FieldDescriptor fieldDescriptor : plainFields(schema)) {
       fields.add(toField(
           ctx, fieldDescriptor, appendToList(indexPath, index++), recordNumbers, asMapEntry));
     }
-    for (OneofDescriptor oneOfDescriptor : schema.getRealOneofs()) {
+    for (OneofDescriptor oneOfDescriptor : oneofs(schema)) {
       Schema unionSchema = toLogicalTypeOneof(
           oneOfDescriptor, ctx, appendToList(indexPath, index), recordNumbers);
       // A oneof is no step in the descriptor: its members are fields of this message.
@@ -853,6 +853,48 @@ public class ProtoToLogicalTypeConverter {
       final Descriptor message, final ToLogicalContext<String> ctx, final List<Integer> path) {
     return ctx.convertNamedType(message.getFullName(), path,
         () -> toLogicalTypeNested(false, message, ctx, path));
+  }
+
+  /**
+   * A message's fields that are in no oneof, in the order of the type's attributes: those the
+   * writer gave a place ({@link CommonConstants#CONNECT_INDEX_PROP}) by it, then the others as
+   * declared. A normalized message declares its fields by number, whatever order the type has.
+   */
+  private static List<FieldDescriptor> plainFields(Descriptor message) {
+    return byIndex(message.getFields().stream()
+        .filter(field -> field.getRealContainingOneof() == null)
+        .collect(Collectors.toList()), ProtoToLogicalTypeConverter::indexOf);
+  }
+
+  /** A message's oneofs, in the order of the type's attributes: by their first member's place. */
+  private static List<OneofDescriptor> oneofs(Descriptor message) {
+    return byIndex(message.getRealOneofs(), oneof -> oneof.getFields().stream()
+        .mapToInt(ProtoToLogicalTypeConverter::indexOf).min().orElse(Integer.MAX_VALUE));
+  }
+
+  /** A oneof's members, in the order of the union's branches. */
+  private static List<FieldDescriptor> members(OneofDescriptor oneof) {
+    return byIndex(oneof.getFields(), ProtoToLogicalTypeConverter::indexOf);
+  }
+
+  private static <T> List<T> byIndex(List<T> declared, ToIntFunction<T> index) {
+    if (declared.stream().allMatch(item -> index.applyAsInt(item) == Integer.MAX_VALUE)) {
+      return declared;
+    }
+    final List<T> ordered = new ArrayList<>(declared);
+    ordered.sort(Comparator.comparingInt(index));
+    return ordered;
+  }
+
+  // The place the writer gave a field, or the last for one it gave none.
+  private static int indexOf(FieldDescriptor field) {
+    final String index = getMeta(field)
+        .flatMap(getParam(CommonConstants.CONNECT_INDEX_PROP)).orElse(null);
+    try {
+      return index == null ? Integer.MAX_VALUE : Integer.parseInt(index);
+    } catch (NumberFormatException e) {
+      return Integer.MAX_VALUE;
+    }
   }
 
   private static List<Integer> appendToList(final List<Integer> list, final int value) {
@@ -879,7 +921,7 @@ public class ProtoToLogicalTypeConverter {
         if (!oneof.getName().equals(part)) {
           continue;
         }
-        for (FieldDescriptor member : oneof.getFields()) {
+        for (FieldDescriptor member : members(oneof)) {
           if (member.getNumber() != expected++) {
             return false;
           }
@@ -890,25 +932,22 @@ public class ProtoToLogicalTypeConverter {
   }
 
   /**
-   * True if the message's field numbers are exactly {@code 1..N} in the writer's emission order
-   * (regular fields first, then oneof members in declaration order) — i.e. the positional defaults
-   * the writer reproduces for free. When true no numbers need recording; when false every number
-   * is recorded (see the all-or-nothing note in {@code toLogicalTypeNested}).
+   * True if the message's field numbers are exactly {@code 1..N} in the order of the type's
+   * attributes (regular fields first, then oneof members, each as read) — i.e. the positional
+   * defaults the writer reproduces for free. When true no numbers need recording; when false
+   * every number is recorded (see the all-or-nothing note in {@code toLogicalTypeNested}).
    */
   private static boolean messageNumbersAreSequential(Descriptor schema) {
     int expected = 1;
-    for (FieldDescriptor f : schema.getFields()) {
-      if (f.getRealContainingOneof() != null) {
-        continue;
-      }
+    for (FieldDescriptor f : plainFields(schema)) {
       // A wrapped union in a regular field reads as a oneof whose members would continue this
       // message's numbering; they are the wrapper's own, so the numbers are recorded instead.
       if (f.getNumber() != expected++ || wrapsUnion(f)) {
         return false;
       }
     }
-    for (OneofDescriptor oneof : schema.getRealOneofs()) {
-      for (FieldDescriptor f : oneof.getFields()) {
+    for (OneofDescriptor oneof : oneofs(schema)) {
+      for (FieldDescriptor f : members(oneof)) {
         if (f.getNumber() != expected++) {
           return false;
         }
@@ -934,7 +973,7 @@ public class ProtoToLogicalTypeConverter {
       final ToLogicalContext<String> ctx,
       final List<Integer> indexPath,
       final boolean recordNumbers) {
-    List<FieldDescriptor> fieldDescriptors = oneOfDescriptor.getFields();
+    List<FieldDescriptor> fieldDescriptors = members(oneOfDescriptor);
     final List<UnionBranch> branches = new ArrayList<>();
     for (int i = 0; i < fieldDescriptors.size(); i++) {
       final FieldDescriptor fieldDescriptor = fieldDescriptors.get(i);
@@ -1287,7 +1326,7 @@ public class ProtoToLogicalTypeConverter {
       if (!oneof.getName().equals(oneofName)) {
         continue;
       }
-      for (FieldDescriptor member : oneof.getFields()) {
+      for (FieldDescriptor member : members(oneof)) {
         String name = ownTypeName(member);
         if (name != null) {
           names.put(getMeta(member).flatMap(getParam(CommonConstants.LOGICAL_BRANCH_PROP))

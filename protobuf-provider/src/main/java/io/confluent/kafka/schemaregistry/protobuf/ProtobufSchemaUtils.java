@@ -285,12 +285,7 @@ public class ProtobufSchemaUtils {
   }
 
   protected static String toNormalizedString(ProtobufSchema schema) {
-    return toNormalizedString(schema, false);
-  }
-
-  // keepOrder: the fields of a message, its oneofs and their members stay as declared.
-  protected static String toNormalizedString(ProtobufSchema schema, boolean keepOrder) {
-    FormatContext ctx = new FormatContext(false, true, keepOrder);
+    FormatContext ctx = new FormatContext(false, true);
     return toFormattedString(ctx, schema);
   }
 
@@ -585,7 +580,7 @@ public class ProtobufSchemaUtils {
     if (!type.getFields().isEmpty()) {
       sb.append('\n');
       List<FieldElement> fields = type.getFields();
-      if (ctx.normalize() && !ctx.keepOrder()) {
+      if (ctx.normalize()) {
         fields = new ArrayList<>(fields);
         fields.sort(Comparator.comparing(FieldElement::getTag));
       }
@@ -601,16 +596,12 @@ public class ProtobufSchemaUtils {
             .filter(o -> !o.getFields().isEmpty())
             .map(o -> {
               List<FieldElement> fields = new ArrayList<>(o.getFields());
-              if (!ctx.keepOrder()) {
-                fields.sort(Comparator.comparing(FieldElement::getTag));
-              }
+              fields.sort(Comparator.comparing(FieldElement::getTag));
               return new OneOfElement(o.getName(), o.getDocumentation(),
                   fields, o.getGroups(), o.getOptions(), DEFAULT_LOCATION);
             })
             .collect(Collectors.toList());
-        if (!ctx.keepOrder()) {
-          oneOfs.sort(Comparator.comparing(o -> o.getFields().get(0).getTag()));
-        }
+        oneOfs.sort(Comparator.comparing(o -> o.getFields().get(0).getTag()));
       }
       for (OneOfElement oneOf : oneOfs) {
         appendIndented(sb, toString(ctx, oneOf));
@@ -1212,23 +1203,12 @@ public class ProtobufSchemaUtils {
   public static class FormatContext extends Context {
     private boolean ignoreExtensions;
     private boolean normalize;
-    private boolean keepOrder;
     private NumberFormat numberFormat;
 
     public FormatContext(boolean ignoreExtensions, boolean normalize) {
-      this(ignoreExtensions, normalize, false);
-    }
-
-    public FormatContext(boolean ignoreExtensions, boolean normalize, boolean keepOrder) {
       super();
       this.ignoreExtensions = ignoreExtensions;
       this.normalize = normalize;
-      this.keepOrder = keepOrder;
-    }
-
-    // With normalize: a message's fields, its oneofs and their members are not sorted.
-    public boolean keepOrder() {
-      return keepOrder;
     }
 
     public boolean ignoreExtensions() {

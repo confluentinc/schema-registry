@@ -1544,8 +1544,13 @@ class TypeAlterTest {
         new MoveAttribute("c", Position.first()));
     assertThat(names("pp")).containsExactly("c", "a", "d", "b", "u");
     assertThat(numbers(message("pp"))).contains("a=1", "b=2", "c=3", "x=4", "y=5", "d=6");
+    // The text is normalized, its fields by number, and each says its place.
     String text = registry.schema("pp").canonicalString();
-    assertThat(text.indexOf(" c = 3")).isBetween(0, text.indexOf(" a = 1"));
+    assertThat(text.indexOf(" a = 1")).isBetween(0, text.indexOf(" c = 3"));
+    assertThat(text).contains("key: \"connect.index\"");
+    assertThat(registry.schema("pp").normalize().canonicalString()).isEqualTo(text);
+    assertThat(LogicalTypeToDdlConverter.toDdl(registry.logicalType("pp", registry.latest("pp"))))
+        .doesNotContain("connect.index");
 
     // With no position, an attribute that is no union goes after the last such one.
     registry.alter("pp", new AddAttribute("e", "INT"));
@@ -1570,7 +1575,7 @@ class TypeAlterTest {
   }
 
   // The order a message declares its fields in is the order of the type's attributes, and
-  // is kept: a statement does not put them in the order of their numbers.
+  // is kept: a statement writes them by number, as normalized, and tells the place of each.
   @Test
   void aProtobufMessageDeclaredOutOfNumberOrderKeepsItsOrder() throws Exception {
     registry.client.register("po", new ProtobufSchema("syntax = \"proto3\";\n\n"
@@ -1578,14 +1583,37 @@ class TypeAlterTest {
     registry.alter("po", new AddAttribute("x", "INT"));
     assertThat(names("po")).containsExactly("a", "b", "x");
     String text = registry.schema("po").canonicalString();
-    assertThat(text.indexOf(" a = 2")).isBetween(0, text.indexOf(" b = 1"));
-    assertThat(numbers(message("po"))).isEqualTo("a=2 b=1 x=3");
+    assertThat(text.indexOf(" b = 1")).isBetween(0, text.indexOf(" a = 2"));
+    assertThat(numbers(message("po"))).isEqualTo("b=1 a=2 x=3");
 
-    // A type created with its numbers in another order is stored as it is written.
+    // A type created with its numbers in another order has its attributes as it says them.
     create("pc", SchemaType.PROTOBUF, "(a BIGINT WITH ('protobuf.field.number' = '2'), "
         + "b BIGINT WITH ('protobuf.field.number' = '1'))");
     assertThat(names("pc")).containsExactly("a", "b");
-    assertThat(numbers(message("pc"))).isEqualTo("a=2 b=1");
+    assertThat(numbers(message("pc"))).isEqualTo("b=1 a=2");
+
+    // Normalized once more, as a registry does when asked, each is the type it was.
+    for (String subject : List.of("po", "pc")) {
+      registry.client.register(subject + "n", registry.schema(subject).normalize());
+      assertThat(names(subject + "n")).isEqualTo(names(subject));
+      assertThat(numbers(message(subject + "n"))).isEqualTo(numbers(message(subject)));
+    }
+    // A field with no place, as one added to the text by hand, follows those that have one.
+    registry.client.register("ph2", new ProtobufSchema(registry.schema("pc").canonicalString()
+        .replaceFirst("\n\\}\\s*$", "\n  int32 c = 9;\n  int32 d = 3;\n}\n")));
+    assertThat(names("ph2")).containsExactly("a", "b", "c", "d");
+
+    // Where the order is that of the numbers, nothing is told.
+    create("pd", SchemaType.PROTOBUF, "(a INT NOT NULL, u UNION(x INT, y STRING))");
+    registry.alter("pd", new AddAttribute("b", "INT"));
+    assertThat(names("pd")).containsExactly("a", "b", "u");
+    assertThat(registry.schema("pd").canonicalString()).doesNotContain("connect.index");
+    registry.alter("pd", new MoveAttribute("b", Position.first()));
+    assertThat(names("pd")).containsExactly("b", "a", "u");
+    assertThat(registry.schema("pd").canonicalString()).contains("connect.index");
+    registry.alter("pd", new MoveAttribute("a", Position.first()), new AddAttribute("c", "INT"));
+    assertThat(names("pd")).containsExactly("a", "b", "c", "u");
+    assertThat(registry.schema("pd").canonicalString()).doesNotContain("connect.index");
   }
 
   // Messages are named in the order of the attributes: first, fooBar would take the name
@@ -1721,7 +1749,9 @@ class TypeAlterTest {
     registry.alter("un", new AlterAttributeType("s",
         "STRUCT(v UNION(b INT, d STRING), u UNION(a INT, d INT))"));
     Descriptor row = message("un").findFieldByName("s").getMessageType();
-    assertThat(numbers(row)).isEqualTo("b=2 d=3 a=1 u_d=4");
+    assertThat(numbers(row).split(" ")).containsExactlyInAnyOrder("b=2", "d=3", "a=1", "u_d=4");
+    assertThat(registry.logicalType("un", registry.latest("un")).getRootSchema().getField("s")
+        .getSchema().getFields()).extracting(Schema.Field::getName).containsExactly("v", "u");
     registry.alter("un", new AddAttribute("zz", "INT"));
     assertThat(numbers(message("un").findFieldByName("s").getMessageType()))
         .isEqualTo(numbers(row));
