@@ -217,6 +217,66 @@ class FormatsTest {
     });
   }
 
+  // Two rows are told apart by what tells apart the rows they name, however many steps
+  // away that is and in whatever order they are met; and are told by both of them.
+  @Test
+  void aJsonUnionsRowsAreToldApartByTheRowsTheyName() {
+    Formats.refuseUnwritable(SchemaType.JSON, TypeScripts.parse(
+        "STRUCT X (q Q1 NOT NULL, k INT NOT NULL); STRUCT Y (q Q2 NOT NULL, k STRING NOT NULL);"
+            + " STRUCT Q1 (p X NOT NULL); STRUCT Q2 (p Y NOT NULL); "
+            + "STRUCT t (u UNION(q1 Q1, q2 Q2)); TYPE t;"));
+    Formats.refuseUnwritable(SchemaType.JSON, TypeScripts.parse(
+        "STRUCT A0 (n A1 NOT NULL); STRUCT A1 (n A2 NOT NULL); STRUCT A2 (n A3 NOT NULL); "
+            + "STRUCT A3 (k INT NOT NULL); STRUCT B0 (n B1 NOT NULL); STRUCT B1 (n B2 NOT NULL); "
+            + "STRUCT B2 (n B3 NOT NULL); STRUCT B3 (k STRING NOT NULL); "
+            + "STRUCT t (u UNION(x A0, y B0)); TYPE t;"));
+    for (String[] three : new String[][] {
+        {"STRUCT A (k INT NOT NULL); STRUCT B1 (k STRING NOT NULL); STRUCT B2 (k INT NOT NULL); "
+            + "STRUCT t (u UNION(x A, y B1, z B2)); TYPE t;", "x and z"},
+        {"STRUCT A1 (k INT NOT NULL); STRUCT B (k STRING NOT NULL); "
+            + "STRUCT A2 (k STRING NOT NULL); STRUCT t (u UNION(x A1, y B, z A2)); TYPE t;",
+            "y and z"}}) {
+      assertThatThrownBy(() -> Formats.refuseUnwritable(SchemaType.JSON,
+          TypeScripts.parse(three[0]))).isInstanceOf(TypeRefusedException.class)
+          .hasMessageContaining("cannot have branches " + three[1]);
+    }
+    // A type of the document's own is written with no null, whatever it says.
+    Formats.refuseUnwritable(SchemaType.JSON, TypeScripts.parse("STRUCT N (p INT); STRUCT t ("
+        + "u UNION(r1 STRUCT<a N NOT NULL>, r2 STRUCT<a BOOLEAN>) NOT NULL); TYPE t;"));
+  }
+
+  // Two rings of rows of lengths with no common measure, told apart in one place, and two
+  // chains told apart at their ends: each two are judged again only when one they were
+  // judged by is told apart.
+  @Test
+  void aJsonUnionsLongChainsOfRowsAreJudgedInTheirOrder() {
+    StringBuilder rings = new StringBuilder();
+    for (int i = 0; i < 140; i++) {
+      rings.append("STRUCT A").append(i).append(" (nxt A").append((i + 1) % 140)
+          .append(" NOT NULL, y ").append(i == 139 ? "INT" : "VARIANT").append(" NOT NULL); ");
+    }
+    for (int j = 0; j < 141; j++) {
+      rings.append("STRUCT B").append(j).append(" (nxt B").append((j + 1) % 141)
+          .append(" NOT NULL, y ").append(j == 140 ? "STRING" : "VARIANT")
+          .append(" NOT NULL); ");
+    }
+    StringBuilder chains = new StringBuilder();
+    for (String family : new String[] {"A", "B"}) {
+      for (int i = 0; i < 1500; i++) {
+        chains.append("STRUCT ").append(family).append(i).append(" (c0 ").append(family)
+            .append(i + 1).append(" NOT NULL, c1 ").append(family).append(i + 1)
+            .append(" NOT NULL); ");
+      }
+      chains.append("STRUCT ").append(family).append("1500 (k ")
+          .append(family.equals("B") ? "STRING" : "INT").append(" NOT NULL); ");
+    }
+    List<LogicalType> told = List.of(
+        TypeScripts.parse(rings + "STRUCT t (u UNION(x A0, y B0)); TYPE t;"),
+        TypeScripts.parse(chains + "STRUCT t (u UNION(x A0, y B0)); TYPE t;"));
+    assertTimeoutPreemptively(Duration.ofSeconds(20),
+        () -> told.forEach(lt -> Formats.refuseUnwritable(SchemaType.JSON, lt)));
+  }
+
   // Two rows come to again while they are compared are taken to match; two compared once
   // and told apart are so wherever they are come to again.
   @Test

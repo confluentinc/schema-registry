@@ -331,7 +331,7 @@ public class JsonToLogicalTypeConverter {
    * Returns {@code null} if the URI is non-canonical — caller invokes
    * {@link ToLogicalContext#synthesizeRefName} to get the synthesized name.
    */
-  private static String extractCanonicalDefsKey(String refValue) {
+  public static String extractCanonicalDefsKey(String refValue) {
     String[] markers = {"/$defs/", "/definitions/"};
     for (String marker : markers) {
       int idx = refValue.indexOf(marker);

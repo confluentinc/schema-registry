@@ -30,9 +30,11 @@ import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTyp
 import io.confluent.kafka.schemaregistry.type.logical.avro.LogicalTypeToAvroConverter;
 import io.confluent.kafka.schemaregistry.type.logical.json.LogicalTypeToJsonConverter;
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.LogicalTypeToProtoConverter;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.HashSet;
@@ -471,14 +473,22 @@ public final class Formats {
   // The rows met while two branches are judged, two by two, and whether a value of the one
   // would match the other. Two are taken to match until an attribute tells them apart, as
   // two that name each other tell nothing of themselves; each is judged by what the others
-  // are taken to be, again until none changes. Rows that name each other are so judged
-  // once each for each that changes, and not by every way they are come to.
+  // are taken to be, and again when one of those is told apart. Rows that name each other
+  // are so judged once each for each that changes, and not by every way they are come to.
   private static final class Pairs {
     final Map<Pair, Boolean> match = new HashMap<>();
     final List<Pair> met = new ArrayList<>();
+    // The pairs judged by what a pair was taken to be: they are judged again once it is
+    // told apart, and no others, however long the chain of them.
+    private final Map<Pair, Set<Pair>> judgedBy = new HashMap<>();
+    private Pair judging;
+    private int settled;
 
     boolean of(Written one, Written other) {
       Pair pair = new Pair(one, other);
+      if (judging != null) {
+        judgedBy.computeIfAbsent(pair, p -> new HashSet<>()).add(judging);
+      }
       Boolean known = match.putIfAbsent(pair, true);
       if (known == null) {
         met.add(pair);
@@ -488,16 +498,19 @@ public final class Formats {
     }
 
     void settle() {
-      boolean changed = true;
-      while (changed) {
-        changed = false;
-        // Those met on the way are judged in their turn.
-        for (int i = 0; i < met.size(); i++) {
-          Pair pair = met.get(i);
-          if (match.get(pair) && !judge(pair.one, pair.other, this)) {
-            match.put(pair, false);
-            changed = true;
-          }
+      Deque<Pair> again = new ArrayDeque<>();
+      // Those met on the way are judged in their turn.
+      while (!again.isEmpty() || settled < met.size()) {
+        Pair pair = again.isEmpty() ? met.get(settled++) : again.pop();
+        if (!match.get(pair)) {
+          continue;
+        }
+        judging = pair;
+        boolean both = judge(pair.one, pair.other, this);
+        judging = null;
+        if (!both) {
+          match.put(pair, false);
+          judgedBy.getOrDefault(pair, Set.of()).forEach(again::push);
         }
       }
     }

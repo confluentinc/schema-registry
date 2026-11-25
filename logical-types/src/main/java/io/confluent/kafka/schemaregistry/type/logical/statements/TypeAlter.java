@@ -16,7 +16,9 @@
 
 package io.confluent.kafka.schemaregistry.type.logical.statements;
 
+import com.fasterxml.jackson.core.JsonPointer;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.MissingNode;
 import com.google.protobuf.DescriptorProtos.DescriptorProto;
 import com.google.protobuf.DescriptorProtos.EnumDescriptorProto;
 import com.google.protobuf.DescriptorProtos.FieldDescriptorProto;
@@ -41,6 +43,7 @@ import io.confluent.kafka.schemaregistry.type.logical.Schema.EnumValue;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.Field;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.UnionBranch;
 import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
+import io.confluent.kafka.schemaregistry.type.logical.json.JsonToLogicalTypeConverter;
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.LogicalTypeToProtoConverter;
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTypeConverter;
 import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceReport;
@@ -60,8 +63,6 @@ import java.util.TreeSet;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.IntFunction;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -83,9 +84,6 @@ public final class TypeAlter {
   private static final int RESERVED_FIRST = 19_000;
   private static final int RESERVED_LAST = 19_999;
   private static final int MAX_NUMBER = 536_870_911;
-  // A $ref to a definition: of the document named before the #, or the schema's own.
-  private static final Pattern DEFINITION =
-      Pattern.compile("([^#]*)#/(\\$defs|definitions)/([^/]+)");
   private static final String KEY_SUFFIX = "-key";
   private static final String VALUE_SUFFIX = "-value";
 
@@ -1844,22 +1842,31 @@ public final class TypeAlter {
     md.getReferences().forEach(r -> documents.add(r.getName()));
     JsonNode schema = ((JsonSchema) stored).toJsonNode();
     for (JsonNode ref : schema.findValues("$ref")) {
-      Matcher to = DEFINITION.matcher(ref.asText(""));
-      if (!to.matches() || !documents.contains(to.group(3)) || to.group(3).equals(to.group(1))) {
+      String to = ref.asText("");
+      // The name a definition is read by, wherever in a document it is.
+      String name = JsonToLogicalTypeConverter.extractCanonicalDefsKey(to);
+      String of = to.contains("#") ? to.substring(0, to.indexOf('#')) : to;
+      if (name == null || !documents.contains(name) || name.equals(of)) {
         continue;
       }
-      // A definition that only names the document is that document.
-      JsonNode own = schema.path(to.group(2)).path(to.group(3));
-      if (to.group(1).isEmpty() && own.size() == 1
-          && to.group(3).equals(own.path("$ref").asText(null))) {
+      // A definition that only names the document is that document, whatever else it says.
+      if (of.isEmpty() && name.equals(definition(schema, to).path("$ref").asText(null))) {
         continue;
       }
       throw new TypeRefusedException("Type " + subject + " cannot be altered: it has a "
-          + "definition named " + to.group(3)
-          + (to.group(1).isEmpty() ? " of its own" : " of " + to.group(1))
+          + "definition named " + name + (of.isEmpty() ? " of its own" : " of " + of)
           + ", and refers to a type by that name. The two are read as one, and the "
           + "definition would be written as that type. Register its new version as a JSON "
           + "schema");
+    }
+  }
+
+  // What a $ref to a part of the schema itself is to, or nothing where it is to none.
+  private static JsonNode definition(JsonNode schema, String ref) {
+    try {
+      return schema.at(JsonPointer.compile(ref.substring(ref.indexOf('#') + 1)));
+    } catch (IllegalArgumentException e) {
+      return MissingNode.getInstance();
     }
   }
 
@@ -1878,10 +1885,11 @@ public final class TypeAlter {
     LogicalType lt = parseWithReferences(builder, names);
     parsedTypes = lt.getNamedTypes();
     parsedImports = lt.getExternalImports();
-    // The names the type has a use for other than as its references': a definition of a
-    // type it refers to, or what the type as read calls one of them.
+    // The names the type has a use for other than as its references': a definition of its
+    // own or of a type it refers to. And what the type as read calls a type it refers to,
+    // in use or not: the name is that type's until the statement is done.
     Set<String> defined = namesInUse();
-    defined.retainAll(externalTypes);
+    defined.addAll(externalImports.keySet());
     references.forEach(r -> defined.remove(r.getName()));
     Set<String> named = new HashSet<>(externalTypes);
     references.forEach(r -> named.remove(r.getName()));
@@ -1911,7 +1919,8 @@ public final class TypeAlter {
       if (!found && format == SchemaType.JSON && defined.contains(ref.getName())) {
         throw new TypeRefusedException(refused() + ": it has a type named " + ref.getName()
             + " already, " + (externalImports.containsKey(ref.getName())
-              ? "as it calls a type it refers to" : "a definition of a type it refers to")
+              ? "as it calls a type it refers to" : named.contains(ref.getName())
+              ? "a definition of a type it refers to" : "a definition of its own")
             + ", and would have type " + ref.getSubject() + " by that name as well");
       }
       // A name the type had for a definition, and has no more a use for as that, is the

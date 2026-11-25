@@ -2774,6 +2774,35 @@ class TypeAlterTest {
         .isInstanceOf(TypeRefusedException.class).hasMessage("Type h3 cannot be changed so: "
             + "it has a type named Ref1 already, as it calls a type it refers to, and would "
             + "have type Ref1 by that name as well");
+    // It is that type's until the statement is done, though an action before has dropped
+    // the attribute that was of it: the new attribute would be written as the old type.
+    for (AlterAction[] actions : new AlterAction[][] {
+        {new DropAttribute("a", false), new AddAttribute("b", "Ref1")},
+        {new AlterAttributeType("a", "Ref1")},
+        {new AlterAttributeType("a", "INT"), new AddAttribute("b", "Ref1")}}) {
+      assertThatThrownBy(() -> registry.alter("h3", actions))
+          .isInstanceOf(TypeRefusedException.class)
+          .hasMessageContaining("it has a type named Ref1 already, as it calls a type it "
+              + "refers to");
+    }
+    assertThat(version("h3")).isEqualTo(1);
+    // A definition's name is in use through a type of the document's own, and is freed by
+    // SET DATA TYPE as by a retype.
+    registry.client.register("viaown", new JsonSchema("{\"type\":\"object\",\"title\":"
+        + "\"viaown\",\"properties\":{\"id\":{\"type\":\"integer\"},\"e\":{\"$ref\":"
+        + "\"lib#/$defs/E\"},\"x\":{\"$ref\":\"#/$defs/Loc\"}},\"additionalProperties\":false,"
+        + "\"$defs\":{\"Loc\":{\"type\":\"object\",\"properties\":{\"in\":{\"$ref\":"
+        + "\"lib#/$defs/E\"}},\"additionalProperties\":false}}}",
+        List.of(new SchemaReference("lib", "lib", 1)), resolved, null));
+    assertThatThrownBy(() -> registry.alter("viaown", new AlterAttributeType("e", "E")))
+        .isInstanceOf(TypeRefusedException.class).hasMessageContaining("it has a type named "
+            + "E already, a definition of a type it refers to");
+    registry.client.register("arr", new JsonSchema("{\"title\":\"arr\",\"type\":\"array\","
+        + "\"items\":{\"$ref\":\"lib#/$defs/E\"}}",
+        List.of(new SchemaReference("lib", "lib", 1)), resolved, null));
+    registry.alter("arr", new SetDataType("ARRAY<E>"));
+    assertThat(registry.schema("arr").canonicalString()).contains("{\"$ref\":\"E\"}")
+        .doesNotContain("lib#/$defs/E");
   }
 
   // A JSON name is one type's. A schema written by hand with a definition, its own or one
@@ -2820,6 +2849,76 @@ class TypeAlterTest {
         .hasMessageStartingWith("Type hb cannot be altered: it has a definition named E of "
             + "lib, and refers to a type by that name.");
     assertThat(version("hb")).isEqualTo(1);
+    // A definition is told by the name it is read by, wherever in the schema it is and by
+    // either word for it, and from wherever it is named.
+    String object = "{\"type\":\"object\",\"properties\":{\"p\":{\"type\":\"integer\"}},"
+        + "\"additionalProperties\":false}";
+    String head = "{\"type\":\"object\",\"title\":\"%s\",\"properties\":{\"id\":{\"type\":"
+        + "\"integer\"},\"r\":{\"$ref\":\"o5s\"},";
+    Map<String, String> written = new LinkedHashMap<>();
+    written.put("dprop", head + "\"x\":{\"$ref\":\"#/properties/y/$defs/o5s\"},\"y\":"
+        + "{\"type\":\"object\",\"properties\":{\"k\":{\"type\":\"integer\"}},"
+        + "\"additionalProperties\":false,\"$defs\":{\"o5s\":" + object + "}}},"
+        + "\"additionalProperties\":false}");
+    written.put("ddef", head + "\"x\":{\"$ref\":\"#/definitions/A/$defs/o5s\"}},"
+        + "\"additionalProperties\":false,\"definitions\":{\"A\":{\"type\":\"object\","
+        + "\"$defs\":{\"o5s\":" + object + "}}}}");
+    written.put("d7", head + "\"x\":{\"$ref\":\"#/definitions/o5s\"}},"
+        + "\"additionalProperties\":false,\"definitions\":{\"o5s\":" + object + "}}");
+    written.put("dvia", head + "\"x\":{\"$ref\":\"#/$defs/Loc\"}},"
+        + "\"additionalProperties\":false,\"$defs\":{\"Loc\":{\"type\":\"object\","
+        + "\"properties\":{\"in\":{\"$ref\":\"#/$defs/o5s\"}},\"additionalProperties\":false},"
+        + "\"o5s\":" + object + "}}");
+    // One that names another document than that of its name is no name of that one.
+    written.put("dother", head + "\"x\":{\"$ref\":\"#/$defs/o5s\"}},"
+        + "\"additionalProperties\":false,\"$defs\":{\"o5s\":{\"$ref\":\"E\"}}}");
+    Map<String, String> two = new LinkedHashMap<>(resolved);
+    two.put("E", registry.latest("E").getSchema());
+    for (Map.Entry<String, String> type : written.entrySet()) {
+      boolean other = type.getKey().equals("dother");
+      registry.client.register(type.getKey(), new JsonSchema(
+          String.format(type.getValue(), type.getKey()), other ? List.of(refs.get(0),
+          new SchemaReference("E", "E", 1)) : refs, other ? two : resolved, null));
+      assertThatThrownBy(() -> registry.alter(type.getKey(), new AddAttribute("z", "INT")))
+          .as(type.getKey()).isInstanceOf(TypeRefusedException.class)
+          .hasMessageContaining("it has a definition named o5s of its own");
+    }
+    // A definition that only names the document of its name is that document, whatever
+    // else it says, as the writer writes a name the type has for it.
+    written.clear();
+    written.put("dal", "{\"$ref\":\"o5s\"}");
+    written.put("dlr", "{\"$ref\":\"o5s\",\"logical.ref\":true}");
+    written.put("dds", "{\"$ref\":\"o5s\",\"description\":\"the same\"}");
+    for (Map.Entry<String, String> type : written.entrySet()) {
+      registry.client.register(type.getKey(), new JsonSchema(String.format(head
+          + "\"x\":{\"$ref\":\"#/$defs/o5s\"}},\"additionalProperties\":false,\"$defs\":"
+          + "{\"o5s\":" + type.getValue() + "}}", type.getKey()), refs, resolved, null));
+      registry.alter(type.getKey(), new AddAttribute("z", "INT"));
+      assertThat(version(type.getKey())).as(type.getKey()).isEqualTo(2);
+    }
+    nativeJson("dwr", "USING TYPE o5s FOR REF 'o5s'; STRUCT dwr (id INT, x o5s); TYPE dwr;",
+        "o5s");
+    registry.alter("dwr", new AddAttribute("z", "INT"));
+    assertThat(registry.schema("dwr").canonicalString()).contains("\"$ref\":\"o5s\"");
+    // A document's definition of the document's own name is no other document's.
+    registry.client.register("lown", new JsonSchema("{\"type\":\"object\",\"title\":\"lown\","
+        + "\"properties\":{\"q\":{\"type\":\"integer\"}},\"additionalProperties\":false,"
+        + "\"$defs\":{\"lown\":{\"type\":\"boolean\"}}}"));
+    registry.client.register("down", new JsonSchema("{\"type\":\"object\",\"title\":\"down\","
+        + "\"properties\":{\"id\":{\"type\":\"integer\"},\"e\":{\"$ref\":"
+        + "\"lown#/$defs/lown\"}},\"additionalProperties\":false}",
+        List.of(new SchemaReference("lown", "lown", 1)),
+        Map.of("lown", registry.latest("lown").getSchema()), null));
+    registry.alter("down", new AddAttribute("z", "INT"));
+    assertThat(registry.schema("down").canonicalString())
+        .contains("{\"$ref\":\"lown#/$defs/lown\"}");
+    // A statement that names a type of the name of a definition of the type's own, which
+    // an attribute is of, would have the two as one.
+    create("Loc", SchemaType.JSON, "(q STRING NOT NULL)");
+    assertThatThrownBy(() -> registry.alter("o5c", new AddAttribute("b", "Loc")))
+        .isInstanceOf(TypeRefusedException.class).hasMessage("Type o5c cannot be changed so: "
+            + "it has a type named Loc already, a definition of its own, and would have type "
+            + "Loc by that name as well");
   }
 
   // The names in a type referred to are its own: a type whose root is a name, or a union
@@ -3033,9 +3132,31 @@ class TypeAlterTest {
         "(u UNION(r1 STRUCT<a c6 NOT NULL>, r2 STRUCT<a BOOLEAN>) NOT NULL)");
     // Past a limit of names a null is taken to be one, which refuses.
     jsonRefused("n12", "(u UNION(r1 STRUCT<a c18 NOT NULL>, r2 STRUCT<a BOOLEAN>) NOT NULL)");
-    // A null is a value of the map only where its values take one.
+    // A null is a value of the map only where its values take one: as the type they are
+    // of does, whatever the map says of them. A multiset's is a count, which takes none.
     create("n5", SchemaType.JSON,
         "(u UNION(r1 STRUCT<a hu NOT NULL>, r2 MAP<STRING, BOOLEAN NOT NULL>) NOT NULL)");
+    registry.create("rown", SchemaType.JSON, BodyKind.OTHER, "STRUCT<p INT>");
+    create("n13", SchemaType.JSON,
+        "(u UNION(r1 STRUCT<a rown NOT NULL>, r2 MULTISET<STRING>) NOT NULL)");
+    jsonRefused("n14",
+        "(u UNION(r1 STRUCT<a rown NOT NULL>, r2 MAP<STRING, hu NOT NULL>) NOT NULL)");
+    // An attribute the row does not require tells it from no map: {} is of both.
+    jsonRefused("n15", "(u UNION(r1 STRUCT<a INT>, r2 MAP<STRING, STRING NOT NULL>) NOT NULL)");
+    // The limit of names is where it is.
+    create("n16", SchemaType.JSON,
+        "(u UNION(r1 STRUCT<a c15 NOT NULL>, r2 STRUCT<a BOOLEAN>) NOT NULL)");
+    jsonRefused("n17", "(u UNION(r1 STRUCT<a c16 NOT NULL>, r2 STRUCT<a BOOLEAN>) NOT NULL)");
+    // Rows that say the same of types of one name that are not one type are not one row,
+    // in whichever order they are judged.
+    create("wc", SchemaType.JSON, "(tag e1 NOT NULL)");
+    create("mc", SchemaType.JSON, "(inner wc NOT NULL)");
+    for (String union : List.of("UNION(a ma, b mb, c mc)", "UNION(a ma, c mc, b mb)")) {
+      assertThatThrownBy(() -> create("s3", SchemaType.JSON, "(u " + union + ")")).as(union)
+          .isInstanceOf(TypeRefusedException.class)
+          .hasMessageContaining("cannot have branches a and c");
+    }
+    create("s5", SchemaType.JSON, "(u UNION(b mb, a ma))");
     // A type two of the referred types refer to.
     create("mx", SchemaType.JSON, "(t e1 NOT NULL, f e2)");
     create("my", SchemaType.JSON, "(t e2 NOT NULL)");
@@ -3073,7 +3194,9 @@ class TypeAlterTest {
         + "\"additionalProperties\":false}}}"));
     assertThatThrownBy(() -> registry.alter("h3",
         new AddAttribute("u", "UNION(a STRING, b Color)")))
-        .isInstanceOf(TypeRefusedException.class).hasMessageContaining("cannot have branches");
+        .isInstanceOf(TypeRefusedException.class).hasMessage("Type h3 cannot be changed so: "
+            + "it has a type named Color already, a definition of its own, and would have "
+            + "type Color by that name as well");
     // A referred type whose own name is the created type's.
     registry.client.register("other", new JsonSchema("{\"type\":\"string\",\"enum\":[\"X\","
         + "\"Y\"],\"title\":\"h9\"}"));
