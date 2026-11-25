@@ -59,8 +59,9 @@ public abstract class AlterAction {
 
   /**
    * Where an attribute goes among the others of its type: first, or right after another. It is
-   * the order they are declared and read in, in Avro and JSON Schema; a Protobuf message's
-   * fields are in the order of their numbers, so a position does nothing there.
+   * the order they are declared and read in. A Protobuf message declares its unions after its
+   * other fields, so there a union is placed among the unions, and any other attribute among
+   * those that are not.
    */
   public static final class Position {
 

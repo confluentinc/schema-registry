@@ -1765,7 +1765,7 @@ public final class TypeAlter {
     return ordered;
   }
 
-  // A position that would put a union before an attribute that is none cannot be kept.
+  // A position that would put a union before an attribute that is not one cannot be kept.
   private void refuseUnionBeforePlain(List<Field> fields, String name,
       AlterAction.Position position) {
     if (format != SchemaType.PROTOBUF || plainThenUnions(fields).equals(fields)) {
@@ -1774,7 +1774,7 @@ public final class TypeAlter {
     throw new TypeRefusedException("Attribute " + name + " cannot be placed "
         + (position.after() == null ? "first" : "after " + position.after()) + " in PROTOBUF "
         + "type " + subject + ": a Protobuf message declares its unions after its other "
-        + "fields, so a union follows every attribute that is none");
+        + "fields, so a union follows every attribute that is not a union");
   }
 
   /**

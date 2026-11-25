@@ -839,10 +839,16 @@ public class LogicalTypeToProtoConverter {
         .filter(f -> f.getTypeName().equals(name) || f.getTypeName().endsWith("." + name))
         .map(FieldDescriptorProto::getName)
         .collect(Collectors.toList());
+    // A generated type may keep a name given it, which renaming its field does not change:
+    // beside a field or oneof of that name, that one is the one to name otherwise.
+    final boolean priorIsType = prior.equals("message") || prior.equals("enum");
+    final boolean kindIsType = kind.equals("message") || kind.equals("enum");
     throw new ValidationException("Protobuf name '" + name + "' is defined twice in " + scope
         + (prior.equals(kind) ? "" : ", as a " + prior + " and a " + kind)
         + (users.isEmpty() ? "" : " (used by fields " + String.join(", ", users) + ")")
-        + "; rename one of the fields it is generated from");
+        + (priorIsType != kindIsType
+            ? "; give the " + (priorIsType ? kind : prior) + " another name"
+            : "; rename one of the fields it is generated from"));
   }
 
   // A oneof member's field, whose type is named by the member's pin.

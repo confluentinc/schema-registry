@@ -188,8 +188,6 @@ public final class Formats {
     }
   }
 
-  // Refuses a Protobuf field or enum number that is none, which the registry would refuse
-  // without naming it.
   // A member's field name is a Protobuf identifier; whether another field has it is the
   // writer's to say, which names the fields around it.
   private static void refuseBadFieldName(SchemaType format, UnionBranch b) {
@@ -203,6 +201,8 @@ public final class Formats {
     }
   }
 
+  // Refuses a Protobuf field or enum number that is none, which the registry would refuse
+  // without naming it.
   private static void refuseBadNumber(SchemaType format, String property, String of,
       Map<String, Object> params) {
     Object number = params.get(property);

@@ -1535,7 +1535,7 @@ class TypeAlterTest {
 
   // A Protobuf attribute is placed and moved as in the other formats, and is the field it
   // was: its number stays. A message declares its unions after its other fields, and is read
-  // so: a position that would put a union before an attribute that is none is refused.
+  // so: a position that would put a union before an attribute that is not one is refused.
   @Test
   void aProtobufAttributeIsPlacedAndKeepsItsNumber() {
     create("pp", SchemaType.PROTOBUF,
@@ -1556,7 +1556,7 @@ class TypeAlterTest {
     assertThat(names("pp")).containsExactly("c", "a", "d", "b", "e", "v", "u");
 
     String unions = " in PROTOBUF type pp: a Protobuf message declares its unions after its "
-        + "other fields, so a union follows every attribute that is none";
+        + "other fields, so a union follows every attribute that is not a union";
     assertThatThrownBy(() -> registry.alter("pp", new MoveAttribute("u", Position.first())))
         .isInstanceOf(TypeRefusedException.class)
         .hasMessage("Attribute u cannot be placed first" + unions);
@@ -1612,8 +1612,13 @@ class TypeAlterTest {
     assertThatThrownBy(() -> registry.alter("pn", new AddAttribute("FooRow", "INT")))
         .isInstanceOf(TypeRefusedException.class).hasMessage("Type pn cannot be changed so: "
             + "no PROTOBUF schema can be made of it: Protobuf name 'FooRow' is defined twice "
-            + "in pn, as a field and a message (used by fields foo); rename one of the fields "
-            + "it is generated from");
+            + "in pn, as a field and a message (used by fields foo); give the field another "
+            + "name");
+    // The message keeps its name when its attribute is renamed, so it is the new one's to
+    // have another.
+    assertThatThrownBy(() -> registry.alter("pn", new RenameAttribute("foo", "baz"),
+        new AddAttribute("FooRow", "INT"))).isInstanceOf(TypeRefusedException.class)
+        .hasMessageEndingWith("(used by fields baz); give the field another name");
     // However the name comes to be taken: by a rename, a oneof's member, or a new attribute
     // beside the row of an attribute that is now an array of that row.
     for (AlterAction[] taking : List.of(
