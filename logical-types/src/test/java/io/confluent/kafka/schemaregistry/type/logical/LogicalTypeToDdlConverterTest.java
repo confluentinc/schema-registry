@@ -666,6 +666,12 @@ class LogicalTypeToDdlConverterTest {
         ddl);
     assertEquals(Set.of("Customer.Geo"), parse(ddl).getExternalTypes(), ddl);
     assertRoundTrip(lt);
+    // The root's name may give the namespace too: its declaration is read the same.
+    String qualified = LogicalTypeToDdlConverter.toDdl(new LogicalType("shop.Customer", "shop",
+        root, Map.of(), Set.of("Customer.Geo"), Map.of(), List.of(), Map.of(), Map.of()), true);
+    assertTrue(qualified.startsWith(
+        "NAMESPACE shop; USING TYPE Customer.Geo FOR Customer.Geo; "), qualified);
+    assertEquals(Set.of("Customer.Geo"), parse(qualified).getExternalTypes(), qualified);
   }
 
   @Test

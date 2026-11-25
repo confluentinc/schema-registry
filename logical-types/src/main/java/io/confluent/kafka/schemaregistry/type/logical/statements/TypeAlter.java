@@ -202,8 +202,6 @@ public final class TypeAlter {
   private final Set<String> dropped = new HashSet<>();
   // The names of the previous version of attributes this statement renames, by their new names.
   private final Map<String, String> previousNames = new HashMap<>();
-  // The names this type's references and theirs give their types, by subject; read once.
-  private Map<String, String> boundNames;
   // The attributes this statement adds, by their names in it.
   private final Set<String> added = new HashSet<>();
   private final List<Message> versions = new ArrayList<>();
@@ -1467,12 +1465,6 @@ public final class TypeAlter {
       for (SchemaReference r : references) {
         names.put(TypeReferences.referenced(subject, r.getSubject()), r.getName());
       }
-    } else if (!references.isEmpty()) {
-      // And an Avro or Protobuf type's takes the name the types it refers to already use.
-      if (boundNames == null) {
-        boundNames = TypeReferences.boundNames(lookup, subject, references);
-      }
-      names = boundNames;
     }
     LogicalType lt = parseWithReferences(builder, names);
     externalTypes.addAll(lt.getExternalTypes());
@@ -1506,7 +1498,32 @@ public final class TypeAlter {
     } else {
       lt.getResolvedReferences().forEach(resolved::putIfAbsent);
     }
+    if (format != SchemaType.JSON && !lt.getReferences().isEmpty()) {
+      nameReferencesAsBelow();
+    }
     return lt;
+  }
+
+  // An Avro or Protobuf reference takes the name the types this one refers to give its
+  // subject, whichever was named first: by two names, a Protobuf file is imported twice.
+  private void nameReferencesAsBelow() {
+    Map<String, String> below = TypeReferences.namesBelow(lookup, subject, references);
+    boolean renamed = false;
+    for (int i = 0; i < references.size(); i++) {
+      SchemaReference r = references.get(i);
+      String name = below.get(TypeReferences.referenced(subject, r.getSubject()));
+      if (name != null && !name.equals(r.getName())) {
+        references.set(i, new SchemaReference(name, r.getSubject(), r.getVersion()));
+        renamed = true;
+      }
+    }
+    if (renamed) {
+      List<SchemaReference> once = new ArrayList<>(new LinkedHashSet<>(references));
+      references.clear();
+      references.addAll(once);
+      resolved.clear();
+      resolved.putAll(TypeReferences.resolve(lookup, subject, references));
+    }
   }
 
   private Field field(String name) {

@@ -971,7 +971,14 @@ class TypeAlterTest {
     create("o3", format, "(id INT NOT NULL, p `:.c:pair`)");
     create("o4", format, "(id INT NOT NULL, p `:.c:pair`)");
     registry.alter("o3", new AddAttribute("k", "`:.c:inner`", Position.first()));
-    for (String type : List.of("o1", "o2", "o3")) {
+    // Whichever a type had first, and both added by one statement to a type with another.
+    create("o5", format, "(id INT NOT NULL, k `:.c:inner`)");
+    registry.alter("o5", new AddAttribute("p", "`:.c:pair`"));
+    create("other", format, "(v INT)");
+    create("o6", format, "(id INT NOT NULL, x other)");
+    registry.alter("o6", new AddAttribute("p", "`:.c:pair`"), new AddAttribute("k", "`:.c:inner`"),
+        new DropAttribute("x", false));
+    for (String type : List.of("o1", "o2", "o3", "o5", "o6")) {
       List<SchemaReference> references = registry.latest(type).getReferences();
       assertThat(references).as(type).extracting(SchemaReference::getSubject)
           .containsExactlyInAnyOrder(":.c:inner", ":.c:pair");
@@ -1012,6 +1019,13 @@ class TypeAlterTest {
     create("top", SchemaType.AVRO, "(id INT NOT NULL, t m)");
     registry.alter("top", new AddAttribute("j", "inner"));
     assertThat(version("top")).isEqualTo(2);
+    // Beside the type it has an older version through, it is two versions, in either order.
+    for (String body : List.of("(id INT NOT NULL, t m, p pair)",
+        "(id INT NOT NULL, p pair, t m)")) {
+      assertThatThrownBy(() -> create("both", SchemaType.AVRO, body))
+          .isInstanceOf(TypeRefusedException.class).hasMessageContaining("it would refer to "
+              + "two versions of type inner, version ");
+    }
     registry.alter("pair", new AlterAttributeType("i", "inner"));
 
     assertThatThrownBy(() -> registry.alter("m", new AddAttribute("n", "INT")))

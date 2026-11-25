@@ -57,9 +57,8 @@ public final class TypeReferences {
    * <li>A JSON reference to a type takes the name a reference to it is stored with, if names
    * holds one for its subject; otherwise its name, or for a type in a context, which is no URI
    * a $ref can name, that name encoded.</li>
-   * <li>An Avro or Protobuf reference to a type takes the name names holds for its subject, or
-   * the one a type named beside it refers to it by: referred to by two names, a Protobuf file
-   * would be imported twice.</li>
+   * <li>An Avro or Protobuf reference to a type takes the name a type named beside it refers
+   * to it by: referred to by two names, a Protobuf file would be imported twice.</li>
    * </ul>
    */
   public static LogicalType parse(TypeLookup lookup, SchemaType format, ScriptBuilder builder,
@@ -92,7 +91,7 @@ public final class TypeReferences {
             + ", so it cannot be used in a " + format + " type");
       }
       String stored = names.get(subject);
-      String refName = format != SchemaType.JSON ? stored != null ? stored : name
+      String refName = format != SchemaType.JSON ? name
           : stored != null && nameable(stored) ? stored : jsonReferenceName(name);
       references.add(new SchemaReference(refName, name, md.getVersion()));
       requireOneSubject(named, refName, subject);
@@ -143,13 +142,20 @@ public final class TypeReferences {
   }
 
   /**
-   * The names a subject's references and theirs give the types they refer to, by subject, the
-   * first for each: what {@link #parse} takes as the names stored.
+   * The names the types a subject refers to give the types they refer to in turn, by subject,
+   * the first for each: the names its own references to those subjects are to have.
    */
-  static Map<String, String> boundNames(TypeLookup lookup, String referrer,
+  static Map<String, String> namesBelow(TypeLookup lookup, String referrer,
       List<SchemaReference> references) {
     Map<String, String> bound = new HashMap<>();
-    collectReferences(lookup, referrer, references, new LinkedHashMap<>(), null, null, bound);
+    Map<String, String> seen = new LinkedHashMap<>();
+    for (SchemaReference ref : references) {
+      String subject = referenced(referrer, ref.getSubject());
+      SchemaMetadata md = lookup.version(subject, ref.getVersion());
+      if (md != null) {
+        collectReferences(lookup, subject, md.getReferences(), seen, null, null, bound);
+      }
+    }
     return bound;
   }
 
@@ -274,46 +280,66 @@ public final class TypeReferences {
    * Refuses references that reach two types by one name, or two versions of one, their own or
    * those of the types they refer to. A schema holds one type and one version of a name, the
    * first its references are read to, and they are stored in another order than a statement
-   * gives them: the version checked would not be the one stored. Two met below one of the
-   * references are left: a type stored so is read through it as it is read alone. A refusal
-   * of two versions starts with {@code refused}.
+   * gives them: the version checked would not be the one stored. Each reference is taken with
+   * what it binds read alone, and those are set beside one another, in whatever order: two
+   * versions a stored type has of its own are left, as it is read through a reference as it
+   * is read alone. A refusal of two versions starts with {@code refused}.
    */
   static void requireOneOfEach(TypeLookup lookup, String referrer,
       List<SchemaReference> references, String refused) {
-    oneOfEach(lookup, referrer, null, null, references, new HashMap<>(), refused);
-  }
-
-  // Each name at the type and version, and through the type, it was first met, and below
-  // which of the statement's own references; via and below are null for those themselves.
-  private static void oneOfEach(TypeLookup lookup, String referrer, String via, String below,
-      List<SchemaReference> references, Map<String, String[]> met, String refused) {
     if (references == null) {
       return;
     }
-    int own = 0;
+    Map<String, SchemaMetadata> versions = new HashMap<>();
+    Map<String, String[]> met = new HashMap<>();
     for (SchemaReference ref : references) {
-      String subject = referenced(referrer, ref.getSubject());
-      String under = below != null ? below : String.valueOf(own++);
-      String[] first = met.get(ref.getName());
-      if (first == null) {
-        met.put(ref.getName(),
-            new String[] {subject, String.valueOf(ref.getVersion()), via, under});
-        SchemaMetadata md = lookup.version(subject, ref.getVersion());
-        if (md != null) {
-          oneOfEach(lookup, subject, "version " + ref.getVersion() + " of type " + subject,
-              under, md.getReferences(), met, refused);
+      Map<String, String[]> alone = new LinkedHashMap<>();
+      bind(lookup, referrer, null, List.of(ref), alone, versions);
+      for (Map.Entry<String, String[]> name : alone.entrySet()) {
+        String[] now = name.getValue();
+        String[] first = met.putIfAbsent(name.getKey(), now);
+        if (first == null) {
+          continue;
         }
-      } else if (first[3].equals(under)) {
-        continue;
-      } else if (!first[0].equals(subject)) {
-        throw twoTypes(first[0], subject, ref.getName());
-      } else if (!first[1].equals(String.valueOf(ref.getVersion()))) {
-        throw new TypeRefusedException(refused + ": it would refer to two versions of type "
-            + subject + ", " + met(first[1], first[2]) + " and "
-            + met(String.valueOf(ref.getVersion()), via) + "; a schema has one version of a "
-            + "type, so name the type again to move it to its latest version, or first move "
-            + "the types that refer to it");
+        if (!first[0].equals(now[0])) {
+          throw twoTypes(first[0], now[0], name.getKey());
+        }
+        if (!first[1].equals(now[1])) {
+          throw new TypeRefusedException(refused + ": it would refer to two versions of type "
+              + now[0] + ", " + met(first[1], first[2]) + " and " + met(now[1], now[2])
+              + "; a schema has one version of a type, so name the type again to move it to "
+              + "its latest version, or first move the types that refer to it");
+        }
       }
+    }
+  }
+
+  // Each name at the type and version, and through the type, it is first met, which is the
+  // one that binds it; via is null for the reference itself, and else the referring type and
+  // its version. A version is looked up once.
+  private static void bind(TypeLookup lookup, String referrer, String via,
+      List<SchemaReference> references, Map<String, String[]> bound,
+      Map<String, SchemaMetadata> versions) {
+    if (references == null) {
+      return;
+    }
+    for (SchemaReference ref : references) {
+      if (bound.containsKey(ref.getName())) {
+        continue;
+      }
+      String subject = referenced(referrer, ref.getSubject());
+      bound.put(ref.getName(), new String[] {subject, String.valueOf(ref.getVersion()), via});
+      String key = subject + "@" + ref.getVersion();
+      SchemaMetadata md = versions.get(key);
+      if (md == null) {
+        md = lookup.version(subject, ref.getVersion());
+        if (md == null) {
+          continue;
+        }
+        versions.put(key, md);
+      }
+      bind(lookup, subject, "version " + ref.getVersion() + " of type " + subject,
+          md.getReferences(), bound, versions);
     }
   }
 

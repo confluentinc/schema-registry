@@ -812,7 +812,12 @@ public final class LogicalTypeToDdlConverter {
           && root.getType() != Schema.Type.ENUM) {
         return false;
       }
-      return name.startsWith(lt.getName() + ".");
+      // The root's name as its declaration is read: without the namespace it may carry.
+      String rootName = lt.getName();
+      if (ns != null && !ns.isEmpty() && rootName.startsWith(ns + ".")) {
+        rootName = rootName.substring(ns.length() + 1);
+      }
+      return name.startsWith(rootName + ".");
     }
 
     // The name the root is declared by and named by a trailing TYPE: with its namespace when
