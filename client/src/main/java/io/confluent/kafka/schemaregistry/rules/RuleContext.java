@@ -199,7 +199,10 @@ public class RuleContext {
       tags.addAll(metadataTags);
     }
     Set<String> ruleTags = rule().getTags();
-    if (!type.isPrimitive() || ruleTags.isEmpty() || !disjoint(tags, ruleTags)) {
+    // ANY is one value, so like a primitive it stays in its parent's context when its own
+    // tags do not match the rule; a tag on the parent then reaches it.
+    boolean ownContext = !type.isPrimitive() && type != Type.ANY;
+    if (ownContext || ruleTags.isEmpty() || !disjoint(tags, ruleTags)) {
       return new FieldContext(containingMessage, fullName, name, type, tags,
           fieldDescriptor);
     } else {
@@ -325,6 +328,7 @@ public class RuleContext {
     COMBINED(false),
     NULLABLE(false),
     FIXED(false),
+    ANY(false),
     STRING(true),
     BYTES(true),
     INT(true),

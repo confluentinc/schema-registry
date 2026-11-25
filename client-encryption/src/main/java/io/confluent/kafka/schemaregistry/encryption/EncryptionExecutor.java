@@ -550,7 +550,10 @@ public class EncryptionExecutor implements RuleExecutor {
           case WRITE:
             plaintext = toBytes(type, value);
             if (plaintext == null) {
-              if (ctx.currentField() == null || !ctx.currentField().isInCombined()) {
+              // A variant is rejected in a combined schema too: skipping it there would
+              // write it in plaintext.
+              if (type == Type.ANY
+                  || ctx.currentField() == null || !ctx.currentField().isInCombined()) {
                 throw new RuleException(
                     ctx.rule(), "Type '" + type + "' not supported for encryption");
               }

@@ -1279,7 +1279,12 @@ public class JsonSchema implements ParsedSchema {
       CombinedSchema.ValidationCriterion criterion = combinedSchema.getCriterion();
       Collection<Schema> subschemas = combinedSchema.getSubschemas();
       if (criterion.equals(CombinedSchema.ALL_CRITERION)) {
+        // An empty conjunct adds no constraint, so it is skipped when another gives the type.
+        boolean typed = subschemas.stream().anyMatch(s -> !(s instanceof EmptySchema));
         for (Schema subschema : subschemas) {
+          if (typed && subschema instanceof EmptySchema) {
+            continue;
+          }
           message = toTransformedMessage(ctx, subschema, path, message, transform);
         }
         return message;
@@ -1349,11 +1354,11 @@ public class JsonSchema implements ParsedSchema {
       return toTransformedMessage(ctx, ((ReferenceSchema)schema).getReferredSchema(),
           path, message, transform);
     } else if (schema instanceof ConditionalSchema
-        || schema instanceof EmptySchema
         || schema instanceof FalseSchema
         || schema instanceof NotSchema) {
       return message;
     } else {
+      // An empty schema lands here too, as Type.ANY, so an executor can reject it.
       if (fieldCtx != null) {
         try {
           Set<String> ruleTags = ctx.rule().getTags();
@@ -1642,6 +1647,8 @@ public class JsonSchema implements ParsedSchema {
       return numberSchema.requiresInteger() ? Type.INT : Type.DOUBLE;
     } else if (schema instanceof BooleanSchema) {
       return Type.BOOLEAN;
+    } else if (schema instanceof EmptySchema) {
+      return Type.ANY;
     } else {
       return Type.NULL;
     }
