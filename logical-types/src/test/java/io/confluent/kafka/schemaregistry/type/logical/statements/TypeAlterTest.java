@@ -2992,6 +2992,59 @@ class TypeAlterTest {
     assertThat(version("jds")).isEqualTo(1);
   }
 
+  // A JSON map keyed by strings is written as an object, and is read from an array of key
+  // and value entries too, as Connect writes one whose key may be null. One stored so would
+  // be written as an object, which its stored values are not: a statement that leaves the
+  // type with it is refused, and one that drops it, or gives it another kind of type, not.
+  @Test
+  void aJsonMapStoredAsEntriesIsNotWrittenAsAnObject() throws Exception {
+    String entries = "{\"type\":\"array\",\"connect.type\":\"map\",\"items\":{\"type\":"
+        + "\"object\",\"properties\":{\"key\":{\"type\":\"string\"},\"value\":{\"type\":"
+        + "\"integer\",\"connect.type\":\"int32\"}}}";
+    Map<String, String> maps = new LinkedHashMap<>();
+    maps.put("jem", entries + "}");
+    maps.put("jes", entries + ",\"flink.type\":\"multiset\",\"flink.version\":\"1\"}");
+    maps.put("jeu", "{\"oneOf\":[{\"type\":\"null\"}," + entries + "},{\"type\":\"object\","
+        + "\"connect.type\":\"map\",\"additionalProperties\":{\"type\":\"string\"}}]}");
+    maps.put("jea", "{\"type\":\"array\",\"items\":" + entries + "}}");
+    maps.put("jer", entries + "}");
+    // One keyed otherwise is written as entries, and one stored as an object as an object.
+    maps.put("jei", entries.replace("\"key\":{\"type\":\"string\"}",
+        "\"key\":{\"type\":\"integer\",\"connect.type\":\"int32\"}") + "}");
+    maps.put("jeo", "{\"type\":\"object\",\"connect.type\":\"map\","
+        + "\"additionalProperties\":{\"type\":\"string\"}}");
+    for (Map.Entry<String, String> map : maps.entrySet()) {
+      registry.client.register(map.getKey(), new JsonSchema("{\"type\":\"object\",\"title\":\""
+          + map.getKey() + "\",\"properties\":{\"id\":{\"type\":\"integer\"},\"x\":"
+          + map.getValue() + ",\"n\":{\"type\":\"integer\"}},\"additionalProperties\":false}"));
+    }
+    for (String type : List.of("jem", "jes", "jeu", "jea")) {
+      for (AlterAction action : List.of(new MoveAttribute("n", Position.first()),
+          new AddAttribute("z", "INT"))) {
+        assertThatThrownBy(() -> registry.alter(type, action)).as(type)
+            .isInstanceOf(TypeRefusedException.class).hasMessage("Type " + type + " cannot be "
+                + "altered: attribute x has a map stored as an array of key and value "
+                + "entries, which would be written as an object, so its stored values would "
+                + "be read wrongly. Drop the attribute, or register its new version as a JSON "
+                + "schema");
+      }
+      assertThat(version(type)).as(type).isEqualTo(1);
+      registry.alter(type, new DropAttribute("x", false),
+          new MoveAttribute("n", Position.first()));
+      assertThat(version(type)).as(type).isEqualTo(2);
+    }
+    assertThatThrownBy(() -> registry.alter("jer",
+        new AlterAttributeType("x", "MAP<STRING, BIGINT>")))
+        .isInstanceOf(TypeRefusedException.class).hasMessageContaining("attribute x has a map");
+    registry.alter("jer", new AlterAttributeType("x", "ARRAY<INT>"));
+    registry.alter("jei", new MoveAttribute("n", Position.first()));
+    registry.alter("jeo", new MoveAttribute("n", Position.first()));
+    for (String type : List.of("jer", "jei", "jeo")) {
+      assertThat(version(type)).as(type).isEqualTo(2);
+    }
+    assertThat(registry.schema("jei").canonicalString()).contains("\"type\":\"array\"");
+  }
+
   // A number said for a new Protobuf attribute is its number where no field has it and
   // none of a version had; it is not left out without a word.
   @Test

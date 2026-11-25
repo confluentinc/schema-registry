@@ -23,6 +23,7 @@ import com.google.protobuf.Descriptors.Descriptor;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
+import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalTypeToDdlConverter;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
@@ -272,6 +273,23 @@ class TypeCreateTest {
     assertThatThrownBy(() -> struct("t", "(a INT)", Map.of("format", "PROTOBUF")))
         .isInstanceOf(TypeRefusedException.class).hasMessage("Type t was dropped as AVRO, and "
             + "keeps the versions it had; it can be created again only as AVRO");
+  }
+
+  // A JSON map keyed by strings that is stored as an array of entries would be written as an
+  // object, which the records of the dropped versions are not.
+  @Test
+  void aJsonTypeCreatedAgainOverAMapStoredAsEntriesIsRefused() throws Exception {
+    registry.client.register("jce", new JsonSchema("{\"type\":\"object\",\"title\":\"jce\","
+        + "\"properties\":{\"id\":{\"type\":\"integer\"},\"x\":{\"type\":\"array\","
+        + "\"connect.type\":\"map\",\"items\":{\"type\":\"object\",\"properties\":{\"key\":"
+        + "{\"type\":\"string\"},\"value\":{\"type\":\"integer\",\"connect.type\":\"int32\"}}}}},"
+        + "\"additionalProperties\":false}"));
+    registry.drop("jce");
+    assertThatThrownBy(() -> create("jce", SchemaType.JSON, "(id BIGINT, x MAP<STRING, INT>)"))
+        .isInstanceOf(TypeRefusedException.class).hasMessage("Type jce cannot be created "
+            + "again: attribute x has a map stored as an array of key and value entries, "
+            + "which would be written as an object, so its stored values would be read "
+            + "wrongly. Drop the attribute, or register its new version as a JSON schema");
   }
 
   // Created again in another order, a Protobuf type keeps its dropped versions' numbers by name,

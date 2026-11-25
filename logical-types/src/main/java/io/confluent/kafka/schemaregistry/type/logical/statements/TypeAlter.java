@@ -494,6 +494,9 @@ public final class TypeAlter {
           refuseWrittenOtherwise(stored, written, "altered");
           refuseTakenNames(stored, written);
         }
+        if (format == SchemaType.JSON) {
+          refuseWrittenOtherwise(stored, written, "altered");
+        }
         refuseOtherColumns(md, edited, version);
         refuseIncompatible(lookup, subject, format, md, softDeleted, versions, edited, policy,
             refused(), v -> "version " + v + " of type " + subject);
@@ -598,6 +601,10 @@ public final class TypeAlter {
   // it wraps, which is other bytes. And an entry's key and value are numbered as the writer
   // numbers them. A version that still has a field of such a field's number is refused.
   private void refuseWrittenOtherwise(ParsedSchema stored, ParsedSchema written, String done) {
+    if (format == SchemaType.JSON) {
+      refuseEntriesWrittenAsObject(stored, written, done);
+      return;
+    }
     if (!(stored instanceof ProtobufSchema) || !(written instanceof ProtobufSchema)) {
       return;
     }
@@ -630,10 +637,91 @@ public final class TypeAlter {
   }
 
   static void refuseWrittenOtherwiseAfterDrop(TypeLookup lookup, String subject,
-      SchemaMetadata md, LogicalType lt) {
-    new TypeAlter(lookup, subject).refuseWrittenOtherwise(lookup.parse(md),
-        ColumnIds.nativeOf(subject, SchemaType.PROTOBUF, lt,
-            "Type " + subject + " cannot be created again so"), "created again");
+      SchemaType format, SchemaMetadata md, LogicalType lt) {
+    TypeAlter alter = new TypeAlter(lookup, subject);
+    alter.format = format;
+    alter.refuseWrittenOtherwise(lookup.parse(md), ColumnIds.nativeOf(subject, format, lt,
+        "Type " + subject + " cannot be created again so"), "created again");
+  }
+
+  // A JSON map keyed by strings is written as an object, and is read from an array of key
+  // and value entries too, as Connect writes one whose key may be null. One stored so would
+  // be written as an object, which its stored values are not: a version that still has it
+  // is refused.
+  private void refuseEntriesWrittenAsObject(ParsedSchema stored, ParsedSchema written,
+      String done) {
+    LogicalType was;
+    LogicalType now;
+    try {
+      was = LogicalTypeConversion.toLogicalType(stored);
+      now = LogicalTypeConversion.toLogicalType(written);
+    } catch (RuntimeException e) {
+      // A schema that cannot be read is refused as that.
+      return;
+    }
+    String in = entriesAsObject(was.getRootSchema(), now.getRootSchema(), null);
+    for (Map.Entry<String, Schema> named : was.getNamedTypes().entrySet()) {
+      if (in == null) {
+        in = entriesAsObject(named.getValue(), now.getNamedTypes().get(named.getKey()),
+            "type " + named.getKey());
+      }
+    }
+    if (in != null) {
+      throw new TypeRefusedException("Type " + subject + " cannot be " + done + ": " + in
+          + " has a map stored as an array of key and value entries, which would be written "
+          + "as an object, so its stored values would be read wrongly. Drop the attribute, "
+          + "or register its new version as a JSON schema");
+    }
+  }
+
+  // Where the first such map is that the type written in its place still has as a map: the
+  // attribute it is in, or the type given. One given another kind of type is written anew.
+  private static String entriesAsObject(Schema was, Schema now, String in) {
+    if (was == null || now == null || was.getType() != now.getType()) {
+      return null;
+    }
+    String found = null;
+    switch (was.getType()) {
+      case STRUCT:
+        for (Field f : was.getFields()) {
+          Field kept = now.getField(f.getName());
+          if (found == null && kept != null) {
+            found = entriesAsObject(f.getSchema(), kept.getSchema(),
+                in != null ? in : "attribute " + f.getName());
+          }
+        }
+        return found;
+      case UNION:
+        for (UnionBranch b : was.getBranches()) {
+          UnionBranch kept = branch(now, b.getName());
+          if (found == null && kept != null) {
+            found = entriesAsObject(b.getSchema(), kept.getSchema(), in);
+          }
+        }
+        return found;
+      case ARRAY:
+        return entriesAsObject(was.getElementType(), now.getElementType(), in);
+      case MULTISET:
+        if (isEntries(was.getElementNativeNames()) && !isEntries(now.getElementNativeNames())) {
+          return in != null ? in : "it";
+        }
+        return entriesAsObject(was.getElementType(), now.getElementType(), in);
+      case MAP:
+        if (isEntries(was.getKeyNativeNames()) && !isEntries(now.getKeyNativeNames())) {
+          return in != null ? in : "it";
+        }
+        found = entriesAsObject(was.getKeyType(), now.getKeyType(), in);
+        return found != null ? found
+            : entriesAsObject(was.getValueType(), now.getValueType(), in);
+      default:
+        return null;
+    }
+  }
+
+  // The steps the JSON reader records to the key of a map read from an array of entries.
+  private static boolean isEntries(List<String> steps) {
+    return steps != null && steps.size() == 2 && steps.get(0) == null
+        && "key".equals(steps.get(1));
   }
 
   // The first such field of a message, at any depth, that the message written in its place

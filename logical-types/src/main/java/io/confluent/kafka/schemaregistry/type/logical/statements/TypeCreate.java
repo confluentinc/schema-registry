@@ -105,7 +105,10 @@ public final class TypeCreate {
     if (format == SchemaType.PROTOBUF) {
       TypeAlter.refuseUncarriedAfterDrop(lookup, subject, last);
       lt = TypeAlter.numberedAfterDrop(lookup, subject, last, lt);
-      TypeAlter.refuseWrittenOtherwiseAfterDrop(lookup, subject, last, lt);
+      TypeAlter.refuseWrittenOtherwiseAfterDrop(lookup, subject, format, last, lt);
+    } else if (format == SchemaType.JSON) {
+      // A JSON type is refused over a map stored otherwise than the new version writes it.
+      TypeAlter.refuseWrittenOtherwiseAfterDrop(lookup, subject, format, last, lt);
     }
     // And an Avro type gives the nullable attributes it adds a null default, as an ALTER does.
     if (format == SchemaType.AVRO) {
