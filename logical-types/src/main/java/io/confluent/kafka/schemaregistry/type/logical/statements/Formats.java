@@ -352,8 +352,12 @@ public final class Formats {
       case ARRAY:
       case MULTISET:
         return newlyOverlapping(type.getElementType(), before, after, within);
-      case MAP:
-        return newlyOverlapping(type.getValueType(), before, after, within);
+      case MAP: {
+        // A key that is not a string is written as a value is, and may be a union.
+        String[] found = newlyOverlapping(type.getKeyType(), before, after, within);
+        return found != null ? found
+            : newlyOverlapping(type.getValueType(), before, after, within);
+      }
       default:
         return null;
     }

@@ -851,8 +851,12 @@ public class LogicalTypeToProtoConverter {
       Set<String> dependencies, List<FileDescriptor> external) {
     final Map<String, String> declared = new HashMap<>();
     final Set<String> builtIn = new HashSet<>();
-    // A wrapper and a VARIANT are read by their names as a root too, imported or not.
-    for (Descriptor type : ROOT_WRAPPER_DESCRIPTORS.values()) {
+    // A wrapper and a VARIANT are read by their names as a root too, imported or not: those
+    // a scalar root is written as, and the unsigned ones, which none is and which are read.
+    final List<Descriptor> wrappers = new ArrayList<>(ROOT_WRAPPER_DESCRIPTORS.values());
+    wrappers.add(com.google.protobuf.UInt32Value.getDescriptor());
+    wrappers.add(com.google.protobuf.UInt64Value.getDescriptor());
+    for (Descriptor type : wrappers) {
       declared.putIfAbsent(type.getFullName(), type.getFile().getName());
     }
     // The others are read so as a field's type: a file may have a message of such a name

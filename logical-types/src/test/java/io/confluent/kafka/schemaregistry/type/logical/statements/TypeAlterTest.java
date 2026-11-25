@@ -1862,6 +1862,16 @@ class TypeAlterTest {
         + "STRUCT StringValue (a INT NOT NULL, b BIGINT NOT NULL);"))
         .isInstanceOf(ValidationException.class)
         .hasMessageContaining("'google.protobuf.StringValue' is defined by");
+    // As the unsigned wrappers, which no root is written as and which are read all the same.
+    for (String wrapper : List.of("UInt32Value", "UInt64Value")) {
+      assertThatThrownBy(() -> written("NAMESPACE google.protobuf; STRUCT " + wrapper
+          + " (a INT NOT NULL, b BIGINT NOT NULL);")).as(wrapper)
+          .isInstanceOf(ValidationException.class)
+          .hasMessageContaining("is defined by google/protobuf/wrappers.proto");
+      assertThatThrownBy(() -> written("NAMESPACE google.protobuf; STRUCT " + wrapper
+          + " (a INT NOT NULL); STRUCT t (id INT, d " + wrapper + "); TYPE t;")).as(wrapper)
+          .isInstanceOf(ValidationException.class).hasMessageContaining("is defined by");
+    }
     assertThat(written("NAMESPACE acme; STRUCT `Decimal` (d DECIMAL(10, 2) NOT NULL);"))
         .contains("message Decimal");
     // A field of a type of the name of one read by its name is read as that one's, whether
@@ -2920,8 +2930,8 @@ class TypeAlterTest {
   }
 
   // A union whose branch's reference moves is judged again wherever it is: in an array, a
-  // map, a branch, one of the type's own named types, a context. One that had two such
-  // branches already is left.
+  // map's values or its keys, a branch, one of the type's own named types, a context. One
+  // that had two such branches already is left.
   @Test
   void aJsonUnionIsJudgedAgainWhereverItIsWhenAReferenceMoves() throws Exception {
     String row = "STRUCT(k INT NOT NULL, m INT NOT NULL)";
@@ -2931,6 +2941,7 @@ class TypeAlterTest {
     }
     create("v16", SchemaType.JSON, "(id INT, arr ARRAY<UNION(a " + row + ", b w)>)");
     create("v17", SchemaType.JSON, "(id INT, mp MAP<STRING, UNION(a " + row + ", b w)>)");
+    create("v19", SchemaType.JSON, "(id INT, mk MAP<UNION(a " + row + ", b w), INT>)");
     create("v18", SchemaType.JSON,
         "(id INT, u UNION(p BOOLEAN, q STRUCT(i UNION(a " + row + ", b w))))");
     nativeJson("v7", "USING TYPE Ref1 FOR REF 'w'; STRUCT N (u UNION(a Ref1, b " + row
@@ -2939,7 +2950,7 @@ class TypeAlterTest {
         + "STRUCT v9 (id INT, u UNION(a N, b STRUCT(i " + row + " NOT NULL))); TYPE v9;", "w");
     registry.alter("w", new AddAttribute("m", "INT"));
     registry.alter(":.ctx:w", new AddAttribute("m", "INT"));
-    for (String type : List.of("v", ":.ctx:v", "v16", "v17", "v18", "v7", "v9")) {
+    for (String type : List.of("v", ":.ctx:v", "v16", "v17", "v18", "v19", "v7", "v9")) {
       movedRefused(type, new AddAttribute("y", "w"));
     }
     // One whose branches a value was of both already, one of them a reference or one of
