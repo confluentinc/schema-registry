@@ -30,6 +30,7 @@ import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
+import io.confluent.kafka.schemaregistry.type.logical.LogicalTypeToDdlConverter;
 import io.confluent.kafka.schemaregistry.type.logical.Rule;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
@@ -86,6 +87,17 @@ class TypeAlterTest {
   private static String numbers(Descriptor message) {
     return message.getFields().stream().map(f -> f.getName() + "=" + f.getNumber())
         .collect(Collectors.joining(" "));
+  }
+
+  // The first message of a name the type declares, at whatever depth.
+  private static Descriptor nested(Descriptor message, String name) {
+    for (Descriptor inner : message.getNestedTypes()) {
+      Descriptor found = inner.getName().equals(name) ? inner : nested(inner, name);
+      if (found != null) {
+        return found;
+      }
+    }
+    return null;
   }
 
   private Descriptor message(String subject) {
@@ -1000,6 +1012,30 @@ class TypeAlterTest {
                 + "type :.c:pair) and version 2 (named directly)");
   }
 
+  // A type the statement drops is no longer referred to, and its name for a type is not this
+  // one's: the type keeps the name it is given here, which another type may then not have.
+  @ParameterizedTest
+  @EnumSource(value = SchemaType.class, names = {"AVRO", "PROTOBUF"})
+  void aReferenceIsNotNamedAsATypeTheStatementDropsNamesIt(SchemaType format) {
+    registry.create(":.c:inner", "inner", format, BodyKind.STRUCT, "(x STRING)");
+    registry.create(":.c:pair", "pair", format, BodyKind.STRUCT, "(a STRING, i inner)");
+    registry.create("inner", "dflt.inner", format, BodyKind.STRUCT, "(q BIGINT, s STRING)");
+    create("o", format, "(id INT NOT NULL, p `:.c:pair`)");
+
+    registry.alter("o", new DropAttribute("p", false), new AddAttribute("k", "`:.c:inner`"));
+    assertThat(registry.latest("o").getReferences()).extracting(SchemaReference::getName,
+        SchemaReference::getSubject).containsExactly(tuple(":.c:inner", ":.c:inner"));
+    registry.alter("o", new AddAttribute("d", "inner"));
+    assertThat(registry.latest("o").getReferences()).extracting(SchemaReference::getSubject)
+        .containsExactlyInAnyOrder(":.c:inner", "inner");
+
+    // And one type named two ways in a statement, with its context and without, is one.
+    registry.create(":.c:two", "two", format, BodyKind.STRUCT,
+        "(id INT NOT NULL, k inner, k2 `:.c:inner`)");
+    assertThat(registry.latest(":.c:two").getReferences())
+        .extracting(SchemaReference::getSubject).hasSize(1);
+  }
+
   // A version stored so, as another tool registers one, is altered only by a statement that
   // leaves it one version of the type.
   @Test
@@ -1018,7 +1054,8 @@ class TypeAlterTest {
     // A type that refers to it reads it as it is read alone, whatever it is.
     create("top", SchemaType.AVRO, "(id INT NOT NULL, t m)");
     registry.alter("top", new AddAttribute("j", "inner"));
-    assertThat(version("top")).isEqualTo(2);
+    registry.alter("top", new AddAttribute("z", "INT"));
+    assertThat(version("top")).isEqualTo(3);
     // Beside the type it has an older version through, it is two versions, in either order.
     for (String body : List.of("(id INT NOT NULL, t m, p pair)",
         "(id INT NOT NULL, p pair, t m)")) {
@@ -1507,6 +1544,28 @@ class TypeAlterTest {
     assertThat(numbers(message("un").findFieldByName("s").getMessageType()))
         .isEqualTo(numbers(row));
 
+    // A member there keeps its name and its number when the field of its name goes, and
+    // when its own type is of another kind.
+    create("uw", SchemaType.PROTOBUF,
+        "(id INT NOT NULL, s STRUCT(a INT, u UNION(a INT, b STRING)))");
+    assertThat(numbers(message("uw").findFieldByName("s").getMessageType()))
+        .isEqualTo("u_a=2 b=3 a=1");
+    for (String type : List.of("STRUCT(u UNION(a INT, b STRING, c INT))",
+        "STRUCT(u UNION(a ENUM('X', 'Y'), b STRING, c INT))")) {
+      registry.alter("uw", new AlterAttributeType("s", type));
+      assertThat(numbers(message("uw").findFieldByName("s").getMessageType())).as(type)
+          .isEqualTo("u_a=2 b=3 c=4");
+    }
+
+    // A type in a namespace is one the root refers to: its members are kept the same.
+    registry.create("ns", "com.acme.ns", SchemaType.PROTOBUF, BodyKind.STRUCT,
+        "(id INT NOT NULL, k INT)");
+    registry.alter("ns", new AddAttribute("u", "UNION(d INT)"),
+        new AlterAttributeType("k", "UNION(d STRING)"));
+    String stored = numbers(message("ns"));
+    registry.alter("ns", new AddAttribute("zz", "INT"));
+    assertThat(numbers(message("ns"))).startsWith(stored);
+
     // The name is the member's: no attribute takes it, and its union renamed leaves it.
     create("ut", SchemaType.PROTOBUF, "(id INT NOT NULL, a INT, t UNION(a STRING, b STRING))");
     assertThatThrownBy(() -> registry.alter("ut", new AddAttribute("b", "INT")))
@@ -1516,14 +1575,49 @@ class TypeAlterTest {
     assertThatThrownBy(() -> registry.alter("ut", new RenameAttribute("t", "b")))
         .isInstanceOf(TypeRefusedException.class).hasMessageEndingWith("Union branch 'b' of "
             + "'b' in ut keeps its field name 'b', which is its union's name");
+    // Refused as such whatever follows it in the statement.
+    assertThatThrownBy(() -> registry.alter("ut", new AddAttribute("b", "INT"),
+        new RenameAttribute("id", "idx"))).isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("keeps its field name 'b'");
     registry.alter("ut", new RenameAttribute("t", "tt"), new DropAttribute("a", false));
     assertThat(numbers(message("ut"))).isEqualTo("t_a=3 b=4 id=1");
+    // Its union said again with another member, it is the member it was.
+    registry.alter("ut", new AlterAttributeType("tt", "UNION(a STRING, b STRING, c INT)"));
+    assertThat(numbers(message("ut"))).contains("t_a=3", "b=4", "c=5");
     assertThatThrownBy(() -> registry.alter("ut", new AddAttribute("t_a", "INT")))
         .isInstanceOf(TypeRefusedException.class).hasMessageContaining("keeps its field name");
     // A member dropped leaves its name to an attribute.
     registry.alter("ut", new AlterAttributeType("tt", "UNION(b STRING)"),
         new AddAttribute("t_a", "INT"));
-    assertThat(numbers(message("ut"))).isEqualTo("b=4 id=1 t_a=5");
+    assertThat(numbers(message("ut"))).isEqualTo("b=4 id=1 t_a=6");
+  }
+
+  // A map's entry is a message of its key and value, a union's members among them. Whatever
+  // order they were numbered in, a later statement leaves the numbers its records are read by.
+  @Test
+  void aProtobufMapEntryKeepsItsNumbers() {
+    List<String> types = List.of("MAP<UNION(d INT, e INT), STRING>",
+        "MAP<STRING, UNION(d INT, e INT)>", "MAP<UNION(d INT, e INT), UNION(f INT, g STRING)>",
+        "MULTISET<UNION(d INT, e INT)>", "ARRAY<MAP<UNION(d INT), STRUCT(x INT)>>");
+    for (int i = 0; i < types.size(); i++) {
+      // Created so, and an attribute given the type after.
+      for (boolean retyped : new boolean[] {false, true}) {
+        String type = "me" + i + retyped;
+        create(type, SchemaType.PROTOBUF, "(id INT NOT NULL, u "
+            + (retyped ? "STRUCT(k INT)" : types.get(i)) + ")");
+        if (retyped) {
+          registry.alter(type, new AlterAttributeType("u", types.get(i)));
+        }
+        String entry = numbers(nested(message(type), "ValueEntry"));
+        registry.alter(type, new SetAttributeComment("id", "the key"));
+        registry.alter(type, new AddAttribute("zz", "INT"));
+        assertThat(numbers(nested(message(type), "ValueEntry"))).as(type).isEqualTo(entry);
+      }
+    }
+    // Read for display, a type created so is as it was: its numbers told only where the
+    // writer would not give them.
+    assertThat(LogicalTypeToDdlConverter.toDdl(registry.logicalType("me1false",
+        registry.latest("me1false")), true)).doesNotContain("protobuf.field.number");
   }
 
   // An enum's name is one of the message's as a nested message's is.

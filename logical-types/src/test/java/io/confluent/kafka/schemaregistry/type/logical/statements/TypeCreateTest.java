@@ -392,6 +392,20 @@ class TypeCreateTest {
     assertThat(registry.versions("o", true)).containsExactly(1);
   }
 
+  // A member's field name given by hand is a Protobuf field name, as its number is a number.
+  @Test
+  void aProtobufMemberFieldNameThatIsNoNameIsRefused() {
+    for (String name : List.of("x y", "9x", "")) {
+      assertThatThrownBy(() -> create("fn", SchemaType.PROTOBUF, "(id INT NOT NULL, "
+          + "u UNION(d INT WITH ('protobuf.field.name' = '" + name + "')))"))
+          .isInstanceOf(TypeRefusedException.class).hasMessage("Property protobuf.field.name "
+              + "of branch d is not a valid field name: '" + name + "'");
+    }
+    create("fn", SchemaType.PROTOBUF,
+        "(id INT NOT NULL, u UNION(d INT WITH ('protobuf.field.name' = 'u_d')))");
+    assertThat(registry.schema("fn").canonicalString()).contains("int32 u_d = 2");
+  }
+
   // A type created over a type that still refers to an earlier version of one it names too.
   @ParameterizedTest
   @EnumSource(SchemaType.class)

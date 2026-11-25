@@ -852,9 +852,17 @@ public final class TypeAlter {
         }
       }
       // The native names of the attribute's types follow its name; pin them to the old one.
-      params.putAll(Formats.typeNameParams(format, edited(), subject, f.getName()));
-      final Schema type = withBranchParams(f.getSchema(),
-          Formats.branchTypeNameParams(format, edited(), subject, f.getName()));
+      final Schema type;
+      try {
+        params.putAll(Formats.typeNameParams(format, edited(), subject, f.getName()));
+        type = withBranchParams(f.getSchema(),
+            Formats.branchTypeNameParams(format, edited(), subject, f.getName()));
+      } catch (TypeRefusedException e) {
+        throw e;
+      } catch (RuntimeException e) {
+        throw new TypeRefusedException(refused() + ": no " + format
+            + " schema can be made of it: " + e.getMessage(), e);
+      }
       // CHECKs refer to the attribute by name, so they follow the rename.
       List<Rule> own = new ArrayList<>();
       for (Rule r : f.getRules()) {
@@ -1465,6 +1473,10 @@ public final class TypeAlter {
       for (SchemaReference r : references) {
         names.put(TypeReferences.referenced(subject, r.getSubject()), r.getName());
       }
+    } else if (!references.isEmpty()) {
+      // A type the statement has dropped is no longer referred to: its names for the types
+      // it refers to are not this type's.
+      dropUnusedReferences();
     }
     LogicalType lt = parseWithReferences(builder, names);
     externalTypes.addAll(lt.getExternalTypes());
@@ -2465,6 +2477,10 @@ public final class TypeAlter {
 
   // The name of a branch's oneof member, which the reader keeps as its native name.
   private static String memberName(UnionBranch b) {
+    Object pinned = b.getParams().get(Schema.PROTOBUF_FIELD_NAME);
+    if (pinned != null) {
+      return pinned.toString();
+    }
     List<String> nativeNames = b.getNativeNames();
     return nativeNames != null && !nativeNames.isEmpty() ? nativeNames.get(0) : b.getName();
   }
@@ -2715,7 +2731,10 @@ public final class TypeAlter {
         List<UnionBranch> branches = new ArrayList<>();
         for (UnionBranch b : type.getBranches()) {
           UnionBranch was = branch(old, b.getName());
-          branches.add(was == null || !sameKind(was.getSchema(), b.getSchema()) ? b
+          // A member is the field it was whatever its type becomes: its field name stays.
+          branches.add(was == null ? b : !sameKind(was.getSchema(), b.getSchema())
+              ? new UnionBranch(b.getName(), b.getSchema(), b.getDoc(),
+                  withFieldName(b.getParams(), was.getParams()))
               : new UnionBranch(b.getName(), withNestedNames(b.getSchema(), was.getSchema()),
                   b.getDoc(), withTypeNames(b.getParams(), was.getParams())));
         }
@@ -2738,6 +2757,17 @@ public final class TypeAlter {
         return type;
     }
     return copyMetadata(type, result).setParams(type.getParams());
+  }
+
+  private static Map<String, Object> withFieldName(Map<String, Object> params,
+      Map<String, Object> was) {
+    Object name = was.get(Schema.PROTOBUF_FIELD_NAME);
+    if (name == null || name.equals(params.get(Schema.PROTOBUF_FIELD_NAME))) {
+      return params;
+    }
+    Map<String, Object> out = new LinkedHashMap<>(params);
+    out.put(Schema.PROTOBUF_FIELD_NAME, name);
+    return out;
   }
 
   // Params with the native names another member had, in place of any they give.

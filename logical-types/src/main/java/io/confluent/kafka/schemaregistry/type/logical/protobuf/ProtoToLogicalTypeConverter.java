@@ -817,7 +817,10 @@ public class ProtoToLogicalTypeConverter {
     // otherwise we record every one — regular fields and oneof members alike. Recording all-or-
     // nothing guarantees a reader/writer round-trip never mixes recorded and omitted numbers, the
     // mix that would otherwise let the writer's positional fallback corrupt an omitted number.
-    final boolean recordNumbers = !messageNumbersAreSequential(schema);
+    // A map's entry is written from its key and value, a union's members where it stands,
+    // which is not always the order read here: numbers the writer would not give are recorded.
+    final boolean recordNumbers = !messageNumbersAreSequential(schema)
+        || asMapEntry && !entryNumbersAreAsWritten(schema);
     final List<Field> fields = new ArrayList<>();
     int index = 0;
     for (FieldDescriptor fieldDescriptor : schema.getFields()) {
@@ -856,6 +859,34 @@ public class ProtoToLogicalTypeConverter {
     final List<Integer> newList = new ArrayList<>(list);
     newList.add(value);
     return newList;
+  }
+
+  /**
+   * True if a map entry's field numbers are those the writer gives one with none recorded:
+   * {@code 1..N} over its key and then its value, a union's members in the place of its field.
+   */
+  private static boolean entryNumbersAreAsWritten(Descriptor entry) {
+    int expected = 1;
+    for (String part : Arrays.asList(CommonConstants.KEY_FIELD, CommonConstants.VALUE_FIELD)) {
+      FieldDescriptor field = entry.findFieldByName(part);
+      if (field != null && field.getRealContainingOneof() == null) {
+        if (field.getNumber() != expected++) {
+          return false;
+        }
+        continue;
+      }
+      for (OneofDescriptor oneof : entry.getRealOneofs()) {
+        if (!oneof.getName().equals(part)) {
+          continue;
+        }
+        for (FieldDescriptor member : oneof.getFields()) {
+          if (member.getNumber() != expected++) {
+            return false;
+          }
+        }
+      }
+    }
+    return true;
   }
 
   /**

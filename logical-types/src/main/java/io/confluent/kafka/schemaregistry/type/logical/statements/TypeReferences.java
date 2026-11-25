@@ -74,6 +74,9 @@ public final class TypeReferences {
     Map<String, String> named = format == SchemaType.JSON ? new HashMap<>() : null;
     // The names the types named refer to their own types by, by subject.
     Map<String, String> bound = format == SchemaType.JSON ? null : new HashMap<>();
+    // The name each subject is referred to by: one named two ways, with its context and
+    // without, is referred to once.
+    Map<String, String> spelt = new HashMap<>();
     // The type itself, as a reference would name it; null when it has no subject yet.
     String self = referrer == null ? null : referenced(referrer, referrer);
     for (String name : lt.getExternalTypes()) {
@@ -93,7 +96,12 @@ public final class TypeReferences {
       String stored = names.get(subject);
       String refName = format != SchemaType.JSON ? name
           : stored != null && nameable(stored) ? stored : jsonReferenceName(name);
-      references.add(new SchemaReference(refName, name, md.getVersion()));
+      String once = format != SchemaType.JSON ? spelt.putIfAbsent(subject, refName) : null;
+      if (once != null) {
+        refName = once;
+      } else {
+        references.add(new SchemaReference(refName, name, md.getVersion()));
+      }
       requireOneSubject(named, refName, subject);
       // A name bound already, as one a type named before it refers to, keeps that binding,
       // as the registry's resolver has it: a schema holds one version of a name.
