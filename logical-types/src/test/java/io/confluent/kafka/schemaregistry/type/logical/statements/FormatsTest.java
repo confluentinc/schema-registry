@@ -26,6 +26,7 @@ import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
 import io.confluent.kafka.schemaregistry.type.logical.statements.TypeScripts.BodyKind;
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -163,24 +164,46 @@ class FormatsTest {
         .containsExactly("u", "x", "y");
   }
 
-  // Rows that name each other are come to by as many ways as there are orders of them: two
-  // compared once are not compared again by each.
-  @Test
-  void aJsonUnionsRowsThatNameEachOtherAreComparedOnce() {
+  // Two families of rows, each of which names every row of its family: by a union with
+  // it, or as itself; the second family's in another order of them, or not; with a tag on
+  // every row, on the first, on the last, or on none.
+  private static LogicalType families(int n, String link, String tagged, boolean shifted) {
     StringBuilder script = new StringBuilder();
     for (String family : new String[] {"A", "B"}) {
-      for (int i = 0; i < 14; i++) {
+      for (int i = 0; i < n; i++) {
         script.append("STRUCT ").append(family).append(i).append(" (");
-        for (int j = 0; j < 14; j++) {
-          script.append("c").append(j).append(" UNION(link ").append(family).append(j)
-              .append(", leaf INT) NOT NULL, ");
+        for (int j = 0; j < n; j++) {
+          int to = shifted && family.equals("B") ? (i + j) % n : j;
+          script.append("c").append(j).append(' ').append(link.replace("$", family + to))
+              .append(", ");
         }
-        script.append("tag ENUM('").append(family).append("') NOT NULL); ");
+        boolean tag = tagged.equals("all") || tagged.equals("first") && i == 0
+            || tagged.equals("last") && i == n - 1;
+        script.append("tag ENUM('").append(tag ? family : "same").append("') NOT NULL); ");
       }
     }
-    LogicalType lt = TypeScripts.parse(script + "STRUCT t (u UNION(x A0, y B0)); TYPE t;");
-    assertTimeoutPreemptively(Duration.ofSeconds(20),
-        () -> Formats.refuseUnwritable(SchemaType.JSON, lt));
+    return TypeScripts.parse(script + "STRUCT t (u UNION(x A0, y B0)); TYPE t;");
+  }
+
+  // Rows that name each other are come to by as many ways as there are orders of them:
+  // each two are judged by what the others are taken to be, and not by every such way.
+  @Test
+  void aJsonUnionsRowsThatNameEachOtherAreJudgedTwoByTwo() {
+    String union = "UNION(link $, leaf INT) NOT NULL";
+    String direct = "$ NOT NULL";
+    assertTimeoutPreemptively(Duration.ofSeconds(20), () -> {
+      for (LogicalType told : List.of(families(16, union, "all", false),
+          families(16, union, "first", false), families(16, direct, "first", false),
+          families(16, direct, "last", true))) {
+        Formats.refuseUnwritable(SchemaType.JSON, told);
+      }
+      for (LogicalType alike : List.of(families(16, union, "none", false),
+          families(16, direct, "none", true), families(16, union, "last", true))) {
+        assertThatThrownBy(() -> Formats.refuseUnwritable(SchemaType.JSON, alike))
+            .isInstanceOf(TypeRefusedException.class)
+            .hasMessageContaining("cannot have branches x and y");
+      }
+    });
   }
 
   // Two rows come to again while they are compared are taken to match; two compared once

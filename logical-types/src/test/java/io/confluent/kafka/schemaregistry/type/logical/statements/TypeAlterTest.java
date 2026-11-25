@@ -2738,6 +2738,71 @@ class TypeAlterTest {
             + "it has a type named E already, a definition of a type it refers to, and would "
             + "have type E by that name as well");
     assertThat(version("h")).isEqualTo(2);
+    // The name is free once the statement has dropped the attribute that had it, or gives
+    // that attribute the document for its type.
+    registry.client.register("h2", new JsonSchema(registry.version("h", 1).getSchema()
+        .replace("\"title\":\"h\"", "\"title\":\"h2\""),
+        List.of(new SchemaReference("lib", "lib", 1)), resolved, null));
+    registry.alter("h", new DropAttribute("e", false), new AddAttribute("w", "E"));
+    registry.alter("h2", new AlterAttributeType("e", "E"));
+    for (String type : List.of("h", "h2")) {
+      assertThat(registry.schema(type).canonicalString()).as(type)
+          .contains("{\"$ref\":\"E\"}").doesNotContain("lib#/$defs/E");
+    }
+    // A name the type as read has for a type it refers to is no other type's either.
+    registry.create("fhu", SchemaType.JSON, BodyKind.OTHER, "INT");
+    create("Ref1", SchemaType.JSON, "(k INT)");
+    create("h3", SchemaType.JSON, "(id INT, a fhu)");
+    assertThatThrownBy(() -> registry.alter("h3", new AddAttribute("b", "Ref1")))
+        .isInstanceOf(TypeRefusedException.class).hasMessage("Type h3 cannot be changed so: "
+            + "it has a type named Ref1 already, as it calls a type it refers to, and would "
+            + "have type Ref1 by that name as well");
+  }
+
+  // A JSON name is one type's. A schema written by hand with a definition, its own or one
+  // of a document it refers to, of the name of a document it refers to is read with the
+  // two as one: it is not altered, which would write the definition as the document.
+  @Test
+  void aJsonTypeWithADefinitionNamedAsADocumentIsNotAltered() throws Exception {
+    create("o5s", SchemaType.JSON, "(q STRING NOT NULL)");
+    String own = "{\"type\":\"object\",\"title\":\"%1$s\",\"properties\":{\"id\":{\"type\":"
+        + "\"integer\"},\"x\":{\"$ref\":\"#/$defs/%2$s\"},\"r\":{\"$ref\":\"o5s\"}},"
+        + "\"additionalProperties\":false,\"$defs\":{\"%2$s\":{\"type\":\"object\","
+        + "\"properties\":{\"p\":{\"type\":\"integer\"}},\"additionalProperties\":false}}}";
+    List<SchemaReference> refs = List.of(new SchemaReference("o5s", "o5s", 1));
+    Map<String, String> resolved = Map.of("o5s", registry.latest("o5s").getSchema());
+    registry.client.register("o5h", new JsonSchema(String.format(own, "o5h", "o5s"), refs,
+        resolved, null));
+    registry.client.register("o5c", new JsonSchema(String.format(own, "o5c", "Loc"), refs,
+        resolved, null));
+    assertThatThrownBy(() -> registry.alter("o5h", new AddAttribute("z", "INT")))
+        .isInstanceOf(TypeRefusedException.class).hasMessage("Type o5h cannot be altered: it "
+            + "has a definition named o5s of its own, and refers to a type by that name. The "
+            + "two are read as one, and the definition would be written as that type. "
+            + "Register its new version as a JSON schema");
+    assertThat(version("o5h")).isEqualTo(1);
+    // One of another name is kept.
+    registry.alter("o5c", new AddAttribute("z", "INT"));
+    assertThat(registry.schema("o5c").canonicalString()).contains("\"$ref\":\"#/$defs/Loc\"")
+        .contains("\"$ref\":\"o5s\"");
+    // As a definition of another document the type refers to.
+    create("E", SchemaType.JSON, "(k INT NOT NULL)");
+    registry.client.register("lib", new JsonSchema("{\"type\":\"object\",\"title\":\"lib\","
+        + "\"properties\":{\"q\":{\"type\":\"integer\"}},\"additionalProperties\":false,"
+        + "\"$defs\":{\"E\":{\"enum\":[\"X\",\"Y\"],\"title\":\"E\"}}}"));
+    Map<String, String> both = new LinkedHashMap<>();
+    both.put("lib", registry.latest("lib").getSchema());
+    both.put("E", registry.latest("E").getSchema());
+    registry.client.register("hb", new JsonSchema("{\"type\":\"object\",\"title\":\"hb\","
+        + "\"properties\":{\"id\":{\"type\":\"integer\"},\"e\":{\"$ref\":\"lib#/$defs/E\"},"
+        + "\"w\":{\"$ref\":\"E\"}},\"additionalProperties\":false}",
+        List.of(new SchemaReference("lib", "lib", 1), new SchemaReference("E", "E", 1)),
+        both, null));
+    assertThatThrownBy(() -> registry.alter("hb", new AddAttribute("z", "INT")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageStartingWith("Type hb cannot be altered: it has a definition named E of "
+            + "lib, and refers to a type by that name.");
+    assertThat(version("hb")).isEqualTo(1);
   }
 
   // The names in a type referred to are its own: a type whose root is a name, or a union
@@ -2930,6 +2995,9 @@ class TypeAlterTest {
         "(u UNION(r1 STRUCT<a hn NOT NULL>, r2 STRUCT<a STRING>) NOT NULL)");
     create("n4", SchemaType.JSON,
         "(u UNION(r1 STRUCT<a hn NOT NULL>, r2 MAP<STRING, STRING>) NOT NULL)");
+    // A null is a value of the map only where its values take one.
+    create("n5", SchemaType.JSON,
+        "(u UNION(r1 STRUCT<a hu NOT NULL>, r2 MAP<STRING, BOOLEAN NOT NULL>) NOT NULL)");
     // A type two of the referred types refer to.
     create("mx", SchemaType.JSON, "(t e1 NOT NULL, f e2)");
     create("my", SchemaType.JSON, "(t e2 NOT NULL)");
@@ -3283,16 +3351,20 @@ class TypeAlterTest {
     assertThat(version("pnt")).isEqualTo(2);
     String[][] others = {
         {"r", "STRUCT(m INT, n STRING, k INT, j INT WITH ('protobuf.field.number' = '50'))",
-            "Attribute j cannot be given the Protobuf field number 50: a new member of a type "
-            + "given anew is numbered as a new attribute is; give it none"},
+            "Attribute j of attribute r cannot be given the Protobuf field number 50: a "
+            + "member new to a type given anew takes the next number its message has free; "
+            + "give it none"},
         {"r", "STRUCT(m INT WITH ('protobuf.field.number' = '51'), n STRING, k INT)",
-            "Attribute m cannot be given the Protobuf field number 51: it has 1; give it none"},
+            "Attribute m of attribute r cannot be given the Protobuf field number 51: it has "
+            + "1; give it none"},
         {"u", "UNION(x INT, y STRING, z BIGINT WITH ('protobuf.field.number' = '80'))",
-            "Branch z cannot be given the Protobuf field number 80: a new member of a type "
-            + "given anew is numbered as a new attribute is; give it none"},
+            "Branch z of attribute u cannot be given the Protobuf field number 80: a member "
+            + "new to a type given anew takes the next number its message has free; give it "
+            + "none"},
         {"a", "UNION(p INT WITH ('protobuf.field.number' = '70'), q STRING)",
-            "Branch p cannot be given the Protobuf field number 70: a new member of a type "
-            + "given anew is numbered as a new attribute is; give it none"}};
+            "Branch p of attribute a cannot be given the Protobuf field number 70: a member "
+            + "new to a type given anew takes the next number its message has free; give it "
+            + "none"}};
     for (String[] other : others) {
       assertThatThrownBy(() -> registry.alter("pnt", new AlterAttributeType(other[0], other[1])))
           .as(other[1]).isInstanceOf(TypeRefusedException.class).hasMessage(other[2]);

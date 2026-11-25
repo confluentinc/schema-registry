@@ -16,6 +16,7 @@
 
 package io.confluent.kafka.schemaregistry.type.logical.statements;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.google.protobuf.DescriptorProtos.DescriptorProto;
 import com.google.protobuf.DescriptorProtos.EnumDescriptorProto;
 import com.google.protobuf.DescriptorProtos.FieldDescriptorProto;
@@ -30,6 +31,7 @@ import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
+import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalTypeConversion;
@@ -58,6 +60,8 @@ import java.util.TreeSet;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.IntFunction;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -79,6 +83,9 @@ public final class TypeAlter {
   private static final int RESERVED_FIRST = 19_000;
   private static final int RESERVED_LAST = 19_999;
   private static final int MAX_NUMBER = 536_870_911;
+  // A $ref to a definition: of the document named before the #, or the schema's own.
+  private static final Pattern DEFINITION =
+      Pattern.compile("([^#]*)#/(\\$defs|definitions)/([^/]+)");
   private static final String KEY_SUFFIX = "-key";
   private static final String VALUE_SUFFIX = "-value";
 
@@ -215,6 +222,10 @@ public final class TypeAlter {
   // Whether the Avro names are pinned as the type stands: no action since has given it a type
   // that could have a name of its own.
   private boolean avroNamesPinned;
+  // The type an action gives anew, whose names are no more the type's, and the attribute
+  // it is the type of; null outside such an action.
+  private Schema replacing;
+  private String retyping;
   private final List<Message> versions = new ArrayList<>();
   // The compatibility policy a SET WITH gives the subject, or null to leave it.
   private String policy;
@@ -467,6 +478,7 @@ public final class TypeAlter {
       dropStaleAliases();
       recompileRules();
       if (format == SchemaType.JSON) {
+        refuseDefinitionNamedAsReference(md);
         restoreDirectRefs();
       }
       dropUnusedReferences();
@@ -950,6 +962,8 @@ public final class TypeAlter {
   }
 
   private boolean apply(AlterAction action) {
+    replacing = null;
+    retyping = null;
     if (!(action instanceof AlterAction.SetWith)) {
       refuseSeveralMessages();
     }
@@ -1152,10 +1166,12 @@ public final class TypeAlter {
       if (i < 0) {
         throw new TypeRefusedException("Type " + subject + " has no attribute " + a.name());
       }
+      Field f = fields.get(i);
+      replacing = f.getSchema();
+      retyping = a.name();
       Schema type = parse(aliases -> TypeScripts.typeScript(a.type(), aliases))
           .getRootSchema();
       Formats.refuseUnwritable(format, type, knownTypes(type), "attribute " + a.name());
-      Field f = fields.get(i);
       Map<String, Object> params = f.getParams();
       // A type of the same kind keeps the native names pinned on it; another kind gets new.
       if (keepsNames(f.getSchema(), type)) {
@@ -1210,6 +1226,7 @@ public final class TypeAlter {
         throw new TypeRefusedException("Type " + subject
             + " is a struct; use ALTER ATTRIBUTE to change its attributes");
       }
+      replacing = target;
       Schema type = parse(aliases -> TypeScripts.typeScript(a.type(), aliases))
           .getRootSchema();
       Formats.refuseUnwritable(format, type, knownTypes(type), null);
@@ -1788,6 +1805,63 @@ public final class TypeAlter {
     }
   }
 
+  // The names the type's attributes are of, and those of the named types they are of in
+  // turn: but for the type an action is giving anew, which the statement frees them of.
+  private Set<String> namesInUse() {
+    Set<String> used = new LinkedHashSet<>();
+    Schema target = target();
+    if (target != replacing && target.getType() == Schema.Type.STRUCT) {
+      for (Field f : target.getFields()) {
+        if (f.getSchema() != replacing) {
+          LogicalType.collectNamedRefs(f.getSchema(), used);
+        }
+      }
+    } else if (target != replacing) {
+      LogicalType.collectNamedRefs(target, used);
+    }
+    List<String> todo = new ArrayList<>(used);
+    while (!todo.isEmpty()) {
+      Schema named = namedTypes.get(todo.remove(todo.size() - 1));
+      Set<String> more = new LinkedHashSet<>();
+      if (named != null) {
+        LogicalType.collectNamedRefs(named, more);
+      }
+      more.stream().filter(used::add).forEach(todo::add);
+    }
+    return used;
+  }
+
+  // A JSON name is one type's. A schema with a definition, its own or one of a document it
+  // refers to, of the name of a document it refers to is read with the two as one, and
+  // would be written with every attribute of the definition as one of the document.
+  private void refuseDefinitionNamedAsReference(SchemaMetadata md) {
+    ParsedSchema stored = lookup.parse(md);
+    if (!(stored instanceof JsonSchema) || md.getReferences() == null) {
+      return;
+    }
+    Set<String> documents = new HashSet<>();
+    md.getReferences().forEach(r -> documents.add(r.getName()));
+    JsonNode schema = ((JsonSchema) stored).toJsonNode();
+    for (JsonNode ref : schema.findValues("$ref")) {
+      Matcher to = DEFINITION.matcher(ref.asText(""));
+      if (!to.matches() || !documents.contains(to.group(3)) || to.group(3).equals(to.group(1))) {
+        continue;
+      }
+      // A definition that only names the document is that document.
+      JsonNode own = schema.path(to.group(2)).path(to.group(3));
+      if (to.group(1).isEmpty() && own.size() == 1
+          && to.group(3).equals(own.path("$ref").asText(null))) {
+        continue;
+      }
+      throw new TypeRefusedException("Type " + subject + " cannot be altered: it has a "
+          + "definition named " + to.group(3)
+          + (to.group(1).isEmpty() ? " of its own" : " of " + to.group(1))
+          + ", and refers to a type by that name. The two are read as one, and the "
+          + "definition would be written as that type. Register its new version as a JSON "
+          + "schema");
+    }
+  }
+
   private LogicalType parse(TypeReferences.ScriptBuilder builder) {
     // A JSON type's reference to a type it already refers to keeps its name, which its $refs use.
     Map<String, String> names = new HashMap<>();
@@ -1803,7 +1877,10 @@ public final class TypeAlter {
     LogicalType lt = parseWithReferences(builder, names);
     parsedTypes = lt.getNamedTypes();
     parsedImports = lt.getExternalImports();
-    Set<String> defined = new HashSet<>(externalTypes);
+    // The names the type has a use for other than as its references': a definition of a
+    // type it refers to, or what the type as read calls one of them.
+    Set<String> defined = namesInUse();
+    defined.retainAll(externalTypes);
     references.forEach(r -> defined.remove(r.getName()));
     externalTypes.addAll(lt.getExternalTypes());
     boolean moved = false;
@@ -1830,8 +1907,9 @@ public final class TypeAlter {
       // under a name, and a type of that name, would both be written as the one.
       if (!found && format == SchemaType.JSON && defined.contains(ref.getName())) {
         throw new TypeRefusedException(refused() + ": it has a type named " + ref.getName()
-            + " already, a definition of a type it refers to, and would have type "
-            + ref.getSubject() + " by that name as well");
+            + " already, " + (externalImports.containsKey(ref.getName())
+              ? "as it calls a type it refers to" : "a definition of a type it refers to")
+            + ", and would have type " + ref.getSubject() + " by that name as well");
       }
       if (!found) {
         // One the statement dropped and names again is the reference it was, by the name it
@@ -3017,16 +3095,17 @@ public final class TypeAlter {
     return given;
   }
 
-  // A member of a type given anew keeps the number it has, and a new one is numbered as a
-  // new attribute is: another number said for it is refused, not left out.
-  private static void refuseOtherNumber(String member, Map<String, Object> params, int has) {
+  // A member of a type given anew keeps the number it has, and one new to it takes the
+  // next its message has free: another number said for it is refused, not left out.
+  private void refuseOtherNumber(String member, Map<String, Object> params, int has) {
     if (!params.containsKey(Schema.PROTOBUF_FIELD_NUMBER) || numberIn(params) == has) {
       return;
     }
-    throw new TypeRefusedException(member + " cannot be given the Protobuf field number "
-        + numberIn(params) + ": " + (has > 0 ? "it has " + has
-          : "a new member of a type given anew is numbered as a new attribute is")
-        + "; give it none");
+    throw new TypeRefusedException(member
+        + (retyping != null ? " of attribute " + retyping : "")
+        + " cannot be given the Protobuf field number " + numberIn(params) + ": "
+        + (has > 0 ? "it has " + has : "a member new to a type given anew takes the next "
+          + "number its message has free") + "; give it none");
   }
 
   // A new union is a oneof, which has no number, and its members are numbered as the

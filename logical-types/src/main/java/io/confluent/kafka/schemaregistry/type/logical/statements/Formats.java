@@ -307,13 +307,21 @@ public final class Formats {
     }
     List<String[]> pairs = new ArrayList<>();
     Pairs comparing = new Pairs();
-    for (int j = 1; j < branches.size(); j++) {
-      for (int i = 0; i < j; i++) {
-        if (matchBoth(written.get(i), written.get(j), comparing)) {
-          pairs.add(new String[] {branches.get(i).getName(), branches.get(j).getName()});
+    int met;
+    // Rows met while the branches are judged are judged themselves, and the branches again
+    // by what those are found to be, until no more are met.
+    do {
+      met = comparing.met.size();
+      comparing.settle();
+      pairs.clear();
+      for (int j = 1; j < branches.size(); j++) {
+        for (int i = 0; i < j; i++) {
+          if (matchBoth(written.get(i), written.get(j), comparing)) {
+            pairs.add(new String[] {branches.get(i).getName(), branches.get(j).getName()});
+          }
         }
       }
-    }
+    } while (comparing.met.size() > met);
     return pairs;
   }
 
@@ -431,17 +439,65 @@ public final class Formats {
     }
   }
 
-  // The rows being compared, by the two types, and what two compared were found to be: rows
-  // that name each other are come to by as many ways as there are orders of them.
-  private static final class Pairs {
-    final Set<List<Integer>> open = new HashSet<>();
-    final Map<List<Integer>, Boolean> found = new HashMap<>();
-    // How many times two being compared were come to again.
-    int again;
+  // Two rows, or a row and a map written as an object, by what they are and not by what
+  // they say.
+  private static final class Pair {
+    final Written one;
+    final Written other;
+
+    Pair(Written one, Written other) {
+      this.one = one;
+      this.other = other;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      return o instanceof Pair && ((Pair) o).one.type == one.type
+          && ((Pair) o).other.type == other.type;
+    }
+
+    @Override
+    public int hashCode() {
+      return 31 * System.identityHashCode(one.type) + System.identityHashCode(other.type);
+    }
   }
 
-  // comparing: the rows being compared, by the two types: a row that has an attribute of
-  // its own type is come to again while it is compared.
+  // The rows met while two branches are judged, two by two, and whether a value of the one
+  // would match the other. Two are taken to match until an attribute tells them apart, as
+  // two that name each other tell nothing of themselves; each is judged by what the others
+  // are taken to be, again until none changes. Rows that name each other are so judged
+  // once each for each that changes, and not by every way they are come to.
+  private static final class Pairs {
+    final Map<Pair, Boolean> match = new HashMap<>();
+    final List<Pair> met = new ArrayList<>();
+
+    boolean of(Written one, Written other) {
+      Pair pair = new Pair(one, other);
+      Boolean known = match.putIfAbsent(pair, true);
+      if (known == null) {
+        met.add(pair);
+        return true;
+      }
+      return known;
+    }
+
+    void settle() {
+      boolean changed = true;
+      while (changed) {
+        changed = false;
+        // Those met on the way are judged in their turn.
+        for (int i = 0; i < met.size(); i++) {
+          Pair pair = met.get(i);
+          if (match.get(pair) && !judge(pair.one, pair.other, this)) {
+            match.put(pair, false);
+            changed = true;
+          }
+        }
+      }
+    }
+  }
+
+  // comparing: the rows met, and what two of them are taken to be.
   private static boolean matchBoth(List<Written> one, List<Written> other,
       Pairs comparing) {
     // A VARIANT is written as any JSON value, so a value of any other branch, a struct or
@@ -478,32 +534,19 @@ public final class Formats {
     if (!rowA && !rowB) {
       return true;
     }
-    // Two come to while they are compared tell nothing of themselves: the attributes that
-    // come after do.
-    List<Integer> pair = List.of(System.identityHashCode(a), System.identityHashCode(b));
-    Boolean found = comparing.found.get(pair);
-    if (found != null) {
-      return found;
-    }
-    if (!comparing.open.add(pair)) {
-      comparing.again++;
-      return true;
-    }
-    int again = comparing.again;
-    try {
-      // A map written as an object takes any property whose value is one of its values'.
-      boolean both = rowA && rowB
-          ? !toldApart(one, other, comparing) && (readsAs(a, b) || readsAs(b, a))
-          : !toldFromMap(rowA ? one : other, rowA ? other : one, comparing);
-      // Two told apart are so however they were come to; two that are not may be only
-      // for the two taken to match on the way.
-      if (!both || again == comparing.again) {
-        comparing.found.put(pair, both);
-      }
-      return both;
-    } finally {
-      comparing.open.remove(pair);
-    }
+    return comparing.of(one, other);
+  }
+
+  // Whether a value of one of two rows, or of a row and a map written as an object, would
+  // match the other, by what the rows they name are taken to be.
+  private static boolean judge(Written one, Written other, Pairs comparing) {
+    boolean rowA = one.type.getType() == Schema.Type.STRUCT;
+    boolean rowB = other.type.getType() == Schema.Type.STRUCT;
+    // A map written as an object takes any property whose value is one of its values'.
+    return rowA && rowB
+        ? !toldApart(one, other, comparing)
+            && (readsAs(one.type, other.type) || readsAs(other.type, one.type))
+        : !toldFromMap(rowA ? one : other, rowA ? other : one, comparing);
   }
 
   // Whether a value of one row, written with each of its attributes, is a value of the
@@ -532,11 +575,14 @@ public final class Formats {
   }
 
   // A row is told from a map written as an object by an attribute it requires whose value
-  // is never one of the map's.
+  // is never one of the map's: a null is, where both take one. A multiset's is a count.
   private static boolean toldFromMap(Written row, Written map, Pairs comparing) {
-    List<Written> value = written(map.type.getType() == Schema.Type.MAP
-        ? map.type.getValueType() : Schema.create(Schema.Type.INT), map.named);
-    return row.type.getFields().stream().anyMatch(f -> !takesNull(f.getSchema(), row.named)
+    Schema of = map.type.getType() == Schema.Type.MAP
+        ? map.type.getValueType() : Schema.create(Schema.Type.INT).setNullable(false);
+    List<Written> value = written(of, map.named);
+    boolean nulls = takesNull(of, map.named);
+    return row.type.getFields().stream().anyMatch(f -> !f.getSchema().isNullable()
+        && !(nulls && takesNull(f.getSchema(), row.named))
         && neverMatch(written(f.getSchema(), row.named), value, comparing));
   }
 
