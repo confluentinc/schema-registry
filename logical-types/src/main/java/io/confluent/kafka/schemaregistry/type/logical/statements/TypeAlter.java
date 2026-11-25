@@ -2623,6 +2623,18 @@ public final class TypeAlter {
       }
       return max;
     }
+
+    // The numbers for the message's new fields: above every one a version used, and where
+    // none is left there, the lowest that none used.
+    Counter counter() {
+      Set<Integer> taken = new HashSet<>();
+      for (Message m : all) {
+        if (m != null) {
+          m.members().forEach(member -> taken.add(member.number()));
+        }
+      }
+      return new Counter(maxUsed() + 1, taken);
+    }
   }
 
   // The field a map's entry holds its value in.
@@ -2639,7 +2651,7 @@ public final class TypeAlter {
     Schema result;
     switch (type.getType()) {
       case STRUCT: {
-        Counter inner = new Counter(at.maxUsed() + 1);
+        Counter inner = at.counter();
         List<Field> fields = new ArrayList<>();
         for (Field f : type.getFields()) {
           Field was = old != null && old.getType() == Schema.Type.STRUCT
@@ -2652,6 +2664,7 @@ public final class TypeAlter {
           Map<String, Object> params = new LinkedHashMap<>(f.getParams());
           if (s.getType() != Schema.Type.UNION) {
             int n = at.number(f.getName());
+            refuseOtherNumber("Attribute " + f.getName(), params, n);
             params.put(Schema.PROTOBUF_FIELD_NUMBER,
                 String.valueOf(n > 0 ? n : inner.take()));
           }
@@ -2661,7 +2674,7 @@ public final class TypeAlter {
         break;
       }
       case UNION: {
-        Counter counter = next != null ? next : new Counter(at.maxUsed() + 1);
+        Counter counter = next != null ? next : at.counter();
         List<UnionBranch> branches = new ArrayList<>();
         for (UnionBranch b : type.getBranches()) {
           // A branch's member may be named <oneof>_<branch>, so it is found by the
@@ -2672,6 +2685,7 @@ public final class TypeAlter {
           int n = was == null ? 0 : numberIn(was.getParams()) > 0
               ? numberIn(was.getParams()) : at.number(memberName(was));
           Map<String, Object> params = new LinkedHashMap<>(b.getParams());
+          refuseOtherNumber("Branch " + b.getName(), params, n);
           params.put(Schema.PROTOBUF_FIELD_NUMBER,
               String.valueOf(n > 0 ? n : counter.take()));
           branches.add(new UnionBranch(b.getName(),
@@ -2705,7 +2719,7 @@ public final class TypeAlter {
         boolean wasMap = old != null && old.getType() == Schema.Type.MAP;
         // A key and a value that are unions are oneofs of the one entry message, numbered
         // by one counter.
-        Counter entry = new Counter(at.maxUsed() + 1);
+        Counter entry = at.counter();
         result = Schema.createMap(
             renumbered(type.getKeyType(), wasMap ? old.getKeyType() : null,
               entryPart(at, type.getKeyType(), "key"),
@@ -2978,6 +2992,18 @@ public final class TypeAlter {
     return given;
   }
 
+  // A member of a type given anew keeps the number it has, and a new one is numbered as a
+  // new attribute is: another number said for it is refused, not left out.
+  private static void refuseOtherNumber(String member, Map<String, Object> params, int has) {
+    if (!params.containsKey(Schema.PROTOBUF_FIELD_NUMBER) || numberIn(params) == has) {
+      return;
+    }
+    throw new TypeRefusedException(member + " cannot be given the Protobuf field number "
+        + numberIn(params) + ": " + (has > 0 ? "it has " + has
+          : "a new member of a type given anew is numbered as a new attribute is")
+        + "; give it none");
+  }
+
   // A new union is a oneof, which has no number, and its members are numbered as the
   // type's new fields are: a number said for either is refused, not left out.
   private static void refuseUnionNumbers(Field field) {
@@ -3021,10 +3047,6 @@ public final class TypeAlter {
     private int next;
     private boolean below;
 
-    Counter(int next) {
-      this(next, null);
-    }
-
     Counter(int next, Set<Integer> taken) {
       this.next = next;
       this.taken = taken;
@@ -3032,7 +3054,7 @@ public final class TypeAlter {
 
     int take() {
       int number = unreserved(next);
-      if (taken != null && (below || number > MAX_NUMBER)) {
+      if (below || number > MAX_NUMBER) {
         number = below ? number : 1;
         below = true;
         while (taken.contains(number)) {

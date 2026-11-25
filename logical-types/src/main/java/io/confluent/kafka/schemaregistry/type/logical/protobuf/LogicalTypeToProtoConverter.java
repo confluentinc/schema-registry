@@ -897,10 +897,21 @@ public class LogicalTypeToProtoConverter {
     final Set<String> seen = new HashSet<>(builtIn);
     while (!todo.isEmpty()) {
       final FileDescriptor f = todo.remove(todo.size() - 1);
+      if (!seen.add(f.getName())) {
+        continue;
+      }
       // One of the format's own files under a reference's name declares what that file
       // does, and is that file: unless that file is imported too, and its names twice.
-      if (seen.add(f.getName()) && own.stream().noneMatch(
-          o -> !dependencies.contains(o.getName()) && declaresTheSame(o, f))) {
+      final FileDescriptor copied = own.stream().filter(o -> declaresTheSame(o, f))
+          .findFirst().orElse(null);
+      if (copied != null && dependencies.contains(copied.getName())) {
+        throw new ValidationException("Protobuf file '" + f.getName() + "', which the type "
+            + "refers to, is a copy of " + copied.getName() + ", a file of the Protobuf "
+            + "format's own that the type imports as well for an attribute of its own: "
+            + "their names would be defined twice. Give the attribute that refers to the "
+            + "copy the format's type instead");
+      }
+      if (copied == null) {
         referred.addAll(namesOf(f));
         todo.addAll(f.getDependencies());
       }

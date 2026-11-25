@@ -1924,6 +1924,16 @@ class TypeAlterTest {
     assertThat(version("vda")).isEqualTo(2);
     assertThatThrownBy(() -> create("vdb", SchemaType.PROTOBUF, "(id INT, d vdd, own DATE)"))
         .isInstanceOf(RuntimeException.class);
+    // The refusal tells of the copy, and not of a name the statement gave no type.
+    LogicalType both = TypeReferences.parse(registry, SchemaType.PROTOBUF,
+        aliases -> TypeScripts.createScript("vdb", BodyKind.STRUCT, "(id INT, d vdd, own DATE)",
+          Map.of(), aliases), "vdb", Map.of());
+    assertThatThrownBy(() -> ColumnIds.nativeOf("vdb", SchemaType.PROTOBUF, both, "Refused"))
+        .isInstanceOf(TypeRefusedException.class).hasMessage("Refused: no PROTOBUF schema can "
+            + "be made of it: Protobuf file 'vdd', which the type refers to, is a copy of "
+            + "google/type/date.proto, a file of the Protobuf format's own that the type "
+            + "imports as well for an attribute of its own: their names would be defined "
+            + "twice. Give the attribute that refers to the copy the format's type instead");
     assertThat(registry.latest("vdb")).isNull();
     assertThat(LogicalTypeToProtoConverter.fromLogicalType(TypeScripts.parse(
         "NAMESPACE google.protobuf; STRUCT StringValue (a INT NOT NULL, b BIGINT NOT NULL);"),
@@ -3123,6 +3133,36 @@ class TypeAlterTest {
     registry.alter("pnm", new AddAttribute("e", "INT"));
     assertThat(numbers(message("pnm")).split(" "))
         .containsExactlyInAnyOrder("a=1", "c=536870911", "d=3", "x=5", "y=6", "e=4");
+    // As in a row's message, and for a union in it.
+    create("pnr", SchemaType.PROTOBUF, "(a INT, "
+        + "r STRUCT(x INT, y INT WITH ('protobuf.field.number' = '536870911')) NOT NULL)");
+    registry.alter("pnr", new AlterAttributeType("r",
+        "STRUCT(x INT, y INT, z INT, u UNION(p INT, q STRING)) NOT NULL"));
+    assertThat(numbers(message("pnr").findFieldByName("r").getMessageType()).split(" "))
+        .containsExactlyInAnyOrder("x=1", "y=536870911", "z=2", "p=3", "q=4");
+    // A number said for a member of a type given anew is the one it has, or is refused.
+    create("pnt", SchemaType.PROTOBUF,
+        "(a INT, r STRUCT(m INT, n STRING), u UNION(x INT, y STRING))");
+    registry.alter("pnt", new AlterAttributeType("r",
+        "STRUCT(m INT WITH ('protobuf.field.number' = '1'), n STRING, k INT)"));
+    assertThat(version("pnt")).isEqualTo(2);
+    String[][] others = {
+        {"r", "STRUCT(m INT, n STRING, k INT, j INT WITH ('protobuf.field.number' = '50'))",
+            "Attribute j cannot be given the Protobuf field number 50: a new member of a type "
+            + "given anew is numbered as a new attribute is; give it none"},
+        {"r", "STRUCT(m INT WITH ('protobuf.field.number' = '51'), n STRING, k INT)",
+            "Attribute m cannot be given the Protobuf field number 51: it has 1; give it none"},
+        {"u", "UNION(x INT, y STRING, z BIGINT WITH ('protobuf.field.number' = '80'))",
+            "Branch z cannot be given the Protobuf field number 80: a new member of a type "
+            + "given anew is numbered as a new attribute is; give it none"},
+        {"a", "UNION(p INT WITH ('protobuf.field.number' = '70'), q STRING)",
+            "Branch p cannot be given the Protobuf field number 70: a new member of a type "
+            + "given anew is numbered as a new attribute is; give it none"}};
+    for (String[] other : others) {
+      assertThatThrownBy(() -> registry.alter("pnt", new AlterAttributeType(other[0], other[1])))
+          .as(other[1]).isInstanceOf(TypeRefusedException.class).hasMessage(other[2]);
+    }
+    assertThat(version("pnt")).isEqualTo(2);
     registry.alter("pnn", new DropAttribute("e", false));
     assertThatThrownBy(() -> registry.alter("pnn", new AddAttribute("g",
         "INT WITH ('protobuf.field.number' = '9')")))
