@@ -81,7 +81,15 @@ public final class TypeCreate {
         subject, Map.of());
     LogicalType lt = Constraints.named(kind != BodyKind.OTHER && dot > 0
         ? TypeScripts.withNamespace(parsed, name.substring(0, dot)) : parsed, subject);
-    Formats.refuseUnwritable(format, lt);
+    // Only a JSON type is judged by what the types it refers to are, and only one with a
+    // union and a name in it.
+    boolean named = format == SchemaType.JSON && (Formats.namesInAUnion(lt.getRootSchema())
+        || lt.getNamedTypes().values().stream().anyMatch(Formats::namesInAUnion));
+    Formats.refuseUnwritable(format, lt, !named ? KnownTypes.none()
+        : TypeReferences.referredTypes(lookup, subject, lt.getReferences(),
+            lt.getExternalImports()));
+    TypeReferences.requireOneOfEach(lookup, subject, lt.getReferences(), "Type " + subject
+        + " cannot be created" + (last != null ? " again" : "") + " so");
     if (last != null) {
       lt = afterDrop(lookup, subject, format, last, lt, applied);
     }
@@ -97,6 +105,10 @@ public final class TypeCreate {
     if (format == SchemaType.PROTOBUF) {
       TypeAlter.refuseUncarriedAfterDrop(lookup, subject, last);
       lt = TypeAlter.numberedAfterDrop(lookup, subject, last, lt);
+      TypeAlter.refuseWrittenOtherwiseAfterDrop(lookup, subject, format, last, lt);
+    } else if (format == SchemaType.JSON) {
+      // A JSON type is refused over a map stored otherwise than the new version writes it.
+      TypeAlter.refuseWrittenOtherwiseAfterDrop(lookup, subject, format, last, lt);
     }
     // And an Avro type gives the nullable attributes it adds a null default, as an ALTER does.
     if (format == SchemaType.AVRO) {
