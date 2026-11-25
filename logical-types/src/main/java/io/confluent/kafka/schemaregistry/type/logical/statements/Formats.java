@@ -287,24 +287,31 @@ public final class Formats {
 
   // The first two branches of a union a value of one of which would match the other.
   private static String[] overlappingBranches(Schema union, KnownTypes named) {
+    List<String[]> pairs = overlappingPairs(union, named);
+    return pairs.isEmpty() ? null : pairs.get(0);
+  }
+
+  // Every two branches of a union a value of one of which would match the other.
+  private static List<String[]> overlappingPairs(Schema union, KnownTypes named) {
     List<UnionBranch> branches = union.getBranches();
     List<List<Written>> written = new ArrayList<>();
     for (UnionBranch b : branches) {
       written.add(written(b.getSchema(), named));
     }
+    List<String[]> pairs = new ArrayList<>();
     for (int j = 1; j < branches.size(); j++) {
       for (int i = 0; i < j; i++) {
-        if (matchBoth(written.get(i), written.get(j))) {
-          return new String[] {branches.get(i).getName(), branches.get(j).getName()};
+        if (matchBoth(written.get(i), written.get(j), new HashSet<>())) {
+          pairs.add(new String[] {branches.get(i).getName(), branches.get(j).getName()});
         }
       }
     }
-    return null;
+    return pairs;
   }
 
   /**
-   * A union in a type that would have two branches a value of one of which matches the other
-   * with the types its names are of {@code after}, and had none with those {@code before}: a
+   * A union in a type two of whose branches a value of one of which would match the other
+   * with the types its names are of {@code after}, and did not with those {@code before}: a
    * reference moved to another version of its type gives a branch that type's attributes.
    * Told as the attribute it is of, or null, and the two branches; null if there is none.
    */
@@ -320,9 +327,13 @@ public final class Formats {
         }
         return null;
       case UNION: {
-        String[] both = overlappingBranches(type, after);
-        if (both != null && overlappingBranches(type, before) == null) {
-          return new String[] {within, both[0], both[1]};
+        // Two that did before are left: a type stored so is altered as it was.
+        Set<String> were = new HashSet<>();
+        overlappingPairs(type, before).forEach(pair -> were.add(pair[0] + " " + pair[1]));
+        for (String[] pair : overlappingPairs(type, after)) {
+          if (!were.contains(pair[0] + " " + pair[1])) {
+            return new String[] {within, pair[0], pair[1]};
+          }
         }
         for (UnionBranch b : type.getBranches()) {
           String[] found = newlyOverlapping(b.getSchema(), before, after, within);
@@ -342,10 +353,11 @@ public final class Formats {
     }
   }
 
-  static TypeRefusedException newlyOverlapping(String refused, String[] found) {
-    return new TypeRefusedException(refused + ": a type it refers to would be of another "
-        + "version, and with that one's attributes branches " + found[1] + " and " + found[2]
-        + " of the UNION" + (found[0] != null ? " of attribute " + found[0] : "")
+  // moved: the references that would be to another version, as told to a reader.
+  static TypeRefusedException newlyOverlapping(String refused, String moved, String[] found) {
+    return new TypeRefusedException(refused + ": " + moved + ", and with that version's "
+        + "attributes branches " + found[1] + " and " + found[2] + " of the UNION"
+        + (found[0] != null ? " of attribute " + found[0] : "")
         + " would be written as one JSON type: a value of either would match both");
   }
 
@@ -407,17 +419,21 @@ public final class Formats {
     }
   }
 
-  private static boolean matchBoth(List<Written> one, List<Written> other) {
+  // comparing: the rows being compared, by the two types: a row that has an attribute of
+  // its own type is come to again while it is compared.
+  private static boolean matchBoth(List<Written> one, List<Written> other,
+      Set<List<Integer>> comparing) {
     // A VARIANT is written as any JSON value, so a value of any other branch, a struct or
     // a collection as much as a scalar, matches it too.
     if (one.stream().anyMatch(t -> "any".equals(jsonKind(t.type)))
         || other.stream().anyMatch(t -> "any".equals(jsonKind(t.type)))) {
       return true;
     }
-    return one.stream().anyMatch(a -> other.stream().anyMatch(b -> matchBoth(a, b)));
+    return one.stream().anyMatch(a -> other.stream()
+        .anyMatch(b -> matchBoth(a, b, comparing)));
   }
 
-  private static boolean matchBoth(Written one, Written other) {
+  private static boolean matchBoth(Written one, Written other, Set<List<Integer>> comparing) {
     Schema a = one.type;
     Schema b = other.type;
     if (a.getType() == Schema.Type.ENUM && b.getType() == Schema.Type.ENUM) {
@@ -438,11 +454,24 @@ public final class Formats {
     }
     boolean rowA = a.getType() == Schema.Type.STRUCT;
     boolean rowB = b.getType() == Schema.Type.STRUCT;
-    if (rowA && rowB) {
-      return !toldApart(one, other) && (readsAs(a, b) || readsAs(b, a));
+    if (!rowA && !rowB) {
+      return true;
     }
-    // A map written as an object takes any property whose value is one of its values'.
-    return !rowA && !rowB || !toldFromMap(rowA ? one : other, rowA ? other : one);
+    // Two come to while they are compared tell nothing of themselves: the attributes that
+    // come after do.
+    List<Integer> pair = List.of(System.identityHashCode(a), System.identityHashCode(b));
+    if (!comparing.add(pair)) {
+      return true;
+    }
+    try {
+      if (rowA && rowB) {
+        return !toldApart(one, other, comparing) && (readsAs(a, b) || readsAs(b, a));
+      }
+      // A map written as an object takes any property whose value is one of its values'.
+      return !toldFromMap(rowA ? one : other, rowA ? other : one, comparing);
+    } finally {
+      comparing.remove(pair);
+    }
   }
 
   // Whether a value of one row, written with each of its attributes, is a value of the
@@ -454,14 +483,15 @@ public final class Formats {
         || f.getSchema().isNullable()) && names.stream().allMatch(n -> other.getField(n) != null);
   }
 
-  // Two rows are told apart by an attribute both have and require whose value in the one is
-  // never one in the other; a null, which either takes where it may, tells nothing.
-  private static boolean toldApart(Written row, Written other) {
+  // Two rows are told apart by an attribute both have whose value in the one is never one
+  // in the other, and that one of them requires: a null, which both take where neither
+  // does, tells nothing.
+  private static boolean toldApart(Written row, Written other, Set<List<Integer>> comparing) {
     for (Field f : row.type.getFields()) {
       Field g = other.type.getField(f.getName());
-      if (g != null && !f.getSchema().isNullable() && !g.getSchema().isNullable()
+      if (g != null && (!f.getSchema().isNullable() || !g.getSchema().isNullable())
           && neverMatch(written(f.getSchema(), row.named),
-              written(g.getSchema(), other.named))) {
+              written(g.getSchema(), other.named), comparing)) {
         return true;
       }
     }
@@ -470,16 +500,17 @@ public final class Formats {
 
   // A row is told from a map written as an object by an attribute it requires whose value
   // is never one of the map's.
-  private static boolean toldFromMap(Written row, Written map) {
+  private static boolean toldFromMap(Written row, Written map, Set<List<Integer>> comparing) {
     List<Written> value = written(map.type.getType() == Schema.Type.MAP
         ? map.type.getValueType() : Schema.create(Schema.Type.INT), map.named);
     return row.type.getFields().stream().anyMatch(f -> !f.getSchema().isNullable()
-        && neverMatch(written(f.getSchema(), row.named), value));
+        && neverMatch(written(f.getSchema(), row.named), value, comparing));
   }
 
   // Whether no value of one type is a value of the other; false where either is not known.
-  private static boolean neverMatch(List<Written> one, List<Written> other) {
-    return !one.isEmpty() && !other.isEmpty() && !matchBoth(one, other);
+  private static boolean neverMatch(List<Written> one, List<Written> other,
+      Set<List<Integer>> comparing) {
+    return !one.isEmpty() && !other.isEmpty() && !matchBoth(one, other, comparing);
   }
 
   // A map or multiset is written as an object where its keys are character strings, and as

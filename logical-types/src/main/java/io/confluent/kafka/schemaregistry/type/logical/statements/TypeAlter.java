@@ -193,6 +193,7 @@ public final class TypeAlter {
   private Map<String, Schema> parsedTypes = Map.of();
   private Map<String, String> parsedImports = Map.of();
   private final Map<String, KnownTypes> referredTypes = new HashMap<>();
+  private final Map<String, TypeReferences.Referred> referredRead = new HashMap<>();
   private final Set<String> externalTypes = new LinkedHashSet<>();
   private final Map<String, String> externalImports = new LinkedHashMap<>();
   private final List<SchemaReference> references = new ArrayList<>();
@@ -1613,7 +1614,7 @@ public final class TypeAlter {
   // The types references are of, read once for a statement.
   private KnownTypes referred(List<SchemaReference> to, Map<String, String> imports) {
     return referredTypes.computeIfAbsent(to + " " + new TreeMap<>(imports),
-        k -> TypeReferences.referredTypes(lookup, subject, to, imports));
+        k -> TypeReferences.referredTypes(lookup, subject, to, imports, referredRead));
   }
 
   // A reference moved to another version of its type gives the union branches of that type
@@ -1629,9 +1630,13 @@ public final class TypeAlter {
         types.add(type);
       }
     });
-    if (types.stream().noneMatch(Formats::namesInAUnion)
-        || references.stream().allMatch(r -> r.getVersion().equals(versions.getOrDefault(
-            TypeReferences.referenced(subject, r.getSubject()), r.getVersion())))) {
+    // Told as the references that move: "type t from version 1 to version 2".
+    String moved = references.stream().filter(r -> !r.getVersion().equals(versions.getOrDefault(
+        TypeReferences.referenced(subject, r.getSubject()), r.getVersion())))
+        .map(r -> "type " + r.getSubject() + " from version " + versions.get(
+            TypeReferences.referenced(subject, r.getSubject())) + " to version "
+            + r.getVersion()).collect(Collectors.joining(" and "));
+    if (moved.isEmpty() || types.stream().noneMatch(Formats::namesInAUnion)) {
       return;
     }
     KnownTypes before = KnownTypes.of(original.getNamedTypes());
@@ -1640,7 +1645,8 @@ public final class TypeAlter {
     for (Schema type : types) {
       String[] found = Formats.newlyOverlapping(type, before, knownTypes(type), null);
       if (found != null) {
-        throw Formats.newlyOverlapping(refused(), found);
+        throw Formats.newlyOverlapping(refused(), "its reference would move, " + moved,
+            found);
       }
     }
   }
@@ -2831,7 +2837,8 @@ public final class TypeAlter {
     }
     String has = null;
     for (Field f : fields) {
-      if (numberIn(f.getParams()) == given) {
+      // A union is no field: its members are.
+      if (f.getSchema().getType() != Schema.Type.UNION && numberIn(f.getParams()) == given) {
         has = "attribute " + f.getName() + " has it";
       }
       if (f.getSchema().getType() == Schema.Type.UNION) {

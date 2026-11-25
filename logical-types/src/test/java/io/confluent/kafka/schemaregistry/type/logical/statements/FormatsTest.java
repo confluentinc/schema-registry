@@ -21,6 +21,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
+import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
 import io.confluent.kafka.schemaregistry.type.logical.statements.TypeScripts.BodyKind;
 import java.util.Map;
@@ -121,6 +122,45 @@ class FormatsTest {
         struct("(u UNION(a INT, b UNION(c BOOLEAN, d STRING)))"));
   }
 
+  // A row that has an attribute of its own type is come to again while two rows are
+  // compared: the attributes after it still tell them apart, or do not.
+  @Test
+  void aJsonUnionsRowsOfTheirOwnTypeAreCompared() {
+    String rows = "STRUCT A (child UNION(link A, leaf INT) NOT NULL, kind %s NOT NULL); "
+        + "STRUCT B (child UNION(link B, leaf INT) NOT NULL, kind %s NOT NULL); "
+        + "STRUCT t (u UNION(x A, y B)); TYPE t;";
+    Formats.refuseUnwritable(SchemaType.JSON,
+        TypeScripts.parse(String.format(rows, "ENUM('a')", "ENUM('b')")));
+    assertThatThrownBy(() -> Formats.refuseUnwritable(SchemaType.JSON,
+        TypeScripts.parse(String.format(rows, "ENUM('a')", "ENUM('a')"))))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("cannot have branches x and y");
+    // So of rows of the type they are in, and of a row beside a map of it.
+    Formats.refuseUnwritable(SchemaType.JSON, TypeScripts.parse("STRUCT node (u UNION("
+        + "add STRUCT<l node NOT NULL, r node NOT NULL, kind ENUM('add') NOT NULL>, "
+        + "mul STRUCT<l node NOT NULL, r node NOT NULL, kind ENUM('mul') NOT NULL>, "
+        + "lit DOUBLE) NOT NULL);"));
+    Formats.refuseUnwritable(SchemaType.JSON, TypeScripts.parse("STRUCT tree ("
+        + "kids MAP<STRING, tree> NOT NULL, name STRING NOT NULL, "
+        + "u UNION(one tree, many MAP<STRING, tree>));"));
+  }
+
+  // A union two of whose branches a value was of both before is left; another two that a
+  // value would be of both with the types its names are then of are told.
+  @Test
+  void aJsonUnionsNewPairIsToldBesideAnOldOne() {
+    LogicalType type = TypeScripts.parse("STRUCT R (a INT); STRUCT t (u UNION(p STRUCT<k INT>, "
+        + "q STRUCT<k INT>, x R, y STRUCT<b STRING>)); TYPE t;");
+    Schema union = type.getRootSchema().getType() != Schema.Type.NAMED_TYPE_REF
+        ? type.getRootSchema()
+        : type.getNamedTypes().get(type.getRootSchema().getQualifiedName());
+    KnownTypes before = KnownTypes.of(Map.of("R", struct("(a INT)").getRootSchema()));
+    KnownTypes after = KnownTypes.of(Map.of("R", struct("(a INT, b STRING)").getRootSchema()));
+    assertThat(Formats.newlyOverlapping(union, before, before, null)).isNull();
+    assertThat(Formats.newlyOverlapping(union, before, after, null))
+        .containsExactly("u", "x", "y");
+  }
+
   // Rows, arrays and maps are written as objects and arrays: two branches are refused where
   // a value of one would be a value of the other.
   @Test
@@ -159,6 +199,9 @@ class FormatsTest {
         // An attribute both require, whose value in one is never one in the other, tells
         // two rows apart, and a row from a map of other values.
         "UNION(r1 STRUCT<a INT NOT NULL>, r2 STRUCT<a STRING NOT NULL>)",
+        // One of them requiring it is enough: the other's null is not a value of it.
+        "UNION(r1 STRUCT<a INT NOT NULL>, r2 STRUCT<a STRING>)",
+        "UNION(r1 STRUCT<a INT>, r2 STRUCT<a STRING NOT NULL>)",
         // As rows tagged by an attribute that is one symbol in each.
         "UNION(r1 STRUCT<kind ENUM('circle') NOT NULL, r DOUBLE>, "
             + "r2 STRUCT<kind ENUM('square') NOT NULL, r DOUBLE>)",

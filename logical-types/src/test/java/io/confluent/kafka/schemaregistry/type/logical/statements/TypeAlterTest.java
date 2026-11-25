@@ -2609,9 +2609,9 @@ class TypeAlterTest {
     registry.alter("w1r", new AddAttribute("b", "STRING"));
     assertThatThrownBy(() -> registry.alter("w1u", new AddAttribute("z", "w1r")))
         .isInstanceOf(TypeRefusedException.class).hasMessage("Type w1u cannot be changed so: "
-            + "a type it refers to would be of another version, and with that one's "
-            + "attributes branches x and y of the UNION of attribute u would be written as "
-            + "one JSON type: a value of either would match both");
+            + "its reference would move, type w1r from version 1 to version 2, and with that "
+            + "version's attributes branches x and y of the UNION of attribute u would be "
+            + "written as one JSON type: a value of either would match both");
     assertThat(version("w1u")).isEqualTo(1);
     // A statement that moves no reference leaves the union as it is.
     registry.alter("w1u", new AddAttribute("q", "INT"));
@@ -2626,6 +2626,23 @@ class TypeAlterTest {
         .isInstanceOf(TypeRefusedException.class)
         .hasMessageContaining("cannot have branches x and y");
     create("nu4", SchemaType.JSON, "(u UNION(x INT, y nu2))");
+  }
+
+  // A name of a document the type refers to whole is of that document, though another it
+  // refers to has a definition of that name.
+  @Test
+  void aJsonReferenceIsNotTakenForAnotherDocumentsDefinitionOfItsName() throws Exception {
+    registry.client.register("d1p", new JsonSchema("{\"type\":\"object\",\"title\":\"d1p\","
+        + "\"properties\":{\"k\":{\"type\":\"integer\"}},\"additionalProperties\":false,"
+        + "\"$defs\":{\"d1in\":{\"type\":\"object\",\"properties\":{\"a\":"
+        + "{\"type\":\"integer\"}},\"required\":[\"a\"],\"additionalProperties\":false}}}"));
+    registry.create("d1in", SchemaType.JSON, BodyKind.STRUCT, "(a STRING NOT NULL)");
+    create("d1w", SchemaType.JSON, "(id INT, i d1in)");
+    registry.alter("d1w", new AddAttribute("z", "d1p", Position.after("id")));
+    assertThat(registry.schema("d1w").canonicalString()).contains("\"$ref\":\"d1in\"")
+        .doesNotContain("d1p#/$defs/d1in");
+    assertThat(registry.struct("d1w").getField("i").getSchema().getType())
+        .isEqualTo(Schema.Type.NAMED_TYPE_REF);
   }
 
   // The names in a type referred to are its own: a type whose root is a name, or a union
@@ -2710,6 +2727,14 @@ class TypeAlterTest {
     TypeAlter.alter(counting, "jq", List.of(new AddAttribute("w", "UNION(a INT, b je)"),
         new AddAttribute("x", "UNION(a BOOLEAN, b jk)")), new TypeAlter.Options());
     assertThat(read).containsOnlyOnce("je").containsOnlyOnce("jk");
+    // A type that others refer to is read once, by however many ways it is come to.
+    registry.create("jd1", SchemaType.JSON, BodyKind.STRUCT, "(k INT)");
+    registry.create("jd2", SchemaType.JSON, BodyKind.STRUCT, "(r jd1)");
+    registry.create("jd3", SchemaType.JSON, BodyKind.STRUCT, "(p jd1, q jd2)");
+    read.clear();
+    TypeAlter.alter(counting, "jq", List.of(new AddAttribute("y", "UNION(a INT, b jd3)"),
+        new AddAttribute("y2", "UNION(a INT, b jd2)")), new TypeAlter.Options());
+    assertThat(read).containsOnlyOnce("jd1").containsOnlyOnce("jd2").containsOnlyOnce("jd3");
   }
 
   // A number said for a new Protobuf attribute is its number where no field has it and
@@ -2730,6 +2755,11 @@ class TypeAlterTest {
               + "Protobuf field number " + number[0] + ": " + number[1]
               + "; give it another, or none");
     }
+    // A union is no field, and has no number for another to have: its members have.
+    create("pnu", SchemaType.PROTOBUF, "(a INT, b STRING)");
+    registry.alter("pnu", new AddAttribute("u", "UNION(x INT, y STRING)"),
+        new AddAttribute("e", "INT WITH ('protobuf.field.number' = '3')"));
+    assertThat(numbers(message("pnu")).split(" ")).contains("e=3", "x=4", "y=5");
     registry.alter("pnn", new DropAttribute("e", false));
     assertThatThrownBy(() -> registry.alter("pnn", new AddAttribute("g",
         "INT WITH ('protobuf.field.number' = '9')")))

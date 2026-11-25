@@ -210,11 +210,33 @@ public final class TypeReferences {
    */
   static KnownTypes referredTypes(TypeLookup lookup, String referrer,
       List<SchemaReference> references, Map<String, String> imports) {
-    return referredTypes(lookup, referrer, references, imports, new HashSet<>());
+    return referredTypes(lookup, referrer, references, imports, new HashMap<>());
+  }
+
+  /**
+   * As {@link #referredTypes(TypeLookup, String, List, Map)}, with the versions read so far,
+   * each read once: a type many refer to is come to by as many ways.
+   */
+  static KnownTypes referredTypes(TypeLookup lookup, String referrer,
+      List<SchemaReference> references, Map<String, String> imports,
+      Map<String, Referred> read) {
+    return referredTypes(lookup, referrer, references, imports, read, new HashSet<>());
+  }
+
+  /** A version referred to, as read: its type and the names it has of its own. */
+  static final class Referred {
+    private final LogicalType type;
+    private final KnownTypes names;
+
+    private Referred(LogicalType type, KnownTypes names) {
+      this.type = type;
+      this.names = names;
+    }
   }
 
   private static KnownTypes referredTypes(TypeLookup lookup, String referrer,
-      List<SchemaReference> references, Map<String, String> imports, Set<String> within) {
+      List<SchemaReference> references, Map<String, String> imports,
+      Map<String, Referred> read, Set<String> within) {
     KnownTypes types = KnownTypes.none();
     if (references == null) {
       return types;
@@ -222,24 +244,31 @@ public final class TypeReferences {
     for (SchemaReference ref : references) {
       String subject = referenced(referrer, ref.getSubject());
       String key = subject + " " + ref.getVersion();
-      LogicalType referred;
-      try {
-        SchemaMetadata md = lookup.version(subject, ref.getVersion());
-        referred = md == null ? null : lookup.logicalType(subject, md);
-      } catch (RuntimeException e) {
-        referred = null;
-      }
+      Referred referred = read.get(key);
       // One that refers back to a type being read is left out.
-      if (referred == null || !within.add(key)) {
+      if (referred == null && within.add(key)) {
+        LogicalType type;
+        try {
+          SchemaMetadata md = lookup.version(subject, ref.getVersion());
+          type = md == null ? null : lookup.logicalType(subject, md);
+        } catch (RuntimeException e) {
+          type = null;
+        }
+        if (type != null) {
+          KnownTypes names = referredTypes(lookup, subject, type.getReferences(),
+              type.getExternalImports(), read, within);
+          type.getNamedTypes().forEach(names::put);
+          referred = new Referred(type, names);
+          read.put(key, referred);
+        }
+        within.remove(key);
+      }
+      if (referred == null) {
         continue;
       }
-      KnownTypes names = referredTypes(lookup, subject, referred.getReferences(),
-          referred.getExternalImports(), within);
-      within.remove(key);
-      referred.getNamedTypes().forEach(names::put);
       Set<String> called = new LinkedHashSet<>(List.of(ref.getName(), ref.getSubject()));
-      if (referred.getName() != null) {
-        called.add(referred.getName());
+      if (referred.type.getName() != null) {
+        called.add(referred.type.getName());
       }
       // A name imported with a fragment is of a part of the document, which is not told.
       imports.forEach((name, from) -> {
@@ -248,7 +277,7 @@ public final class TypeReferences {
         }
       });
       for (String name : called) {
-        types.putReferred(name, referred.getRootSchema(), names);
+        types.putReferred(name, referred.type.getRootSchema(), referred.names);
       }
     }
     return types;
