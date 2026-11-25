@@ -21,6 +21,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
+import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
 import io.confluent.kafka.schemaregistry.type.logical.statements.TypeScripts.BodyKind;
 import java.util.Map;
@@ -101,7 +102,124 @@ class FormatsTest {
     assertThatThrownBy(() -> Formats.refuseUnwritable(SchemaType.JSON,
         struct("(u UNION(a BIGINT, b DOUBLE))")))
         .isInstanceOf(TypeRefusedException.class)
-        .hasMessage("A UNION in a JSON type cannot have branches a and b, which are written "
-            + "as one JSON type: a value of either would match both");
+        .hasMessage("A UNION of attribute u in a JSON type cannot have branches a and b, "
+            + "which are written as one JSON type: a value of either would match both");
+
+    // A branch that is a union is written as any of its members is: a value of one of them
+    // that another branch is written as would match both.
+    for (String union : new String[] {"UNION(a INT, b UNION(c INT, d STRING))",
+        "UNION(b UNION(c BOOLEAN, d STRING), a VARCHAR(3))",
+        "UNION(a INT, b UNION(c BOOLEAN, d UNION(e STRING, f DOUBLE)))",
+        "UNION(a UNION(p INT, q STRING), b UNION(c BOOLEAN, d STRING))",
+        "UNION(a INT, b UNION(c BOOLEAN, v VARIANT))"}) {
+      assertThatThrownBy(() -> Formats.refuseUnwritable(SchemaType.JSON,
+          struct("(u " + union + ")"))).as(union)
+          .isInstanceOf(TypeRefusedException.class)
+          .hasMessageContaining("which are written as one JSON type");
+      Formats.refuseUnwritable(SchemaType.PROTOBUF, struct("(u " + union + ")"));
+    }
+    Formats.refuseUnwritable(SchemaType.JSON,
+        struct("(u UNION(a INT, b UNION(c BOOLEAN, d STRING)))"));
+  }
+
+  // A row that has an attribute of its own type is come to again while two rows are
+  // compared: the attributes after it still tell them apart, or do not.
+  @Test
+  void aJsonUnionsRowsOfTheirOwnTypeAreCompared() {
+    String rows = "STRUCT A (child UNION(link A, leaf INT) NOT NULL, kind %s NOT NULL); "
+        + "STRUCT B (child UNION(link B, leaf INT) NOT NULL, kind %s NOT NULL); "
+        + "STRUCT t (u UNION(x A, y B)); TYPE t;";
+    Formats.refuseUnwritable(SchemaType.JSON,
+        TypeScripts.parse(String.format(rows, "ENUM('a')", "ENUM('b')")));
+    assertThatThrownBy(() -> Formats.refuseUnwritable(SchemaType.JSON,
+        TypeScripts.parse(String.format(rows, "ENUM('a')", "ENUM('a')"))))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("cannot have branches x and y");
+    // So of rows of the type they are in, and of a row beside a map of it.
+    Formats.refuseUnwritable(SchemaType.JSON, TypeScripts.parse("STRUCT node (u UNION("
+        + "add STRUCT<l node NOT NULL, r node NOT NULL, kind ENUM('add') NOT NULL>, "
+        + "mul STRUCT<l node NOT NULL, r node NOT NULL, kind ENUM('mul') NOT NULL>, "
+        + "lit DOUBLE) NOT NULL);"));
+    Formats.refuseUnwritable(SchemaType.JSON, TypeScripts.parse("STRUCT tree ("
+        + "kids MAP<STRING, tree> NOT NULL, name STRING NOT NULL, "
+        + "u UNION(one tree, many MAP<STRING, tree>));"));
+  }
+
+  // A union two of whose branches a value was of both before is left; another two that a
+  // value would be of both with the types its names are then of are told.
+  @Test
+  void aJsonUnionsNewPairIsToldBesideAnOldOne() {
+    LogicalType type = TypeScripts.parse("STRUCT R (a INT); STRUCT t (u UNION(p STRUCT<k INT>, "
+        + "q STRUCT<k INT>, x R, y STRUCT<b STRING>)); TYPE t;");
+    Schema union = type.getRootSchema().getType() != Schema.Type.NAMED_TYPE_REF
+        ? type.getRootSchema()
+        : type.getNamedTypes().get(type.getRootSchema().getQualifiedName());
+    KnownTypes before = KnownTypes.of(Map.of("R", struct("(a INT)").getRootSchema()));
+    KnownTypes after = KnownTypes.of(Map.of("R", struct("(a INT, b STRING)").getRootSchema()));
+    assertThat(Formats.newlyOverlapping(union, before, before, null)).isNull();
+    assertThat(Formats.newlyOverlapping(union, before, after, null))
+        .containsExactly("u", "x", "y");
+  }
+
+  // Rows, arrays and maps are written as objects and arrays: two branches are refused where
+  // a value of one would be a value of the other.
+  @Test
+  void aJsonUnionsRowsArraysAndMapsAreToldApart() {
+    for (String union : new String[] {
+        // A row's value, written with each of its attributes, is another row's: it has no
+        // attribute the other lacks, and each the other requires.
+        "UNION(r1 STRUCT<a INT>, r2 STRUCT<a INT, b STRING>)",
+        "UNION(r1 STRUCT<a INT, b STRING>, r2 STRUCT<b STRING>)",
+        "UNION(r1 STRUCT<a INT>, r2 STRUCT<a INT>)",
+        "UNION(r1 STRUCT<a INT>, r2 STRUCT<a STRING>)",
+        "UNION(r1 STRUCT<a INT NOT NULL>, r2 STRUCT<a BIGINT NOT NULL>)",
+        "UNION(r1 STRUCT<kind ENUM('circle', 'both') NOT NULL>, "
+            + "r2 STRUCT<kind ENUM('square', 'both') NOT NULL>)",
+        "UNION(r1 STRUCT<kind ENUM('circle')>, r2 STRUCT<kind ENUM('square')>)",
+        "UNION(r1 ENUM('A', 'B'), r2 ENUM('B', 'C'))",
+        "UNION(r1 ENUM('A', 'B'), r2 VARCHAR(3))",
+        "UNION(r1 STRUCT<x INT>, r2 UNION(c STRING, d STRUCT<x INT>))",
+        // An empty array is a value of any type written as one.
+        "UNION(r1 ARRAY<INT>, r2 ARRAY<STRING>)",
+        "UNION(r1 ARRAY<INT>, r2 MAP<INT, STRING>)",
+        // A map written as an object takes any property.
+        "UNION(r1 MAP<STRING, INT>, r2 STRUCT<a INT>)",
+        "UNION(r1 MAP<STRING, INT>, r2 STRUCT<a INT NOT NULL>)",
+        "UNION(r1 MAP<STRING, INT>, r2 MAP<STRING, STRING>)",
+        "UNION(r1 MULTISET<STRING>, r2 STRUCT<a INT>)",
+        // A row's attribute that may be null does not tell it from a map, nor one of the
+        // type of a multiset's counts, nor one of a name no type is known by.
+        "UNION(r1 STRUCT<k STRING>, r2 MAP<STRING, INT>)",
+        "UNION(r1 STRUCT<k INT NOT NULL>, r2 MULTISET<STRING>)",
+        "UNION(r1 STRUCT<k Missing NOT NULL>, r2 STRUCT<k INT NOT NULL>)",
+        "UNION(r1 STRUCT<k Missing NOT NULL>, r2 MAP<STRING, INT>)"}) {
+      assertThatThrownBy(() -> Formats.refuseUnwritable(SchemaType.JSON,
+          struct("(u " + union + ")"))).as(union)
+          .isInstanceOf(TypeRefusedException.class)
+          .hasMessageContaining("cannot have branches r1 and r2");
+      Formats.refuseUnwritable(SchemaType.AVRO, struct("(u " + union + ")"));
+    }
+    for (String union : new String[] {
+        "UNION(r1 STRUCT<a INT>, r2 STRUCT<b STRING>)",
+        "UNION(r1 STRUCT<a INT>, r2 STRUCT<a INT, b STRING NOT NULL>)",
+        // An attribute both require, whose value in one is never one in the other, tells
+        // two rows apart, and a row from a map of other values.
+        "UNION(r1 STRUCT<a INT NOT NULL>, r2 STRUCT<a STRING NOT NULL>)",
+        // One of them requiring it is enough: the other's null is not a value of it.
+        "UNION(r1 STRUCT<a INT NOT NULL>, r2 STRUCT<a STRING>)",
+        "UNION(r1 STRUCT<a INT>, r2 STRUCT<a STRING NOT NULL>)",
+        // As rows tagged by an attribute that is one symbol in each.
+        "UNION(r1 STRUCT<kind ENUM('circle') NOT NULL, r DOUBLE>, "
+            + "r2 STRUCT<kind ENUM('square') NOT NULL, r DOUBLE>)",
+        "UNION(r1 ENUM('A', 'B'), r2 ENUM('C'))",
+        "UNION(r1 STRUCT<a STRUCT<x INT NOT NULL> NOT NULL>, "
+            + "r2 STRUCT<a STRUCT<y STRING NOT NULL> NOT NULL>)",
+        "UNION(r1 MAP<STRING, STRING>, r2 STRUCT<a INT NOT NULL>)",
+        "UNION(r1 STRUCT<k BOOLEAN NOT NULL>, r2 MULTISET<STRING>)",
+        "UNION(r1 STRUCT<a INT>, r2 ARRAY<INT>, r3 INT)",
+        "UNION(r1 MAP<STRING, INT>, r2 ARRAY<INT>)",
+        "UNION(r1 MAP<STRING, INT>, r2 MAP<INT, STRING>)"}) {
+      Formats.refuseUnwritable(SchemaType.JSON, struct("(u " + union + ")"));
+    }
   }
 }

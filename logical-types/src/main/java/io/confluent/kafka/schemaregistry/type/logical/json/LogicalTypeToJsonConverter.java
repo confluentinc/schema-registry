@@ -244,10 +244,14 @@ public class LogicalTypeToJsonConverter {
       return;
     }
     Map<String, Schema> localNamedTypes = ctx.getLogicalType().getLocalNamedTypes();
+    // Nor one of the name of another document the type refers to whole, which that name
+    // is of; a document may hold a definition of its own name.
+    Set<String> documents = ctx.getLogicalType().getResolvedReferences().keySet();
     Iterator<String> names = container.fieldNames();
     while (names.hasNext()) {
       String name = names.next();
-      if (!localNamedTypes.containsKey(name)) {
+      if (!localNamedTypes.containsKey(name)
+          && (name.equals(docUri) || !documents.contains(name))) {
         ctx.putConverted(name, docUri);
       }
     }
@@ -438,7 +442,11 @@ public class LogicalTypeToJsonConverter {
             .criterion(CombinedSchema.ONE_CRITERION);
         List<Map<String, Object>> unionMeta = new ArrayList<>();
         for (UnionBranch branch : schema.getBranches()) {
-          builder.subschema(fromLogicalTypeRaw(branch.getSchema(), branch.getName(), ctx));
+          // Null is the union's to allow, as one of its alternatives: a member is written
+          // without one of its own, whatever is said of it, as Avro writes it. One beside
+          // each member would have a null value match them all, which a oneOf refuses.
+          builder.subschema(fromLogicalTypeIgnoreNullable(
+              branch.getSchema(), branch.getName(), ctx).build());
           Map<String, Object> entry = new LinkedHashMap<>();
           entry.put("name", branch.getName());
           if (branch.getDoc() != null) {
