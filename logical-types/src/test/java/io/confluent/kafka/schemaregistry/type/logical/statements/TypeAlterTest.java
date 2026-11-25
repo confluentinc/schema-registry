@@ -20,6 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
@@ -2286,22 +2287,54 @@ class TypeAlterTest {
     assertThat(typeNames(message("ue"))).isEqualTo(typeNames(message("uf")));
   }
 
-  // A member said NOT NULL is read as one that may be null, and written as it is read: a
-  // statement that changes nothing makes no version of it.
+  // In every format a member said NOT NULL is written as any other member, and a statement
+  // that changes nothing makes no version of it: null is the union's to allow.
   @ParameterizedTest
-  @EnumSource(value = SchemaType.class, names = {"AVRO", "PROTOBUF"})
-  void aUnionMemberSaidNotNullIsWrittenAsItIsRead(SchemaType format) {
+  @EnumSource(SchemaType.class)
+  void aUnionMemberSaidNotNullIsWrittenAsAnyOther(SchemaType format) {
     List<String> members = List.of("INT", "STRUCT(k INT)", "ARRAY<INT>", "MAP<STRING, INT>",
         "ENUM('A', 'B')");
     for (int i = 0; i < members.size(); i++) {
       String type = "mn" + i;
       create(type, format, "(id INT NOT NULL, u UNION(x " + members.get(i)
-          + " NOT NULL, y STRING))");
+          + " NOT NULL, y BOOLEAN))");
       assertThat(registry.alter(type, new AddAttribute("q", "INT"),
           new DropAttribute("q", false)).edited()).as(members.get(i)).isNull();
       assertThat(registry.alter(type, new AlterAttributeType("u", "UNION(x " + members.get(i)
-          + ", y STRING)")).edited()).as(members.get(i)).isNull();
+          + ", y BOOLEAN)")).edited()).as(members.get(i)).isNull();
     }
+  }
+
+  // A JSON union's null is one of its alternatives, beside its members, as in Avro: one
+  // beside each member too would have a null value match them all, which a oneOf refuses.
+  @Test
+  void aJsonUnionHasNullAsOneOfItsAlternatives() throws Exception {
+    String flat = "\"oneOf\":[{\"type\":\"null\"},{\"connect.type\":\"int32\","
+        + "\"type\":\"number\"},{\"type\":\"string\"}]";
+    create("ju", SchemaType.JSON, "(id INT NOT NULL, u UNION(x INT, y STRING))");
+    create("jn", SchemaType.JSON,
+        "(id INT NOT NULL, u UNION(x INT NOT NULL, y STRING NOT NULL))");
+    for (String type : List.of("ju", "jn")) {
+      JsonSchema schema = (JsonSchema) registry.schema(type);
+      assertThat(schema.canonicalString()).as(type).contains(flat);
+      schema.validate(new ObjectMapper().readTree("{\"id\":1,\"u\":null}"));
+      schema.validate(new ObjectMapper().readTree("{\"id\":1,\"u\":5}"));
+    }
+    // One that may not be null has none.
+    create("jr", SchemaType.JSON, "(id INT NOT NULL, u UNION(x INT, y STRING) NOT NULL)");
+    assertThat(registry.schema("jr").canonicalString()).doesNotContain("\"null\"");
+
+    // A type stored with a null beside each member is read as it was, and written so.
+    String nested = registry.schema("ju").canonicalString().replace("\"title\":\"ju\"",
+        "\"title\":\"jo\"").replace(flat, "\"oneOf\":[{\"type\":\"null\"},{\"oneOf\":["
+        + "{\"type\":\"null\"},{\"connect.type\":\"int32\",\"type\":\"number\"}]},"
+        + "{\"oneOf\":[{\"type\":\"null\"},{\"type\":\"string\"}]}]");
+    registry.client.register("jo", new JsonSchema(nested));
+    assertThat(LogicalTypeToDdlConverter.toDdl(registry.logicalType("jo", registry.latest("jo")),
+        true)).isEqualTo(LogicalTypeToDdlConverter.toDdl(registry.logicalType("ju",
+        registry.latest("ju")), true).replace("ju", "jo"));
+    registry.alter("jo", new AddAttribute("z", "INT"));
+    assertThat(registry.schema("jo").canonicalString()).contains(flat);
   }
 
   // The names of the messages a message declares, at every level, with their fields' numbers.
