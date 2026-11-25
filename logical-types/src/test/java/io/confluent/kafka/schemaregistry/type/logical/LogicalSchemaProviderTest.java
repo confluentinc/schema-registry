@@ -138,6 +138,25 @@ class LogicalSchemaProviderTest {
     assertEquals("2", parsed.metadata().getProperties().get("confluent:edition"));
   }
 
+  // What the conversion sets tells how the type was written, and is read back with it: the
+  // registry gives a request with no metadata the previous version's, which told of that one.
+  @Test
+  void aPropertyTheConversionSetsIsNotTakenFromTheRequest() {
+    java.util.Map<String, String> previous = new java.util.HashMap<>();
+    previous.put("owner", "payments");
+    previous.put("confluent:edition", "1");
+    previous.put("confluent:union", "[{\"name\":\"i\"},{\"name\":\"s\"}]");
+    Schema schema = new Schema(SUBJECT, null, null, AvroSchema.TYPE, Collections.emptyList(),
+        new Metadata(null, previous, null), null, "TYPE UNION(i INT, s STRING, l BOOLEAN)");
+    ParsedSchema parsed =
+        new LogicalAvroSchemaProvider().parseSchemaOrElseThrow(schema, false, false);
+
+    assertEquals("payments", parsed.metadata().getProperties().get("owner"));
+    assertEquals("2", parsed.metadata().getProperties().get("confluent:edition"));
+    assertTrue(parsed.metadata().getProperties().get("confluent:union").contains("\"l\""),
+        parsed.metadata().getProperties().get("confluent:union"));
+  }
+
   @Test
   void jsonAcceptsExternalImports() {
     // External imports are a JSON construct: they name a target an FQN cannot address, and the
