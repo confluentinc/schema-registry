@@ -1546,6 +1546,37 @@ public abstract class FieldEncryptionExecutorTest {
   }
 
   @Test
+  public void testKafkaAvroSerializerVariantInUnion() throws Exception {
+    String userSchema = "{\"namespace\": \"example.avro\", \"type\": \"record\", "
+        + "\"name\": \"User\","
+        + "\"fields\": ["
+        + "{\"name\": \"payload\", \"confluent:tags\": [\"PII\"], \"type\": [\"null\", \"string\", "
+        + "{\"type\": \"record\", \"name\": \"confluent.type.Variant\", "
+        + "\"logicalType\": \"variant\", \"fields\": ["
+        + "{\"name\": \"metadata\", \"type\": \"bytes\"},"
+        + "{\"name\": \"value\", \"type\": \"bytes\"}]}]}"
+        + "]}";
+    Schema schema = new Schema.Parser().parse(userSchema);
+    GenericRecord variant =
+        new GenericData.Record(schema.getField("payload").schema().getTypes().get(2));
+    variant.put("metadata", ByteBuffer.wrap(new byte[] {1, 0, 0}));
+    variant.put("value", ByteBuffer.wrap(new byte[] {0}));
+    GenericRecord avroRecord = new GenericData.Record(schema);
+    avroRecord.put("payload", variant);
+    AvroSchema avroSchema = new AvroSchema(schema);
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
+    Metadata metadata = getMetadata("kek1");
+    avroSchema = avroSchema.copy(metadata, ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+
+    SerializationException e = assertThrows(SerializationException.class,
+        () -> avroSerializer.serialize(topic, new RecordHeaders(), avroRecord));
+    assertTypeNotSupported(e, "ANY");
+  }
+
+  @Test
   public void testKafkaJsonSchemaSerializer() throws Exception {
     OldWidget widget = new OldWidget("alice");
     widget.setSize(123);
@@ -2037,6 +2068,13 @@ public abstract class FieldEncryptionExecutorTest {
     assertVariantEncryptionRejected(
         "{\"type\": \"array\", \"confluent:tags\": [\"PII\"], \"items\": {}}",
         "[{\"ssn\": \"123-45-6789\"}]");
+  }
+
+  @Test
+  public void testKafkaJsonSchemaSerializerVariantInCombined() throws Exception {
+    assertVariantEncryptionRejected(
+        "{\"anyOf\": [{}, {\"type\": \"string\"}], \"confluent:tags\": [\"PII\"]}",
+        "{\"ssn\": \"123-45-6789\"}");
   }
 
   @Test
