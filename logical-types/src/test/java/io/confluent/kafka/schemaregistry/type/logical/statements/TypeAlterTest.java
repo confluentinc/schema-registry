@@ -646,6 +646,23 @@ class TypeAlterTest {
         .hasMessageContaining("field z of message F is a sfixed32, which would be written as "
             + "int32");
 
+    // Nor is a map the file declares as one: it would be written as a repeated field of an
+    // entry message, which is another kind of field to the registry and to generated code.
+    registry.client.register("nm", new ProtobufSchema("syntax = \"proto3\";\n"
+        + "message M { int32 z = 1; message In { int32 x = 1; } In p = 2; "
+        + "message N { map<string, In> m = 1; } N n = 3; }"));
+    assertThat(registry.struct("nm").getField("n").getSchema().getField("m").getSchema()
+        .getType()).isEqualTo(Schema.Type.MAP);
+    for (AlterAction action : List.of(new AddAttribute("c", "INT"),
+        new MoveAttribute("p", Position.first()))) {
+      assertThatThrownBy(() -> registry.alter("nm", action))
+          .isInstanceOf(TypeRefusedException.class)
+          .hasMessage("Type nm cannot be altered: field m of message N is a Protobuf map, "
+              + "which would be written as a repeated field of an entry message, another kind "
+              + "of field. Register its new version as a Protobuf schema");
+    }
+    assertThat(version("nm")).isEqualTo(1);
+
     // One the logical type carries whole is altered as any other; a uint32 is read as a
     // BIGINT, whose int64 is the same encoding.
     registry.client.register("plain", new ProtobufSchema("syntax = \"proto3\";\n"
@@ -1976,6 +1993,36 @@ class TypeAlterTest {
     }
   }
 
+  // A union's member may be null whatever is said of it, and its collection is wrapped so:
+  // said NOT NULL, it is the type it was, by the names it had under the union's old name.
+  @Test
+  void aProtobufUnionMemberSaidNotNullIsTheTypeItWas() {
+    String[][] cases = {
+        {"UNION(p INT, q MAP<STRING, INT>)", "UNION(p INT, q MAP<STRING, INT> NOT NULL)"},
+        {"UNION(p INT, q ARRAY<STRUCT(k INT)>)", "UNION(p INT, q ARRAY<STRUCT(k INT)> NOT NULL)"},
+        {"UNION(p INT, q MULTISET<STRING> NOT NULL)", "UNION(p INT, q MULTISET<STRING>)"}};
+    for (int i = 0; i < cases.length; i++) {
+      String type = "ub" + i;
+      create(type, SchemaType.PROTOBUF, "(id BIGINT NOT NULL, a " + cases[i][0] + ")");
+      registry.alter(type, new RenameAttribute("a", "b"));
+      List<String> names = typeNames(message(type));
+      assertThat(registry.alter(type, new AlterAttributeType("b", cases[i][1])).edited())
+          .as(type).isNull();
+      // With another change beside it, the version keeps the names.
+      registry.alter(type, new AlterAttributeType("b", cases[i][1]),
+          new AddAttribute("zz", "INT"));
+      assertThat(version(type)).as(type).isEqualTo(3);
+      assertThat(typeNames(message(type))).as(type).isEqualTo(names);
+    }
+    // An element that may now be null is wrapped, and is named anew.
+    create("ue", SchemaType.PROTOBUF,
+        "(id BIGINT NOT NULL, a UNION(p INT, q ARRAY<STRUCT(k INT) NOT NULL>))");
+    registry.alter("ue", new AlterAttributeType("a", "UNION(p INT, q ARRAY<STRUCT(k INT)>)"));
+    create("uf", SchemaType.PROTOBUF,
+        "(id BIGINT NOT NULL, a UNION(p INT, q ARRAY<STRUCT(k INT)>))");
+    assertThat(typeNames(message("ue"))).isEqualTo(typeNames(message("uf")));
+  }
+
   // The names of the messages a message declares, at every level, with their fields' numbers.
   private static List<String> typeNames(Descriptor message) {
     List<String> names = new ArrayList<>();
@@ -1994,7 +2041,7 @@ class TypeAlterTest {
     for (String type : List.of("INT", "UNION(p INT, q STRING)")) {
       assertThatThrownBy(() -> registry.alter("en", new AddAttribute(name, type)))
           .isInstanceOf(TypeRefusedException.class).hasMessageContaining("Protobuf name '"
-              + name + "' is defined twice in en");
+              + name + "' is defined twice in en").hasMessageContaining(" an enum");
     }
     assertThat(version("en")).isEqualTo(1);
     // And an enum may be what takes a message's name.

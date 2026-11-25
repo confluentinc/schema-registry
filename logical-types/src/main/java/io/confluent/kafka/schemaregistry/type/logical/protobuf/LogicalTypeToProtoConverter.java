@@ -795,6 +795,10 @@ public class LogicalTypeToProtoConverter {
     }
   }
 
+  private static String article(String kind) {
+    return (kind.equals("enum") ? "an " : "a ") + kind;
+  }
+
   /**
    * Tells the order of a message's attributes where normalizing loses it. Normalized, a message
    * declares its fields, its oneofs and their members by number; where the type has them
@@ -895,7 +899,7 @@ public class LogicalTypeToProtoConverter {
     final boolean priorIsType = prior.equals("message") || prior.equals("enum");
     final boolean kindIsType = kind.equals("message") || kind.equals("enum");
     throw new ValidationException("Protobuf name '" + name + "' is defined twice in " + scope
-        + (prior.equals(kind) ? "" : ", as a " + prior + " and a " + kind)
+        + (prior.equals(kind) ? "" : ", as " + article(prior) + " and " + article(kind))
         + (users.isEmpty() ? "" : " (used by fields " + String.join(", ", users) + ")")
         + (priorIsType != kindIsType
             ? "; give the " + (priorIsType ? kind : prior) + " another name"

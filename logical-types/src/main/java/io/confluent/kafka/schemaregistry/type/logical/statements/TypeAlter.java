@@ -553,6 +553,22 @@ public final class TypeAlter {
   // file has, such as required fields and defaults, nor the numbers and names a message or
   // enum reserves, nor which of its encodings an integer has. The first would be lost, the
   // second free for a new field to take, and the third changed, so stored values read wrongly.
+  // The first field of the messages, at any depth, that the file declares as a map.
+  private static String protobufMap(List<Descriptor> messages) {
+    for (Descriptor message : messages) {
+      for (FieldDescriptor field : message.getFields()) {
+        if (field.isMapField()) {
+          return field.getName() + " of message " + message.getName();
+        }
+      }
+      String nested = protobufMap(message.getNestedTypes());
+      if (nested != null) {
+        return nested;
+      }
+    }
+    return null;
+  }
+
   private void refuseUncarried(SchemaMetadata md, String done) {
     ParsedSchema schema = lookup.parse(md);
     if (!(schema instanceof ProtobufSchema)) {
@@ -566,9 +582,15 @@ public final class TypeAlter {
           ? "it reserves field numbers or names, which would be dropped, and a new field "
             + "could then take one"
         : reencoded(file.getMessageTypeList());
+    List<Descriptor> messages = ((ProtobufSchema) schema).toDescriptor().getFile()
+        .getMessageTypes();
     if (lost == null) {
-      String entry = ProtoToLogicalTypeConverter.entryFieldRenumbered(
-          ((ProtobufSchema) schema).toDescriptor().getFile().getMessageTypes());
+      String map = protobufMap(messages);
+      lost = map == null ? null : "field " + map + " is a Protobuf map, which would be written "
+          + "as a repeated field of an entry message, another kind of field";
+    }
+    if (lost == null) {
+      String entry = ProtoToLogicalTypeConverter.entryFieldRenumbered(messages);
       lost = entry == null ? null : entry + ", so its stored entries would be read wrongly";
     }
     if (lost != null) {
@@ -2801,7 +2823,7 @@ public final class TypeAlter {
         for (UnionBranch b : type.getBranches()) {
           UnionBranch was = branch(old, b.getName());
           // A member is the field it was whatever its type becomes: its field name stays.
-          branches.add(was == null ? b : !keepsNames(was.getSchema(), b.getSchema())
+          branches.add(was == null ? b : !keepsNames(was.getSchema(), b.getSchema(), true)
               ? new UnionBranch(b.getName(), b.getSchema(), b.getDoc(),
                   withFieldName(b.getParams(), was.getParams()))
               : new UnionBranch(b.getName(), withNestedNames(b.getSchema(), was.getSchema()),
@@ -2876,19 +2898,24 @@ public final class TypeAlter {
   // may be null is wrapped, one that may not is its entries or elements, and a nullable
   // element is wrapped; in Avro it is the same type with a null beside it.
   private boolean keepsNames(Schema a, Schema b) {
+    return keepsNames(a, b, false);
+  }
+
+  // asBranch: a union's member may be null whatever is said of it, and is wrapped so.
+  private boolean keepsNames(Schema a, Schema b, boolean asBranch) {
     if (!sameKind(a, b)) {
       return false;
     }
     if (format != SchemaType.PROTOBUF) {
       return true;
     }
+    boolean wrapped = asBranch || a.isNullable() == b.isNullable();
     switch (a.getType()) {
       case ARRAY:
-        return a.isNullable() == b.isNullable()
-            && a.getElementType().isNullable() == b.getElementType().isNullable();
+        return wrapped && a.getElementType().isNullable() == b.getElementType().isNullable();
       case MAP:
       case MULTISET:
-        return a.isNullable() == b.isNullable();
+        return wrapped;
       default:
         return true;
     }
