@@ -884,6 +884,29 @@ public class LogicalTypeToProtoConverter {
     }
   }
 
+  // A member whose field name is given keeps it, before any other is named around it.
+  private static void keepGivenMemberNames(List<Field> fields, Set<String> takenNames,
+      Map<List<String>, String> memberNames, String rowName) {
+    for (Field field : fields) {
+      if (field.getSchema().getType() != Schema.Type.UNION) {
+        continue;
+      }
+      for (UnionBranch branch : field.getSchema().getBranches()) {
+        final Object given = branch.getParams().get(Schema.PROTOBUF_FIELD_NAME);
+        if (given == null) {
+          continue;
+        }
+        if (!takenNames.add(given.toString())) {
+          throw new ValidationException("Union branch '" + branch.getName() + "' of '"
+              + field.getName() + "' in " + rowName + " keeps its field name '" + given
+              + "', which is " + (given.toString().equals(field.getName())
+                  ? "its union's name" : "another field's name"));
+        }
+        memberNames.put(Arrays.asList(field.getName(), branch.getName()), given.toString());
+      }
+    }
+  }
+
   // Members share the message's field namespace: a branch name already taken is qualified by the
   // oneof, and kept in logical.branch.
   private static String memberName(
@@ -1014,12 +1037,15 @@ public class LogicalTypeToProtoConverter {
       takenNames.add(field.getName());
     }
     final Map<List<String>, String> memberNames = new HashMap<>();
+    keepGivenMemberNames(fields, takenNames, memberNames, rowName);
     for (Field field : fields) {
       if (field.getSchema().getType() == Schema.Type.UNION) {
         for (UnionBranch branch : field.getSchema().getBranches()) {
           reserveFieldNumber(branch.getFieldNumber(), reservedNumbers, rowName);
-          memberNames.put(Arrays.asList(field.getName(), branch.getName()),
-              memberName(field, branch, takenNames, rowName));
+          final List<String> member = Arrays.asList(field.getName(), branch.getName());
+          if (!memberNames.containsKey(member)) {
+            memberNames.put(member, memberName(field, branch, takenNames, rowName));
+          }
         }
       } else {
         reserveFieldNumber(field.getFieldNumber(), reservedNumbers, rowName);

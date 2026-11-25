@@ -20,6 +20,7 @@ import io.confluent.kafka.schemaregistry.type.logical.generated.LogicalTypesPars
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Set;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -772,6 +773,60 @@ class LogicalTypesSchemaVisitorTest {
         + "STRUCT H (f Foo);"
         + "TYPE H"
     ));
+  }
+
+  // Under a NAMESPACE a bare name is one of its types; aliased to itself, it is as written.
+  @Test
+  void testSelfAliasUnderANamespaceIsTheTypeOfNoNamespace() {
+    LogicalType lt = parseScript(
+        "NAMESPACE com.example.hr;"
+        + "USING TYPE Person FOR Person;"
+        + "STRUCT Employee (person Person, boss Boss);"
+        + "TYPE Employee"
+    ).toLogicalType();
+    assertEquals("Person",
+        lt.getRootSchema().getFields().get(0).getSchema().getQualifiedName());
+    assertEquals("com.example.hr.Boss",
+        lt.getRootSchema().getFields().get(1).getSchema().getQualifiedName());
+    // Another alias may not go by way of it.
+    assertThrows(ValidationException.class, () -> parseScript(
+        "NAMESPACE com.example.hr;"
+        + "USING TYPE Person FOR Person;"
+        + "USING TYPE P FOR Person;"
+        + "STRUCT Employee (person Person, other P);"
+        + "TYPE Employee"
+    ));
+  }
+
+  // The namespace's own type of that name is another type, named with its namespace.
+  @Test
+  void testSelfAliasLeavesTheNamespacesTypeOfThatName() {
+    LogicalType lt = parseScript(
+        "NAMESPACE com.example.hr;"
+        + "USING TYPE Person FOR Person;"
+        + "STRUCT com.example.hr.Person (name STRING);"
+        + "STRUCT Employee (person Person, self com.example.hr.Person, "
+        + "boss com.example.hr.Boss);"
+        + "TYPE Employee"
+    ).toLogicalType();
+    List<Schema.Field> fields = lt.getRootSchema().getFields();
+    assertEquals("Person", fields.get(0).getSchema().getQualifiedName());
+    assertEquals("com.example.hr.Person", fields.get(1).getSchema().getQualifiedName());
+    assertEquals(Set.of("Person", "com.example.hr.Boss"), lt.getExternalTypes());
+    assertTrue(lt.getNamedTypes().containsKey("com.example.hr.Person"));
+
+    // Declared bare, it is the namespace's own all the same; the bare name refers to the other.
+    LogicalType bare = parseScript(
+        "NAMESPACE com.example.hr;"
+        + "USING TYPE Person FOR Person;"
+        + "STRUCT Person (name STRING);"
+        + "STRUCT Employee (person Person, self com.example.hr.Person);"
+        + "TYPE Employee"
+    ).toLogicalType();
+    assertEquals("Person",
+        bare.getRootSchema().getFields().get(0).getSchema().getQualifiedName());
+    assertEquals(Set.of("Person"), bare.getExternalTypes());
+    assertTrue(bare.getNamedTypes().containsKey("com.example.hr.Person"));
   }
 
   @Test

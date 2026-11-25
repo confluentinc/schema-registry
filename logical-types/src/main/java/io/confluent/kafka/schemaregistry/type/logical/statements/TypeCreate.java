@@ -82,6 +82,8 @@ public final class TypeCreate {
     LogicalType lt = Constraints.named(kind != BodyKind.OTHER && dot > 0
         ? TypeScripts.withNamespace(parsed, name.substring(0, dot)) : parsed, subject);
     Formats.refuseUnwritable(format, lt);
+    TypeReferences.requireOneOfEach(lookup, subject, lt.getReferences(), "Type " + subject
+        + " cannot be created" + (last != null ? " again" : "") + " so");
     if (last != null) {
       lt = afterDrop(lookup, subject, format, last, lt, applied);
     }
