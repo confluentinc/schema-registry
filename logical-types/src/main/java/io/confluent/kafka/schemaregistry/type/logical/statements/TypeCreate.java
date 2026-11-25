@@ -99,6 +99,7 @@ public final class TypeCreate {
     if (format == SchemaType.PROTOBUF) {
       TypeAlter.refuseUncarriedAfterDrop(lookup, subject, last);
       lt = TypeAlter.numberedAfterDrop(lookup, subject, last, lt);
+      TypeAlter.refuseMapKeptAfterDrop(lookup, subject, last, lt);
     }
     // And an Avro type gives the nullable attributes it adds a null default, as an ALTER does.
     if (format == SchemaType.AVRO) {

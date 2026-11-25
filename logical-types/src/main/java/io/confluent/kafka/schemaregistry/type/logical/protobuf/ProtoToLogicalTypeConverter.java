@@ -1226,14 +1226,19 @@ public class ProtoToLogicalTypeConverter {
    * {@code .confluent.type.Decimal} fields.
    */
   private static boolean isUserParam(String key) {
-    if (key.startsWith("flink.")
+    return !isReservedParam(key) && !Schema.isFormatNativeParam(key);
+  }
+
+  /**
+   * True for a Meta.params key this converter keeps for itself: it reads such a key as how a
+   * field's type is encoded, and returns none as a param. The writer writes none a type gives.
+   */
+  public static boolean isReservedParam(String key) {
+    return key.startsWith("flink.")
         || key.startsWith("connect.")
         || key.startsWith(CommonConstants.LOGICAL_PREFIX)
-        || Schema.isFormatNativeParam(key)) {
-      return false;
-    }
-    return !CommonConstants.PROTOBUF_PRECISION_PROP.equals(key)
-        && !CommonConstants.PROTOBUF_SCALE_PROP.equals(key);
+        || CommonConstants.PROTOBUF_PRECISION_PROP.equals(key)
+        || CommonConstants.PROTOBUF_SCALE_PROP.equals(key);
   }
 
   private static String getDescription(FieldDescriptor field) {

@@ -22,6 +22,7 @@ import com.google.protobuf.DescriptorProtos.FieldDescriptorProto;
 import com.google.protobuf.DescriptorProtos.FileDescriptorProto;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
+import com.google.protobuf.Descriptors.FileDescriptor;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.CompatibilityPolicy;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
@@ -480,6 +481,7 @@ public final class TypeAlter {
       } else {
         TypeReferences.requireOneOfEach(lookup, subject, references, refused());
         if (format == SchemaType.PROTOBUF) {
+          refuseMapKept(stored, written, "altered");
           refuseTakenNames(stored, written);
         }
         refuseOtherColumns(md, edited, version);
@@ -553,22 +555,6 @@ public final class TypeAlter {
   // file has, such as required fields and defaults, nor the numbers and names a message or
   // enum reserves, nor which of its encodings an integer has. The first would be lost, the
   // second free for a new field to take, and the third changed, so stored values read wrongly.
-  // The first field of the messages, at any depth, that the file declares as a map.
-  private static String protobufMap(List<Descriptor> messages) {
-    for (Descriptor message : messages) {
-      for (FieldDescriptor field : message.getFields()) {
-        if (field.isMapField()) {
-          return field.getName() + " of message " + message.getName();
-        }
-      }
-      String nested = protobufMap(message.getNestedTypes());
-      if (nested != null) {
-        return nested;
-      }
-    }
-    return null;
-  }
-
   private void refuseUncarried(SchemaMetadata md, String done) {
     ParsedSchema schema = lookup.parse(md);
     if (!(schema instanceof ProtobufSchema)) {
@@ -582,21 +568,69 @@ public final class TypeAlter {
           ? "it reserves field numbers or names, which would be dropped, and a new field "
             + "could then take one"
         : reencoded(file.getMessageTypeList());
-    List<Descriptor> messages = ((ProtobufSchema) schema).toDescriptor().getFile()
-        .getMessageTypes();
     if (lost == null) {
-      String map = protobufMap(messages);
-      lost = map == null ? null : "field " + map + " is a Protobuf map, which would be written "
-          + "as a repeated field of an entry message, another kind of field";
-    }
-    if (lost == null) {
-      String entry = ProtoToLogicalTypeConverter.entryFieldRenumbered(messages);
+      String entry = ProtoToLogicalTypeConverter.entryFieldRenumbered(
+          ((ProtobufSchema) schema).toDescriptor().getFile().getMessageTypes());
       lost = entry == null ? null : entry + ", so its stored entries would be read wrongly";
     }
     if (lost != null) {
       throw new TypeRefusedException("Type " + subject + " cannot be " + done + ": " + lost
           + ". Register its new version as a Protobuf schema");
     }
+  }
+
+  // A field a Protobuf file declares as a map is written as a repeated field of an entry
+  // message: the same bytes, and another kind of field to the registry and to generated
+  // code. A version that still has a field of the map's number is refused.
+  private void refuseMapKept(ParsedSchema stored, ParsedSchema written, String done) {
+    if (!(stored instanceof ProtobufSchema) || !(written instanceof ProtobufSchema)) {
+      return;
+    }
+    String map = protobufMapKept(((ProtobufSchema) stored).toDescriptor().getFile()
+        .getMessageTypes(), ((ProtobufSchema) written).toDescriptor().getFile());
+    if (map != null) {
+      throw new TypeRefusedException("Type " + subject + " cannot be " + done + ": field " + map
+          + " is a Protobuf map, which would be written as a repeated field of an entry "
+          + "message, another kind of field. Drop the attribute, or register its new version "
+          + "as a Protobuf schema");
+    }
+  }
+
+  static void refuseMapKeptAfterDrop(TypeLookup lookup, String subject, SchemaMetadata md,
+      LogicalType lt) {
+    new TypeAlter(lookup, subject).refuseMapKept(lookup.parse(md), ColumnIds.nativeOf(subject,
+        SchemaType.PROTOBUF, lt, "Type " + subject + " cannot be created again so"),
+        "created again");
+  }
+
+  // The first map among the messages' fields, at any depth, whose message the new file
+  // still has with a field of the map's number.
+  private static String protobufMapKept(List<Descriptor> messages, FileDescriptor written) {
+    for (Descriptor message : messages) {
+      Descriptor now = messageNamed(written.getMessageTypes(), message.getFullName());
+      for (FieldDescriptor field : message.getFields()) {
+        if (field.isMapField() && now != null
+            && now.findFieldByNumber(field.getNumber()) != null) {
+          return field.getName() + " of message " + message.getName();
+        }
+      }
+      String nested = protobufMapKept(message.getNestedTypes(), written);
+      if (nested != null) {
+        return nested;
+      }
+    }
+    return null;
+  }
+
+  private static Descriptor messageNamed(List<Descriptor> messages, String fullName) {
+    for (Descriptor message : messages) {
+      Descriptor found = message.getFullName().equals(fullName) ? message
+          : messageNamed(message.getNestedTypes(), fullName);
+      if (found != null) {
+        return found;
+      }
+    }
+    return null;
   }
 
   // The first field whose integer encoding the logical type does not carry, or null.
@@ -1072,6 +1106,7 @@ public final class TypeAlter {
       Field f = field(a.name());
       Map<String, Object> params = new LinkedHashMap<>(f.getParams());
       refuseNativeParams(a.with(), params, "attribute", f.getName());
+      Formats.refuseReservedParams(format, "attribute " + f.getName(), a.with().keySet());
       params.putAll(a.with());
       setField(copy(f, f.getName(), f.getSchema(), params));
       return true;
@@ -1109,6 +1144,7 @@ public final class TypeAlter {
       }
       Map<String, Object> params = new LinkedHashMap<>(target.getParams());
       refuseNativeParams(with, params, "type", subject);
+      Formats.refuseReservedParams(format, "type " + subject, with.keySet());
       params.putAll(with);
       Schema copy = target.getType() == Schema.Type.STRUCT
           ? Schema.createStruct(target.getFields()) : Schema.createEnum(target.getEnumValues());

@@ -32,6 +32,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
+import io.confluent.kafka.schemaregistry.type.logical.LogicalTypeConversion;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalTypeToDdlConverter;
 import io.confluent.kafka.schemaregistry.type.logical.Rule;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
@@ -661,9 +662,30 @@ class TypeAlterTest {
           .isInstanceOf(TypeRefusedException.class)
           .hasMessage("Type nm cannot be altered: field m of message N is a Protobuf map, "
               + "which would be written as a repeated field of an entry message, another kind "
-              + "of field. Register its new version as a Protobuf schema");
+              + "of field. Drop the attribute, or register its new version as a Protobuf "
+              + "schema");
     }
     assertThat(version("nm")).isEqualTo(1);
+    // A version that has no field of the map's number is written: the map dropped, or the
+    // attribute whose message has it.
+    registry.alter("nm", new DropAttribute("n", false));
+    assertThat(names("nm")).containsExactly("z", "p");
+    String flat = "syntax = \"proto3\";\nmessage T { int32 a = 1; map<string, int32> m = 2; }";
+    registry.client.register("nt", new ProtobufSchema(flat));
+    assertThatThrownBy(() -> registry.alter("nt", new RenameAttribute("m", "n")))
+        .isInstanceOf(TypeRefusedException.class).hasMessageContaining("is a Protobuf map");
+    registry.alter("nt", new DropAttribute("m", false), new AddAttribute("c", "INT"));
+    assertThat(numbers(message("nt"))).isEqualTo("a=1 c=3");
+    // And a type created again over a dropped version that had one, as an ALTER of it.
+    registry.client.register("nd", new ProtobufSchema(flat.replace(" T ", " nd ")));
+    registry.drop("nd");
+    create("nd", SchemaType.PROTOBUF, "(a INT NOT NULL, b STRING)");
+    assertThat(numbers(message("nd"))).isEqualTo("a=1 b=3");
+    registry.client.register("ne", new ProtobufSchema(flat.replace(" T ", " ne ")));
+    registry.drop("ne");
+    assertThatThrownBy(() -> create("ne", SchemaType.PROTOBUF,
+        "(a INT NOT NULL, m MAP<STRING, INT NOT NULL> NOT NULL)"))
+        .isInstanceOf(TypeRefusedException.class).hasMessageContaining("is a Protobuf map");
 
     // One the logical type carries whole is altered as any other; a uint32 is read as a
     // BIGINT, whose int64 is the same encoding.
@@ -1690,6 +1712,58 @@ class TypeAlterTest {
         .canonicalString()).doesNotContain(imports);
   }
 
+  // The Protobuf reader takes a param under one of its own names for how a type is encoded
+  // or where it is. A statement that gives one is refused; the writer writes none.
+  @Test
+  void aProtobufParamUnderAReadersNameIsNotGiven() {
+    String kept = " cannot be given in a PROTOBUF type: the format keeps the names flink.*, "
+        + "connect.*, logical.*, precision and scale for how it encodes a type";
+    String[][] bodies = {
+        {"(a INT WITH ('connect.type' = 'int8'))", "Property connect.type of attribute a"},
+        {"(d DECIMAL(10, 2) WITH ('precision' = '4'))", "Property precision of attribute d"},
+        {"(s STRING WITH ('flink.maxLength' = '3'))", "Property flink.maxLength of attribute s"},
+        {"(a INT WITH ('connect.index' = '1'), b INT)", "Property connect.index of attribute a"},
+        {"(r STRUCT(k INT WITH ('flink.notNull' = 'true')))",
+            "Property flink.notNull of attribute k"},
+        {"(u UNION(x INT WITH ('logical.branch' = 'z'), y STRING))",
+            "Property logical.branch of branch x"},
+        {"(e ENUM('A' WITH ('connect.x' = '1'), 'B'))", "Property connect.x of value A"}};
+    for (int i = 0; i < bodies.length; i++) {
+      String type = "rp" + i;
+      String body = bodies[i][0];
+      assertThatThrownBy(() -> create(type, SchemaType.PROTOBUF, body)).as(body)
+          .isInstanceOf(TypeRefusedException.class).hasMessage(bodies[i][1] + kept);
+    }
+    create("rq", SchemaType.PROTOBUF, "(a INT, b STRING)");
+    assertThatThrownBy(() -> registry.alter("rq",
+        new SetAttributeWith("a", Map.of("connect.type", "int8"))))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessage("Property connect.type of attribute a" + kept);
+    assertThatThrownBy(() -> registry.alter("rq",
+        new AddAttribute("c", "INT WITH ('connect.type' = 'int8')")))
+        .isInstanceOf(TypeRefusedException.class).hasMessageContaining("Property connect.type");
+    assertThatThrownBy(() -> registry.alter("rq", new SetWith(Map.of("logical.named", "x"))))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessage("Property logical.named of type rq" + kept);
+    assertThat(version("rq")).isEqualTo(1);
+    // A param of another name is the type's own, and the other formats keep any.
+    registry.alter("rq", new SetAttributeWith("a", Map.of("owner", "x")));
+    assertThat(version("rq")).isEqualTo(2);
+    create("ra", SchemaType.AVRO, "(a INT WITH ('connect.type' = 'int8'))");
+    assertThat(registry.struct("ra").getField("a").getParams()).containsKey("connect.type");
+
+    // A type that comes by one otherwise, as one made of another format's, is written
+    // without it: it is read as it was said, in the order it was said in.
+    LogicalType read = LogicalTypeConversion.toLogicalType(
+        LogicalTypeToProtoConverter.fromLogicalType(TypeScripts.parse(
+            "STRUCT t (a INT WITH ('connect.type' = 'int8', 'connect.index' = '2'), "
+                + "d DECIMAL(10, 2) WITH ('precision' = '4', 'connect.index' = '0'), "
+                + "u UNION(x INT WITH ('logical.branch' = 'z', 'connect.index' = '9'), "
+                + "y STRING WITH ('connect.index' = '0')));"), "t", LogicalTypeVersion.V2));
+    String ddl = LogicalTypeToDdlConverter.toDdl(read, true);
+    assertThat(ddl).contains("(a INT, d DECIMAL(10, 2), u UNION(x INT, y STRING))");
+  }
+
   // The place of a field is the writer's to tell, wherever a message's fields, its oneofs or
   // a oneof's members are not in the order of their numbers, and only there.
   @Test
@@ -1721,14 +1795,6 @@ class TypeAlterTest {
         + String.format(place, "x") + ";\n  int32 b = 2" + String.format(place, "1")
         + ";\n  int32 c = 3" + String.format(place, "0") + ";\n}\n"));
     assertThat(names("ix")).containsExactly("c", "b", "a");
-
-    // A param of that name is no place: the type is read in the order it was said in.
-    create("iu", SchemaType.PROTOBUF, "(a INT WITH ('connect.index' = '1'), "
-        + "b INT WITH ('connect.index' = '0'), c INT, u UNION(x INT WITH "
-        + "('connect.index' = '9'), y STRING WITH ('connect.index' = '0')))");
-    assertThat(names("iu")).containsExactly("a", "b", "c", "u");
-    assertThat(branches("iu", "u")).containsExactly("x", "y");
-    assertThat(registry.schema("iu").canonicalString()).doesNotContain("connect.index");
 
     // V1 tells none.
     assertThat(LogicalTypeToProtoConverter.fromLogicalType(TypeScripts.parse(

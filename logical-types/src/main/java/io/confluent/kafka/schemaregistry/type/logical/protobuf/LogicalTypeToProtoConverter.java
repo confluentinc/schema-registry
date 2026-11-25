@@ -2047,13 +2047,13 @@ public class LogicalTypeToProtoConverter {
     }
   }
 
-  // The params written as a field's own: not the format-native ones, and not one named as
-  // the place the writer tells (indexFields), which the reader would take for one.
+  // The params written as a type's own: not the format-native ones, and none under a name the
+  // reader keeps for itself, which it would take for how the type is encoded or where it is.
   private static Map<String, Object> userParams(Map<String, Object> params) {
     Map<String, Object> userParams = Schema.stripFormatNativeParams(params);
-    if (userParams.containsKey(CommonConstants.CONNECT_INDEX_PROP)) {
+    if (userParams.keySet().stream().anyMatch(ProtoToLogicalTypeConverter::isReservedParam)) {
       userParams = new LinkedHashMap<>(userParams);
-      userParams.remove(CommonConstants.CONNECT_INDEX_PROP);
+      userParams.keySet().removeIf(ProtoToLogicalTypeConverter::isReservedParam);
     }
     return userParams;
   }
@@ -2116,7 +2116,7 @@ public class LogicalTypeToProtoConverter {
     }
     // Format-native params ride their own native slots (the enum number via
     // EnumValueDescriptorProto.number), never the generic meta params, so strip them here.
-    Map<String, Object> userParams = Schema.stripFormatNativeParams(ev.getParams());
+    Map<String, Object> userParams = userParams(ev.getParams());
     if (!userParams.isEmpty()) {
       Map<String, String> stringParams = new LinkedHashMap<>();
       userParams.forEach((k, v) -> stringParams.put(k, String.valueOf(v)));
@@ -2138,7 +2138,7 @@ public class LogicalTypeToProtoConverter {
       hasMeta = true;
     }
     // Strip first: a format-native param alone must not manufacture a Meta block.
-    Map<String, Object> userParams = Schema.stripFormatNativeParams(schema.getParams());
+    Map<String, Object> userParams = userParams(schema.getParams());
     if (!userParams.isEmpty()) {
       Map<String, String> stringParams = new LinkedHashMap<>();
       userParams.forEach((k, v) -> stringParams.put(k, String.valueOf(v)));
