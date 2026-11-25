@@ -711,6 +711,28 @@ class TypeAlterTest {
         new AddAttribute("c", "INT"));
     assertThat(numbers(message("gw"))).isEqualTo("name=1 c=4");
 
+    // A wrapper in an entry another file declares, which is written as an entry of this
+    // file's, is one too; one in a message that stays another file's is not written at all.
+    String imports = "syntax = \"proto3\";\n\nimport \"google/protobuf/wrappers.proto\";\n\n"
+        + "package o;\n\n";
+    String pair = imports + "message PairEntry {\n  string key = 1;\n"
+        + "  google.protobuf.StringValue value = 2;\n}\n";
+    String in = imports + "message In {\n  google.protobuf.StringValue sv = 1;\n}\n";
+    registry.client.register("gp", new ProtobufSchema(pair));
+    registry.client.register("gi", new ProtobufSchema(in));
+    String uses = "syntax = \"proto3\";\n\nimport \"%s\";\n\nmessage R {\n  int32 id = 1;\n"
+        + "  %s a = 2;\n}\n";
+    registry.client.register("ge", new ProtobufSchema(String.format(uses, "gp",
+        "repeated o.PairEntry"), List.of(new SchemaReference("gp", "gp", 1)),
+        Map.of("gp", pair), null, null));
+    assertThatThrownBy(() -> registry.alter("ge", new AddAttribute("c", "INT")))
+        .isInstanceOf(TypeRefusedException.class).hasMessageContaining("field value of "
+            + "message PairEntry is a google.protobuf.StringValue");
+    registry.client.register("gr", new ProtobufSchema(String.format(uses, "gi", "o.In"),
+        List.of(new SchemaReference("gi", "gi", 1)), Map.of("gi", in), null, null));
+    registry.alter("gr", new AddAttribute("c", "INT"));
+    assertThat(numbers(message("gr"))).isEqualTo("id=1 a=2 c=3");
+
     // One the logical type carries whole is altered as any other; a uint32 is read as a
     // BIGINT, whose int64 is the same encoding.
     registry.client.register("plain", new ProtobufSchema("syntax = \"proto3\";\n"

@@ -22,7 +22,6 @@ import com.google.protobuf.DescriptorProtos.FieldDescriptorProto;
 import com.google.protobuf.DescriptorProtos.FileDescriptorProto;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
-import com.google.protobuf.Descriptors.FileDescriptor;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.CompatibilityPolicy;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
@@ -588,8 +587,8 @@ public final class TypeAlter {
     if (!(stored instanceof ProtobufSchema) || !(written instanceof ProtobufSchema)) {
       return;
     }
-    String field = writtenOtherwise(((ProtobufSchema) stored).toDescriptor().getFile()
-        .getMessageTypes(), ((ProtobufSchema) written).toDescriptor().getFile());
+    String field = writtenOtherwise(((ProtobufSchema) stored).toDescriptor(),
+        ((ProtobufSchema) written).toDescriptor(), new HashSet<>());
     if (field != null) {
       throw new TypeRefusedException("Type " + subject + " cannot be " + done + ": field "
           + field + ". Drop the attribute, or register its new version as a Protobuf schema");
@@ -603,41 +602,43 @@ public final class TypeAlter {
             "Type " + subject + " cannot be created again so"), "created again");
   }
 
-  // The first such field of the messages, at any depth, whose message the new file still
-  // has with a field of its number, and what would become of it.
-  private static String writtenOtherwise(List<Descriptor> messages, FileDescriptor written) {
-    for (Descriptor message : messages) {
-      Descriptor now = messageNamed(written.getMessageTypes(), message.getFullName());
-      for (FieldDescriptor field : message.getFields()) {
-        if (now == null || now.findFieldByNumber(field.getNumber()) == null) {
-          continue;
-        }
-        String of = field.getName() + " of message " + message.getName();
-        if (field.isMapField()) {
-          return of + " is a Protobuf map, which would be written as a repeated field of an "
-              + "entry message, another kind of field";
-        }
-        if (field.getJavaType() == FieldDescriptor.JavaType.MESSAGE
-            && ProtoToLogicalTypeConverter.isScalarWrapper(field.getMessageType())) {
-          return of + " is a " + field.getMessageType().getFullName() + ", which would be "
-              + "written as the value it wraps and not as that message, so its stored values "
-              + "would be read wrongly";
-        }
+  // The first such field of a message, at any depth, that the message written in its place
+  // still has a field of the number of, and what would become of it. The fields of the two
+  // are paired by number and their messages in turn, whatever those are named and whichever
+  // file declares them: an entry another file declares is written as one of this file's.
+  private static String writtenOtherwise(Descriptor was, Descriptor now, Set<String> seen) {
+    if (was == null || now == null
+        || !seen.add(was.getFullName() + " " + now.getFullName())) {
+      return null;
+    }
+    for (FieldDescriptor field : was.getFields()) {
+      FieldDescriptor kept = now.findFieldByNumber(field.getNumber());
+      if (kept == null) {
+        continue;
       }
-      String nested = writtenOtherwise(message.getNestedTypes(), written);
+      String of = field.getName() + " of message " + was.getName();
+      if (field.isMapField()) {
+        return of + " is a Protobuf map, which would be written as a repeated field of an "
+            + "entry message, another kind of field";
+      }
+      if (field.getJavaType() != FieldDescriptor.JavaType.MESSAGE) {
+        continue;
+      }
+      // A message another file declares that the field still refers to is not written.
+      Descriptor to = kept.getJavaType() == FieldDescriptor.JavaType.MESSAGE
+          ? kept.getMessageType() : null;
+      if (to != null && to.getFile() != now.getFile()
+          && to.getFullName().equals(field.getMessageType().getFullName())) {
+        continue;
+      }
+      if (ProtoToLogicalTypeConverter.isScalarWrapper(field.getMessageType())) {
+        return of + " is a " + field.getMessageType().getFullName() + ", which would be "
+            + "written as the value it wraps and not as that message, so its stored values "
+            + "would be read wrongly";
+      }
+      String nested = writtenOtherwise(field.getMessageType(), to, seen);
       if (nested != null) {
         return nested;
-      }
-    }
-    return null;
-  }
-
-  private static Descriptor messageNamed(List<Descriptor> messages, String fullName) {
-    for (Descriptor message : messages) {
-      Descriptor found = message.getFullName().equals(fullName) ? message
-          : messageNamed(message.getNestedTypes(), fullName);
-      if (found != null) {
-        return found;
       }
     }
     return null;
