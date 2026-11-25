@@ -188,6 +188,9 @@ public final class TypeAlter {
   private LogicalType original;
   private Schema root;
   private final Map<String, Schema> namedTypes = new LinkedHashMap<>();
+  // The named types of the type text parsed last, those it refers to among them.
+  private Map<String, Schema> parsedTypes = Map.of();
+  private Map<String, String> parsedImports = Map.of();
   private final Set<String> externalTypes = new LinkedHashSet<>();
   private final Map<String, String> externalImports = new LinkedHashMap<>();
   private final List<SchemaReference> references = new ArrayList<>();
@@ -590,8 +593,18 @@ public final class TypeAlter {
     if (!(stored instanceof ProtobufSchema) || !(written instanceof ProtobufSchema)) {
       return;
     }
-    Descriptor was = ((ProtobufSchema) stored).toDescriptor();
-    Descriptor now = ((ProtobufSchema) written).toDescriptor();
+    Descriptor was;
+    Descriptor now;
+    try {
+      was = ((ProtobufSchema) stored).toDescriptor();
+      now = ((ProtobufSchema) written).toDescriptor();
+    } catch (RuntimeException e) {
+      // A file that is no valid Protobuf is refused as that (refuseTakenNames).
+      return;
+    }
+    if (was == null || now == null) {
+      return;
+    }
     Set<String> seen = new HashSet<>();
     String field = writtenOtherwise(was, now, seen);
     // And the messages beside the root that no field of it comes to, which are written by
@@ -637,16 +650,15 @@ public final class TypeAlter {
       if (field.getJavaType() != FieldDescriptor.JavaType.MESSAGE) {
         continue;
       }
+      // A message another file declares, which the field now refers to, is not written.
+      Descriptor to = kept.getJavaType() == FieldDescriptor.JavaType.MESSAGE
+          ? kept.getMessageType() : null;
+      if (to != null && to.getFile() != now.getFile()) {
+        continue;
+      }
       String entry = ProtoToLogicalTypeConverter.entryFieldRenumbered(field);
       if (entry != null) {
         return entry + ", so its stored entries would be read wrongly";
-      }
-      // A message another file declares that the field still refers to is not written.
-      Descriptor to = kept.getJavaType() == FieldDescriptor.JavaType.MESSAGE
-          ? kept.getMessageType() : null;
-      if (to != null && to.getFile() != now.getFile()
-          && to.getFullName().equals(field.getMessageType().getFullName())) {
-        continue;
       }
       if (ProtoToLogicalTypeConverter.isScalarWrapper(field.getMessageType())) {
         return of + " is a " + field.getMessageType().getFullName() + ", which would be "
@@ -829,7 +841,7 @@ public final class TypeAlter {
             + fields.get(same).getName());
       }
       refuseDroppedName(a.name());
-      Formats.refuseUnwritable(format, field);
+      Formats.refuseUnwritable(format, field, knownTypes());
       Map<String, Object> params = new LinkedHashMap<>(field.getParams());
       if (format == SchemaType.PROTOBUF) {
         params.put(Schema.PROTOBUF_FIELD_NUMBER, String.valueOf(nextNumber(fields)));
@@ -1000,7 +1012,7 @@ public final class TypeAlter {
       }
       Schema type = parse(aliases -> TypeScripts.typeScript(a.type(), aliases))
           .getRootSchema();
-      Formats.refuseUnwritable(format, type);
+      Formats.refuseUnwritable(format, type, knownTypes());
       Field f = fields.get(i);
       Map<String, Object> params = f.getParams();
       // A type of the same kind keeps the native names pinned on it; another kind gets new.
@@ -1057,7 +1069,7 @@ public final class TypeAlter {
       }
       Schema type = parse(aliases -> TypeScripts.typeScript(a.type(), aliases))
           .getRootSchema();
-      Formats.refuseUnwritable(format, type);
+      Formats.refuseUnwritable(format, type, knownTypes());
       // An enum keeps its nullability, comment and properties, as with ADD VALUE.
       if (target.getType() == Schema.Type.ENUM && type.getType() == Schema.Type.ENUM) {
         type = copyMetadata(target, Schema.createEnum(type.getEnumValues()))
@@ -1578,6 +1590,20 @@ public final class TypeAlter {
    * names moves to its latest version, which every attribute of that type takes, since a schema
    * refers to one version of a subject.
    */
+  // The types a name in a type text just parsed may be of: the type's own and the text's.
+  private Map<String, Schema> knownTypes() {
+    Map<String, Schema> known = new HashMap<>();
+    // Only a JSON type is judged by what the types it refers to are.
+    if (format == SchemaType.JSON) {
+      Map<String, String> imports = new HashMap<>(externalImports);
+      imports.putAll(parsedImports);
+      known.putAll(TypeReferences.referredTypes(lookup, subject, references, imports));
+    }
+    known.putAll(namedTypes);
+    known.putAll(parsedTypes);
+    return known;
+  }
+
   private LogicalType parse(TypeReferences.ScriptBuilder builder) {
     // A JSON type's reference to a type it already refers to keeps its name, which its $refs use.
     Map<String, String> names = new HashMap<>();
@@ -1591,6 +1617,8 @@ public final class TypeAlter {
       dropUnusedReferences();
     }
     LogicalType lt = parseWithReferences(builder, names);
+    parsedTypes = lt.getNamedTypes();
+    parsedImports = lt.getExternalImports();
     externalTypes.addAll(lt.getExternalTypes());
     boolean moved = false;
     // A hand-written schema may name a reference otherwise than its subject, as Avro by its

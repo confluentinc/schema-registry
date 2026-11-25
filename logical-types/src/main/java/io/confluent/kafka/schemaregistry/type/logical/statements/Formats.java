@@ -32,6 +32,7 @@ import io.confluent.kafka.schemaregistry.type.logical.json.LogicalTypeToJsonConv
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.LogicalTypeToProtoConverter;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Locale;
@@ -123,6 +124,15 @@ public final class Formats {
    * is an ENUM, a JSON UNION whose branches are written as one JSON type.
    */
   public static void refuseUnwritable(SchemaType format, LogicalType lt) {
+    refuseUnwritable(format, lt, Map.of());
+  }
+
+  /**
+   * As {@link #refuseUnwritable(SchemaType, LogicalType)}, with the types it refers to, by
+   * the names it has for them.
+   */
+  public static void refuseUnwritable(SchemaType format, LogicalType lt,
+      Map<String, Schema> referred) {
     Schema root = lt.getRootSchema();
     if (root.getType() == Schema.Type.NAMED_TYPE_REF) {
       root = lt.getNamedTypes().getOrDefault(root.getQualifiedName(), root);
@@ -136,8 +146,10 @@ public final class Formats {
     }
     lt.getNamedTypes().forEach((name, s) ->
         refuseReservedParams(format, "type " + name, s.getParams().keySet()));
-    refuseUnwritable(format, lt.getRootSchema());
-    lt.getNamedTypes().values().forEach(s -> refuseUnwritable(format, s));
+    Map<String, Schema> named = new HashMap<>(referred);
+    named.putAll(lt.getNamedTypes());
+    refuseUnwritable(format, lt.getRootSchema(), named);
+    lt.getNamedTypes().values().forEach(s -> refuseUnwritable(format, s, named));
   }
 
   /**
@@ -145,6 +157,14 @@ public final class Formats {
    * no field defaults, and the JSON deserializer does not fill them in.
    */
   public static void refuseUnwritable(SchemaType format, Field f) {
+    refuseUnwritable(format, f, Map.of());
+  }
+
+  /**
+   * As {@link #refuseUnwritable(SchemaType, Field)}, with the types its type may name: a
+   * name is judged as the type it is of where that is one of them.
+   */
+  public static void refuseUnwritable(SchemaType format, Field f, Map<String, Schema> named) {
     if (format != SchemaType.AVRO && f.hasDefaultValue() && !f.hasDerivedDefault()
         && f.getDefaultValue() != null) {
       throw new TypeRefusedException("Attribute " + f.getName() + " has a DEFAULT, which a "
@@ -154,17 +174,25 @@ public final class Formats {
     refuseBadNumber(format, Schema.PROTOBUF_FIELD_NUMBER, "attribute " + f.getName(),
         f.getParams());
     refuseReservedParams(format, "attribute " + f.getName(), f.getParams().keySet());
-    refuseUnwritable(format, f.getSchema());
+    refuseUnwritable(format, f.getSchema(), named);
   }
 
   /**
    * As {@link #refuseUnwritable(SchemaType, LogicalType)}, for one type and those in it.
    */
   public static void refuseUnwritable(SchemaType format, Schema schema) {
+    refuseUnwritable(format, schema, Map.of());
+  }
+
+  /**
+   * As {@link #refuseUnwritable(SchemaType, Schema)}, with the types it may name.
+   */
+  public static void refuseUnwritable(SchemaType format, Schema schema,
+      Map<String, Schema> named) {
     refuseReservedParams(format, "a type", schema.getParams().keySet());
     switch (schema.getType()) {
       case STRUCT:
-        schema.getFields().forEach(f -> refuseUnwritable(format, f));
+        schema.getFields().forEach(f -> refuseUnwritable(format, f, named));
         break;
       case UNION:
         if (format == SchemaType.PROTOBUF && !schema.isNullable()) {
@@ -172,14 +200,14 @@ public final class Formats {
               + "a Protobuf UNION is a oneof, which is always nullable");
         }
         if (format == SchemaType.JSON) {
-          refuseOverlappingBranches(schema);
+          refuseOverlappingBranches(schema, named);
         }
         for (UnionBranch b : schema.getBranches()) {
           refuseBadNumber(format, Schema.PROTOBUF_FIELD_NUMBER, "branch " + b.getName(),
               b.getParams());
           refuseBadFieldName(format, b);
           refuseReservedParams(format, "branch " + b.getName(), b.getParams().keySet());
-          refuseUnwritable(format, b.getSchema());
+          refuseUnwritable(format, b.getSchema(), named);
         }
         break;
       case ENUM:
@@ -191,11 +219,11 @@ public final class Formats {
         break;
       case ARRAY:
       case MULTISET:
-        refuseUnwritable(format, schema.getElementType());
+        refuseUnwritable(format, schema.getElementType(), named);
         break;
       case MAP:
-        refuseUnwritable(format, schema.getKeyType());
-        refuseUnwritable(format, schema.getValueType());
+        refuseUnwritable(format, schema.getKeyType(), named);
+        refuseUnwritable(format, schema.getValueType(), named);
         break;
       default:
         break;
@@ -250,12 +278,12 @@ public final class Formats {
 
   // Refuses a JSON UNION two of whose branches are written as one JSON type, as BIGINT and
   // DOUBLE both are numbers: a value of either would match both, which its oneOf refuses.
-  private static void refuseOverlappingBranches(Schema union) {
+  private static void refuseOverlappingBranches(Schema union, Map<String, Schema> named) {
     Map<String, Set<String>> kinds = new LinkedHashMap<>();
     String first = null;
     String variant = null;
     for (UnionBranch b : union.getBranches()) {
-      Set<String> kind = jsonKinds(b.getSchema());
+      Set<String> kind = jsonKinds(b.getSchema(), named, new HashSet<>());
       // A VARIANT is written as any JSON value, so a value of any other branch, a struct or
       // a collection as much as a scalar, matches it too.
       boolean any = kind.contains("any");
@@ -280,11 +308,20 @@ public final class Formats {
   }
 
   // The JSON types a value of a branch may be written as: of a branch that is a union, those
-  // of its members, a value of any of which is a value of the branch.
-  private static Set<String> jsonKinds(Schema type) {
+  // of its members, a value of any of which is a value of the branch; of one that is a name,
+  // those of the type it is of, where that is known.
+  private static Set<String> jsonKinds(Schema type, Map<String, Schema> named,
+      Set<String> within) {
     Set<String> kinds = new HashSet<>();
-    if (type.getType() == Schema.Type.UNION) {
-      type.getBranches().forEach(b -> kinds.addAll(jsonKinds(b.getSchema())));
+    if (type.getType() == Schema.Type.NAMED_TYPE_REF) {
+      String name = type.getQualifiedName();
+      Schema of = named.get(name);
+      if (of != null && within.add(name)) {
+        kinds.addAll(jsonKinds(of, named, within));
+        within.remove(name);
+      }
+    } else if (type.getType() == Schema.Type.UNION) {
+      type.getBranches().forEach(b -> kinds.addAll(jsonKinds(b.getSchema(), named, within)));
     } else if (jsonKind(type) != null) {
       kinds.add(jsonKind(type));
     }

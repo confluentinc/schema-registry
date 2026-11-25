@@ -729,7 +729,7 @@ class TypeAlterTest {
         + "import \"confluent/meta.proto\";\nimport \"google/protobuf/wrappers.proto\";\n\n"
         + "option (confluent.file_meta) = { params: [ { key: \"logical.root\", value: "
         + "\"Root\" } ] };\n\nmessage Root {\n  int32 id = 1;\n}\nmessage Unused {\n"
-        + "  google.protobuf.FloatValue w = 1;\n}\n"));
+        + "  google.protobuf.FloatValue w = 5;\n}\n"));
     assertThatThrownBy(() -> registry.alter("gu", new AddAttribute("c", "INT")))
         .isInstanceOf(TypeRefusedException.class).hasMessageContaining("field w of message "
             + "Unused is a google.protobuf.FloatValue");
@@ -755,6 +755,25 @@ class TypeAlterTest {
         List.of(new SchemaReference("gi", "gi", 1)), Map.of("gi", in), null, null));
     registry.alter("gr", new AddAttribute("c", "INT"));
     assertThat(numbers(message("gr"))).isEqualTo("id=1 a=2 c=3");
+    // Nor is one that another file's message takes the place of: neither is written.
+    registry.client.register("go", new ProtobufSchema("syntax = \"proto3\";\n\npackage o;\n\n"
+        + "message Other {\n  string name = 1;\n}\n"));
+    registry.alter("gr", new AlterAttributeType("a", "go"));
+    assertThat(registry.latest("gr").getReferences()).extracting(SchemaReference::getSubject)
+        .containsExactly("go");
+    // A message two fields have is still written for the one that keeps it.
+    registry.client.register("g2", new ProtobufSchema("syntax = \"proto3\";\n\n"
+        + "import \"google/protobuf/wrappers.proto\";\n\nmessage R {\n  int32 id = 1;\n"
+        + "  S a = 2;\n  S b = 3;\n\n  message S {\n    int32 x = 1;\n"
+        + "    google.protobuf.StringValue w = 2;\n  }\n}\n"));
+    assertThatThrownBy(() -> registry.alter("g2", new AlterAttributeType("a", "go")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("field w of message S is a google.protobuf.StringValue");
+    // A message that has a field of its own type is walked once.
+    registry.client.register("gt", new ProtobufSchema("syntax = \"proto3\";\n\n"
+        + "message Tree {\n  int32 v = 1;\n  Tree left = 2;\n  Tree right = 3;\n}\n"));
+    registry.alter("gt", new AddAttribute("c", "INT"));
+    assertThat(version("gt")).isEqualTo(2);
 
     // One the logical type carries whole is altered as any other; a uint32 is read as a
     // BIGINT, whose int64 is the same encoding.
@@ -1807,12 +1826,63 @@ class TypeAlterTest {
     assertThatThrownBy(() -> written("NAMESPACE confluent; "
         + "STRUCT Rule (a INT COMMENT 'the a', b BIGINT);"))
         .isInstanceOf(ValidationException.class).hasMessage("Protobuf name 'confluent.Rule' is "
-            + "defined by confluent/meta.proto, which a Protobuf file imports for its "
-            + "comments, tags, params and root; give the type another name or namespace");
+            + "defined by confluent/meta.proto, a file of the Protobuf format's own; give the "
+            + "type another name or namespace");
     assertThat(written("NAMESPACE confluent; STRUCT Rule (a INT, b BIGINT);"))
         .doesNotContain(imports);
     assertThat(written("NAMESPACE acme; STRUCT Rule (a INT COMMENT 'the a', b BIGINT);"))
         .contains(imports);
+    // So is an enum, a message that is not the first, one where the file is imported for
+    // its own option alone, and one of the name of an option the file declares.
+    for (String script : List.of(
+        "NAMESPACE confluent; ENUM Meta ('A', 'B'); STRUCT t (a INT COMMENT 'c', m Meta); "
+            + "TYPE t;",
+        "NAMESPACE confluent; STRUCT t (a INT NOT NULL COMMENT 'c', m Meta NOT NULL); "
+            + "STRUCT Meta (a INT NOT NULL); TYPE t;",
+        "NAMESPACE confluent; STRUCT Rule (a INT NOT NULL, b BIGINT NOT NULL); "
+            + "STRUCT Inner (a INT NOT NULL); TYPE Rule;",
+        "NAMESPACE confluent; STRUCT field_meta (a INT COMMENT 'c');")) {
+      assertThatThrownBy(() -> written(script)).as(script)
+          .isInstanceOf(ValidationException.class)
+          .hasMessageContaining("is defined by confluent/meta.proto");
+    }
+    // And a type of the name of one a DECIMAL or a TIMESTAMP is written as, where the file
+    // has one; a wrapper's, which is read by its name, wherever.
+    assertThatThrownBy(() -> written("NAMESPACE confluent.type; "
+        + "STRUCT `Decimal` (a INT NOT NULL, d DECIMAL(10, 2) NOT NULL);"))
+        .isInstanceOf(ValidationException.class)
+        .hasMessageContaining("'confluent.type.Decimal' is defined by confluent/type/decimal");
+    assertThatThrownBy(() -> written("NAMESPACE google.protobuf; "
+        + "STRUCT `Timestamp` (a INT NOT NULL, t TIMESTAMP(3));"))
+        .isInstanceOf(ValidationException.class)
+        .hasMessageContaining("'google.protobuf.Timestamp' is defined by");
+    assertThatThrownBy(() -> written("NAMESPACE google.protobuf; "
+        + "STRUCT StringValue (a INT NOT NULL, b BIGINT NOT NULL);"))
+        .isInstanceOf(ValidationException.class)
+        .hasMessageContaining("'google.protobuf.StringValue' is defined by");
+    assertThat(written("NAMESPACE acme; STRUCT `Decimal` (d DECIMAL(10, 2) NOT NULL);"))
+        .contains("message Decimal");
+    // One a type refers to is this file's to import as well.
+    registry.create("ra", "confluent.Rule", SchemaType.PROTOBUF, BodyKind.STRUCT,
+        "(a INT, b BIGINT)");
+    create("rc", SchemaType.PROTOBUF, "(id INT, r ra)");
+    assertThatThrownBy(() -> registry.alter("rc", new SetAttributeComment("id", "the id")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("Protobuf name 'confluent.Rule' is defined by");
+
+    // A comment of no words is none: it is not written, and saying one makes no version.
+    assertThat(written("ENUM Color ('RED', 'BLUE') COMMENT ''; STRUCT t (a INT NOT NULL "
+        + "COMMENT '  ', c Color NOT NULL, e ENUM('A' COMMENT ' ', 'B') NOT NULL) COMMENT ' '; "
+        + "TYPE t;")).doesNotContain(imports).doesNotContain("doc");
+    assertThat(registry.alter("mp", new SetAttributeComment("a", "  ")).edited()).isNull();
+
+    // Another import than the metadata's is the type's own to tell: with one more, a
+    // statement that changes nothing makes a version.
+    registry.client.register("mu", new ProtobufSchema(registry.schema("mi0").canonicalString()
+        .replace(imports, imports + "\nimport \"google/protobuf/timestamp.proto\";")
+        .replace("mi0", "mu")).copy(registry.latest("mi0").getMetadata(), null));
+    assertThat(registry.alter("mu", new AddAttribute("q", "INT"),
+        new DropAttribute("q", false)).edited()).isNotNull();
 
     // V1 is written as Flink writes it, which imports none.
     assertThat(LogicalTypeToProtoConverter.fromLogicalType(TypeScripts.parse(
@@ -1847,6 +1917,11 @@ class TypeAlterTest {
       assertThatThrownBy(() -> create(type, SchemaType.PROTOBUF, body)).as(body)
           .isInstanceOf(TypeRefusedException.class).hasMessage(bodies[i][1] + kept);
     }
+    // One on a type the statement declares is told by that type's name.
+    assertThatThrownBy(() -> Formats.refuseUnwritable(SchemaType.PROTOBUF, TypeScripts.parse(
+        "STRUCT Addr (s STRING) WITH ('connect.x' = '1'); STRUCT t (a Addr); TYPE t;")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessage("Property connect.x of type Addr" + kept);
     // One on the type is told by the type's name.
     assertThatThrownBy(() -> create("rt", SchemaType.PROTOBUF,
         "(a INT) WITH ('connect.name' = 'q')")).isInstanceOf(TypeRefusedException.class)
@@ -1889,9 +1964,12 @@ class TypeAlterTest {
     registry.client.register("re", new ProtobufSchema("syntax = \"proto3\";\n\n"
         + "import \"confluent/meta.proto\";\n\nmessage R {\n  E e = 1;\n\n  enum E {\n"
         + "    A = 0 [(confluent.enum_value_meta) = { params: [ { key: \"connect.x\", "
-        + "value: \"1\" }, { key: \"owner\", value: \"x\" } ] }];\n    B = 1;\n  }\n}\n"));
+        + "value: \"1\" }, { key: \"owner\", value: \"x\" }, { key: "
+        + "\"protobuf.enum.number\", value: \"9\" }, { key: \"avro.x\", value: \"y\" } ] }];\n"
+        + "    B = 1;\n  }\n}\n"));
     assertThat(LogicalTypeToDdlConverter.toDdl(registry.logicalType("re",
-        registry.latest("re")), true)).contains("'owner' = 'x'").doesNotContain("connect.x");
+        registry.latest("re")), true)).contains("'owner' = 'x'").doesNotContain("connect.x")
+        .doesNotContain("avro.x").doesNotContain("'9'");
   }
 
   // The place of a field is the writer's to tell, wherever a message's fields, its oneofs or
@@ -2412,6 +2490,37 @@ class TypeAlterTest {
       assertThat(registry.alter(type, new AlterAttributeType("u", "UNION(x " + members.get(i)
           + ", y BOOLEAN)")).edited()).as(members.get(i)).isNull();
     }
+  }
+
+  // A branch that is a name is written as the type it is of: a value of that type that
+  // another branch is written as would match both, whether the name is of a type the
+  // statement declares or of one it refers to.
+  @Test
+  void aJsonUnionsBranchThatIsANameIsWrittenAsItsType() {
+    assertThatThrownBy(() -> Formats.refuseUnwritable(SchemaType.JSON, TypeScripts.parse(
+        "ENUM Color ('R', 'B'); STRUCT t (u UNION(a STRING, c Color)); TYPE t;")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("cannot have branches a and c");
+    registry.create("je", SchemaType.JSON, BodyKind.ENUM, "('A', 'B')");
+    registry.create("jk", SchemaType.JSON, BodyKind.STRUCT, "(k INT)");
+    assertThatThrownBy(() -> create("jv", SchemaType.JSON, "(u UNION(a STRING, b je))"))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("cannot have branches a and b");
+    // And one a statement adds, or gives an attribute.
+    create("jw", SchemaType.JSON, "(id INT NOT NULL, w INT)");
+    assertThatThrownBy(() -> registry.alter("jw",
+        new AddAttribute("u", "UNION(a STRING, b je)")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("cannot have branches a and b");
+    assertThatThrownBy(() -> registry.alter("jw",
+        new AlterAttributeType("w", "UNION(a VARCHAR(3), b UNION(c BOOLEAN, d je))")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("cannot have branches a and b");
+    assertThat(version("jw")).isEqualTo(1);
+    // One of another JSON type is a branch as any other; the other formats take them all.
+    registry.alter("jw", new AddAttribute("u", "UNION(a INT, b je, c jk)"));
+    registry.create("ae", SchemaType.AVRO, BodyKind.ENUM, "('A', 'B')");
+    create("ax", SchemaType.AVRO, "(u UNION(a STRING, b ae))");
   }
 
   // A JSON union's null is one of its alternatives, beside its members, as in Avro: one

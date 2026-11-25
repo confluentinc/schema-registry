@@ -774,9 +774,7 @@ public class LogicalTypeToProtoConverter {
           dependencies.add(MetaProto.getDescriptor().getName());
         }
       }
-      if (dependencies.contains(MetaProto.getDescriptor().getName())) {
-        refuseMetaNames(packageName, fileBuilder);
-      }
+      refuseBuiltInNames(packageName, fileBuilder, dependencies, ctx.getExternalDependencies());
       fileBuilder.addAllDependency(dependencies);
       if (packageName != null && !packageName.isEmpty()) {
         fileBuilder.setPackage(packageName);
@@ -829,23 +827,64 @@ public class LogicalTypeToProtoConverter {
     return !meta.equals(Meta.getDefaultInstance());
   }
 
-  // The file that declares the metadata declares messages of its own, in its own package: a
-  // type of one of their names there is defined twice in a file that imports it.
-  private static void refuseMetaNames(String packageName, FileDescriptorProto.Builder file) {
-    final FileDescriptor meta = MetaProto.getDescriptor();
-    if (!meta.getPackage().equals(packageName == null ? "" : packageName)) {
-      return;
-    }
-    final List<String> names = new ArrayList<>();
-    file.getMessageTypeList().forEach(message -> names.add(message.getName()));
-    file.getEnumTypeList().forEach(enumType -> names.add(enumType.getName()));
-    for (String name : names) {
-      if (meta.findMessageTypeByName(name) != null || meta.findEnumTypeByName(name) != null) {
-        throw new ValidationException("Protobuf name '" + meta.getPackage() + "." + name
-            + "' is defined by " + meta.getName() + ", which a Protobuf file imports for its "
-            + "comments, tags, params and root; give the type another name or namespace");
+  // A comment of no words is none to the reader, and is not written.
+  private static boolean isBlank(String comment) {
+    return comment == null || comment.trim().isEmpty();
+  }
+
+  // The format's own files declare names of their own: the metadata's, the types a DECIMAL,
+  // a TIMESTAMP, a DATE, a TIME or a VARIANT is written as, and the wrappers a scalar root
+  // is read by. A type of one of those names, this file's or a file's it refers to, is
+  // defined twice where the file is imported, and read as the other where it is read by name.
+  private static void refuseBuiltInNames(String packageName, FileDescriptorProto.Builder file,
+      Set<String> dependencies, List<FileDescriptor> external) {
+    final Map<String, String> declared = new HashMap<>();
+    final Set<String> builtIn = new HashSet<>();
+    final List<FileDescriptor> todo = new ArrayList<>();
+    Stream.of(Meta.getDescriptor(), Date.getDescriptor(), TimeOfDay.getDescriptor(),
+        Timestamp.getDescriptor(), Decimal.getDescriptor(),
+        io.confluent.protobuf.type.Variant.getDescriptor())
+        .map(Descriptor::getFile).forEach(todo::add);
+    while (!todo.isEmpty()) {
+      final FileDescriptor f = todo.remove(todo.size() - 1);
+      if (builtIn.add(f.getName()) && dependencies.contains(f.getName())) {
+        namesOf(f).forEach(name -> declared.put(name, f.getName()));
+        // And those it imports in turn, which a file that imports it may not define either.
+        for (FileDescriptor imported : f.getDependencies()) {
+          builtIn.add(imported.getName());
+          namesOf(imported).forEach(name -> declared.putIfAbsent(name, imported.getName()));
+        }
       }
     }
+    for (Descriptor wrapper : ROOT_WRAPPER_DESCRIPTORS.values()) {
+      builtIn.add(wrapper.getFile().getName());
+      declared.putIfAbsent(wrapper.getFullName(), wrapper.getFile().getName());
+    }
+    final String prefix = packageName == null || packageName.isEmpty() ? "" : packageName + ".";
+    final List<String> names = new ArrayList<>();
+    file.getMessageTypeList().forEach(message -> names.add(prefix + message.getName()));
+    file.getEnumTypeList().forEach(enumType -> names.add(prefix + enumType.getName()));
+    for (FileDescriptor f : external) {
+      if (dependencies.contains(f.getName()) && !builtIn.contains(f.getName())) {
+        names.addAll(namesOf(f));
+      }
+    }
+    for (String name : names) {
+      if (declared.containsKey(name)) {
+        throw new ValidationException("Protobuf name '" + name + "' is defined by "
+            + declared.get(name) + ", a file of the Protobuf format's own; give the type "
+            + "another name or namespace");
+      }
+    }
+  }
+
+  private static List<String> namesOf(FileDescriptor f) {
+    final String prefix = f.getPackage().isEmpty() ? "" : f.getPackage() + ".";
+    final List<String> names = new ArrayList<>();
+    f.getMessageTypes().forEach(m -> names.add(prefix + m.getName()));
+    f.getEnumTypes().forEach(e -> names.add(prefix + e.getName()));
+    f.getExtensions().forEach(e -> names.add(prefix + e.getName()));
+    return names;
   }
 
   private static String article(String kind) {
@@ -1926,7 +1965,7 @@ public class LogicalTypeToProtoConverter {
   }
 
   private static void addComment(FieldDescriptorProto.Builder builder, String fieldComment) {
-    if (fieldComment != null) {
+    if (!isBlank(fieldComment)) {
       builder.mergeOptions(createMetaForComment(fieldComment));
     }
   }
@@ -2139,7 +2178,7 @@ public class LogicalTypeToProtoConverter {
   private static Meta.Builder buildEnumValueMeta(EnumValue ev) {
     boolean hasMeta = false;
     Meta.Builder metaBuilder = Meta.newBuilder();
-    if (ev.getDoc() != null) {
+    if (!isBlank(ev.getDoc())) {
       metaBuilder.setDoc(ev.getDoc());
       hasMeta = true;
     }
@@ -2158,7 +2197,7 @@ public class LogicalTypeToProtoConverter {
   private static Meta.Builder buildSchemaMeta(Schema schema) {
     boolean hasMeta = false;
     Meta.Builder metaBuilder = Meta.newBuilder();
-    if (schema.getDoc() != null) {
+    if (!isBlank(schema.getDoc())) {
       metaBuilder.setDoc(schema.getDoc());
       hasMeta = true;
     }

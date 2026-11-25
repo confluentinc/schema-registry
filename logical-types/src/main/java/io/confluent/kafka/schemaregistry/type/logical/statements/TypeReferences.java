@@ -19,6 +19,7 @@ package io.confluent.kafka.schemaregistry.type.logical.statements;
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
+import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import java.net.URLEncoder;
@@ -201,6 +202,49 @@ public final class TypeReferences {
    * because the registry has no such version or its schema cannot be parsed. A lookup that
    * fails is neither, and fails here as it does.
    */
+  /**
+   * The types a type's references are of, by the names the type has for them: each
+   * reference's name, its subject, the referred type's own name and the names imported
+   * from it. A reference that cannot be read is left out.
+   */
+  static Map<String, Schema> referredTypes(TypeLookup lookup, String referrer,
+      List<SchemaReference> references, Map<String, String> imports) {
+    Map<String, Schema> types = new HashMap<>();
+    for (SchemaReference ref : references) {
+      LogicalType referred;
+      try {
+        String subject = referenced(referrer, ref.getSubject());
+        SchemaMetadata md = lookup.version(subject, ref.getVersion());
+        referred = md == null ? null : lookup.logicalType(subject, md);
+      } catch (RuntimeException e) {
+        referred = null;
+      }
+      if (referred == null) {
+        continue;
+      }
+      Schema root = referred.getRootSchema();
+      if (root.getType() == Schema.Type.NAMED_TYPE_REF) {
+        root = referred.getNamedTypes().getOrDefault(root.getQualifiedName(), root);
+      }
+      Set<String> names = new LinkedHashSet<>(List.of(ref.getName(), ref.getSubject()));
+      if (referred.getName() != null) {
+        names.add(referred.getName());
+      }
+      for (Map.Entry<String, String> imported : imports.entrySet()) {
+        String from = imported.getValue();
+        if (ref.getName().equals(from.contains("#") ? from.substring(0, from.indexOf('#'))
+            : from)) {
+          names.add(imported.getKey());
+        }
+      }
+      for (String name : names) {
+        types.putIfAbsent(name, root);
+      }
+      referred.getNamedTypes().forEach(types::putIfAbsent);
+    }
+    return types;
+  }
+
   public static Set<String> definedNames(TypeLookup lookup, String referrer,
       SchemaReference ref) {
     SchemaMetadata md = lookup.version(referenced(referrer, ref.getSubject()),

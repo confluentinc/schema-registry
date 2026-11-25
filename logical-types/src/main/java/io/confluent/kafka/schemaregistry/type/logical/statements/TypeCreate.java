@@ -81,7 +81,10 @@ public final class TypeCreate {
         subject, Map.of());
     LogicalType lt = Constraints.named(kind != BodyKind.OTHER && dot > 0
         ? TypeScripts.withNamespace(parsed, name.substring(0, dot)) : parsed, subject);
-    Formats.refuseUnwritable(format, lt);
+    // Only a JSON type is judged by what the types it refers to are.
+    Formats.refuseUnwritable(format, lt, format != SchemaType.JSON ? Map.of()
+        : TypeReferences.referredTypes(lookup, subject, lt.getReferences(),
+            lt.getExternalImports()));
     TypeReferences.requireOneOfEach(lookup, subject, lt.getReferences(), "Type " + subject
         + " cannot be created" + (last != null ? " again" : "") + " so");
     if (last != null) {
