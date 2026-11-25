@@ -1993,7 +1993,12 @@ public abstract class FieldEncryptionExecutorTest {
 
   private byte[] serializeWithVariantEncryption(String profileSchema, String tag, String message)
       throws Exception {
-    JsonSchema jsonSchema = new JsonSchema(variantSchema(profileSchema));
+    return serializeWithEncryption(variantSchema(profileSchema), tag, message);
+  }
+
+  private byte[] serializeWithEncryption(String schemaStr, String tag, String message)
+      throws Exception {
+    JsonSchema jsonSchema = new JsonSchema(schemaStr);
     Rule rule = new Rule("rule1", null, null, null,
         FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of(tag), null, null, null, null, false);
     RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
@@ -2062,6 +2067,28 @@ public abstract class FieldEncryptionExecutorTest {
     verify(cryptor, times(1)).encrypt(any(), any(), any());
     assertEquals(new ObjectMapper().readTree(message),
         jsonSchemaDeserializer.deserialize(topic, new RecordHeaders(), bytes));
+  }
+
+  @Test
+  public void testKafkaJsonSchemaSerializerEmptyConjunctByReference() throws Exception {
+    String schemaStr = "{\"type\": \"object\", \"definitions\": {\"Any\": {}}, "
+        + "\"properties\": {\"id\": {\"type\": \"string\"}, \"profile\": "
+        + "{\"allOf\": [{\"$ref\": \"#/definitions/Any\"}, {\"type\": \"string\"}], "
+        + "\"confluent:tags\": [\"PII\"]}}}";
+    String message = "{\"id\": \"1\", \"profile\": \"secret\"}";
+    Cryptor cryptor = addSpyToCryptor(jsonSchemaSerializer5);
+    byte[] bytes = serializeWithEncryption(schemaStr, "PII", message);
+    verify(cryptor, times(1)).encrypt(any(), any(), any());
+    assertEquals(new ObjectMapper().readTree(message),
+        jsonSchemaDeserializer.deserialize(topic, new RecordHeaders(), bytes));
+  }
+
+  @Test
+  public void testKafkaJsonSchemaSerializerVariantAllOfNotNull() throws Exception {
+    // Neither conjunct gives a type, so the field is still a variant
+    assertVariantEncryptionRejected(
+        "{\"allOf\": [{}, {\"not\": {\"type\": \"null\"}}], \"confluent:tags\": [\"PII\"]}",
+        "{\"ssn\": \"123-45-6789\"}");
   }
 
   @Test
