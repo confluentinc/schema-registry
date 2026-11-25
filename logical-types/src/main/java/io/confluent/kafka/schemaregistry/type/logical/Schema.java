@@ -101,8 +101,18 @@ public abstract class Schema {
   public static final String PROTOBUF_NAME = "protobuf.name";
 
   /**
-   * True if {@code key} names a type a writer generates: {@link #AVRO_NAME} and its exceptions,
-   * or {@link #PROTOBUF_NAME}.
+   * Reserved {@code params} key on a union branch: the exact name of the field the Protobuf
+   * writer gives the branch's member in its message, when it is to be kept whatever the other
+   * fields are named. Without it a member is named for its branch, or after its union too when
+   * a field before it has that name. Format-native on the same terms as
+   * {@link #PROTOBUF_FIELD_NUMBER}.
+   */
+  public static final String PROTOBUF_FIELD_NAME = "protobuf.field.name";
+
+  /**
+   * True if {@code key} names what a writer generates: a type, as {@link #AVRO_NAME} and its
+   * exceptions and {@link #PROTOBUF_NAME}, or a union member's field,
+   * {@link #PROTOBUF_FIELD_NAME}.
    */
   public static boolean isTypeNameParam(String key) {
     return TYPE_NAME_PARAMS.contains(key);
@@ -110,7 +120,8 @@ public abstract class Schema {
 
   private static final java.util.Set<String> TYPE_NAME_PARAMS = Collections
       .unmodifiableSet(new java.util.HashSet<>(Arrays.asList(
-          AVRO_NAME, AVRO_ENTRY_NAME, AVRO_KEY_NAME, AVRO_VALUE_NAME, PROTOBUF_NAME)));
+          AVRO_NAME, AVRO_ENTRY_NAME, AVRO_KEY_NAME, AVRO_VALUE_NAME, PROTOBUF_NAME,
+          PROTOBUF_FIELD_NAME)));
 
   /**
    * True if {@code key} belongs to a format-native reserved param namespace ({@code avro.} or

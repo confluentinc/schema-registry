@@ -1702,7 +1702,8 @@ public final class TypeAlter {
    * Pins the name of every message and enum the version declares for one field, at every level,
    * that the writer would name otherwise, as it would one Flink named ({@code addr_Row} for
    * {@code AddrRow}): the registry takes a type of another name for another type, and refuses
-   * the version that loses the first.
+   * the version that loses the first. And the field name of every union member: which name the
+   * writer gives one turns on the fields before it, in an order the version is not read in.
    */
   private void pinProtobufNames(SchemaMetadata md) {
     ParsedSchema schema = lookup.parse(md);
@@ -1787,19 +1788,6 @@ public final class TypeAlter {
   private void refuseTakenNames(Descriptor was, Descriptor now) {
     for (FieldDescriptor old : was.getFields()) {
       FieldDescriptor kept = now.findFieldByNumber(old.getNumber());
-      // A union's member is named for its branch, or after the union too when a field has
-      // that name: one the writer so renames, for another field to take its name. A member
-      // renamed with its union, whose name before a new field may take, is not that.
-      if (kept != null && old.getRealContainingOneof() != null
-          && kept.getRealContainingOneof() != null
-          && kept.getName().equals(kept.getRealContainingOneof().getName() + "_"
-              + old.getName())
-          && now.findFieldByName(old.getName()) != null) {
-        throw new TypeRefusedException(refused() + ": " + old.getName() + ", a member of union "
-            + old.getRealContainingOneof().getName() + " in Protobuf message " + was.getName()
-            + ", would be renamed " + kept.getName() + ", as another attribute or member of "
-            + "the message would have its name; give that one another name");
-      }
       if (kept == null || kept.getType() != old.getType()) {
         continue;
       }

@@ -395,6 +395,31 @@ class NativeTypeNamesTest {
     assertEquals(ddl(logicalType), ddl(ProtoToLogicalTypeConverter.toLogicalType(written)));
   }
 
+  // A member's field name is given, and the others are named around it; read as written,
+  // every member's name is told, which the reading for display leaves out.
+  @Test
+  void testProtoMemberFieldNameIsKeptWhereGiven() {
+    String given = proto("STRUCT p (u UNION(d INT WITH ('protobuf.field.name' = 'u_d')), "
+        + "k UNION(d STRING), w UNION(d BIGINT));");
+    assertThat(given).contains("int32 u_d = 1", "string d = 2", "int64 w_d = 3");
+    assertThat(proto("STRUCT p (u UNION(d INT), k UNION(d STRING));"))
+        .contains("int32 d = 1", "string k_d = 2");
+
+    ProtobufSchema written = new ProtobufSchema(given);
+    assertThat(ddl(ProtoToLogicalTypeConverter.toLogicalType(written)))
+        .doesNotContain("protobuf.field.name");
+    LogicalType asWritten = ProtoToLogicalTypeConverter.toLogicalType(written, true);
+    assertThat(ddl(asWritten)).contains("'protobuf.field.name' = 'u_d'",
+        "'protobuf.field.name' = 'd'", "'protobuf.field.name' = 'w_d'");
+    assertEquals(given,
+        LogicalTypeToProtoConverter.fromLogicalType(asWritten, "p").canonicalString());
+
+    // A name two fields would have is refused.
+    assertThat(assertThrows(ValidationException.class, () -> proto("STRUCT p (d INT, "
+        + "u UNION(d STRING WITH ('protobuf.field.name' = 'd')));")).getMessage())
+        .contains("keeps its field name 'd', which is another field's name");
+  }
+
   // A oneof member's name is taken in its message, so a generated type yields to it.
   @Test
   void testProtoDerivedNameTakenByMemberGetsSuffix() {

@@ -933,6 +933,13 @@ public class ProtoToLogicalTypeConverter {
       final String branchName = getMeta(fieldDescriptor)
           .flatMap(getParam(CommonConstants.LOGICAL_BRANCH_PROP))
           .orElse(fieldDescriptor.getName());
+      if (ctx.namesAsWritten()) {
+        // Which of the two names a member has turns on the fields before it: as written, it
+        // is the one it has.
+        branchParams = branchParams != null
+            ? new LinkedHashMap<>(branchParams) : new LinkedHashMap<>();
+        branchParams.put(Schema.PROTOBUF_FIELD_NAME, fieldDescriptor.getName());
+      }
       final String typeName = typeNameParam(fieldDescriptor,
           oneOfDescriptor.getName() + "_" + branchName, fieldSchema, ctx.namesAsWritten());
       if (typeName != null) {
