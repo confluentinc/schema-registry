@@ -905,11 +905,15 @@ public class LogicalTypeToProtoConverter {
       final FileDescriptor copied = own.stream().filter(o -> declaresTheSame(o, f))
           .findFirst().orElse(null);
       if (copied != null && dependencies.contains(copied.getName())) {
+        // The file the metadata is written in is imported for no attribute's type.
+        final boolean meta = copied == Meta.getDescriptor().getFile();
         throw new ValidationException("Protobuf file '" + f.getName() + "', which the type "
             + "refers to, is a copy of " + copied.getName() + ", a file of the Protobuf "
-            + "format's own that the type imports as well for an attribute of its own: "
-            + "their names would be defined twice. Give the attribute that refers to the "
-            + "copy the format's type instead");
+            + "format's own that the type imports as well for "
+            + (meta ? "its metadata" : "an attribute of its own")
+            + ": their names would be defined twice."
+            + (meta ? "" : " Give the attribute that refers to the copy the format's type "
+              + "instead"));
       }
       if (copied == null) {
         referred.addAll(namesOf(f));

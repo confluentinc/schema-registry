@@ -197,8 +197,19 @@ class FormatsTest {
           families(16, direct, "last", true))) {
         Formats.refuseUnwritable(SchemaType.JSON, told);
       }
+      // Rows of one type under two attributes, forty deep: each two are judged once.
+      StringBuilder deep = new StringBuilder();
+      for (String family : new String[] {"A", "B"}) {
+        for (int i = 0; i < 40; i++) {
+          deep.append("STRUCT ").append(family).append(i).append(" (c0 ").append(family)
+              .append(i + 1).append(" NOT NULL, c1 ").append(family).append(i + 1)
+              .append(" NOT NULL); ");
+        }
+        deep.append("STRUCT ").append(family).append("40 (k INT NOT NULL); ");
+      }
       for (LogicalType alike : List.of(families(16, union, "none", false),
-          families(16, direct, "none", true), families(16, union, "last", true))) {
+          families(16, direct, "none", true), families(16, union, "last", true),
+          TypeScripts.parse(deep + "STRUCT t (u UNION(x A0, y B0)); TYPE t;"))) {
         assertThatThrownBy(() -> Formats.refuseUnwritable(SchemaType.JSON, alike))
             .isInstanceOf(TypeRefusedException.class)
             .hasMessageContaining("cannot have branches x and y");
@@ -221,6 +232,11 @@ class FormatsTest {
             + "STRUCT S2 (a R1 NOT NULL, t2 INT NOT NULL); "
             + "STRUCT T (a R2 NOT NULL, t2 INT NOT NULL); "
             + "STRUCT t (u UNION(x UNION(s1 S1, s2 S2), y T)); TYPE t;"));
+    // Two that match only while two others are taken to are told apart once those are.
+    Formats.refuseUnwritable(SchemaType.JSON, TypeScripts.parse(
+        "STRUCT X (q Q1 NOT NULL, k INT NOT NULL); STRUCT Y (q Q2 NOT NULL, k STRING NOT NULL);"
+            + " STRUCT Q1 (p X NOT NULL); STRUCT Q2 (p Y NOT NULL); "
+            + "STRUCT t (u UNION(x X, y Y, q1 Q1, q2 Q2)); TYPE t;"));
   }
 
   // An enum value's number may be 0 or less, as a field's may not.

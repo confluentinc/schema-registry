@@ -589,19 +589,24 @@ public final class Formats {
   // Whether a null is a value of an attribute's type: one that may be null, or a name of a
   // type referred to whose own root may be, whatever the attribute says of itself.
   private static boolean takesNull(Schema type, KnownTypes named) {
-    for (int depth = 0; depth < 16; depth++) {
-      if (type.isNullable()) {
-        return true;
-      }
-      Schema of = type.getType() == Schema.Type.NAMED_TYPE_REF
-          ? named.get(type.getQualifiedName()) : null;
-      if (of == null || !named.isReferred(of)) {
-        return false;
-      }
-      named = named.within(of);
-      type = of;
+    return type.isNullable() || nullWithin(type, named, 0);
+  }
+
+  // Whether a null is a value of a type that does not say so of itself: a name of a type
+  // referred to whose root may be null, or a union a member of which is such a name. A
+  // union's members, and a type of the document's own, are written with no null of theirs.
+  private static boolean nullWithin(Schema type, KnownTypes named, int depth) {
+    if (depth > 16) {
+      return true;
     }
-    return true;
+    if (type.getType() == Schema.Type.UNION) {
+      return type.getBranches().stream()
+          .anyMatch(b -> nullWithin(b.getSchema(), named, depth + 1));
+    }
+    Schema of = type.getType() == Schema.Type.NAMED_TYPE_REF
+        ? named.get(type.getQualifiedName()) : null;
+    return of != null && (named.isReferred(of) && of.isNullable()
+        || nullWithin(of, named.within(of), depth + 1));
   }
 
   // Whether no value of one type is a value of the other; false where either is not known.

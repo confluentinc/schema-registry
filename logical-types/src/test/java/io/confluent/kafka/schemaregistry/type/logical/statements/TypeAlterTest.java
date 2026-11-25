@@ -33,6 +33,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
+import io.confluent.protobuf.MetaProto;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalTypeConversion;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalTypeToDdlConverter;
@@ -1924,6 +1925,19 @@ class TypeAlterTest {
     assertThat(version("vda")).isEqualTo(2);
     assertThatThrownBy(() -> create("vdb", SchemaType.PROTOBUF, "(id INT, d vdd, own DATE)"))
         .isInstanceOf(RuntimeException.class);
+    // A copy of the file the metadata is written in is imported with it for no
+    // attribute's type, and the refusal says so.
+    registry.client.register("mymeta", new ProtobufSchema(new ProtobufSchema(
+        MetaProto.getDescriptor().getMessageTypes().get(0)).canonicalString()));
+    registry.client.register("hm", new ProtobufSchema("syntax = \"proto3\";\n\nimport "
+        + "\"mymeta\";\n\nmessage Hm {\n  int32 id = 1;\n  confluent.Meta m = 2;\n"
+        + "  int32 n = 3;\n}\n", List.of(new SchemaReference("mymeta", "mymeta", 1)),
+        Map.of("mymeta", registry.latest("mymeta").getSchema()), null, null));
+    assertThatThrownBy(() -> registry.alter("hm", new MoveAttribute("n", Position.first())))
+        .isInstanceOf(TypeRefusedException.class).hasMessageEndingWith("Protobuf file "
+            + "'mymeta', which the type refers to, is a copy of confluent/meta.proto, a file "
+            + "of the Protobuf format's own that the type imports as well for its metadata: "
+            + "their names would be defined twice.");
     // The refusal tells of the copy, and not of a name the statement gave no type.
     LogicalType both = TypeReferences.parse(registry, SchemaType.PROTOBUF,
         aliases -> TypeScripts.createScript("vdb", BodyKind.STRUCT, "(id INT, d vdd, own DATE)",
@@ -2995,6 +3009,27 @@ class TypeAlterTest {
         "(u UNION(r1 STRUCT<a hn NOT NULL>, r2 STRUCT<a STRING>) NOT NULL)");
     create("n4", SchemaType.JSON,
         "(u UNION(r1 STRUCT<a hn NOT NULL>, r2 MAP<STRING, STRING>) NOT NULL)");
+    // The row whose attribute it is may be either, and the type a member of a union, or a
+    // name of a name of it; one that takes none takes none through as many names.
+    jsonRefused("n6", "(u UNION(r1 STRUCT<a BOOLEAN>, r2 STRUCT<a hu NOT NULL>) NOT NULL)");
+    create("n7", SchemaType.JSON,
+        "(u UNION(r1 STRUCT<a BOOLEAN NOT NULL>, r2 STRUCT<a hu NOT NULL>) NOT NULL)");
+    jsonRefused("n8", "(u UNION(r1 STRUCT<a UNION(x hu, y STRING) NOT NULL>, "
+        + "r2 STRUCT<a BOOLEAN>) NOT NULL)");
+    create("n9", SchemaType.JSON, "(u UNION(r1 STRUCT<a UNION(x hn, y STRING) NOT NULL>, "
+        + "r2 STRUCT<a BOOLEAN>) NOT NULL)");
+    registry.create("al1", SchemaType.JSON, BodyKind.OTHER, "hu NOT NULL");
+    registry.create("al2", SchemaType.JSON, BodyKind.OTHER, "al1 NOT NULL");
+    jsonRefused("n10", "(u UNION(r1 STRUCT<a al2 NOT NULL>, r2 STRUCT<a BOOLEAN>) NOT NULL)");
+    String last = "hn";
+    for (int i = 1; i <= 18; i++) {
+      registry.create("c" + i, SchemaType.JSON, BodyKind.OTHER, last + " NOT NULL");
+      last = "c" + i;
+    }
+    create("n11", SchemaType.JSON,
+        "(u UNION(r1 STRUCT<a c6 NOT NULL>, r2 STRUCT<a BOOLEAN>) NOT NULL)");
+    // Past a limit of names a null is taken to be one, which refuses.
+    jsonRefused("n12", "(u UNION(r1 STRUCT<a c18 NOT NULL>, r2 STRUCT<a BOOLEAN>) NOT NULL)");
     // A null is a value of the map only where its values take one.
     create("n5", SchemaType.JSON,
         "(u UNION(r1 STRUCT<a hu NOT NULL>, r2 MAP<STRING, BOOLEAN NOT NULL>) NOT NULL)");
@@ -3229,6 +3264,27 @@ class TypeAlterTest {
           .as(map.getKey()).isInstanceOf(TypeRefusedException.class)
           .hasMessageContaining("attribute x has a map stored as an array of key and value");
     }
+    // One keyed by a CHAR, and one in a type that names itself, which is walked once.
+    registry.client.register("jchar", new JsonSchema("{\"type\":\"object\",\"title\":"
+        + "\"jchar\",\"properties\":{\"id\":{\"type\":\"integer\"},\"x\":"
+        + entries.replace("{\"type\":\"string\"}",
+            "{\"type\":\"string\",\"minLength\":3,\"maxLength\":3}")
+        + "}},\"additionalProperties\":false}"));
+    registry.client.register("jself", new JsonSchema("{\"type\":\"object\",\"title\":"
+        + "\"jself\",\"properties\":{\"id\":{\"type\":\"integer\"},\"x\":{\"$ref\":"
+        + "\"#/$defs/D\"}},\"additionalProperties\":false,\"$defs\":{\"D\":{\"type\":"
+        + "\"object\",\"properties\":{\"a\":{\"$ref\":\"#/$defs/D\"},\"m\":" + entries
+        + "}},\"additionalProperties\":false}}}"));
+    for (String type : List.of("jchar", "jself")) {
+      assertThatThrownBy(() -> registry.alter(type, new AddAttribute("z", "INT"))).as(type)
+          .isInstanceOf(TypeRefusedException.class)
+          .hasMessageContaining("attribute x has a map stored as an array of key and value");
+    }
+    // A row given the name of a type referred to that has the map as an object.
+    create("jw2", SchemaType.JSON, "(inner MAP<STRING, INT>)");
+    assertThatThrownBy(() -> registry.alter("jen", new AlterAttributeType("x", "jw2")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("attribute x has a map stored as an array of key and value");
     // A type that is such a map has no attribute to tell, or to drop.
     registry.client.register("jroot", new JsonSchema(entries + ",\"title\":\"jroot\"}"));
     assertThatThrownBy(() -> registry.alter("jroot", new SetDataType("MAP<STRING, BIGINT>")))
@@ -3343,6 +3399,19 @@ class TypeAlterTest {
         "STRUCT(x INT, y INT, z INT, u UNION(p INT, q STRING)) NOT NULL"));
     assertThat(numbers(message("pnr").findFieldByName("r").getMessageType()).split(" "))
         .containsExactlyInAnyOrder("x=1", "y=536870911", "z=2", "p=3", "q=4");
+    // As a oneof in an array's wrapper, and one in a map's entry.
+    String top = " WITH ('protobuf.field.number' = '536870911')";
+    create("pnw", SchemaType.PROTOBUF, "(a INT, arr ARRAY<UNION(x INT, y STRING" + top
+        + ")>, mm MAP<UNION(k1 INT, k2 STRING), UNION(v1 INT, v2 STRING" + top + ")>)");
+    registry.alter("pnw", new AlterAttributeType("arr",
+        "ARRAY<UNION(x INT, y STRING, z BOOLEAN)>"), new AlterAttributeType("mm",
+        "MAP<UNION(k1 INT, k2 STRING, k3 BOOLEAN), UNION(v1 INT, v2 STRING, v3 BOOLEAN)>"));
+    assertThat(numbers(message("pnw").findFieldByName("arr").getMessageType()
+        .findFieldByName("value").getMessageType()).split(" "))
+        .containsExactlyInAnyOrder("x=1", "z=2", "y=536870911");
+    assertThat(numbers(message("pnw").findFieldByName("mm").getMessageType()
+        .findFieldByName("value").getMessageType()).split(" "))
+        .containsExactlyInAnyOrder("k1=1", "k2=2", "v1=3", "k3=4", "v3=5", "v2=536870911");
     // A number said for a member of a type given anew is the one it has, or is refused.
     create("pnt", SchemaType.PROTOBUF,
         "(a INT, r STRUCT(m INT, n STRING), u UNION(x INT, y STRING))");
@@ -3361,6 +3430,10 @@ class TypeAlterTest {
             "Branch z of attribute u cannot be given the Protobuf field number 80: a member "
             + "new to a type given anew takes the next number its message has free; give it "
             + "none"},
+        {"r", "STRUCT(m INT, n STRING, k INT, "
+            + "v UNION(p INT, q STRING) WITH ('protobuf.field.number' = '7'))",
+            "Attribute v of attribute r cannot have a Protobuf field number: a UNION is a "
+            + "oneof, which has none; give it none"},
         {"a", "UNION(p INT WITH ('protobuf.field.number' = '70'), q STRING)",
             "Branch p of attribute a cannot be given the Protobuf field number 70: a member "
             + "new to a type given anew takes the next number its message has free; give it "

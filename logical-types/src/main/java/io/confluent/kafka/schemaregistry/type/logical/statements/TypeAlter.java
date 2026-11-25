@@ -2765,6 +2765,12 @@ public final class TypeAlter {
               ? renumbered(f.getSchema(), wasType, at, inner)
               : renumbered(f.getSchema(), wasType, at.field(f.getName()), null);
           Map<String, Object> params = new LinkedHashMap<>(f.getParams());
+          if (s.getType() == Schema.Type.UNION
+              && params.containsKey(Schema.PROTOBUF_FIELD_NUMBER)) {
+            throw new TypeRefusedException("Attribute " + f.getName()
+                + (retyping != null ? " of attribute " + retyping : "") + " cannot have a "
+                + "Protobuf field number: a UNION is a oneof, which has none; give it none");
+          }
           if (s.getType() != Schema.Type.UNION) {
             int n = at.number(f.getName());
             refuseOtherNumber("Attribute " + f.getName(), params, n);
