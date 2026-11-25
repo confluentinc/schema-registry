@@ -1890,6 +1890,22 @@ class TypeAlterTest {
         String.format(entry, "int32 key = 1;", "int32 value = 2;")));
     registry.alter("ok", new AddAttribute("z", "INT"));
     assertThat(version("ok")).isEqualTo(2);
+    // A message of an entry's shape that no repeated field has is a row, and is altered: a
+    // row has its fields' numbers.
+    registry.client.register("re", new ProtobufSchema("syntax = \"proto3\";\n\n"
+        + "message REntry {\n  int32 value = 1;\n  int32 key = 2;\n}\n"));
+    registry.client.register("rs", new ProtobufSchema(String.format(entry,
+        "int32 value = 1;", "int32 key = 2;").replace("repeated MEntry", "MEntry")));
+    assertThat(registry.struct("rs").getField("m").getSchema().getType())
+        .isEqualTo(Schema.Type.STRUCT);
+    for (String type : List.of("re", "rs")) {
+      registry.alter(type, new AddAttribute("z", "INT"));
+      assertThat(version(type)).as(type).isEqualTo(2);
+    }
+    assertThat(numbers(message("re")).split(" "))
+        .containsExactlyInAnyOrder("value=1", "key=2", "z=3");
+    assertThat(numbers(message("rs").findFieldByName("m").getMessageType()).split(" "))
+        .containsExactlyInAnyOrder("value=1", "key=2");
   }
 
   // A map's entry is a message of its key and value, a union's members among them. Whatever
@@ -2418,5 +2434,23 @@ class TypeAlterTest {
     AvroSchema after = (AvroSchema) registry.schema("av");
     assertThat(after.canonicalString()).contains("\"name\":\"GeoPoint\"");
     assertThat(after.isBackwardCompatible(before)).isEmpty();
+
+    // A collection that may now be null, or no longer, is the type it was with a null beside
+    // it: its entry's or element's record keeps its name, at the root and below it.
+    String[][] types = {
+        {"MAP<INT NOT NULL, STRING> NOT NULL WITH ('avro.entry.name' = 'Kept')",
+            "MAP<INT NOT NULL, STRING>"},
+        {"STRUCT(m MAP<INT NOT NULL, STRING> WITH ('avro.entry.name' = 'Kept'))",
+            "STRUCT(m MAP<INT NOT NULL, STRING> NOT NULL)"}};
+    for (int i = 0; i < types.length; i++) {
+      String type = "an" + i;
+      create(type, SchemaType.AVRO, "(id INT NOT NULL, a " + types[i][0] + ")");
+      assertThat(registry.schema(type).canonicalString()).as(type)
+          .contains("\"name\":\"Kept\"");
+      registry.alter(type, new AlterAttributeType("a", types[i][1]));
+      assertThat(version(type)).as(type).isEqualTo(2);
+      assertThat(registry.schema(type).canonicalString()).as(type)
+          .contains("\"name\":\"Kept\"");
+    }
   }
 }

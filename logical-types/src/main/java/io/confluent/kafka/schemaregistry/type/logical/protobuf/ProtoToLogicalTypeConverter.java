@@ -1915,38 +1915,50 @@ public class ProtoToLogicalTypeConverter {
   }
 
   /**
-   * The first map entry among the messages, at any depth, whose key or value field that is no
-   * oneof member has a number the writer would not give it, told as a field that would be
+   * The first map entry of the messages' fields, at any depth, whose key or value field that is
+   * no oneof member has a number the writer would not give it, told as a field that would be
    * renumbered; null if none. A map has no place for such a number: the writer gives the key
    * and then the value the lowest numbers their unions' members leave.
    */
   public static String entryFieldRenumbered(final List<Descriptor> messages) {
     for (Descriptor message : messages) {
-      if (isMapEntryShape(message)) {
-        Set<Integer> taken = new HashSet<>();
-        for (OneofDescriptor oneof : message.getRealOneofs()) {
-          oneof.getFields().forEach(member -> taken.add(member.getNumber()));
-        }
-        int next = 1;
-        for (String part : Arrays.asList(CommonConstants.KEY_FIELD, CommonConstants.VALUE_FIELD)) {
-          FieldDescriptor field = message.findFieldByName(part);
-          if (field == null || field.getRealContainingOneof() != null) {
-            continue;
-          }
-          while (taken.contains(next)) {
-            next++;
-          }
-          if (field.getNumber() != next) {
-            return "field " + part + " of map entry " + message.getName() + " has the number "
-                + field.getNumber() + ", which would be written as " + next;
-          }
-          next++;
+      for (FieldDescriptor field : message.getFields()) {
+        // A message of an entry's shape is an entry as a repeated field's, as it is read; one
+        // of another file is not written here.
+        String entry = field.isRepeated() && isMapDescriptor(field)
+            && field.getMessageType().getFile() == message.getFile()
+            ? renumbered(field.getMessageType()) : null;
+        if (entry != null) {
+          return entry;
         }
       }
       String nested = entryFieldRenumbered(message.getNestedTypes());
       if (nested != null) {
         return nested;
       }
+    }
+    return null;
+  }
+
+  private static String renumbered(final Descriptor entry) {
+    Set<Integer> taken = new HashSet<>();
+    for (OneofDescriptor oneof : entry.getRealOneofs()) {
+      oneof.getFields().forEach(member -> taken.add(member.getNumber()));
+    }
+    int next = 1;
+    for (String part : Arrays.asList(CommonConstants.KEY_FIELD, CommonConstants.VALUE_FIELD)) {
+      FieldDescriptor field = entry.findFieldByName(part);
+      if (field == null || field.getRealContainingOneof() != null) {
+        continue;
+      }
+      while (taken.contains(next)) {
+        next++;
+      }
+      if (field.getNumber() != next) {
+        return "field " + part + " of map entry " + entry.getName() + " has the number "
+            + field.getNumber() + ", which would be written as " + next;
+      }
+      next++;
     }
     return null;
   }

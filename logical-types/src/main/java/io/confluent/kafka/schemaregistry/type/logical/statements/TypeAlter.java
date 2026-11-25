@@ -2779,7 +2779,7 @@ public final class TypeAlter {
   // A replacing type keeps, at every level below it, the native names pinned on the members it
   // keeps, one of the name and the kind it was, whatever name the replacement pins on it: the
   // type is the one it was, which another name would not be.
-  private static Schema withNestedNames(Schema type, Schema old) {
+  private Schema withNestedNames(Schema type, Schema old) {
     if (old == null || type.getType() != old.getType()) {
       return type;
     }
@@ -2872,11 +2872,15 @@ public final class TypeAlter {
   }
 
   // Whether a member keeps the native names pinned on it: its type is of the same kind, and
-  // the Protobuf writer generates the same sort of type for it. A collection that may be null
-  // is wrapped, one that may not is its entries or elements, and a nullable element is wrapped.
-  private static boolean keepsNames(Schema a, Schema b) {
+  // in Protobuf the writer generates the same sort of type for it. There a collection that
+  // may be null is wrapped, one that may not is its entries or elements, and a nullable
+  // element is wrapped; in Avro it is the same type with a null beside it.
+  private boolean keepsNames(Schema a, Schema b) {
     if (!sameKind(a, b)) {
       return false;
+    }
+    if (format != SchemaType.PROTOBUF) {
+      return true;
     }
     switch (a.getType()) {
       case ARRAY:
