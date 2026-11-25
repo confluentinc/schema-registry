@@ -438,7 +438,11 @@ public class LogicalTypeToJsonConverter {
             .criterion(CombinedSchema.ONE_CRITERION);
         List<Map<String, Object>> unionMeta = new ArrayList<>();
         for (UnionBranch branch : schema.getBranches()) {
-          builder.subschema(fromLogicalTypeRaw(branch.getSchema(), branch.getName(), ctx));
+          // Null is the union's to allow, as one of its alternatives: a member is written
+          // without one of its own, whatever is said of it, as Avro writes it. One beside
+          // each member would have a null value match them all, which a oneOf refuses.
+          builder.subschema(fromLogicalTypeIgnoreNullable(
+              branch.getSchema(), branch.getName(), ctx).build());
           Map<String, Object> entry = new LinkedHashMap<>();
           entry.put("name", branch.getName());
           if (branch.getDoc() != null) {

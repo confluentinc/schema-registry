@@ -42,6 +42,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -53,6 +54,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.function.ToIntFunction;
+import java.util.stream.Collectors;
 
 /**
  * Converts Protobuf {@link Descriptor} to logical type {@link Schema}.
@@ -188,7 +191,20 @@ public class ProtoToLogicalTypeConverter {
    * public-import wrapper is read by the file it re-exports.
    */
   public static LogicalType toLogicalType(final ProtobufSchema schema) {
-    return read(schema, schema.readsAsSeveralMessages());
+    return read(schema, schema.readsAsSeveralMessages(), false);
+  }
+
+  /**
+   * {@code schema} read as {@link #toLogicalType(ProtobufSchema)} reads it, and with
+   * {@code namesAsWritten}, with the name of each message and enum declared for one field
+   * recorded on it unless the writer would derive that very name. Read otherwise, a name Flink's
+   * writer derives ({@code addr_Row}) is not recorded, and written from the logical type the
+   * type takes the name this writer derives ({@code AddrRow}): for a schema Flink wrote,
+   * another type to the registry.
+   */
+  public static LogicalType toLogicalType(final ProtobufSchema schema,
+      final boolean namesAsWritten) {
+    return read(schema, schema.readsAsSeveralMessages(), namesAsWritten);
   }
 
   /**
@@ -196,7 +212,7 @@ public class ProtoToLogicalTypeConverter {
    * whatever else it declares.
    */
   public static LogicalType toLogicalType(final ProtobufSchema schema, final String message) {
-    return read(schema.copy(message), false);
+    return read(schema.copy(message), false, false);
   }
 
   /**
@@ -206,17 +222,18 @@ public class ProtoToLogicalTypeConverter {
    * message is wrapped all the same, and a root it names is not singled out.
    */
   public static LogicalType toMultiMessageLogicalType(final ProtobufSchema schema) {
-    return read(schema, true);
+    return read(schema, true, false);
   }
 
   private static LogicalType read(
-      final ProtobufSchema schema, final boolean includeMultipleMessages) {
+      final ProtobufSchema schema, final boolean includeMultipleMessages,
+      final boolean namesAsWritten) {
     if (includeMultipleMessages && schema.rawSchema() != null
         && schema.rawSchema().getTypes().isEmpty() && !isPublicImportWrapper(schema)) {
       throw new ValidationException("Protobuf file has no top-level messages");
     }
     try {
-      return toLogicalTypeInternal(schema, includeMultipleMessages)
+      return toLogicalTypeInternal(schema, includeMultipleMessages, namesAsWritten)
           .withSourceFormat(SchemaType.PROTOBUF);
     } catch (StackOverflowError e) {
       throw new TypeTooDeepException("Protobuf schema nests types too deeply to convert");
@@ -257,7 +274,8 @@ public class ProtoToLogicalTypeConverter {
   }
 
   private static LogicalType toLogicalTypeInternal(
-      final ProtobufSchema schema, final boolean includeMultipleMessages) {
+      final ProtobufSchema schema, final boolean includeMultipleMessages,
+      final boolean namesAsWritten) {
     // Re-export-only file: the local proto has no types of its own, just
     // `import public "..."`. Detect this BEFORE toDescriptor(), because
     // toDescriptor() resolves through the public import to the imported file
@@ -291,6 +309,7 @@ public class ProtoToLogicalTypeConverter {
     }
     final ToLogicalContext<String> ctx =
         new ToLogicalContext<>(schema);
+    ctx.setNamesAsWritten(namesAsWritten);
     // Extend reference names with all nested message/enum full names from
     // each resolved external schema, so nested external types are recognized.
     // An enum-only file's enums are too, since its reference may be named for the file.
@@ -801,17 +820,17 @@ public class ProtoToLogicalTypeConverter {
     // otherwise we record every one — regular fields and oneof members alike. Recording all-or-
     // nothing guarantees a reader/writer round-trip never mixes recorded and omitted numbers, the
     // mix that would otherwise let the writer's positional fallback corrupt an omitted number.
-    final boolean recordNumbers = !messageNumbersAreSequential(schema);
+    // A map's entry is written from its key and value, a union's members where it stands,
+    // which is not always the order read here: numbers the writer would not give are recorded.
+    final boolean recordNumbers = !messageNumbersAreSequential(schema)
+        || asMapEntry && !entryNumbersAreAsWritten(schema);
     final List<Field> fields = new ArrayList<>();
     int index = 0;
-    for (FieldDescriptor fieldDescriptor : schema.getFields()) {
-      if (fieldDescriptor.getRealContainingOneof() != null) {
-        continue;
-      }
+    for (FieldDescriptor fieldDescriptor : plainFields(schema)) {
       fields.add(toField(
           ctx, fieldDescriptor, appendToList(indexPath, index++), recordNumbers, asMapEntry));
     }
-    for (OneofDescriptor oneOfDescriptor : schema.getRealOneofs()) {
+    for (OneofDescriptor oneOfDescriptor : oneofs(schema)) {
       Schema unionSchema = toLogicalTypeOneof(
           oneOfDescriptor, ctx, appendToList(indexPath, index), recordNumbers);
       // A oneof is no step in the descriptor: its members are fields of this message.
@@ -836,6 +855,48 @@ public class ProtoToLogicalTypeConverter {
         () -> toLogicalTypeNested(false, message, ctx, path));
   }
 
+  /**
+   * A message's fields that are in no oneof, in the order of the type's attributes: those the
+   * writer gave a place ({@link CommonConstants#CONNECT_INDEX_PROP}) by it, then the others as
+   * declared. A normalized message declares its fields by number, whatever order the type has.
+   */
+  private static List<FieldDescriptor> plainFields(Descriptor message) {
+    return byIndex(message.getFields().stream()
+        .filter(field -> field.getRealContainingOneof() == null)
+        .collect(Collectors.toList()), ProtoToLogicalTypeConverter::indexOf);
+  }
+
+  /** A message's oneofs, in the order of the type's attributes: by their first member's place. */
+  private static List<OneofDescriptor> oneofs(Descriptor message) {
+    return byIndex(message.getRealOneofs(), oneof -> oneof.getFields().stream()
+        .mapToInt(ProtoToLogicalTypeConverter::indexOf).min().orElse(Integer.MAX_VALUE));
+  }
+
+  /** A oneof's members, in the order of the union's branches. */
+  private static List<FieldDescriptor> members(OneofDescriptor oneof) {
+    return byIndex(oneof.getFields(), ProtoToLogicalTypeConverter::indexOf);
+  }
+
+  private static <T> List<T> byIndex(List<T> declared, ToIntFunction<T> index) {
+    if (declared.stream().allMatch(item -> index.applyAsInt(item) == Integer.MAX_VALUE)) {
+      return declared;
+    }
+    final List<T> ordered = new ArrayList<>(declared);
+    ordered.sort(Comparator.comparingInt(index));
+    return ordered;
+  }
+
+  // The place the writer gave a field, or the last for one it gave none.
+  private static int indexOf(FieldDescriptor field) {
+    final String index = getMeta(field)
+        .flatMap(getParam(CommonConstants.CONNECT_INDEX_PROP)).orElse(null);
+    try {
+      return index == null ? Integer.MAX_VALUE : Integer.parseInt(index);
+    } catch (NumberFormatException e) {
+      return Integer.MAX_VALUE;
+    }
+  }
+
   private static List<Integer> appendToList(final List<Integer> list, final int value) {
     final List<Integer> newList = new ArrayList<>(list);
     newList.add(value);
@@ -843,25 +904,50 @@ public class ProtoToLogicalTypeConverter {
   }
 
   /**
-   * True if the message's field numbers are exactly {@code 1..N} in the writer's emission order
-   * (regular fields first, then oneof members in declaration order) — i.e. the positional defaults
-   * the writer reproduces for free. When true no numbers need recording; when false every number
-   * is recorded (see the all-or-nothing note in {@code toLogicalTypeNested}).
+   * True if a map entry's field numbers are those the writer gives one with none recorded:
+   * {@code 1..N} over its key and then its value, a union's members in the place of its field.
+   */
+  private static boolean entryNumbersAreAsWritten(Descriptor entry) {
+    int expected = 1;
+    for (String part : Arrays.asList(CommonConstants.KEY_FIELD, CommonConstants.VALUE_FIELD)) {
+      FieldDescriptor field = entry.findFieldByName(part);
+      if (field != null && field.getRealContainingOneof() == null) {
+        if (field.getNumber() != expected++) {
+          return false;
+        }
+        continue;
+      }
+      for (OneofDescriptor oneof : entry.getRealOneofs()) {
+        if (!oneof.getName().equals(part)) {
+          continue;
+        }
+        for (FieldDescriptor member : members(oneof)) {
+          if (member.getNumber() != expected++) {
+            return false;
+          }
+        }
+      }
+    }
+    return true;
+  }
+
+  /**
+   * True if the message's field numbers are exactly {@code 1..N} in the order of the type's
+   * attributes (regular fields first, then oneof members, each as read) — i.e. the positional
+   * defaults the writer reproduces for free. When true no numbers need recording; when false
+   * every number is recorded (see the all-or-nothing note in {@code toLogicalTypeNested}).
    */
   private static boolean messageNumbersAreSequential(Descriptor schema) {
     int expected = 1;
-    for (FieldDescriptor f : schema.getFields()) {
-      if (f.getRealContainingOneof() != null) {
-        continue;
-      }
+    for (FieldDescriptor f : plainFields(schema)) {
       // A wrapped union in a regular field reads as a oneof whose members would continue this
       // message's numbering; they are the wrapper's own, so the numbers are recorded instead.
       if (f.getNumber() != expected++ || wrapsUnion(f)) {
         return false;
       }
     }
-    for (OneofDescriptor oneof : schema.getRealOneofs()) {
-      for (FieldDescriptor f : oneof.getFields()) {
+    for (OneofDescriptor oneof : oneofs(schema)) {
+      for (FieldDescriptor f : members(oneof)) {
         if (f.getNumber() != expected++) {
           return false;
         }
@@ -887,7 +973,7 @@ public class ProtoToLogicalTypeConverter {
       final ToLogicalContext<String> ctx,
       final List<Integer> indexPath,
       final boolean recordNumbers) {
-    List<FieldDescriptor> fieldDescriptors = oneOfDescriptor.getFields();
+    List<FieldDescriptor> fieldDescriptors = members(oneOfDescriptor);
     final List<UnionBranch> branches = new ArrayList<>();
     for (int i = 0; i < fieldDescriptors.size(); i++) {
       final FieldDescriptor fieldDescriptor = fieldDescriptors.get(i);
@@ -917,8 +1003,15 @@ public class ProtoToLogicalTypeConverter {
       final String branchName = getMeta(fieldDescriptor)
           .flatMap(getParam(CommonConstants.LOGICAL_BRANCH_PROP))
           .orElse(fieldDescriptor.getName());
-      final String typeName = typeNameParam(
-          fieldDescriptor, oneOfDescriptor.getName() + "_" + branchName, fieldSchema);
+      if (ctx.namesAsWritten()) {
+        // Which of the two names a member has turns on the fields before it: as written, it
+        // is the one it has.
+        branchParams = branchParams != null
+            ? new LinkedHashMap<>(branchParams) : new LinkedHashMap<>();
+        branchParams.put(Schema.PROTOBUF_FIELD_NAME, fieldDescriptor.getName());
+      }
+      final String typeName = typeNameParam(fieldDescriptor,
+          oneOfDescriptor.getName() + "_" + branchName, fieldSchema, ctx.namesAsWritten());
       if (typeName != null) {
         branchParams = branchParams != null
             ? new LinkedHashMap<>(branchParams) : new LinkedHashMap<>();
@@ -1038,7 +1131,8 @@ public class ProtoToLogicalTypeConverter {
           ? new LinkedHashMap<>(fieldParams) : new LinkedHashMap<>();
       effectiveParams.put(Schema.PROTOBUF_FIELD_NUMBER, String.valueOf(field.getNumber()));
     }
-    final String typeName = typeNameParam(field, field.getName(), fieldSchema);
+    final String typeName = typeNameParam(field, field.getName(), fieldSchema,
+        ctx.namesAsWritten());
     if (typeName != null) {
       effectiveParams = effectiveParams != null
           ? new LinkedHashMap<>(effectiveParams) : new LinkedHashMap<>();
@@ -1132,14 +1226,40 @@ public class ProtoToLogicalTypeConverter {
    * {@code .confluent.type.Decimal} fields.
    */
   private static boolean isUserParam(String key) {
-    if (key.startsWith("flink.")
+    return !isReservedParam(key) && !Schema.isFormatNativeParam(key);
+  }
+
+  /**
+   * True for a google.protobuf wrapper of a scalar, which is read as that scalar, one that may
+   * be null. The writer writes such a scalar as an optional field, not as the wrapper.
+   */
+  public static boolean isScalarWrapper(Descriptor message) {
+    switch (message.getFullName()) {
+      case CommonConstants.PROTOBUF_DOUBLE_WRAPPER_TYPE:
+      case CommonConstants.PROTOBUF_FLOAT_WRAPPER_TYPE:
+      case CommonConstants.PROTOBUF_INT64_WRAPPER_TYPE:
+      case CommonConstants.PROTOBUF_UINT64_WRAPPER_TYPE:
+      case CommonConstants.PROTOBUF_INT32_WRAPPER_TYPE:
+      case CommonConstants.PROTOBUF_UINT32_WRAPPER_TYPE:
+      case CommonConstants.PROTOBUF_BOOL_WRAPPER_TYPE:
+      case CommonConstants.PROTOBUF_STRING_WRAPPER_TYPE:
+      case CommonConstants.PROTOBUF_BYTES_WRAPPER_TYPE:
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  /**
+   * True for a Meta.params key this converter keeps for itself: it reads such a key as how a
+   * field's type is encoded, and returns none as a param. The writer writes none a type gives.
+   */
+  public static boolean isReservedParam(String key) {
+    return key.startsWith("flink.")
         || key.startsWith("connect.")
         || key.startsWith(CommonConstants.LOGICAL_PREFIX)
-        || Schema.isFormatNativeParam(key)) {
-      return false;
-    }
-    return !CommonConstants.PROTOBUF_PRECISION_PROP.equals(key)
-        && !CommonConstants.PROTOBUF_SCALE_PROP.equals(key);
+        || CommonConstants.PROTOBUF_PRECISION_PROP.equals(key)
+        || CommonConstants.PROTOBUF_SCALE_PROP.equals(key);
   }
 
   private static String getDescription(FieldDescriptor field) {
@@ -1155,12 +1275,15 @@ public class ProtoToLogicalTypeConverter {
    * The protobuf.name param of a field or oneof member whose own message or enum, inlined and
    * declared in the field's message, is not named as the writer derives it from
    * {@code derivedFrom}, or is shared with another field, which only a pin on each keeps; null
-   * otherwise. A type declared elsewhere keeps no name.
+   * otherwise. A type declared elsewhere keeps no name. The name Flink's writer derives is
+   * taken as derived too. Read {@code asWritten}, every such type's name is told: which name
+   * the writer derives for one turns on the attributes before it, whose order may change.
    */
-  static String typeNameParam(FieldDescriptor field, String derivedFrom, Schema fieldSchema) {
+  static String typeNameParam(FieldDescriptor field, String derivedFrom, Schema fieldSchema,
+      boolean asWritten) {
     final String name = fieldSchema.getType() == Schema.Type.NAMED_TYPE_REF
         ? null : ownTypeName(field);
-    if (name == null || isShared(field)) {
+    if (name == null || isShared(field) || asWritten) {
       return name;
     }
     String suffix = typeSuffix(field, fieldSchema);
@@ -1229,7 +1352,7 @@ public class ProtoToLogicalTypeConverter {
       if (!oneof.getName().equals(oneofName)) {
         continue;
       }
-      for (FieldDescriptor member : oneof.getFields()) {
+      for (FieldDescriptor member : members(oneof)) {
         String name = ownTypeName(member);
         if (name != null) {
           names.put(getMeta(member).flatMap(getParam(CommonConstants.LOGICAL_BRANCH_PROP))
@@ -1815,6 +1938,54 @@ public class ProtoToLogicalTypeConverter {
     boolean hasValueOneof = oneofs.stream()
         .anyMatch(o -> CommonConstants.VALUE_FIELD.equals(o.getName()));
     return (hasKeyRegular || hasKeyOneof) && (hasValueRegular || hasValueOneof);
+  }
+
+  /**
+   * The first map entry of the messages' fields, at any depth, whose key or value field that is
+   * no oneof member has a number the writer would not give it, told as a field that would be
+   * renumbered; null if none. A map has no place for such a number: the writer gives the key
+   * and then the value the lowest numbers their unions' members leave.
+   */
+  public static String entryFieldRenumbered(final List<Descriptor> messages) {
+    for (Descriptor message : messages) {
+      for (FieldDescriptor field : message.getFields()) {
+        // A message of an entry's shape is an entry as a repeated field's, as it is read.
+        // One another file declares is one too: the writer writes an entry of its own.
+        String entry = field.isRepeated() && isMapDescriptor(field)
+            ? renumbered(field.getMessageType()) : null;
+        if (entry != null) {
+          return entry;
+        }
+      }
+      String nested = entryFieldRenumbered(message.getNestedTypes());
+      if (nested != null) {
+        return nested;
+      }
+    }
+    return null;
+  }
+
+  private static String renumbered(final Descriptor entry) {
+    Set<Integer> taken = new HashSet<>();
+    for (OneofDescriptor oneof : entry.getRealOneofs()) {
+      oneof.getFields().forEach(member -> taken.add(member.getNumber()));
+    }
+    int next = 1;
+    for (String part : Arrays.asList(CommonConstants.KEY_FIELD, CommonConstants.VALUE_FIELD)) {
+      FieldDescriptor field = entry.findFieldByName(part);
+      if (field == null || field.getRealContainingOneof() != null) {
+        continue;
+      }
+      while (taken.contains(next)) {
+        next++;
+      }
+      if (field.getNumber() != next) {
+        return "field " + part + " of map entry " + entry.getName() + " has the number "
+            + field.getNumber() + ", which would be written as " + next;
+      }
+      next++;
+    }
+    return null;
   }
 
   private static boolean isMapDescriptor(final FieldDescriptor fieldDescriptor) {
