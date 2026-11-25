@@ -26,7 +26,6 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.EnumHashBiMap;
 import com.google.common.collect.Lists;
-import io.confluent.avro.type.VariantLogicalType;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Metadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind;
@@ -63,7 +62,6 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 import org.apache.avro.JsonProperties;
-import org.apache.avro.LogicalType;
 import org.apache.avro.NameValidator;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaCompatibility;
@@ -838,10 +836,6 @@ public class AvroSchema implements ParsedSchema {
         if (message == null) {
           return null;
         }
-        if (isVariant(schema)) {
-          // A variant is one value of Type.ANY, not a record to walk into.
-          return transformLeaf(ctx, message, transform, fieldCtx);
-        }
         Schema recordSchema = schema;
         if (message instanceof GenericContainer) {
           // Use the schema from the message if it exists, so schema evolution works properly
@@ -874,34 +868,22 @@ public class AvroSchema implements ParsedSchema {
         }
         return message;
       default:
-        return transformLeaf(ctx, message, transform, fieldCtx);
-    }
-  }
-
-  private static Object transformLeaf(RuleContext ctx, Object message, FieldTransform transform,
-      FieldContext fieldCtx) {
-    if (fieldCtx != null) {
-      try {
-        Set<String> ruleTags = ctx.rule().getTags();
-        if (ruleTags.isEmpty()) {
-          return fieldTransform(ctx, message, transform, fieldCtx);
-        } else {
-          if (!RuleContext.disjoint(fieldCtx.getTags(), ruleTags)) {
-            return fieldTransform(ctx, message, transform, fieldCtx);
+        if (fieldCtx != null) {
+          try {
+            Set<String> ruleTags = ctx.rule().getTags();
+            if (ruleTags.isEmpty()) {
+              return fieldTransform(ctx, message, transform, fieldCtx);
+            } else {
+              if (!RuleContext.disjoint(fieldCtx.getTags(), ruleTags)) {
+                return fieldTransform(ctx, message, transform, fieldCtx);
+              }
+            }
+          } catch (RuleException e) {
+            throw new RuntimeException(e);
           }
         }
-      } catch (RuleException e) {
-        throw new RuntimeException(e);
-      }
+        return message;
     }
-    return message;
-  }
-
-  private static boolean isVariant(Schema schema) {
-    // Read the property, not getLogicalType(): that is null for a schema parsed before
-    // AvroSchemaUtils registered the variant logical type.
-    return schema.getType() == Schema.Type.RECORD
-        && VariantLogicalType.NAME.equals(schema.getProp(LogicalType.LOGICAL_TYPE_PROP));
   }
 
   private static Object fieldTransform(RuleContext ctx, Object message, FieldTransform transform,
@@ -1148,7 +1130,7 @@ public class AvroSchema implements ParsedSchema {
   private RuleContext.Type getType(Schema schema) {
     switch (schema.getType()) {
       case RECORD:
-        return isVariant(schema) ? Type.ANY : Type.RECORD;
+        return Type.RECORD;
       case ENUM:
         return Type.ENUM;
       case ARRAY:

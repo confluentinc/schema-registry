@@ -1279,7 +1279,12 @@ public class JsonSchema implements ParsedSchema {
       CombinedSchema.ValidationCriterion criterion = combinedSchema.getCriterion();
       Collection<Schema> subschemas = combinedSchema.getSubschemas();
       if (criterion.equals(CombinedSchema.ALL_CRITERION)) {
+        // An empty conjunct adds no constraint, so it is skipped when another gives the type.
+        boolean typed = subschemas.stream().anyMatch(s -> !(s instanceof EmptySchema));
         for (Schema subschema : subschemas) {
+          if (typed && subschema instanceof EmptySchema) {
+            continue;
+          }
           message = toTransformedMessage(ctx, subschema, path, message, transform);
         }
         return message;
