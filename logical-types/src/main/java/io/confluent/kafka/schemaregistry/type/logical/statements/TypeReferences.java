@@ -27,6 +27,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -205,15 +206,26 @@ public final class TypeReferences {
   /**
    * The types a type's references are of, by the names the type has for them: each
    * reference's name, its subject, the referred type's own name and the names imported
-   * from it. A reference that cannot be read is left out.
+   * from it; and the types those refer to in turn, by the names they have for them. A
+   * reference that cannot be read is left out.
    */
   static Map<String, Schema> referredTypes(TypeLookup lookup, String referrer,
       List<SchemaReference> references, Map<String, String> imports) {
     Map<String, Schema> types = new HashMap<>();
+    collectReferred(lookup, referrer, references, imports, types, new HashSet<>());
+    return types;
+  }
+
+  private static void collectReferred(TypeLookup lookup, String referrer,
+      List<SchemaReference> references, Map<String, String> imports,
+      Map<String, Schema> types, Set<String> seen) {
     for (SchemaReference ref : references) {
+      String subject = referenced(referrer, ref.getSubject());
+      if (!seen.add(subject + " " + ref.getVersion())) {
+        continue;
+      }
       LogicalType referred;
       try {
-        String subject = referenced(referrer, ref.getSubject());
         SchemaMetadata md = lookup.version(subject, ref.getVersion());
         referred = md == null ? null : lookup.logicalType(subject, md);
       } catch (RuntimeException e) {
@@ -241,8 +253,11 @@ public final class TypeReferences {
         types.putIfAbsent(name, root);
       }
       referred.getNamedTypes().forEach(types::putIfAbsent);
+      if (referred.getReferences() != null) {
+        collectReferred(lookup, subject, referred.getReferences(),
+            referred.getExternalImports(), types, seen);
+      }
     }
-    return types;
   }
 
   public static Set<String> definedNames(TypeLookup lookup, String referrer,

@@ -468,6 +468,9 @@ public final class TypeAlter {
       moveDeletedReferences();
       refuseOlderReferences(lookup, subject, original.getReferences(), references, policy,
           "Type " + subject + " cannot be changed so", "drop");
+      if (format == SchemaType.JSON) {
+        refuseNewOverlaps();
+      }
       edited = edited();
       ParsedSchema stored = lookup.parse(md);
       ParsedSchema written;
@@ -844,7 +847,7 @@ public final class TypeAlter {
       Formats.refuseUnwritable(format, field, knownTypes());
       Map<String, Object> params = new LinkedHashMap<>(field.getParams());
       if (format == SchemaType.PROTOBUF) {
-        params.put(Schema.PROTOBUF_FIELD_NUMBER, String.valueOf(nextNumber(fields)));
+        params.put(Schema.PROTOBUF_FIELD_NUMBER, String.valueOf(numberGiven(field, fields)));
       }
       // A nullable attribute without a default reads as null for existing data.
       boolean nullDefault = !field.hasDefaultValue() && field.getSchema().isNullable();
@@ -1012,7 +1015,7 @@ public final class TypeAlter {
       }
       Schema type = parse(aliases -> TypeScripts.typeScript(a.type(), aliases))
           .getRootSchema();
-      Formats.refuseUnwritable(format, type, knownTypes());
+      Formats.refuseUnwritable(format, type, knownTypes(), "attribute " + a.name());
       Field f = fields.get(i);
       Map<String, Object> params = f.getParams();
       // A type of the same kind keeps the native names pinned on it; another kind gets new.
@@ -1592,16 +1595,53 @@ public final class TypeAlter {
    */
   // The types a name in a type text just parsed may be of: the type's own and the text's.
   private Map<String, Schema> knownTypes() {
-    Map<String, Schema> known = new HashMap<>();
-    // Only a JSON type is judged by what the types it refers to are.
-    if (format == SchemaType.JSON) {
-      Map<String, String> imports = new HashMap<>(externalImports);
-      imports.putAll(parsedImports);
-      known.putAll(TypeReferences.referredTypes(lookup, subject, references, imports));
-    }
-    known.putAll(namedTypes);
+    Map<String, String> imports = new HashMap<>(externalImports);
+    imports.putAll(parsedImports);
+    Map<String, Schema> known = new HashMap<>(namedTypes);
     known.putAll(parsedTypes);
+    return withReferred(known, references, imports);
+  }
+
+  // Only a JSON type is judged by what the types it refers to are: those as the references
+  // have them, whatever the type holds under their names.
+  private Map<String, Schema> withReferred(Map<String, Schema> known,
+      List<SchemaReference> to, Map<String, String> imports) {
+    if (format == SchemaType.JSON) {
+      TypeReferences.referredTypes(lookup, subject, to, imports).forEach((name, type) -> {
+        if (externalTypes.contains(name) || !known.containsKey(name)) {
+          known.put(name, type);
+        }
+      });
+    }
     return known;
+  }
+
+  // A reference moved to another version of its type gives the union branches of that type
+  // its attributes there: a union whose branches a value could not be both of, and could
+  // then, is refused; the rows stored under one branch would be read as the other's.
+  private void refuseNewOverlaps() {
+    Map<String, Integer> versions = new HashMap<>();
+    original.getReferences().forEach(r -> versions.put(
+        TypeReferences.referenced(subject, r.getSubject()), r.getVersion()));
+    if (references.stream().allMatch(r -> r.getVersion().equals(versions.getOrDefault(
+        TypeReferences.referenced(subject, r.getSubject()), r.getVersion())))) {
+      return;
+    }
+    Map<String, Schema> before = withReferred(new HashMap<>(original.getNamedTypes()),
+        original.getReferences(), original.getExternalImports());
+    Map<String, Schema> after = knownTypes();
+    List<Schema> types = new ArrayList<>(List.of(root));
+    namedTypes.forEach((name, type) -> {
+      if (!externalTypes.contains(name)) {
+        types.add(type);
+      }
+    });
+    for (Schema type : types) {
+      String[] found = Formats.newlyOverlapping(type, before, after, null);
+      if (found != null) {
+        throw Formats.newlyOverlapping(refused(), found);
+      }
+    }
   }
 
   private LogicalType parse(TypeReferences.ScriptBuilder builder) {
@@ -2781,6 +2821,37 @@ public final class TypeAlter {
 
   // Above every number any version used, so that a new field never takes the data of a
   // dropped one.
+  // The number a new attribute says, where no field has it and none of a version had; the
+  // next free one where it says none, as for a union, whose members are numbered.
+  private int numberGiven(Field field, List<Field> fields) {
+    int given = numberIn(field.getParams());
+    if (given <= 0 || field.getSchema().getType() == Schema.Type.UNION) {
+      return nextNumber(fields);
+    }
+    String has = null;
+    for (Field f : fields) {
+      if (numberIn(f.getParams()) == given) {
+        has = "attribute " + f.getName() + " has it";
+      }
+      if (f.getSchema().getType() == Schema.Type.UNION) {
+        for (UnionBranch b : f.getSchema().getBranches()) {
+          if (numberIn(b.getParams()) == given) {
+            has = "branch " + b.getName() + " of attribute " + f.getName() + " has it";
+          }
+        }
+      }
+    }
+    if (has == null && (usedNumbers.contains(given) || unreserved(given) != given)) {
+      has = usedNumbers.contains(given) ? "an attribute of an earlier version had it"
+          : "Protobuf keeps it for itself";
+    }
+    if (has != null) {
+      throw new TypeRefusedException("Attribute " + field.getName() + " cannot have the "
+          + "Protobuf field number " + given + ": " + has + "; give it another, or none");
+    }
+    return given;
+  }
+
   private int nextNumber(List<Field> fields) {
     int max = usedNumbers.isEmpty() ? 0 : usedNumbers.last();
     for (Field f : fields) {

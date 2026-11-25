@@ -2549,9 +2549,9 @@ class TypeAlterTest {
         "(id BIGINT NOT NULL, u UNION(r1 STRUCT(a INT), r2 STRUCT(b STRING)))");
     assertThatThrownBy(() -> registry.alter("jf", new AlterAttributeType("u",
         "UNION(r1 STRUCT(a INT, b STRING), r2 STRUCT(b STRING))")))
-        .isInstanceOf(TypeRefusedException.class).hasMessage("A UNION in a JSON type cannot "
-            + "have branches r1 and r2, which are written as one JSON type: a value of "
-            + "either would match both");
+        .isInstanceOf(TypeRefusedException.class).hasMessage("A UNION of attribute u in a "
+            + "JSON type cannot have branches r1 and r2, which are written as one JSON type: "
+            + "a value of either would match both");
     assertThat(version("jf")).isEqualTo(1);
     // A row that is a name is the row it is of.
     registry.create("jg", SchemaType.JSON, BodyKind.STRUCT, "(a INT)");
@@ -2563,6 +2563,60 @@ class TypeAlterTest {
     registry.alter("jf", new AlterAttributeType("u",
         "UNION(r1 STRUCT(a INT, c INT), r2 STRUCT(b STRING))"));
     assertThat(version("jf")).isEqualTo(2);
+  }
+
+  // A branch that is a name is of the version of its type the reference is to. A statement
+  // that moves the reference to a later one gives the branch that version's attributes: where
+  // a value could then be both branches', it is refused, as giving the branch them would be.
+  @Test
+  void aJsonUnionsNamedBranchIsNotMovedToAVersionAnotherBranchIsReadAs() {
+    registry.create("w1r", SchemaType.JSON, BodyKind.STRUCT, "(a INT)");
+    create("w1u", SchemaType.JSON, "(id INT, u UNION(x w1r, y STRUCT(b STRING)))");
+    registry.alter("w1r", new AddAttribute("b", "STRING"));
+    assertThatThrownBy(() -> registry.alter("w1u", new AddAttribute("z", "w1r")))
+        .isInstanceOf(TypeRefusedException.class).hasMessage("Type w1u cannot be changed so: "
+            + "a type it refers to would be of another version, and with that one's "
+            + "attributes branches x and y of the UNION of attribute u would be written as "
+            + "one JSON type: a value of either would match both");
+    assertThat(version("w1u")).isEqualTo(1);
+    // A statement that moves no reference leaves the union as it is.
+    registry.alter("w1u", new AddAttribute("q", "INT"));
+    assertThat(version("w1u")).isEqualTo(2);
+    assertThat(registry.latest("w1u").getReferences()).extracting(SchemaReference::getVersion)
+        .containsExactly(1);
+
+    // A name of a name: a branch is what the type its type refers to is.
+    registry.create("nu1", SchemaType.JSON, BodyKind.OTHER, "UNION(c STRUCT(a INT), d BOOLEAN)");
+    registry.create("nu2", SchemaType.JSON, BodyKind.OTHER, "UNION(e nu1, f STRING)");
+    assertThatThrownBy(() -> create("nu3", SchemaType.JSON, "(u UNION(x BOOLEAN, y nu2))"))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("cannot have branches x and y");
+    create("nu4", SchemaType.JSON, "(u UNION(x INT, y nu2))");
+  }
+
+  // A number said for a new Protobuf attribute is its number where no field has it and
+  // none of a version had; it is not left out without a word.
+  @Test
+  void aProtobufAttributeIsAddedWithTheNumberSaid() {
+    create("pnn", SchemaType.PROTOBUF, "(a INT, b STRING, u UNION(x INT, y STRING))");
+    registry.alter("pnn", new AddAttribute("e", "INT WITH ('protobuf.field.number' = '9')"));
+    assertThat(numbers(message("pnn"))).contains("e=9");
+    registry.alter("pnn", new AddAttribute("f", "INT"));
+    assertThat(numbers(message("pnn"))).contains("f=10");
+    String[][] taken = {{"2", "attribute b has it"}, {"4", "branch y of attribute u has it"},
+        {"19000", "Protobuf keeps it for itself"}};
+    for (String[] number : taken) {
+      assertThatThrownBy(() -> registry.alter("pnn", new AddAttribute("g",
+          "INT WITH ('protobuf.field.number' = '" + number[0] + "')")))
+          .isInstanceOf(TypeRefusedException.class).hasMessage("Attribute g cannot have the "
+              + "Protobuf field number " + number[0] + ": " + number[1]
+              + "; give it another, or none");
+    }
+    registry.alter("pnn", new DropAttribute("e", false));
+    assertThatThrownBy(() -> registry.alter("pnn", new AddAttribute("g",
+        "INT WITH ('protobuf.field.number' = '9')")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("an attribute of an earlier version had it");
   }
 
   // A JSON union's null is one of its alternatives, beside its members, as in Avro: one

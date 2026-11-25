@@ -101,8 +101,8 @@ class FormatsTest {
     assertThatThrownBy(() -> Formats.refuseUnwritable(SchemaType.JSON,
         struct("(u UNION(a BIGINT, b DOUBLE))")))
         .isInstanceOf(TypeRefusedException.class)
-        .hasMessage("A UNION in a JSON type cannot have branches a and b, which are written "
-            + "as one JSON type: a value of either would match both");
+        .hasMessage("A UNION of attribute u in a JSON type cannot have branches a and b, "
+            + "which are written as one JSON type: a value of either would match both");
 
     // A branch that is a union is written as any of its members is: a value of one of them
     // that another branch is written as would match both.
@@ -132,12 +132,14 @@ class FormatsTest {
         "UNION(r1 STRUCT<a INT, b STRING>, r2 STRUCT<b STRING>)",
         "UNION(r1 STRUCT<a INT>, r2 STRUCT<a INT>)",
         "UNION(r1 STRUCT<a INT>, r2 STRUCT<a STRING>)",
+        "UNION(r1 STRUCT<a INT NOT NULL>, r2 STRUCT<a BIGINT NOT NULL>)",
         "UNION(r1 STRUCT<x INT>, r2 UNION(c STRING, d STRUCT<x INT>))",
         // An empty array is a value of any type written as one.
         "UNION(r1 ARRAY<INT>, r2 ARRAY<STRING>)",
         "UNION(r1 ARRAY<INT>, r2 MAP<INT, STRING>)",
         // A map written as an object takes any property.
         "UNION(r1 MAP<STRING, INT>, r2 STRUCT<a INT>)",
+        "UNION(r1 MAP<STRING, INT>, r2 STRUCT<a INT NOT NULL>)",
         "UNION(r1 MAP<STRING, INT>, r2 MAP<STRING, STRING>)",
         "UNION(r1 MULTISET<STRING>, r2 STRUCT<a INT>)"}) {
       assertThatThrownBy(() -> Formats.refuseUnwritable(SchemaType.JSON,
@@ -149,6 +151,12 @@ class FormatsTest {
     for (String union : new String[] {
         "UNION(r1 STRUCT<a INT>, r2 STRUCT<b STRING>)",
         "UNION(r1 STRUCT<a INT>, r2 STRUCT<a INT, b STRING NOT NULL>)",
+        // An attribute both require, whose value in one is never one in the other, tells
+        // two rows apart, and a row from a map of other values.
+        "UNION(r1 STRUCT<a INT NOT NULL>, r2 STRUCT<a STRING NOT NULL>)",
+        "UNION(r1 STRUCT<a STRUCT<x INT NOT NULL> NOT NULL>, "
+            + "r2 STRUCT<a STRUCT<y STRING NOT NULL> NOT NULL>)",
+        "UNION(r1 MAP<STRING, STRING>, r2 STRUCT<a INT NOT NULL>)",
         "UNION(r1 STRUCT<a INT>, r2 ARRAY<INT>, r3 INT)",
         "UNION(r1 MAP<STRING, INT>, r2 ARRAY<INT>)",
         "UNION(r1 MAP<STRING, INT>, r2 MAP<INT, STRING>)"}) {

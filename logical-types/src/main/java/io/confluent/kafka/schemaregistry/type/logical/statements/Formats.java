@@ -174,7 +174,7 @@ public final class Formats {
     refuseBadNumber(format, Schema.PROTOBUF_FIELD_NUMBER, "attribute " + f.getName(),
         f.getParams());
     refuseReservedParams(format, "attribute " + f.getName(), f.getParams().keySet());
-    refuseUnwritable(format, f.getSchema(), named);
+    refuseUnwritable(format, f.getSchema(), named, "attribute " + f.getName());
   }
 
   /**
@@ -189,6 +189,12 @@ public final class Formats {
    */
   public static void refuseUnwritable(SchemaType format, Schema schema,
       Map<String, Schema> named) {
+    refuseUnwritable(format, schema, named, null);
+  }
+
+  // within: the attribute the type is the type of, or is in the type of; null if none.
+  static void refuseUnwritable(SchemaType format, Schema schema,
+      Map<String, Schema> named, String within) {
     refuseReservedParams(format, "a type", schema.getParams().keySet());
     switch (schema.getType()) {
       case STRUCT:
@@ -200,14 +206,14 @@ public final class Formats {
               + "a Protobuf UNION is a oneof, which is always nullable");
         }
         if (format == SchemaType.JSON) {
-          refuseOverlappingBranches(schema, named);
+          refuseOverlappingBranches(schema, named, within);
         }
         for (UnionBranch b : schema.getBranches()) {
           refuseBadNumber(format, Schema.PROTOBUF_FIELD_NUMBER, "branch " + b.getName(),
               b.getParams());
           refuseBadFieldName(format, b);
           refuseReservedParams(format, "branch " + b.getName(), b.getParams().keySet());
-          refuseUnwritable(format, b.getSchema(), named);
+          refuseUnwritable(format, b.getSchema(), named, within);
         }
         break;
       case ENUM:
@@ -219,11 +225,11 @@ public final class Formats {
         break;
       case ARRAY:
       case MULTISET:
-        refuseUnwritable(format, schema.getElementType(), named);
+        refuseUnwritable(format, schema.getElementType(), named, within);
         break;
       case MAP:
-        refuseUnwritable(format, schema.getKeyType(), named);
-        refuseUnwritable(format, schema.getValueType(), named);
+        refuseUnwritable(format, schema.getKeyType(), named, within);
+        refuseUnwritable(format, schema.getValueType(), named, within);
         break;
       default:
         break;
@@ -280,26 +286,91 @@ public final class Formats {
   // oneOf refuses: two written as one scalar JSON type, as BIGINT and DOUBLE both are
   // numbers; two written as arrays, as an empty one is either's; a map written as an object
   // beside a row or another such map; and two rows one of whose values is the other's.
-  private static void refuseOverlappingBranches(Schema union, Map<String, Schema> named) {
-    List<UnionBranch> branches = union.getBranches();
-    List<List<Schema>> written = new ArrayList<>();
-    for (UnionBranch b : branches) {
-      List<Schema> types = new ArrayList<>();
-      collectWritten(b.getSchema(), named, new HashSet<>(), types);
-      written.add(types);
-    }
-    for (int j = 1; j < branches.size(); j++) {
-      for (int i = 0; i < j; i++) {
-        if (matchBoth(written.get(i), written.get(j))) {
-          throw overlapping(branches.get(i).getName(), branches.get(j).getName());
-        }
-      }
+  private static void refuseOverlappingBranches(Schema union, Map<String, Schema> named,
+      String within) {
+    String[] both = overlappingBranches(union, named);
+    if (both != null) {
+      throw new TypeRefusedException("A UNION " + (within != null ? "of " + within + " " : "")
+          + "in a JSON type cannot have branches " + both[0] + " and " + both[1]
+          + OVERLAPPING);
     }
   }
 
-  // The types a value of a branch may be written as: of a branch that is a union, those of
-  // its members, a value of any of which is a value of the branch; of one that is a name,
-  // those of the type it is of, where that is known.
+  private static final String OVERLAPPING =
+      ", which are written as one JSON type: a value of either would match both";
+
+  // The first two branches of a union a value of one of which would match the other.
+  private static String[] overlappingBranches(Schema union, Map<String, Schema> named) {
+    List<UnionBranch> branches = union.getBranches();
+    List<List<Schema>> written = new ArrayList<>();
+    for (UnionBranch b : branches) {
+      written.add(written(b.getSchema(), named));
+    }
+    for (int j = 1; j < branches.size(); j++) {
+      for (int i = 0; i < j; i++) {
+        if (matchBoth(written.get(i), written.get(j), named)) {
+          return new String[] {branches.get(i).getName(), branches.get(j).getName()};
+        }
+      }
+    }
+    return null;
+  }
+
+  /**
+   * A union in a type that would have two branches a value of one of which matches the other
+   * with the types its names are of {@code after}, and had none with those {@code before}: a
+   * reference moved to another version of its type gives a branch that type's attributes.
+   * Told as the attribute it is of, or null, and the two branches; null if there is none.
+   */
+  static String[] newlyOverlapping(Schema type, Map<String, Schema> before,
+      Map<String, Schema> after, String within) {
+    switch (type.getType()) {
+      case STRUCT:
+        for (Field f : type.getFields()) {
+          String[] found = newlyOverlapping(f.getSchema(), before, after, f.getName());
+          if (found != null) {
+            return found;
+          }
+        }
+        return null;
+      case UNION: {
+        String[] both = overlappingBranches(type, after);
+        if (both != null && overlappingBranches(type, before) == null) {
+          return new String[] {within, both[0], both[1]};
+        }
+        for (UnionBranch b : type.getBranches()) {
+          String[] found = newlyOverlapping(b.getSchema(), before, after, within);
+          if (found != null) {
+            return found;
+          }
+        }
+        return null;
+      }
+      case ARRAY:
+      case MULTISET:
+        return newlyOverlapping(type.getElementType(), before, after, within);
+      case MAP:
+        return newlyOverlapping(type.getValueType(), before, after, within);
+      default:
+        return null;
+    }
+  }
+
+  static TypeRefusedException newlyOverlapping(String refused, String[] found) {
+    return new TypeRefusedException(refused + ": a type it refers to would be of another "
+        + "version, and with that one's attributes branches " + found[1] + " and " + found[2]
+        + " of the UNION" + (found[0] != null ? " of attribute " + found[0] : "")
+        + " would be written as one JSON type: a value of either would match both");
+  }
+
+  // The types a value of a type may be written as: of a union, those of its members, a value
+  // of any of which is a value of it; of a name, those of the type it is of, where known.
+  private static List<Schema> written(Schema type, Map<String, Schema> named) {
+    List<Schema> types = new ArrayList<>();
+    collectWritten(type, named, new HashSet<>(), types);
+    return types;
+  }
+
   private static void collectWritten(Schema type, Map<String, Schema> named,
       Set<String> within, List<Schema> types) {
     if (type.getType() == Schema.Type.NAMED_TYPE_REF) {
@@ -316,17 +387,18 @@ public final class Formats {
     }
   }
 
-  private static boolean matchBoth(List<Schema> one, List<Schema> other) {
+  private static boolean matchBoth(List<Schema> one, List<Schema> other,
+      Map<String, Schema> named) {
     // A VARIANT is written as any JSON value, so a value of any other branch, a struct or
     // a collection as much as a scalar, matches it too.
     if (one.stream().anyMatch(t -> "any".equals(jsonKind(t)))
         || other.stream().anyMatch(t -> "any".equals(jsonKind(t)))) {
       return true;
     }
-    return one.stream().anyMatch(a -> other.stream().anyMatch(b -> matchBoth(a, b)));
+    return one.stream().anyMatch(a -> other.stream().anyMatch(b -> matchBoth(a, b, named)));
   }
 
-  private static boolean matchBoth(Schema a, Schema b) {
+  private static boolean matchBoth(Schema a, Schema b, Map<String, Schema> named) {
     if (jsonKind(a) != null || jsonKind(b) != null) {
       return jsonKind(a) != null && jsonKind(a).equals(jsonKind(b));
     }
@@ -334,9 +406,16 @@ public final class Formats {
       // An empty array is a value of any of them.
       return isJsonArray(a) && isJsonArray(b);
     }
-    boolean rows = a.getType() == Schema.Type.STRUCT && b.getType() == Schema.Type.STRUCT;
-    // A map written as an object takes any property, a row's among them.
-    return rows ? readsAs(a, b) || readsAs(b, a) : isJsonObject(a) && isJsonObject(b);
+    if (!isJsonObject(a) || !isJsonObject(b)) {
+      return false;
+    }
+    boolean rowA = a.getType() == Schema.Type.STRUCT;
+    boolean rowB = b.getType() == Schema.Type.STRUCT;
+    if (rowA && rowB) {
+      return !toldApart(a, b, named) && (readsAs(a, b) || readsAs(b, a));
+    }
+    // A map written as an object takes any property whose value is one of its values'.
+    return !rowA && !rowB || !toldFromMap(rowA ? a : b, rowA ? b : a, named);
   }
 
   // Whether a value of one row, written with each of its attributes, is a value of the
@@ -346,6 +425,35 @@ public final class Formats {
     row.getFields().forEach(f -> names.add(f.getName()));
     return other.getFields().stream().allMatch(f -> names.contains(f.getName())
         || f.getSchema().isNullable()) && names.stream().allMatch(n -> other.getField(n) != null);
+  }
+
+  // Two rows are told apart by an attribute both have and require whose value in the one is
+  // never one in the other; a null, which either takes where it may, tells nothing.
+  private static boolean toldApart(Schema row, Schema other, Map<String, Schema> named) {
+    for (Field f : row.getFields()) {
+      Field g = other.getField(f.getName());
+      if (g != null && !f.getSchema().isNullable() && !g.getSchema().isNullable()
+          && neverMatch(f.getSchema(), g.getSchema(), named)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // A row is told from a map written as an object by an attribute it requires whose value
+  // is never one of the map's.
+  private static boolean toldFromMap(Schema row, Schema map, Map<String, Schema> named) {
+    Schema value = map.getType() == Schema.Type.MAP ? map.getValueType()
+        : Schema.create(Schema.Type.INT);
+    return row.getFields().stream().anyMatch(f -> !f.getSchema().isNullable()
+        && neverMatch(f.getSchema(), value, named));
+  }
+
+  // Whether no value of one type is a value of the other; false where either is not known.
+  private static boolean neverMatch(Schema a, Schema b, Map<String, Schema> named) {
+    List<Schema> one = written(a, named);
+    List<Schema> other = written(b, named);
+    return !one.isEmpty() && !other.isEmpty() && !matchBoth(one, other, named);
   }
 
   // A map or multiset is written as an object where its keys are character strings, and as
@@ -366,12 +474,6 @@ public final class Formats {
     Schema.Type key = (type.getType() == Schema.Type.MAP ? type.getKeyType()
         : type.getElementType()).getType();
     return key == Schema.Type.VARCHAR || key == Schema.Type.CHAR;
-  }
-
-  private static TypeRefusedException overlapping(String one, String other) {
-    return new TypeRefusedException("A UNION in a JSON type cannot have branches " + one
-        + " and " + other + ", which are written as one JSON type: a value of either would "
-        + "match both");
   }
 
   // The JSON type a value of the type is written as, if a scalar or any; null otherwise.
