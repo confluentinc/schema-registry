@@ -203,6 +203,7 @@ public final class Formats {
     String of = within != null ? " of attribute " + within : "";
     switch (schema.getType()) {
       case STRUCT:
+        refuseSharedNumbers(format, schema, within);
         schema.getFields().forEach(f -> refuseUnwritable(format, f, named, within));
         break;
       case UNION:
@@ -240,6 +241,39 @@ public final class Formats {
         break;
       default:
         break;
+    }
+  }
+
+  // A Protobuf message's fields, and the members of the unions among them, have each a
+  // number of its own: one said for two of them is told here by their paths, and not by
+  // the writer by a message's name no statement gave.
+  private static void refuseSharedNumbers(SchemaType format, Schema row, String within) {
+    if (format != SchemaType.PROTOBUF) {
+      return;
+    }
+    Map<String, String> said = new HashMap<>();
+    for (Field f : row.getFields()) {
+      String path = within == null ? f.getName() : within + "." + f.getName();
+      if (f.getSchema().getType() != Schema.Type.UNION) {
+        refuseSharedNumber(said, f.getParams(), "attribute " + path);
+        continue;
+      }
+      for (UnionBranch b : f.getSchema().getBranches()) {
+        refuseSharedNumber(said, b.getParams(), "branch " + b.getName() + " of attribute "
+            + path);
+      }
+    }
+  }
+
+  private static void refuseSharedNumber(Map<String, String> said,
+      Map<String, Object> params, String of) {
+    Object number = params.get(Schema.PROTOBUF_FIELD_NUMBER);
+    // One that is no number is refused as that.
+    String has = number == null ? null : said.putIfAbsent(number.toString().trim(), of);
+    if (has != null) {
+      throw new TypeRefusedException(Character.toUpperCase(of.charAt(0)) + of.substring(1)
+          + " cannot have the Protobuf field number " + number + ": " + has
+          + " has it; give it another, or none");
     }
   }
 

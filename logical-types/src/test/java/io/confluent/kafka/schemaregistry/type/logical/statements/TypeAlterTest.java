@@ -815,8 +815,8 @@ class TypeAlterTest {
         "INT, CHECK (b > 0)", "INT); TYPE STRUCT(x STRING", "INT); STRUCT other (y INT")) {
       assertThatThrownBy(() -> registry.alter("one", new AddAttribute("b", text)))
           .isInstanceOf(TypeRefusedException.class)
-          .hasMessage("Attribute b is given more than one attribute's type and clauses, or "
-              + "clauses out of their order (the type, DEFAULT, CHECK, COMMENT, TAGS, WITH): "
+          .hasMessage("Attribute b is given more than one type and its clauses, or clauses "
+              + "out of their order (the type, DEFAULT, CHECK, COMMENT, TAGS, WITH): "
               + text);
     }
     // Clauses said out of their order are told as that, and not as two attributes.
@@ -948,6 +948,31 @@ class TypeAlterTest {
       assertThatThrownBy(() -> create("bn2", SchemaType.PROTOBUF, "(a INT, r " + number[0]
           + ")")).as(number[0]).isInstanceOf(TypeRefusedException.class).hasMessage(number[1]);
     }
+    // A number said for two fields of a row, or for a field and a member of a union in it,
+    // is told by their paths, in a type that is made as in a new attribute.
+    String five = " WITH ('protobuf.field.number' = '5')";
+    String[][] shared = {
+        {"STRUCT<x INT" + five + ", y INT" + five + ">", "Attribute r.y cannot have the "
+            + "Protobuf field number 5: attribute r.x has it; give it another, or none"},
+        {"STRUCT<x INT" + five + ", v UNION(p INT" + five + ", q STRING)>", "Branch p of "
+            + "attribute r.v cannot have the Protobuf field number 5: attribute r.x has it; "
+            + "give it another, or none"},
+        {"ARRAY<STRUCT<s STRUCT<x INT" + five + ", y INT" + five + ">>>", "Attribute r.s.y "
+            + "cannot have the Protobuf field number 5: attribute r.s.x has it; give it "
+            + "another, or none"}};
+    for (String[] number : shared) {
+      assertThatThrownBy(() -> registry.alter("bn", new AddAttribute("r", number[0])))
+          .as(number[0]).isInstanceOf(TypeRefusedException.class).hasMessage(number[1]);
+      assertThatThrownBy(() -> create("bn2", SchemaType.PROTOBUF, "(a INT, r " + number[0]
+          + ")")).as(number[0]).isInstanceOf(TypeRefusedException.class).hasMessage(number[1]);
+    }
+    assertThatThrownBy(() -> create("bn2", SchemaType.PROTOBUF, "(a INT" + five + ", b INT"
+        + five + ")")).isInstanceOf(TypeRefusedException.class).hasMessage("Attribute b "
+            + "cannot have the Protobuf field number 5: attribute a has it; give it another, "
+            + "or none");
+    // The same number in two rows is two fields' of two messages.
+    create("bn3", SchemaType.PROTOBUF, "(a INT, r STRUCT<x INT" + five + ", s STRUCT<y INT"
+        + five + ">>)");
     // In a type given anew the path starts at the attribute; a default, and a union that
     // may not be null, are told by their paths too.
     assertThatThrownBy(() -> registry.alter("bn", new AlterAttributeType("a",
@@ -3360,6 +3385,37 @@ class TypeAlterTest {
     registry.client.register("other", new JsonSchema("{\"type\":\"string\",\"enum\":[\"X\","
         + "\"Y\"],\"title\":\"h9\"}"));
     create("h9", SchemaType.JSON, "(id INT NOT NULL, z other, u UNION(a h9, b STRING))");
+  }
+
+  // A union's branch that is a definition of a document the type refers to is what that
+  // definition is at the version the reference moves to, as the document's root is.
+  @Test
+  void aJsonUnionsBranchThatIsADefinitionIsJudgedAtTheVersionMovedTo() throws Exception {
+    String lib = "{\"type\":\"object\",\"title\":\"%s\",\"properties\":{\"q\":{\"type\":"
+        + "\"integer\"}},\"additionalProperties\":false,\"$defs\":{\"D\":{\"enum\":[%s]}}}";
+    for (String name : List.of("dlb", "dlc")) {
+      registry.client.register(name, new JsonSchema(String.format(lib, name, "\"A\"")));
+      registry.client.register("u" + name, new JsonSchema("{\"type\":\"object\",\"title\":\"u"
+          + name + "\",\"properties\":{\"id\":{\"type\":\"integer\"},\"u\":{\"oneOf\":[{\"$ref\":"
+          + "\"" + name + "#/$defs/D\"},{\"enum\":[\"B\"]}]}},\"additionalProperties\":false}",
+          List.of(new SchemaReference(name, name, 1)),
+          Map.of(name, registry.latest(name).getSchema()), null));
+    }
+    // One that comes to take a value of the other branch, and one that does not.
+    registry.client.register("dlb", new JsonSchema(String.format(lib, "dlb", "\"A\",\"B\"")));
+    registry.client.register("dlc", new JsonSchema(String.format(lib, "dlc", "\"A\",\"C\"")));
+    assertThatThrownBy(() -> registry.alter("udlb", new AddAttribute("z", "dlb")))
+        .isInstanceOf(TypeRefusedException.class).hasMessage("Type udlb cannot be changed so: "
+            + "its reference would move, type dlb from version 1 to version 2, and with that "
+            + "version's attributes branches connect_union_field_0 and connect_union_field_1 "
+            + "of the UNION of attribute u would be written as one JSON type: a value of "
+            + "either would match both");
+    assertThat(version("udlb")).isEqualTo(1);
+    registry.alter("udlc", new AddAttribute("z", "dlc"));
+    JsonSchema moved = (JsonSchema) registry.schema("udlc");
+    for (String value : List.of("{\"u\":\"A\"}", "{\"u\":\"B\"}", "{\"u\":\"C\"}")) {
+      moved.validate(new ObjectMapper().readTree(value));
+    }
   }
 
   // A union whose branch's reference moves is judged again wherever it is: in an array, a

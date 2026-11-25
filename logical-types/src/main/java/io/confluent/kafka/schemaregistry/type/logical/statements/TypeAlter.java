@@ -496,7 +496,7 @@ public final class TypeAlter {
       refuseOlderReferences(lookup, subject, original.getReferences(), references, policy,
           "Type " + subject + " cannot be changed so", "drop");
       if (format == SchemaType.JSON) {
-        refuseNewOverlaps();
+        refuseNewOverlaps(null, null);
       }
       edited = edited();
       ParsedSchema stored = lookup.parse(md);
@@ -518,6 +518,9 @@ public final class TypeAlter {
         }
         if (format == SchemaType.JSON) {
           refuseWrittenOtherwise(stored, written, "altered");
+          // And by the definitions of the documents referred to, as the two schemas have
+          // them: each at the version its reference is to.
+          refuseNewOverlaps(stored, written);
         }
         refuseOtherColumns(md, edited, version);
         refuseIncompatible(lookup, subject, format, md, softDeleted, versions, edited, policy,
@@ -991,8 +994,8 @@ public final class TypeAlter {
       if (one == null || one.getFields().size() != 1 || !one.getParams().isEmpty()
           || one.getDoc() != null || !one.getTags().isEmpty() || !one.getRules().isEmpty()) {
         throw new TypeRefusedException("Attribute " + a.name() + " is given more than one "
-            + "attribute's type and clauses, or clauses out of their order (the type, "
-            + "DEFAULT, CHECK, COMMENT, TAGS, WITH): " + a.field());
+            + "type and its clauses, or clauses out of their order (the type, DEFAULT, "
+            + "CHECK, COMMENT, TAGS, WITH): " + a.field());
       }
       Field field = one.getFields().get(0);
       // A type no format names brings no name: those pinned are all there are.
@@ -1821,7 +1824,7 @@ public final class TypeAlter {
   // A reference moved to another version of its type gives the union branches of that type
   // its attributes there: a union whose branches a value could not be both of, and could
   // then, is refused; the rows stored under one branch would be read as the other's.
-  private void refuseNewOverlaps() {
+  private void refuseNewOverlaps(ParsedSchema stored, ParsedSchema written) {
     Map<String, Integer> versions = new HashMap<>();
     original.getReferences().forEach(r -> versions.put(
         TypeReferences.referenced(subject, r.getSubject()), r.getVersion()));
@@ -1843,13 +1846,35 @@ public final class TypeAlter {
     KnownTypes before = KnownTypes.of(original.getNamedTypes());
     before.adopt(referred(original.getReferences(), original.getExternalImports()),
         original.getExternalTypes()::contains);
+    withDefinitions(before, stored);
     for (Schema type : types) {
-      String[] found = Formats.newlyOverlapping(type, before, knownTypes(type), null);
+      String[] found = Formats.newlyOverlapping(type, before,
+          withDefinitions(knownTypes(type), written), null);
       if (found != null) {
         throw Formats.newlyOverlapping(refused(), "its reference would move, " + moved,
             found);
       }
     }
+  }
+
+  // A definition of a document referred to is no type of that document as it is read by
+  // itself, nor of this type as the registry gives it: it is what the schema read with its
+  // references has under the definition's name. Known so where it is not known otherwise.
+  private static KnownTypes withDefinitions(KnownTypes known, ParsedSchema schema) {
+    if (schema == null) {
+      return known;
+    }
+    try {
+      LogicalTypeConversion.toLogicalType(schema).getNamedTypes().forEach((name, type) -> {
+        if (known.get(name) == null) {
+          known.put(name, type);
+        }
+      });
+    } catch (RuntimeException e) {
+      // A schema that cannot be read is refused as that.
+      return known;
+    }
+    return known;
   }
 
   // The names the type's attributes are of, and those of the named types they are of in
