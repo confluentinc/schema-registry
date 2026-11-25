@@ -26,12 +26,17 @@ import io.confluent.kafka.schemaregistry.type.logical.Schema.EnumValue;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.Field;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.UnionBranch;
 import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
+import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTypeConverter;
 import io.confluent.kafka.schemaregistry.type.logical.avro.LogicalTypeToAvroConverter;
 import io.confluent.kafka.schemaregistry.type.logical.json.LogicalTypeToJsonConverter;
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.LogicalTypeToProtoConverter;
-import java.util.HashMap;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 /** What depends on the schema format a type is registered in. */
 public final class Formats {
@@ -126,6 +131,11 @@ public final class Formats {
       throw new TypeRefusedException("A PROTOBUF type cannot be an ENUM: the root of a "
           + "Protobuf schema is a message");
     }
+    if (lt.getName() != null) {
+      refuseReservedParams(format, "type " + lt.getName(), root.getParams().keySet());
+    }
+    lt.getNamedTypes().forEach((name, s) ->
+        refuseReservedParams(format, "type " + name, s.getParams().keySet()));
     refuseUnwritable(format, lt.getRootSchema());
     lt.getNamedTypes().values().forEach(s -> refuseUnwritable(format, s));
   }
@@ -143,6 +153,7 @@ public final class Formats {
     }
     refuseBadNumber(format, Schema.PROTOBUF_FIELD_NUMBER, "attribute " + f.getName(),
         f.getParams());
+    refuseReservedParams(format, "attribute " + f.getName(), f.getParams().keySet());
     refuseUnwritable(format, f.getSchema());
   }
 
@@ -150,6 +161,7 @@ public final class Formats {
    * As {@link #refuseUnwritable(SchemaType, LogicalType)}, for one type and those in it.
    */
   public static void refuseUnwritable(SchemaType format, Schema schema) {
+    refuseReservedParams(format, "a type", schema.getParams().keySet());
     switch (schema.getType()) {
       case STRUCT:
         schema.getFields().forEach(f -> refuseUnwritable(format, f));
@@ -165,6 +177,8 @@ public final class Formats {
         for (UnionBranch b : schema.getBranches()) {
           refuseBadNumber(format, Schema.PROTOBUF_FIELD_NUMBER, "branch " + b.getName(),
               b.getParams());
+          refuseBadFieldName(format, b);
+          refuseReservedParams(format, "branch " + b.getName(), b.getParams().keySet());
           refuseUnwritable(format, b.getSchema());
         }
         break;
@@ -172,6 +186,7 @@ public final class Formats {
         for (EnumValue v : schema.getEnumValues()) {
           refuseBadNumber(format, Schema.PROTOBUF_ENUM_NUMBER, "value " + v.getSymbol(),
               v.getParams());
+          refuseReservedParams(format, "value " + v.getSymbol(), v.getParams().keySet());
         }
         break;
       case ARRAY:
@@ -184,6 +199,36 @@ public final class Formats {
         break;
       default:
         break;
+    }
+  }
+
+  /**
+   * Refuses a property under a name the Protobuf format keeps for itself: its reader takes
+   * such a property for how a type is encoded, so it would change the type and not be kept.
+   */
+  static void refuseReservedParams(SchemaType format, String of, Collection<String> names) {
+    if (format != SchemaType.PROTOBUF) {
+      return;
+    }
+    for (String name : names) {
+      if (ProtoToLogicalTypeConverter.isReservedParam(name)) {
+        throw new TypeRefusedException("Property " + name + " of " + of + " cannot be given "
+            + "in a PROTOBUF type: the format keeps the names flink.*, connect.*, logical.*, "
+            + "precision and scale for how it encodes a type");
+      }
+    }
+  }
+
+  // A member's field name is a Protobuf identifier; whether another field has it is the
+  // writer's to say, which names the fields around it.
+  private static void refuseBadFieldName(SchemaType format, UnionBranch b) {
+    Object name = b.getParams().get(Schema.PROTOBUF_FIELD_NAME);
+    if (format != SchemaType.PROTOBUF || name == null) {
+      return;
+    }
+    if (!name.toString().matches("[A-Za-z_][A-Za-z0-9_]*")) {
+      throw new TypeRefusedException("Property " + Schema.PROTOBUF_FIELD_NAME + " of branch "
+          + b.getName() + " is not a valid field name: '" + name + "'");
     }
   }
 
@@ -206,31 +251,44 @@ public final class Formats {
   // Refuses a JSON UNION two of whose branches are written as one JSON type, as BIGINT and
   // DOUBLE both are numbers: a value of either would match both, which its oneOf refuses.
   private static void refuseOverlappingBranches(Schema union) {
-    Map<String, String> kinds = new HashMap<>();
+    Map<String, Set<String>> kinds = new LinkedHashMap<>();
     String first = null;
     String variant = null;
     for (UnionBranch b : union.getBranches()) {
-      String kind = jsonKind(b.getSchema());
+      Set<String> kind = jsonKinds(b.getSchema());
       // A VARIANT is written as any JSON value, so a value of any other branch, a struct or
       // a collection as much as a scalar, matches it too.
-      String other = "any".equals(kind) ? first : variant;
+      boolean any = kind.contains("any");
+      String other = any ? first : variant;
       if (other != null) {
         throw overlapping(other, b.getName());
       }
       if (first == null) {
         first = b.getName();
       }
-      if ("any".equals(kind)) {
+      if (any) {
         variant = b.getName();
-      } else if (kind != null) {
-        for (Map.Entry<String, String> e : kinds.entrySet()) {
-          if (kind.equals(e.getValue())) {
+      } else if (!kind.isEmpty()) {
+        for (Map.Entry<String, Set<String>> e : kinds.entrySet()) {
+          if (!Collections.disjoint(e.getValue(), kind)) {
             throw overlapping(e.getKey(), b.getName());
           }
         }
         kinds.put(b.getName(), kind);
       }
     }
+  }
+
+  // The JSON types a value of a branch may be written as: of a branch that is a union, those
+  // of its members, a value of any of which is a value of the branch.
+  private static Set<String> jsonKinds(Schema type) {
+    Set<String> kinds = new HashSet<>();
+    if (type.getType() == Schema.Type.UNION) {
+      type.getBranches().forEach(b -> kinds.addAll(jsonKinds(b.getSchema())));
+    } else if (jsonKind(type) != null) {
+      kinds.add(jsonKind(type));
+    }
+    return kinds;
   }
 
   private static TypeRefusedException overlapping(String one, String other) {
