@@ -165,6 +165,7 @@ public final class Formats {
         for (UnionBranch b : schema.getBranches()) {
           refuseBadNumber(format, Schema.PROTOBUF_FIELD_NUMBER, "branch " + b.getName(),
               b.getParams());
+          refuseBadFieldName(format, b);
           refuseUnwritable(format, b.getSchema());
         }
         break;
@@ -184,6 +185,19 @@ public final class Formats {
         break;
       default:
         break;
+    }
+  }
+
+  // A member's field name is a Protobuf identifier; whether another field has it is the
+  // writer's to say, which names the fields around it.
+  private static void refuseBadFieldName(SchemaType format, UnionBranch b) {
+    Object name = b.getParams().get(Schema.PROTOBUF_FIELD_NAME);
+    if (format != SchemaType.PROTOBUF || name == null) {
+      return;
+    }
+    if (!name.toString().matches("[A-Za-z_][A-Za-z0-9_]*")) {
+      throw new TypeRefusedException("Property " + Schema.PROTOBUF_FIELD_NAME + " of branch "
+          + b.getName() + " is not a valid field name: '" + name + "'");
     }
   }
 

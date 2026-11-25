@@ -70,6 +70,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -316,7 +317,7 @@ public class LogicalTypeToProtoConverter {
     // V1 must stay byte-equivalent to Flink's writer output, which does not
     // normalize. Normalize would expand type-name references to fully-qualified
     // form and reorder fields/imports — both visible deviations from Flink's
-    // raw descriptor emission.
+    // raw descriptor emission. The order of a type's attributes is told apart (indexFields).
     if (version != LogicalTypeVersion.V1) {
       result = result.normalize();
     }
@@ -769,6 +770,9 @@ public class LogicalTypeToProtoConverter {
       if (packageName != null && !packageName.isEmpty()) {
         fileBuilder.setPackage(packageName);
       }
+      if (!ctx.isV1()) {
+        fileBuilder.getMessageTypeBuilderList().forEach(LogicalTypeToProtoConverter::indexFields);
+      }
       final FileDescriptorProto fileDescriptorProto = fileBuilder.build();
       checkDistinctNames(fileDescriptorProto);
       return FileDescriptor.buildFrom(
@@ -789,6 +793,48 @@ public class LogicalTypeToProtoConverter {
       throw new ValidationException(
           "Failed to translate the provided schema to a Protobuf descriptor", e);
     }
+  }
+
+  /**
+   * Tells the order of a message's attributes where normalizing loses it. Normalized, a message
+   * declares its fields, its oneofs and their members by number; where the type has them
+   * otherwise, each field says its place in {@link CommonConstants#CONNECT_INDEX_PROP}.
+   */
+  private static void indexFields(DescriptorProto.Builder message) {
+    message.getNestedTypeBuilderList().forEach(LogicalTypeToProtoConverter::indexFields);
+    // As the reader takes them: the fields in no oneof, then each oneof's members.
+    final List<FieldDescriptorProto.Builder> plain = new ArrayList<>();
+    final Map<Integer, List<FieldDescriptorProto.Builder>> members = new TreeMap<>();
+    for (FieldDescriptorProto.Builder field : message.getFieldBuilderList()) {
+      if (field.hasOneofIndex() && !field.getProto3Optional()) {
+        members.computeIfAbsent(field.getOneofIndex(), k -> new ArrayList<>()).add(field);
+      } else {
+        plain.add(field);
+      }
+    }
+    final List<FieldDescriptorProto.Builder> first = new ArrayList<>();
+    members.values().forEach(oneof -> first.add(oneof.get(0)));
+    if (inNumberOrder(plain) && inNumberOrder(first)
+        && members.values().stream().allMatch(LogicalTypeToProtoConverter::inNumberOrder)) {
+      return;
+    }
+    final List<FieldDescriptorProto.Builder> fields = new ArrayList<>(plain);
+    members.values().forEach(fields::addAll);
+    for (int i = 0; i < fields.size(); i++) {
+      final FieldDescriptorProto.Builder field = fields.get(i);
+      field.getOptionsBuilder().setExtension(MetaProto.fieldMeta,
+          field.getOptions().getExtension(MetaProto.fieldMeta).toBuilder()
+              .putParams(CommonConstants.CONNECT_INDEX_PROP, String.valueOf(i)).build());
+    }
+  }
+
+  private static boolean inNumberOrder(List<FieldDescriptorProto.Builder> fields) {
+    for (int i = 1; i < fields.size(); i++) {
+      if (fields.get(i - 1).getNumber() > fields.get(i).getNumber()) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /**
@@ -838,10 +884,16 @@ public class LogicalTypeToProtoConverter {
         .filter(f -> f.getTypeName().equals(name) || f.getTypeName().endsWith("." + name))
         .map(FieldDescriptorProto::getName)
         .collect(Collectors.toList());
+    // A generated type may keep a name given it, which renaming its field does not change:
+    // beside a field or oneof of that name, that one is the one to name otherwise.
+    final boolean priorIsType = prior.equals("message") || prior.equals("enum");
+    final boolean kindIsType = kind.equals("message") || kind.equals("enum");
     throw new ValidationException("Protobuf name '" + name + "' is defined twice in " + scope
         + (prior.equals(kind) ? "" : ", as a " + prior + " and a " + kind)
         + (users.isEmpty() ? "" : " (used by fields " + String.join(", ", users) + ")")
-        + "; rename one of the fields it is generated from");
+        + (priorIsType != kindIsType
+            ? "; give the " + (priorIsType ? kind : prior) + " another name"
+            : "; rename one of the fields it is generated from"));
   }
 
   // A oneof member's field, whose type is named by the member's pin.
@@ -881,6 +933,29 @@ public class LogicalTypeToProtoConverter {
           ctx);
     } finally {
       names.exitBranch();
+    }
+  }
+
+  // A member whose field name is given keeps it, before any other is named around it.
+  private static void keepGivenMemberNames(List<Field> fields, Set<String> takenNames,
+      Map<List<String>, String> memberNames, String rowName) {
+    for (Field field : fields) {
+      if (field.getSchema().getType() != Schema.Type.UNION) {
+        continue;
+      }
+      for (UnionBranch branch : field.getSchema().getBranches()) {
+        final Object given = branch.getParams().get(Schema.PROTOBUF_FIELD_NAME);
+        if (given == null) {
+          continue;
+        }
+        if (!takenNames.add(given.toString())) {
+          throw new ValidationException("Union branch '" + branch.getName() + "' of '"
+              + field.getName() + "' in " + rowName + " keeps its field name '" + given
+              + "', which is " + (given.toString().equals(field.getName())
+                  ? "its union's name" : "another field's name"));
+        }
+        memberNames.put(Arrays.asList(field.getName(), branch.getName()), given.toString());
+      }
     }
   }
 
@@ -1014,12 +1089,15 @@ public class LogicalTypeToProtoConverter {
       takenNames.add(field.getName());
     }
     final Map<List<String>, String> memberNames = new HashMap<>();
+    keepGivenMemberNames(fields, takenNames, memberNames, rowName);
     for (Field field : fields) {
       if (field.getSchema().getType() == Schema.Type.UNION) {
         for (UnionBranch branch : field.getSchema().getBranches()) {
           reserveFieldNumber(branch.getFieldNumber(), reservedNumbers, rowName);
-          memberNames.put(Arrays.asList(field.getName(), branch.getName()),
-              memberName(field, branch, takenNames, rowName));
+          final List<String> member = Arrays.asList(field.getName(), branch.getName());
+          if (!memberNames.containsKey(member)) {
+            memberNames.put(member, memberName(field, branch, takenNames, rowName));
+          }
         }
       } else {
         reserveFieldNumber(field.getFieldNumber(), reservedNumbers, rowName);

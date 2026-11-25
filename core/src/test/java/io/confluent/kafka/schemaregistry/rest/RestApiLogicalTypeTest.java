@@ -80,9 +80,54 @@ public abstract class RestApiLogicalTypeTest {
   }
 
   /**
+   * A request with no metadata of its own is given the previous version's, which named that
+   * version's branches. The branches of the new version are the ones its own conversion
+   * records, or a branch it adds would come back named for its type.
+   */
+  @Test
+  public void testAvroUnionGainsABranchInANewVersion() throws Exception {
+    String subject = "union-grows-value";
+    restApp.restClient.registerSchema(
+        "TYPE UNION(mystr STRING, myint INT)", AvroSchema.TYPE, Collections.emptyList(), subject);
+    restApp.restClient.registerSchema("TYPE UNION(mystr STRING, myint INT, mybool BOOLEAN)",
+        AvroSchema.TYPE, Collections.emptyList(), subject);
+
+    Schema stored = restApp.restClient.getVersion(
+        RestService.DEFAULT_REQUEST_PROPERTIES, subject, 2);
+    assertTrue(stored.getMetadata().getProperties().get("confluent:union").contains("mybool"),
+        "the new version's own branches: " + stored.getMetadata().getProperties());
+    Schema logical = restApp.restClient.getVersion(
+        RestService.DEFAULT_REQUEST_PROPERTIES, subject, 2, LOGICAL, false, null);
+    assertTrue(logical.getSchema().contains("mybool"), logical.getSchema());
+  }
+
+  /**
    * The declared schema type picks the format a DDL body is converted to, and it is matched
    * without regard to case.
    */
+  @Test
+  public void testProtobufAttributeOrderSurvivesNormalization() throws Exception {
+    String subject = "order-value";
+    String ddl = "TYPE STRUCT(b BIGINT WITH ('protobuf.field.number' = '2'), "
+        + "a BIGINT WITH ('protobuf.field.number' = '1'), "
+        + "u UNION(y STRING WITH ('protobuf.field.number' = '4'), "
+        + "x INT WITH ('protobuf.field.number' = '3')))";
+    restApp.restClient.registerSchema(
+        ddl, ProtobufSchema.TYPE, Collections.emptyList(), subject, true);
+
+    // Normalized, the message declares its fields by number.
+    String stored = restApp.restClient.getVersion(
+        RestService.DEFAULT_REQUEST_PROPERTIES, subject, 1).getSchema();
+    assertTrue(stored.indexOf(" a = 1") < stored.indexOf(" b = 2"), stored);
+    assertTrue(stored.indexOf(" x = 3") < stored.indexOf(" y = 4"), stored);
+    // The type has its attributes, and the union its branches, as they were said.
+    String logical = restApp.restClient.getVersion(
+        RestService.DEFAULT_REQUEST_PROPERTIES, subject, 1, LOGICAL, false, null).getSchema();
+    assertTrue(logical.indexOf("b BIGINT") < logical.indexOf("a BIGINT"), logical);
+    assertTrue(logical.indexOf("y STRING") < logical.indexOf("x INT"), logical);
+    assertTrue(!logical.contains("connect.index"), logical);
+  }
+
   @Test
   public void testLowerCaseSchemaTypeStillConverts() throws Exception {
     String subject = "lowercase-value";
