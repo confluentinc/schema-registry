@@ -1862,11 +1862,45 @@ class TypeAlterTest {
         .hasMessageContaining("'google.protobuf.StringValue' is defined by");
     assertThat(written("NAMESPACE acme; STRUCT `Decimal` (d DECIMAL(10, 2) NOT NULL);"))
         .contains("message Decimal");
+    // A type of the name of one read by its name is read as that one, whether the file has
+    // a DECIMAL or a DATE or none: it is refused wherever.
+    for (String script : List.of(
+        "NAMESPACE confluent.type; STRUCT `Decimal` (a INT, b STRING);",
+        "NAMESPACE google.type; STRUCT `Date` (a INT NOT NULL);",
+        "NAMESPACE google.type; STRUCT TimeOfDay (a INT NOT NULL);",
+        "NAMESPACE google.protobuf; STRUCT `Timestamp` (a INT NOT NULL);")) {
+      assertThatThrownBy(() -> written(script)).as(script)
+          .isInstanceOf(ValidationException.class).hasMessageContaining("is defined by");
+    }
+    assertThat(written("NAMESPACE confluent.type; STRUCT Other (d DECIMAL(10, 2) NOT NULL);"))
+        .contains("message Other");
+    assertThat(written("NAMESPACE google.protobuf; STRUCT Other (a INT NOT NULL);"))
+        .contains("message Other");
+    // A type whose root is a scalar is one of the format's own files under its subject's
+    // name: a type that refers to it is written, as it was. And V1 is written whatever the
+    // names, as Flink writes it.
+    registry.create("pss", SchemaType.PROTOBUF, BodyKind.OTHER, "STRING");
+    create("pr", SchemaType.PROTOBUF, "(id INT, s pss)");
+    assertThat(version("pr")).isEqualTo(1);
+    assertThat(LogicalTypeToProtoConverter.fromLogicalType(TypeScripts.parse(
+        "NAMESPACE google.protobuf; STRUCT StringValue (a INT NOT NULL, b BIGINT NOT NULL);"),
+        "t", LogicalTypeVersion.V1).canonicalString()).contains("message StringValue");
+    // So is one a type refers to, which would be read as the DECIMAL it is not.
+    registry.client.register("dn", new ProtobufSchema("syntax = \"proto3\";\n\n"
+        + "package confluent.type;\n\nmessage Decimal {\n  int32 a = 1;\n  string b = 2;\n}\n"));
+    assertThatThrownBy(() -> create("du", SchemaType.PROTOBUF, "(id INT, d dn, z STRING)"))
+        .isInstanceOf(RuntimeException.class);
+    assertThat(registry.latest("du")).isNull();
     // One a type refers to is this file's to import as well.
     registry.create("ra", "confluent.Rule", SchemaType.PROTOBUF, BodyKind.STRUCT,
         "(a INT, b BIGINT)");
     create("rc", SchemaType.PROTOBUF, "(id INT, r ra)");
     assertThatThrownBy(() -> registry.alter("rc", new SetAttributeComment("id", "the id")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("Protobuf name 'confluent.Rule' is defined by");
+    // And one that a type it refers to refers to.
+    create("rd", SchemaType.PROTOBUF, "(k INT, y rc)");
+    assertThatThrownBy(() -> registry.alter("rd", new SetAttributeComment("k", "the k")))
         .isInstanceOf(TypeRefusedException.class)
         .hasMessageContaining("Protobuf name 'confluent.Rule' is defined by");
 

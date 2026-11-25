@@ -774,7 +774,11 @@ public class LogicalTypeToProtoConverter {
           dependencies.add(MetaProto.getDescriptor().getName());
         }
       }
-      refuseBuiltInNames(packageName, fileBuilder, dependencies, ctx.getExternalDependencies());
+      // V1 is written as Flink writes it, whatever the names.
+      if (!ctx.isV1()) {
+        refuseBuiltInNames(packageName, fileBuilder, dependencies,
+            ctx.getExternalDependencies());
+      }
       fileBuilder.addAllDependency(dependencies);
       if (packageName != null && !packageName.isEmpty()) {
         fileBuilder.setPackage(packageName);
@@ -834,39 +838,52 @@ public class LogicalTypeToProtoConverter {
 
   // The format's own files declare names of their own: the metadata's, the types a DECIMAL,
   // a TIMESTAMP, a DATE, a TIME or a VARIANT is written as, and the wrappers a scalar root
-  // is read by. A type of one of those names, this file's or a file's it refers to, is
-  // defined twice where the file is imported, and read as the other where it is read by name.
+  // is read by. A type of one of those names, this file's or one's it refers to, however
+  // far, is defined twice where the file is imported, and read as the other where it is
+  // read by name.
   private static void refuseBuiltInNames(String packageName, FileDescriptorProto.Builder file,
       Set<String> dependencies, List<FileDescriptor> external) {
     final Map<String, String> declared = new HashMap<>();
     final Set<String> builtIn = new HashSet<>();
-    final List<FileDescriptor> todo = new ArrayList<>();
-    Stream.of(Meta.getDescriptor(), Date.getDescriptor(), TimeOfDay.getDescriptor(),
-        Timestamp.getDescriptor(), Decimal.getDescriptor(),
-        io.confluent.protobuf.type.Variant.getDescriptor())
-        .map(Descriptor::getFile).forEach(todo::add);
-    while (!todo.isEmpty()) {
-      final FileDescriptor f = todo.remove(todo.size() - 1);
-      if (builtIn.add(f.getName()) && dependencies.contains(f.getName())) {
-        namesOf(f).forEach(name -> declared.put(name, f.getName()));
-        // And those it imports in turn, which a file that imports it may not define either.
+    // The types a DECIMAL, a TIMESTAMP, a DATE, a TIME and a VARIANT are written as, and the
+    // wrappers, are read by their names, whichever file declares them and imported or not.
+    final List<Descriptor> readByName = new ArrayList<>(ROOT_WRAPPER_DESCRIPTORS.values());
+    Stream.of(Date.getDescriptor(), TimeOfDay.getDescriptor(), Timestamp.getDescriptor(),
+        Decimal.getDescriptor(), io.confluent.protobuf.type.Variant.getDescriptor())
+        .forEach(readByName::add);
+    for (Descriptor type : readByName) {
+      declared.putIfAbsent(type.getFullName(), type.getFile().getName());
+    }
+    final List<FileDescriptor> own = new ArrayList<>();
+    own.add(Meta.getDescriptor().getFile());
+    readByName.forEach(type -> own.add(type.getFile()));
+    for (FileDescriptor f : own) {
+      builtIn.add(f.getName());
+      f.getDependencies().forEach(imported -> builtIn.add(imported.getName()));
+      // Every name of one this file imports, and of those that one imports in turn, which
+      // a file that imports it may not define either.
+      if (dependencies.contains(f.getName())) {
+        namesOf(f).forEach(name -> declared.putIfAbsent(name, f.getName()));
         for (FileDescriptor imported : f.getDependencies()) {
-          builtIn.add(imported.getName());
           namesOf(imported).forEach(name -> declared.putIfAbsent(name, imported.getName()));
         }
       }
-    }
-    for (Descriptor wrapper : ROOT_WRAPPER_DESCRIPTORS.values()) {
-      builtIn.add(wrapper.getFile().getName());
-      declared.putIfAbsent(wrapper.getFullName(), wrapper.getFile().getName());
     }
     final String prefix = packageName == null || packageName.isEmpty() ? "" : packageName + ".";
     final List<String> names = new ArrayList<>();
     file.getMessageTypeList().forEach(message -> names.add(prefix + message.getName()));
     file.getEnumTypeList().forEach(enumType -> names.add(prefix + enumType.getName()));
-    for (FileDescriptor f : external) {
-      if (dependencies.contains(f.getName()) && !builtIn.contains(f.getName())) {
+    // And the names of the files this one refers to, and of those they import in turn.
+    final List<FileDescriptor> todo = new ArrayList<>();
+    external.stream().filter(f -> dependencies.contains(f.getName())).forEach(todo::add);
+    final Set<String> seen = new HashSet<>(builtIn);
+    while (!todo.isEmpty()) {
+      final FileDescriptor f = todo.remove(todo.size() - 1);
+      // One of the format's own files under a reference's name, as a type whose root is a
+      // scalar is referred to, declares what that file does: it is that file.
+      if (seen.add(f.getName()) && own.stream().noneMatch(o -> declaresTheSame(o, f))) {
         names.addAll(namesOf(f));
+        todo.addAll(f.getDependencies());
       }
     }
     for (String name : names) {
@@ -876,6 +893,32 @@ public class LogicalTypeToProtoConverter {
             + "another name or namespace");
       }
     }
+  }
+
+  // The same messages and enums, of the same fields and values: what a file is to a reader
+  // of its types, whatever its options and the names its fields have in JSON.
+  private static boolean declaresTheSame(FileDescriptor one, FileDescriptor other) {
+    return one.getPackage().equals(other.getPackage())
+        && shapeOf(one.toProto().getMessageTypeList(), one.toProto().getEnumTypeList())
+            .equals(shapeOf(other.toProto().getMessageTypeList(),
+                other.toProto().getEnumTypeList()));
+  }
+
+  private static List<String> shapeOf(List<DescriptorProto> messages,
+      List<EnumDescriptorProto> enums) {
+    final List<String> shape = new ArrayList<>();
+    for (DescriptorProto message : messages) {
+      shape.add("message " + message.getName());
+      message.getFieldList().forEach(f -> shape.add(f.getName() + " " + f.getNumber() + " "
+          + f.getLabel() + " " + f.getType() + " " + f.getTypeName()));
+      shape.addAll(shapeOf(message.getNestedTypeList(), message.getEnumTypeList()));
+      shape.add("end " + message.getName());
+    }
+    for (EnumDescriptorProto enumType : enums) {
+      shape.add("enum " + enumType.getName());
+      enumType.getValueList().forEach(v -> shape.add(v.getName() + " " + v.getNumber()));
+    }
+    return shape;
   }
 
   private static List<String> namesOf(FileDescriptor f) {
