@@ -22,6 +22,7 @@ import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
@@ -101,8 +102,18 @@ final class TestRegistry implements TypeLookup {
         config.setCompatibilityPolicy(result.policy());
         client.updateConfig(subject, config);
       }
-      if (result.request() != null) {
-        client.registerWithRequestResponse(subject, result.request(), false);
+      RegisterSchemaRequest request = result.request();
+      if (request != null) {
+        // As the registry does: a request with no metadata or rule set of its own takes the
+        // latest version's.
+        SchemaMetadata latest = latest(subject);
+        if (latest != null && request.getMetadata() == null) {
+          request.setMetadata(latest.getMetadata());
+        }
+        if (latest != null && request.getRuleSet() == null) {
+          request.setRuleSet(latest.getRuleSet());
+        }
+        client.registerWithRequestResponse(subject, request, false);
       }
     } catch (IOException | RestClientException e) {
       throw new IllegalStateException(e);

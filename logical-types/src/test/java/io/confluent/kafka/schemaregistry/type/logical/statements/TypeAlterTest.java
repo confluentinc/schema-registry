@@ -1513,6 +1513,9 @@ class TypeAlterTest {
         .isInstanceOf(TypeRefusedException.class).hasMessage("Type ut cannot be changed so: no "
             + "PROTOBUF schema can be made of it: Union branch 'b' of 't' in ut keeps its field "
             + "name 'b', which is another field's name");
+    assertThatThrownBy(() -> registry.alter("ut", new RenameAttribute("t", "b")))
+        .isInstanceOf(TypeRefusedException.class).hasMessageEndingWith("Union branch 'b' of "
+            + "'b' in ut keeps its field name 'b', which is its union's name");
     registry.alter("ut", new RenameAttribute("t", "tt"), new DropAttribute("a", false));
     assertThat(numbers(message("ut"))).isEqualTo("t_a=3 b=4 id=1");
     assertThatThrownBy(() -> registry.alter("ut", new AddAttribute("t_a", "INT")))
