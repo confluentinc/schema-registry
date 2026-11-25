@@ -18,6 +18,7 @@ package io.confluent.kafka.schemaregistry.encryption.azure;
 
 import com.azure.core.credential.TokenCredential;
 import com.azure.core.exception.HttpResponseException;
+import com.azure.core.http.HttpPipeline;
 import com.azure.identity.ClientSecretCredentialBuilder;
 import com.azure.identity.DefaultAzureCredentialBuilder;
 import com.azure.security.keyvault.keys.KeyClientBuilder;
@@ -25,6 +26,7 @@ import com.azure.security.keyvault.keys.cryptography.CryptographyClient;
 import com.azure.security.keyvault.keys.models.KeyVaultKey;
 import com.google.crypto.tink.KmsClient;
 import io.confluent.kafka.schemaregistry.encryption.tink.KmsDriver;
+import io.confluent.kafka.schemaregistry.encryption.tink.KmsTimeouts;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.security.GeneralSecurityException;
@@ -79,6 +81,12 @@ public class AzureKmsDriver implements KmsDriver {
    */
   public static String getVersionedKeyId(Map<String, ?> configs, String kmsKeyId)
       throws GeneralSecurityException {
+    return getVersionedKeyId(configs, kmsKeyId, null);
+  }
+
+  /** As the two-argument overload, but the lookup runs on the pipeline when it is non-null. */
+  public static String getVersionedKeyId(Map<String, ?> configs, String kmsKeyId,
+      HttpPipeline pipeline) throws GeneralSecurityException {
     KeyVaultId parsed = parse(kmsKeyId);
     if (parsed.version != null) {
       // Already versioned; respect the explicitly pinned config as-is.
@@ -90,12 +98,19 @@ public class AzureKmsDriver implements KmsDriver {
     @SuppressWarnings("unchecked")
     Function<String, KeyVaultKey> testKeyResolver =
         (Function<String, KeyVaultKey>) configs.get(TEST_KEY_CLIENT);
-    Function<String, KeyVaultKey> keyResolver = testKeyResolver != null
-        ? testKeyResolver
-        : new KeyClientBuilder()
-            .vaultUrl(parsed.vaultUrl)
-            .credential(getCredentials(configs))
-            .buildClient()::getKey;
+    Function<String, KeyVaultKey> keyResolver;
+    if (testKeyResolver != null) {
+      keyResolver = testKeyResolver;
+    } else {
+      KeyClientBuilder builder = new KeyClientBuilder().vaultUrl(parsed.vaultUrl);
+      if (pipeline != null) {
+        // The pipeline already carries the credential policy.
+        builder.pipeline(pipeline);
+      } else {
+        builder.credential(getCredentials(configs));
+      }
+      keyResolver = builder.buildClient()::getKey;
+    }
     KeyVaultKey key;
     try {
       key = keyResolver.apply(parsed.name);
@@ -215,6 +230,7 @@ public class AzureKmsDriver implements KmsDriver {
       client = new AzureKmsClient();
     }
     client.withConfigs(configs);
+    client.withTimeouts(KmsTimeouts.fromConfigs(configs));
     if (credentials.isPresent()) {
       client.withCredentialsProvider(credentials.get());
     } else {
