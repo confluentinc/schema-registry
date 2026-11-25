@@ -126,6 +126,12 @@ public abstract class RestApiLogicalTypeTest {
     assertTrue(logical.indexOf("b BIGINT") < logical.indexOf("a BIGINT"), logical);
     assertTrue(logical.indexOf("y STRING") < logical.indexOf("x INT"), logical);
     assertTrue(!logical.contains("connect.index"), logical);
+
+    // A serializer that does not normalize looks the version up by a schema made of its
+    // descriptor, and finds it.
+    String built = new ProtobufSchema(new ProtobufSchema(stored).toDescriptor()).canonicalString();
+    assertEquals(1, restApp.restClient.lookUpSubjectVersion(
+        built, ProtobufSchema.TYPE, Collections.emptyList(), subject, false, false).getVersion());
   }
 
   @Test

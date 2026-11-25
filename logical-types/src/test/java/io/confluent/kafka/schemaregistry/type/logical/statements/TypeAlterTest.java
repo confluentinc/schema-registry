@@ -1586,6 +1586,8 @@ class TypeAlterTest {
     assertThat(text.indexOf(" a = 1")).isBetween(0, text.indexOf(" c = 3"));
     assertThat(text).contains("key: \"connect.index\"");
     assertThat(registry.schema("pp").normalize().canonicalString()).isEqualTo(text);
+    // A serializer looks the type up by a schema made of its descriptor, which is this text.
+    assertThat(new ProtobufSchema(message("pp")).canonicalString()).isEqualTo(text);
     assertThat(LogicalTypeToDdlConverter.toDdl(registry.logicalType("pp", registry.latest("pp"))))
         .doesNotContain("connect.index");
 

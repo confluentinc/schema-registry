@@ -822,9 +822,15 @@ public class LogicalTypeToProtoConverter {
     members.values().forEach(fields::addAll);
     for (int i = 0; i < fields.size(); i++) {
       final FieldDescriptorProto.Builder field = fields.get(i);
+      final Meta.Builder meta = field.getOptions().getExtension(MetaProto.fieldMeta).toBuilder();
+      // Never a field's one param: normalized, a list of one is printed as its element, which
+      // a schema made of the descriptor, as a serializer looks one up, does not match.
+      if (meta.getParamsCount() == 0) {
+        meta.putParams(CommonConstants.FLINK_PROPERTY_VERSION,
+            CommonConstants.FLINK_PROPERTY_CURRENT_VERSION);
+      }
       field.getOptionsBuilder().setExtension(MetaProto.fieldMeta,
-          field.getOptions().getExtension(MetaProto.fieldMeta).toBuilder()
-              .putParams(CommonConstants.CONNECT_INDEX_PROP, String.valueOf(i)).build());
+          meta.putParams(CommonConstants.CONNECT_INDEX_PROP, String.valueOf(i)).build());
     }
   }
 
