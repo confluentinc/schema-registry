@@ -932,7 +932,7 @@ public class LogicalTypeToProtoConverter {
             dependencies,
             ctx);
       }
-      return fromField(
+      return withoutNotNull(fromField(
           branch.getSchema(),
           qualifiedName,
           branch.getDoc(),
@@ -940,10 +940,33 @@ public class LogicalTypeToProtoConverter {
           nestedRows,
           nestedEnums,
           dependencies,
-          ctx);
+          ctx));
     } finally {
       names.exitBranch();
     }
+  }
+
+  // A union's member may be null whatever is said of it, and is read so: it is not marked
+  // otherwise, which the next version written of the type would only take away.
+  private static FieldDescriptorProto.Builder withoutNotNull(FieldDescriptorProto.Builder member) {
+    final Meta meta = member.getOptions().getExtension(MetaProto.fieldMeta);
+    if (!meta.containsParams(CommonConstants.FLINK_NOT_NULL)) {
+      return member;
+    }
+    final Meta.Builder without = meta.toBuilder().removeParams(CommonConstants.FLINK_NOT_NULL);
+    if (without.getParamsCount() == 1) {
+      // The marker of the writer's params, with none left to mark.
+      without.removeParams(CommonConstants.FLINK_PROPERTY_VERSION);
+    }
+    if (without.build().equals(Meta.getDefaultInstance())) {
+      member.getOptionsBuilder().clearExtension(MetaProto.fieldMeta);
+      if (member.getOptions().equals(FieldOptions.getDefaultInstance())) {
+        member.clearOptions();
+      }
+    } else {
+      member.getOptionsBuilder().setExtension(MetaProto.fieldMeta, without.build());
+    }
+    return member;
   }
 
   // A member whose field name is given keeps it, before any other is named around it.
@@ -1143,7 +1166,7 @@ public class LogicalTypeToProtoConverter {
               field, branch, branchNumber, nestedRows, nestedEnums, dependencies, ctx);
           fieldProtoBuilder.setName(memberName);
           // Strip the format-native number (emitted via the native slot) from the branch meta.
-          Map<String, Object> branchParams = Schema.stripFormatNativeParams(branch.getParams());
+          Map<String, Object> branchParams = userParams(branch.getParams());
           Map<String, String> stringParams = new LinkedHashMap<>();
           branchParams.forEach((k, v) -> stringParams.put(k, String.valueOf(v)));
           if (!memberName.equals(branch.getName())) {
@@ -2000,12 +2023,23 @@ public class LogicalTypeToProtoConverter {
     }
   }
 
+  // The params written as a field's own: not the format-native ones, and not one named as
+  // the place the writer tells (indexFields), which the reader would take for one.
+  private static Map<String, Object> userParams(Map<String, Object> params) {
+    Map<String, Object> userParams = Schema.stripFormatNativeParams(params);
+    if (userParams.containsKey(CommonConstants.CONNECT_INDEX_PROP)) {
+      userParams = new LinkedHashMap<>(userParams);
+      userParams.remove(CommonConstants.CONNECT_INDEX_PROP);
+    }
+    return userParams;
+  }
+
   private static void addFieldTagsAndParams(
       FieldDescriptorProto.Builder builder, Field field) {
     // Format-native params are carried through native slots (the field number via
     // FieldDescriptorProto.number), never through the field meta params, so strip them here:
     // protobuf.* because it is emitted natively, avro.* because it is foreign to proto.
-    Map<String, Object> userParams = Schema.stripFormatNativeParams(field.getParams());
+    Map<String, Object> userParams = userParams(field.getParams());
     if (field.getTags().isEmpty() && userParams.isEmpty()
         && field.getRules().isEmpty()) {
       return;

@@ -36,6 +36,8 @@ import io.confluent.kafka.schemaregistry.type.logical.LogicalTypeToDdlConverter;
 import io.confluent.kafka.schemaregistry.type.logical.Rule;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
+import io.confluent.kafka.schemaregistry.type.logical.common.LogicalTypeVersion;
+import io.confluent.kafka.schemaregistry.type.logical.protobuf.LogicalTypeToProtoConverter;
 import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.AddAttribute;
 import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.AddAttributeCheck;
 import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.AddConstraint;
@@ -1071,6 +1073,37 @@ class TypeAlterTest {
     assertThat(registry.latest("cust").getReferences()).extracting(SchemaReference::getName,
         SchemaReference::getSubject).containsExactly(tuple("common.proto", "common"));
     assertThat(registry.schema("cust").canonicalString()).contains("import \"common.proto\";");
+
+    // It refers to the latest version of its subject, by the subject as it was spelt.
+    String cust = "syntax = \"proto3\";\n\nimport \"common.proto\";\n\nmessage Cust {\n"
+        + "  string id = 1;\n  optional .PostalAddress billing = 2;\n}\n";
+    registry.client.register("cust2", new ProtobufSchema(cust,
+        List.of(new SchemaReference("common.proto", ":.:common", 1)),
+        Map.of("common.proto", common), null, null));
+    registry.client.register("common", new ProtobufSchema(common.replace("}\n",
+        "  string city = 2;\n}\n")));
+    registry.alter("cust2", new DropAttribute("billing", false),
+        new AddAttribute("shipping", "common"));
+    assertThat(registry.latest("cust2").getReferences()).extracting(SchemaReference::getName,
+        SchemaReference::getSubject, SchemaReference::getVersion)
+        .containsExactly(tuple("common.proto", ":.:common", 2));
+
+    // A reference to another subject takes no name of the one dropped.
+    registry.client.register("other", new ProtobufSchema(common.replace("PostalAddress", "O")));
+    registry.client.register("cust3", new ProtobufSchema(cust,
+        List.of(new SchemaReference("common.proto", "common", 1)),
+        Map.of("common.proto", common), null, null));
+    registry.alter("cust3", new DropAttribute("billing", false), new AddAttribute("o", "other"));
+    assertThat(registry.latest("cust3").getReferences()).extracting(SchemaReference::getName,
+        SchemaReference::getSubject).containsExactly(tuple("other", "other"));
+
+    // Two types under one name are told as that, not as a type the schema does not know.
+    registry.client.register("cust4", new ProtobufSchema(cust.replace("common.proto", "other"),
+        List.of(new SchemaReference("other", "common", 1)), Map.of("other", common), null,
+        null));
+    assertThatThrownBy(() -> registry.alter("cust4", new AddAttribute("o", "other")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("would both be referred to as other");
   }
 
   // A type is named in a statement otherwise than its reference is: by its subject where
@@ -1630,6 +1663,58 @@ class TypeAlterTest {
     assertThat(version("pp")).isEqualTo(4);
   }
 
+  // The place of a field is the writer's to tell, wherever a message's fields, its oneofs or
+  // a oneof's members are not in the order of their numbers, and only there.
+  @Test
+  void aProtobufFieldsPlaceIsToldWhereverTheOrderIsNotOfTheNumbers() throws Exception {
+    // Only a union's members out of that order: they are read as said, and stay the fields
+    // they were.
+    create("im", SchemaType.PROTOBUF, "(a INT, u UNION(y STRING WITH "
+        + "('protobuf.field.number' = '3'), x INT WITH ('protobuf.field.number' = '2')))");
+    assertThat(branches("im", "u")).containsExactly("y", "x");
+    registry.alter("im", new AddAttribute("z", "INT"));
+    assertThat(branches("im", "u")).containsExactly("y", "x");
+    assertThat(numbers(message("im")).split(" ")).contains("x=2", "y=3");
+
+    // A message beside the root, declared out of that order, keeps its order.
+    registry.client.register("ir", new ProtobufSchema("syntax = \"proto3\";\n\n"
+        + "import \"confluent/meta.proto\";\n\noption (confluent.file_meta) = { params: [{ "
+        + "key: \"logical.root\", value: \"Cust\" }] };\n\nmessage Cust {\n"
+        + "  string id = 1;\n  Addr addr = 2;\n}\nmessage Addr {\n  string zip = 2;\n"
+        + "  string street = 1;\n}\n"));
+    registry.alter("ir", new AddAttribute("z", "INT"));
+    assertThat(registry.logicalType("ir", registry.latest("ir")).getNamedTypes().get("Addr")
+        .getFields()).extracting(Schema.Field::getName).containsExactly("zip", "street");
+
+    // A place that is no number is none: its field follows those that have one.
+    String place = " [(confluent.field_meta) = { params: [{ key: \"connect.index\", value: "
+        + "\"%s\" }] }]";
+    registry.client.register("ix", new ProtobufSchema("syntax = \"proto3\";\n\n"
+        + "import \"confluent/meta.proto\";\n\nmessage R {\n  int32 a = 1"
+        + String.format(place, "x") + ";\n  int32 b = 2" + String.format(place, "1")
+        + ";\n  int32 c = 3" + String.format(place, "0") + ";\n}\n"));
+    assertThat(names("ix")).containsExactly("c", "b", "a");
+
+    // A param of that name is no place: the type is read in the order it was said in.
+    create("iu", SchemaType.PROTOBUF, "(a INT WITH ('connect.index' = '1'), "
+        + "b INT WITH ('connect.index' = '0'), c INT, u UNION(x INT WITH "
+        + "('connect.index' = '9'), y STRING WITH ('connect.index' = '0')))");
+    assertThat(names("iu")).containsExactly("a", "b", "c", "u");
+    assertThat(branches("iu", "u")).containsExactly("x", "y");
+    assertThat(registry.schema("iu").canonicalString()).doesNotContain("connect.index");
+
+    // V1 tells none.
+    assertThat(LogicalTypeToProtoConverter.fromLogicalType(TypeScripts.parse(
+        "STRUCT t (b INT WITH ('protobuf.field.number' = '2'), "
+            + "a INT WITH ('protobuf.field.number' = '1'));"), "t", LogicalTypeVersion.V1)
+        .canonicalString()).doesNotContain("connect.index");
+  }
+
+  private List<String> branches(String subject, String union) {
+    return registry.struct(subject).getField(union).getSchema().getBranches().stream()
+        .map(Schema.UnionBranch::getName).collect(Collectors.toList());
+  }
+
   // Each attribute a statement adds is placed among those before it as they then stand:
   // one with no position after the last that is no union, and the next after that one.
   @Test
@@ -1904,6 +1989,12 @@ class TypeAlterTest {
             + "so its stored entries would be read wrongly. Register its new version as a "
             + "Protobuf schema");
     assertThat(version("rv")).isEqualTo(1);
+    // The value as the key.
+    registry.client.register("rw", new ProtobufSchema(
+        String.format(entry, "int32 key = 1;", "int32 value = 3;")));
+    assertThatThrownBy(() -> registry.alter("rw", new AddAttribute("z", "INT")))
+        .isInstanceOf(TypeRefusedException.class).hasMessageContaining("field value of map "
+            + "entry MEntry has the number 3, which would be written as 2");
     // Numbered in turn, it is altered.
     registry.client.register("ok", new ProtobufSchema(
         String.format(entry, "int32 key = 1;", "int32 value = 2;")));
@@ -2014,6 +2105,13 @@ class TypeAlterTest {
       assertThat(version(type)).as(type).isEqualTo(3);
       assertThat(typeNames(message(type))).as(type).isEqualTo(names);
     }
+    // A member that is a row is not marked as one that may not be null: read, it may be.
+    create("um", SchemaType.PROTOBUF,
+        "(id BIGINT NOT NULL, a UNION(x STRUCT(k INT) NOT NULL, y STRING))");
+    assertThat(registry.schema("um").canonicalString()).doesNotContain("flink.notNull");
+    assertThat(registry.alter("um", new AddAttribute("q", "INT"),
+        new DropAttribute("q", false)).edited()).isNull();
+
     // An element that may now be null is wrapped, and is named anew.
     create("ue", SchemaType.PROTOBUF,
         "(id BIGINT NOT NULL, a UNION(p INT, q ARRAY<STRUCT(k INT) NOT NULL>))");
