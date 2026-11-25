@@ -382,7 +382,7 @@ class NativeTypeNamesTest {
 
     LogicalType asWritten = ProtoToLogicalTypeConverter.toLogicalType(original, true);
     assertThat(ddl(asWritten)).contains("'protobuf.name' = 'addr_Row'",
-        "'protobuf.name' = 'item_Row'").doesNotContain("HomeRow");
+        "'protobuf.name' = 'item_Row'", "'protobuf.name' = 'HomeRow'");
     assertThat(LogicalTypeToProtoConverter.fromLogicalType(asWritten, "Record")
         .isBackwardCompatible(original)).isEmpty();
   }

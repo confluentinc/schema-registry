@@ -426,8 +426,8 @@ public final class TypeAlter {
       pinProtobufNames(md);
       recordProtobufNumbers();
       current = Message.of(target(), namedTypes);
-      // A move changes nothing in Protobuf, and takes no number: every version's numbers are
-      // read only for a statement that may.
+      // A move takes no number: every version's numbers are read only for a statement
+      // that may take one.
       if (!actions.stream().allMatch(a -> a instanceof AlterAction.MoveAttribute)) {
         recordUsedNumbers();
       }
@@ -741,24 +741,24 @@ public final class TypeAlter {
       Schema schema = format == SchemaType.PROTOBUF
           ? numberBranches(field.getSchema(), nextNumber(fields) + 1) : field.getSchema();
       int at = a.position() == null ? fields.size() : place(fields, a.position());
-      // A Protobuf message's fields are written by their numbers, and its messages are named
-      // in the order of the attributes: before another, a new one could take that one's name.
-      if (format == SchemaType.PROTOBUF) {
-        at = fields.size();
-      }
-      fields.add(new Field(field.getName(), schema, fields.size(),
+      Field created = new Field(field.getName(), schema, fields.size(),
           nullDefault ? null : field.getDefaultValue(),
           nullDefault || field.hasDefaultValue(), field.getDoc(), field.getTags(), params,
-          namedRules(field)));
+          namedRules(field));
+      if (a.position() != null) {
+        List<Field> placed = new ArrayList<>(fields);
+        placed.add(at, created);
+        refuseUnionBeforePlain(placed, field.getName(), a.position());
+      }
+      fields.add(created);
       added.add(field.getName());
       setStruct(fields);
       if (at < fields.size() - 1) {
         // Avro names the types under the attributes in their order, and keeps the order:
         // each keeps the name it has with the new attribute last, which then takes its place.
-        if (format == SchemaType.AVRO) {
-          fields = pinAvroNames();
-        }
-        fields.add(at, fields.remove(fields.size() - 1));
+        fields = format == SchemaType.AVRO ? pinAvroNames()
+            : new ArrayList<>(struct().getFields());
+        fields.add(at, fields.remove(find(fields, field.getName())));
         setStruct(fields);
       }
       return true;
@@ -804,9 +804,8 @@ public final class TypeAlter {
             + " cannot go after itself");
       }
       int at = place(fields, a.position());
-      // Where it already is, the type is as it was; so is a Protobuf message, whose fields are
-      // written in the order of their numbers.
-      if (at == i || format == SchemaType.PROTOBUF) {
+      // Where it already is, the type is as it was.
+      if (at == i) {
         return false;
       }
       // As for an attribute added at a position: the names are those of the order there is.
@@ -815,6 +814,7 @@ public final class TypeAlter {
         moved = fields.remove(i);
       }
       fields.add(at, moved);
+      refuseUnionBeforePlain(fields, moved.getName(), a.position());
       setStruct(fields);
       return true;
     } else if (action instanceof AlterAction.RenameAttribute) {
@@ -1728,7 +1728,8 @@ public final class TypeAlter {
     return target;
   }
 
-  private void setStruct(List<Field> fields) {
+  private void setStruct(List<Field> given) {
+    List<Field> fields = format == SchemaType.PROTOBUF ? plainThenUnions(given) : given;
     List<Field> positioned = new ArrayList<>(fields.size());
     for (int i = 0; i < fields.size(); i++) {
       Field f = fields.get(i);
@@ -1738,6 +1739,35 @@ public final class TypeAlter {
     }
     Schema struct = struct();
     setTarget(copyMetadata(struct, Schema.createStruct(positioned)).setParams(struct.getParams()));
+  }
+
+  // A Protobuf message's unions are declared after its other fields, and read so: the
+  // attributes are kept in that order, each kind in the order it has.
+  private static List<Field> plainThenUnions(List<Field> fields) {
+    List<Field> ordered = new ArrayList<>(fields.size());
+    for (Field f : fields) {
+      if (f.getSchema().getType() != Schema.Type.UNION) {
+        ordered.add(f);
+      }
+    }
+    for (Field f : fields) {
+      if (f.getSchema().getType() == Schema.Type.UNION) {
+        ordered.add(f);
+      }
+    }
+    return ordered;
+  }
+
+  // A position that would put a union before an attribute that is none cannot be kept.
+  private void refuseUnionBeforePlain(List<Field> fields, String name,
+      AlterAction.Position position) {
+    if (format != SchemaType.PROTOBUF || plainThenUnions(fields).equals(fields)) {
+      return;
+    }
+    throw new TypeRefusedException("Attribute " + name + " cannot be placed "
+        + (position.after() == null ? "first" : "after " + position.after()) + " in PROTOBUF "
+        + "type " + subject + ": a Protobuf message declares its unions after its other "
+        + "fields, so a union follows every attribute that is none");
   }
 
   /**
@@ -1823,7 +1853,8 @@ public final class TypeAlter {
    * because its name is taken: an attribute, a oneof member and the types a message declares
    * share its names, and the writer gives a type whose name is taken another. The registry
    * would take it for another type. A file that is no valid Protobuf is refused here too,
-   * where the registry would only say so.
+   * where the registry would only say so. The names of the version edited are pinned, so
+   * this is left for an attribute given another kind, whose types are named anew.
    */
   private void refuseTakenNames(ParsedSchema stored, ParsedSchema written) {
     if (!(stored instanceof ProtobufSchema)) {

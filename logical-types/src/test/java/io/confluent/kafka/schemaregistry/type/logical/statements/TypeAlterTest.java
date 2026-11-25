@@ -1294,7 +1294,7 @@ class TypeAlterTest {
   }
 
   @ParameterizedTest
-  @EnumSource(value = SchemaType.class, names = {"AVRO", "JSON"})
+  @EnumSource(SchemaType.class)
   void anAttributeIsAddedAtAPosition(SchemaType format) {
     create("ap", format, "(a INT NOT NULL, b STRING)");
     registry.alter("ap", new AddAttribute("c", "DOUBLE", Position.after("a")),
@@ -1314,7 +1314,7 @@ class TypeAlterTest {
   }
 
   @ParameterizedTest
-  @EnumSource(value = SchemaType.class, names = {"AVRO", "JSON"})
+  @EnumSource(SchemaType.class)
   void anAttributeIsMovedAndStaysTheAttributeItWas(SchemaType format) throws Exception {
     create("mv", format, "(a INT NOT NULL, b STRING COMMENT 'bee', c BIGINT)");
     Map<String, Integer> before = pids("mv");
@@ -1483,8 +1483,8 @@ class TypeAlterTest {
     assertThat(names("cs")).containsExactly("b", "a", "c");
   }
 
-  // A move changes nothing in Protobuf and takes no number, so the type's earlier versions,
-  // read for the numbers they used, are not read for a statement of moves alone.
+  // A move takes no number, so the type's earlier versions, read for the numbers they used,
+  // are not read for a statement of moves alone.
   @Test
   void aProtobufStatementOfMovesAloneDoesNotReadTheTypesHistory() {
     create("ph", SchemaType.PROTOBUF, "(a INT NOT NULL, b STRING, c BIGINT)");
@@ -1525,7 +1525,7 @@ class TypeAlterTest {
     };
     assertThat(TypeAlter.alter(counting, "ph", List.of(new MoveAttribute("c", Position.first()),
         new MoveAttribute("a", Position.after("b"))), new TypeAlter.Options()).edited())
-        .isNull();
+        .isNotNull();
     assertThat(read).isEmpty();
     // A statement that may take a number reads them all.
     TypeAlter.alter(counting, "ph", List.of(new MoveAttribute("c", Position.first()),
@@ -1533,21 +1533,59 @@ class TypeAlterTest {
     assertThat(read).contains(1, 2, 3);
   }
 
-  // A message's fields are written in the order of their numbers, which a position leaves.
+  // A Protobuf attribute is placed and moved as in the other formats, and is the field it
+  // was: its number stays. A message declares its unions after its other fields, and is read
+  // so: a position that would put a union before an attribute that is none is refused.
   @Test
-  void aPositionDoesNothingInProtobuf() {
-    create("pp", SchemaType.PROTOBUF, "(a INT NOT NULL, b STRING, c BIGINT)");
-    registry.alter("pp", new AddAttribute("d", "DOUBLE", Position.after("a")));
-    assertThat(numbers(message("pp"))).isEqualTo("a=1 b=2 c=3 d=4");
-    assertThat(names("pp")).containsExactly("a", "b", "c", "d");
-    assertThat(registry.alter("pp", new MoveAttribute("c", Position.first())).edited())
-        .isNull();
-    assertThat(version("pp")).isEqualTo(2);
+  void aProtobufAttributeIsPlacedAndKeepsItsNumber() {
+    create("pp", SchemaType.PROTOBUF,
+        "(a INT NOT NULL, b STRING, c BIGINT, u UNION(x INT, y STRING))");
+    registry.alter("pp", new AddAttribute("d", "DOUBLE", Position.after("a")),
+        new MoveAttribute("c", Position.first()));
+    assertThat(names("pp")).containsExactly("c", "a", "d", "b", "u");
+    assertThat(numbers(message("pp"))).contains("a=1", "b=2", "c=3", "x=4", "y=5", "d=6");
+    String text = registry.schema("pp").canonicalString();
+    assertThat(text.indexOf(" c = 3")).isBetween(0, text.indexOf(" a = 1"));
+
+    // With no position, an attribute that is no union goes after the last such one.
+    registry.alter("pp", new AddAttribute("e", "INT"));
+    assertThat(names("pp")).containsExactly("c", "a", "d", "b", "e", "u");
+    // Unions are placed among themselves.
+    registry.alter("pp", new AddAttribute("v", "UNION(p INT, q STRING)"),
+        new MoveAttribute("v", Position.after("e")));
+    assertThat(names("pp")).containsExactly("c", "a", "d", "b", "e", "v", "u");
+
+    String unions = " in PROTOBUF type pp: a Protobuf message declares its unions after its "
+        + "other fields, so a union follows every attribute that is none";
+    assertThatThrownBy(() -> registry.alter("pp", new MoveAttribute("u", Position.first())))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessage("Attribute u cannot be placed first" + unions);
+    assertThatThrownBy(() -> registry.alter("pp",
+        new AddAttribute("f", "INT", Position.after("u"))))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessage("Attribute f cannot be placed after u" + unions);
     assertThatThrownBy(() -> registry.alter("pp", new MoveAttribute("z", Position.first())))
         .isInstanceOf(TypeRefusedException.class).hasMessage("Type pp has no attribute z");
-    assertThatThrownBy(() -> registry.alter("pp",
-        new AddAttribute("e", "INT", Position.after("z"))))
-        .isInstanceOf(TypeRefusedException.class).hasMessage("Type pp has no attribute z");
+    assertThat(version("pp")).isEqualTo(4);
+  }
+
+  // The order a message declares its fields in is the order of the type's attributes, and
+  // is kept: a statement does not put them in the order of their numbers.
+  @Test
+  void aProtobufMessageDeclaredOutOfNumberOrderKeepsItsOrder() throws Exception {
+    registry.client.register("po", new ProtobufSchema("syntax = \"proto3\";\n\n"
+        + "message R {\n  int64 a = 2;\n  int64 b = 1;\n}\n"));
+    registry.alter("po", new AddAttribute("x", "INT"));
+    assertThat(names("po")).containsExactly("a", "b", "x");
+    String text = registry.schema("po").canonicalString();
+    assertThat(text.indexOf(" a = 2")).isBetween(0, text.indexOf(" b = 1"));
+    assertThat(numbers(message("po"))).isEqualTo("a=2 b=1 x=3");
+
+    // A type created with its numbers in another order is stored as it is written.
+    create("pc", SchemaType.PROTOBUF, "(a BIGINT WITH ('protobuf.field.number' = '2'), "
+        + "b BIGINT WITH ('protobuf.field.number' = '1'))");
+    assertThat(names("pc")).containsExactly("a", "b");
+    assertThat(numbers(message("pc"))).isEqualTo("a=2 b=1");
   }
 
   // Messages are named in the order of the attributes: first, fooBar would take the name
@@ -1573,20 +1611,26 @@ class TypeAlterTest {
     ProtobufSchema before = (ProtobufSchema) registry.schema("pn");
     assertThatThrownBy(() -> registry.alter("pn", new AddAttribute("FooRow", "INT")))
         .isInstanceOf(TypeRefusedException.class).hasMessage("Type pn cannot be changed so: "
-            + "FooRow, the type of foo in Protobuf message pn, would be renamed Foo2Row, as "
-            + "another member or type of the message would have its name");
+            + "no PROTOBUF schema can be made of it: Protobuf name 'FooRow' is defined twice "
+            + "in pn, as a field and a message (used by fields foo); rename one of the fields "
+            + "it is generated from");
     // However the name comes to be taken: by a rename, a oneof's member, or a new attribute
     // beside the row of an attribute that is now an array of that row.
     for (AlterAction[] taking : List.of(
         new AlterAction[] {new RenameAttribute("id", "FooRow")},
         new AlterAction[] {new AddAttribute("u", "UNION(FooRow INT, c STRING)")},
-        new AlterAction[] {new AddAttribute("FooRow", "UNION(a INT, b STRING)")},
-        new AlterAction[] {
-            new AlterAttributeType("foo", "ARRAY<STRUCT(x STRING) NOT NULL> NOT NULL"),
-            new AddAttribute("FooRow", "INT")})) {
+        new AlterAction[] {new AddAttribute("FooRow", "UNION(a INT, b STRING)")})) {
       assertThatThrownBy(() -> registry.alter("pn", taking))
-          .isInstanceOf(TypeRefusedException.class).hasMessageContaining("would be renamed");
+          .isInstanceOf(TypeRefusedException.class)
+          .hasMessageContaining("'FooRow' is defined twice in pn");
     }
+    // An attribute given another kind has its types named anew: its row, now an array's,
+    // would be renamed for the new attribute to have its name.
+    assertThatThrownBy(() -> registry.alter("pn",
+        new AlterAttributeType("foo", "ARRAY<STRUCT(x STRING) NOT NULL> NOT NULL"),
+        new AddAttribute("FooRow", "INT"))).isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("FooRow, the type of foo in Protobuf message pn, would be "
+            + "renamed Foo2Row");
     // A renamed attribute's message keeps its name by a pin, and so has no other to take.
     assertThatThrownBy(() -> registry.alter("pn", new RenameAttribute("foo", "baz"),
         new AddAttribute("foo", "INT"), new DropAttribute("foo", false),
@@ -1654,12 +1698,14 @@ class TypeAlterTest {
       if (statement.length > 0) {
         registry.alter(type, statement);
       }
-      assertThat(numbers(message(type))).as(type).isEqualTo(cases[i][2]);
+      String[] stored = ((String) cases[i][2]).split(" ");
+      assertThat(numbers(message(type)).split(" ")).as(type)
+          .containsExactlyInAnyOrder(stored);
       // Whatever a later statement says, they are the fields they were.
       int before = version(type);
       registry.alter(type, new AddAttribute("zz", "INT"));
       assertThat(version(type)).as(type).isEqualTo(before + 1);
-      assertThat(numbers(message(type))).as(type).startsWith((String) cases[i][2]);
+      assertThat(numbers(message(type)).split(" ")).as(type).contains(stored);
       assertThat(registry.alter(type, new AddAttribute("q", "INT"),
           new DropAttribute("q", false)).edited()).as(type).isNull();
     }
@@ -1670,7 +1716,7 @@ class TypeAlterTest {
     registry.alter("un", new AlterAttributeType("s",
         "STRUCT(v UNION(b INT, d STRING), u UNION(a INT, d INT))"));
     Descriptor row = message("un").findFieldByName("s").getMessageType();
-    assertThat(numbers(row)).isEqualTo("a=1 u_d=4 b=2 d=3");
+    assertThat(numbers(row)).isEqualTo("b=2 d=3 a=1 u_d=4");
     registry.alter("un", new AddAttribute("zz", "INT"));
     assertThat(numbers(message("un").findFieldByName("s").getMessageType()))
         .isEqualTo(numbers(row));
@@ -1758,8 +1804,8 @@ class TypeAlterTest {
     String name = message("en").findFieldByName("e").getEnumType().getName();
     for (String type : List.of("INT", "UNION(p INT, q STRING)")) {
       assertThatThrownBy(() -> registry.alter("en", new AddAttribute(name, type)))
-          .isInstanceOf(TypeRefusedException.class).hasMessageContaining(name
-              + ", the type of e in Protobuf message en, would be renamed");
+          .isInstanceOf(TypeRefusedException.class).hasMessageContaining("Protobuf name '"
+              + name + "' is defined twice in en");
     }
     assertThat(version("en")).isEqualTo(1);
     // And an enum may be what takes a message's name.
@@ -1767,7 +1813,7 @@ class TypeAlterTest {
     assertThatThrownBy(() -> registry.alter("em", new AddAttribute("k",
         "ENUM('A', 'B') WITH ('protobuf.name' = 'FooRow')")))
         .isInstanceOf(TypeRefusedException.class).hasMessageContaining(
-            "FooRow, the type of foo in Protobuf message em, would be renamed Foo2Row");
+            "Protobuf name 'FooRow' is defined twice in em");
     assertThat(version("em")).isEqualTo(1);
   }
 
@@ -2028,11 +2074,11 @@ class TypeAlterTest {
     assertThatThrownBy(() -> registry.alter("pr", new AlterAttributeType("addr",
         "STRUCT(street STRING, geo STRUCT(lat DOUBLE), GeoRow INT)")))
         .isInstanceOf(TypeRefusedException.class)
-        .hasMessageContaining("GeoRow, the type of geo in Protobuf message AddrRow, would be "
-            + "renamed Geo2Row");
+        .hasMessageContaining("Protobuf name 'GeoRow' is defined twice in pr.AddrRow");
     assertThatThrownBy(() -> registry.alter("pr", new AlterAttributeType("addr",
         "STRUCT(street STRING, geo STRUCT(lat DOUBLE), u UNION(GeoRow INT, s STRING))")))
-        .isInstanceOf(TypeRefusedException.class).hasMessageContaining("would be renamed");
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("'GeoRow' is defined twice in pr.AddrRow");
     assertThat(version("pr")).isEqualTo(1);
   }
 
@@ -2048,9 +2094,8 @@ class TypeAlterTest {
     // A move with it is still made, where the format keeps an order.
     registry.alter("same", new AlterAttributeType("b", "STRING"),
         new MoveAttribute("b", Position.first()));
-    assertThat(version("same")).isEqualTo(format == SchemaType.PROTOBUF ? 1 : 2);
-    assertThat(names("same")).containsExactly(format == SchemaType.PROTOBUF
-        ? new String[] {"a", "b", "s"} : new String[] {"b", "a", "s"});
+    assertThat(version("same")).isEqualTo(2);
+    assertThat(names("same")).containsExactly("b", "a", "s");
   }
 
   // What makes a version is what the statement leaves, set beside what is stored: a type read
@@ -2066,25 +2111,22 @@ class TypeAlterTest {
     StringBuilder body = new StringBuilder("(a INT NOT NULL");
     types.forEach((name, type) -> body.append(", ").append(name).append(' ').append(type));
     create("kept", format, body.append(", p STRUCT(x INT, y STRING))").toString());
-    // Each said as it was created, moved first and back after the attribute before it.
-    String before = "a";
+    // Each said as it was created, moved first and back after the attribute before it; a
+    // Protobuf union, which cannot go first, is moved where it is.
+    List<String> order = names("kept");
     for (Map.Entry<String, String> type : types.entrySet()) {
-      assertThat(registry.alter("kept", new AlterAttributeType(type.getKey(), type.getValue()),
-          new MoveAttribute(type.getKey(), Position.first()),
-          new MoveAttribute(type.getKey(), Position.after(before))).edited())
-          .as(type.getKey()).isNull();
-      before = type.getKey();
+      String name = type.getKey();
+      String before = order.get(order.indexOf(name) - 1);
+      boolean union = format == SchemaType.PROTOBUF && name.equals("u");
+      assertThat(registry.alter("kept", new AlterAttributeType(name, type.getValue()),
+          new MoveAttribute(name, union ? Position.after(before) : Position.first()),
+          new MoveAttribute(name, Position.after(before))).edited()).as(name).isNull();
     }
     // An attribute added and dropped, and a comment set and taken away.
     assertThat(registry.alter("kept", new AddAttribute("z", "INT", Position.first()),
         new DropAttribute("z", false)).edited()).isNull();
     assertThat(registry.alter("kept", new SetAttributeComment("a", "the key"),
         new SetAttributeComment("a", null)).edited()).isNull();
-    if (format == SchemaType.PROTOBUF) {
-      // A message's fields are written by their numbers, in whatever order they are said.
-      assertThat(registry.alter("kept",
-          new AlterAttributeType("p", "STRUCT(y STRING, x INT)")).edited()).isNull();
-    }
     assertThat(version("kept")).isEqualTo(1);
 
     // What changes only a comment or a CHECK is still a version.
@@ -2093,6 +2135,9 @@ class TypeAlterTest {
     assertThat(version("kept")).isEqualTo(2);
     registry.alter("kept", new AddConstraint(new Check("ck", "a > 0", null)));
     assertThat(version("kept")).isEqualTo(3);
+    // And so is a row said with its members in another order: it is the order they then have.
+    registry.alter("kept", new AlterAttributeType("p", "STRUCT(y STRING, x INT)"));
+    assertThat(version("kept")).isEqualTo(4);
   }
 
   // A schema this writer did not write is rewritten by a version, without what the logical

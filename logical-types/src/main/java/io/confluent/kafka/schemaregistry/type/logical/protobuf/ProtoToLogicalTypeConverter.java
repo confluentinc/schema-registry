@@ -1211,19 +1211,19 @@ public class ProtoToLogicalTypeConverter {
    * declared in the field's message, is not named as the writer derives it from
    * {@code derivedFrom}, or is shared with another field, which only a pin on each keeps; null
    * otherwise. A type declared elsewhere keeps no name. The name Flink's writer derives is
-   * taken as derived too, unless names are read {@code asWritten}.
+   * taken as derived too. Read {@code asWritten}, every such type's name is told: which name
+   * the writer derives for one turns on the attributes before it, whose order may change.
    */
   static String typeNameParam(FieldDescriptor field, String derivedFrom, Schema fieldSchema,
       boolean asWritten) {
     final String name = fieldSchema.getType() == Schema.Type.NAMED_TYPE_REF
         ? null : ownTypeName(field);
-    if (name == null || isShared(field)) {
+    if (name == null || isShared(field) || asWritten) {
       return name;
     }
     String suffix = typeSuffix(field, fieldSchema);
     if (name.equals(LogicalTypeToProtoConverter.derivedMessageName(derivedFrom, suffix, false))
-        || !asWritten && name.equals(
-            LogicalTypeToProtoConverter.derivedMessageName(derivedFrom, suffix, true))) {
+        || name.equals(LogicalTypeToProtoConverter.derivedMessageName(derivedFrom, suffix, true))) {
       return null;
     }
     return name;

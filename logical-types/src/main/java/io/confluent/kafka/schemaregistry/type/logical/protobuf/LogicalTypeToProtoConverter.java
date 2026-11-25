@@ -315,10 +315,11 @@ public class LogicalTypeToProtoConverter {
         logicalType.getReferences());
     // V1 must stay byte-equivalent to Flink's writer output, which does not
     // normalize. Normalize would expand type-name references to fully-qualified
-    // form and reorder fields/imports — both visible deviations from Flink's
-    // raw descriptor emission.
+    // form and reorder imports — both visible deviations from Flink's
+    // raw descriptor emission. Fields, oneofs and their members stay as the type has
+    // them: the reader takes their order as the order of its attributes.
     if (version != LogicalTypeVersion.V1) {
-      result = result.normalize();
+      result = result.normalizeKeepingOrder();
     }
     return applyEditionMetadata(result, version);
   }
