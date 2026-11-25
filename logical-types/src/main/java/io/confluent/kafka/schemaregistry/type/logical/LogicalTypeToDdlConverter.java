@@ -634,7 +634,9 @@ public final class LogicalTypeToDdlConverter {
         return true;
       }
       String own = namespaced && !bare.contains(".") ? ns + "." + bare : rootName;
-      if (lt.getNamedTypes().containsKey(own) || lt.getExternalTypes().contains(own)) {
+      // One the type refers to, that is: a reference it makes no use of is not written.
+      if (lt.getNamedTypes().containsKey(own) && !lt.getExternalTypes().contains(own)
+          || collectExternalRefs().contains(own)) {
         return true;
       }
       // Only a bare name is read with the namespace, and so set beside the bare names.

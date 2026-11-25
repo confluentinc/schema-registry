@@ -1663,6 +1663,33 @@ class TypeAlterTest {
     assertThat(version("pp")).isEqualTo(4);
   }
 
+  // The options metadata is written in are declared by confluent/meta.proto. A file that has
+  // them imports it, as protoc does not know them otherwise; one that has none does not.
+  @Test
+  void aProtobufFileThatHasMetadataImportsTheFileThatDeclaresIt() {
+    String imports = "import \"confluent/meta.proto\";";
+    create("mp", SchemaType.PROTOBUF, "(a INT, b BIGINT)");
+    assertThat(registry.schema("mp").canonicalString()).doesNotContain(imports);
+    registry.alter("mp", new MoveAttribute("b", Position.first()));
+    assertThat(registry.schema("mp").canonicalString()).contains(imports);
+
+    List<String> bodies = List.of("(a INT COMMENT 'the a', b BIGINT)", "(a SMALLINT, b BIGINT)",
+        "(a INT, s STRUCT(k INT COMMENT 'the k'))", "(a INT, u UNION(x INT, a STRING))",
+        "(a INT, e ENUM('A' COMMENT 'the first', 'B'))");
+    for (int i = 0; i < bodies.size(); i++) {
+      String type = "mi" + i;
+      create(type, SchemaType.PROTOBUF, bodies.get(i));
+      String text = registry.schema(type).canonicalString();
+      assertThat(text).as(type).contains(imports);
+      // A schema made of the descriptor, as a serializer's is, has it too.
+      assertThat(new ProtobufSchema(message(type)).canonicalString()).as(type).isEqualTo(text);
+    }
+    // V1 is written as Flink writes it, which imports none.
+    assertThat(LogicalTypeToProtoConverter.fromLogicalType(TypeScripts.parse(
+        "STRUCT t (a SMALLINT, d DECIMAL(10, 2));"), "t", LogicalTypeVersion.V1)
+        .canonicalString()).doesNotContain(imports);
+  }
+
   // The place of a field is the writer's to tell, wherever a message's fields, its oneofs or
   // a oneof's members are not in the order of their numbers, and only there.
   @Test

@@ -651,6 +651,11 @@ class LogicalTypeToDdlConverterTest {
         Map.of(), Map.of()), true);
     assertEquals("NAMESPACE shop; STRUCT Order (id STRING); TYPE Order;", ddl);
     assertEquals("Order", parse(ddl).getName());
+    // Nor does one of the root's own full name that it does not refer to.
+    ddl = LogicalTypeToDdlConverter.toDdl(new LogicalType("Order", "shop", alone,
+        Map.of("shop.Order", referred), Set.of("shop.Order"),
+        Map.of("shop.Order", "common.json"), List.of(), Map.of(), Map.of()), true);
+    assertEquals("NAMESPACE shop; STRUCT Order (id STRING); TYPE Order;", ddl);
   }
 
   // The root is declared in the script as a named type is: a name that begins with its name

@@ -766,12 +766,17 @@ public class LogicalTypeToProtoConverter {
             Meta.newBuilder().putParams(ProtobufSchema.ROOT_KEY, root).build()));
       }
 
+      if (!ctx.isV1()) {
+        fileBuilder.getMessageTypeBuilderList().forEach(LogicalTypeToProtoConverter::indexFields);
+        // The options the metadata is written in are declared by its file: one that has them
+        // imports it, as protoc does not know them otherwise.
+        if (usesMeta(fileBuilder.getMessageTypeList(), fileBuilder.getEnumTypeList())) {
+          dependencies.add(MetaProto.getDescriptor().getName());
+        }
+      }
       fileBuilder.addAllDependency(dependencies);
       if (packageName != null && !packageName.isEmpty()) {
         fileBuilder.setPackage(packageName);
-      }
-      if (!ctx.isV1()) {
-        fileBuilder.getMessageTypeBuilderList().forEach(LogicalTypeToProtoConverter::indexFields);
       }
       final FileDescriptorProto fileDescriptorProto = fileBuilder.build();
       checkDistinctNames(fileDescriptorProto);
@@ -793,6 +798,25 @@ public class LogicalTypeToProtoConverter {
       throw new ValidationException(
           "Failed to translate the provided schema to a Protobuf descriptor", e);
     }
+  }
+
+  // Whether a message, a field, an enum or an enum's value has metadata, at any depth.
+  private static boolean usesMeta(List<DescriptorProto> messages,
+      List<EnumDescriptorProto> enums) {
+    for (EnumDescriptorProto enumType : enums) {
+      if (enumType.getOptions().hasExtension(MetaProto.enumMeta) || enumType.getValueList()
+          .stream().anyMatch(v -> v.getOptions().hasExtension(MetaProto.enumValueMeta))) {
+        return true;
+      }
+    }
+    for (DescriptorProto message : messages) {
+      if (message.getOptions().hasExtension(MetaProto.messageMeta) || message.getFieldList()
+          .stream().anyMatch(f -> f.getOptions().hasExtension(MetaProto.fieldMeta))
+          || usesMeta(message.getNestedTypeList(), message.getEnumTypeList())) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private static String article(String kind) {
