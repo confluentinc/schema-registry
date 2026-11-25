@@ -94,6 +94,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -1279,7 +1280,13 @@ public class JsonSchema implements ParsedSchema {
       CombinedSchema.ValidationCriterion criterion = combinedSchema.getCriterion();
       Collection<Schema> subschemas = combinedSchema.getSubschemas();
       if (criterion.equals(CombinedSchema.ALL_CRITERION)) {
+        // An empty conjunct adds no constraint, so it is skipped when another conjunct gives a
+        // concrete type; otherwise it is walked, and the field is treated as a variant.
+        boolean typed = subschemas.stream().anyMatch(s -> isConcrete(resolveReferences(s)));
         for (Schema subschema : subschemas) {
+          if (typed && resolveReferences(subschema) instanceof EmptySchema) {
+            continue;
+          }
           message = toTransformedMessage(ctx, subschema, path, message, transform);
         }
         return message;
@@ -1349,11 +1356,11 @@ public class JsonSchema implements ParsedSchema {
       return toTransformedMessage(ctx, ((ReferenceSchema)schema).getReferredSchema(),
           path, message, transform);
     } else if (schema instanceof ConditionalSchema
-        || schema instanceof EmptySchema
         || schema instanceof FalseSchema
         || schema instanceof NotSchema) {
       return message;
     } else {
+      // An empty schema lands here too, as Type.ANY, so an executor can reject it.
       if (fieldCtx != null) {
         try {
           Set<String> ruleTags = ctx.rule().getTags();
@@ -1642,9 +1649,34 @@ public class JsonSchema implements ParsedSchema {
       return numberSchema.requiresInteger() ? Type.INT : Type.DOUBLE;
     } else if (schema instanceof BooleanSchema) {
       return Type.BOOLEAN;
+    } else if (schema instanceof EmptySchema) {
+      return Type.ANY;
     } else {
       return Type.NULL;
     }
+  }
+
+  private static Schema resolveReferences(Schema schema) {
+    Set<Schema> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+    while (schema instanceof ReferenceSchema && seen.add(schema)) {
+      Schema referred = ((ReferenceSchema) schema).getReferredSchema();
+      if (referred == null) {
+        break;
+      }
+      schema = referred;
+    }
+    return schema;
+  }
+
+  // Whether the transform walk transforms a value against this schema, rather than passing
+  // over it as it does a not, conditional, false or empty schema.
+  private static boolean isConcrete(Schema schema) {
+    return schema != null
+        && !(schema instanceof EmptySchema
+            || schema instanceof NotSchema
+            || schema instanceof ConditionalSchema
+            || schema instanceof FalseSchema
+            || schema instanceof ReferenceSchema);
   }
 
   private static boolean isMap(final ObjectSchema objectSchema) {
