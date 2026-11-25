@@ -1504,11 +1504,11 @@ public final class TypeAlter {
         references.add(ref);
       }
     }
-    if (moved) {
+    // Read anew from the references: a type the statement names otherwise than its reference
+    // is would else be held twice, under both names.
+    if (moved || !lt.getReferences().isEmpty()) {
       resolved.clear();
       resolved.putAll(TypeReferences.resolve(lookup, subject, references));
-    } else {
-      lt.getResolvedReferences().forEach(resolved::putIfAbsent);
     }
     if (format != SchemaType.JSON && !lt.getReferences().isEmpty()) {
       nameReferencesAsBelow();
@@ -1524,7 +1524,8 @@ public final class TypeAlter {
     for (int i = 0; i < references.size(); i++) {
       SchemaReference r = references.get(i);
       String name = below.get(TypeReferences.referenced(subject, r.getSubject()));
-      if (name != null && !name.equals(r.getName())) {
+      if (name != null && !name.equals(r.getName())
+          && !TypeReferences.isNameOf(subject, name)) {
         references.set(i, new SchemaReference(name, r.getSubject(), r.getVersion()));
         renamed = true;
       }

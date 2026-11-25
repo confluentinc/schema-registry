@@ -1036,6 +1036,85 @@ class TypeAlterTest {
         .extracting(SchemaReference::getSubject).hasSize(1);
   }
 
+  // A type is named in a statement otherwise than its reference is: by its subject where
+  // another tool gave an import path, with its context or without, or after the reference
+  // took the name the types beside it use. Named again, it is the type already referred to.
+  @ParameterizedTest
+  @EnumSource(value = SchemaType.class, names = {"AVRO", "PROTOBUF"})
+  void aTypeNamedAgainOtherwiseThanItsReferenceIsTheOneReferredTo(SchemaType format)
+      throws Exception {
+    registry.create(":.c:inner", "inner", format, BodyKind.STRUCT, "(x STRING)");
+    registry.create(":.c:pair", "pair", format, BodyKind.STRUCT, "(a STRING, i inner)");
+    create("o1", format, "(id INT NOT NULL, p `:.c:pair`, k `:.c:inner`)");
+    registry.create(":.c:t", "t", format, BodyKind.STRUCT, "(id INT NOT NULL, k inner)");
+    create("o5", format, "(id INT NOT NULL, k `:.c:inner`)");
+    registry.alter("o5", new AddAttribute("p", "`:.c:pair`"));
+
+    registry.alter("o1", new AddAttribute("k2", "`:.c:inner`"));
+    registry.alter(":.c:t", new AddAttribute("k2", "`:.c:inner`"));
+    registry.alter("o5", new AddAttribute("k2", "`:.c:inner`"));
+    // Said to be the type it is, an attribute is as it was.
+    assertThat(registry.alter("o1", new AlterAttributeType("k", "`:.c:inner`")).edited())
+        .isNull();
+    for (String type : List.of("o1", ":.c:t", "o5")) {
+      assertThat(registry.latest(type).getReferences()).as(type)
+          .extracting(SchemaReference::getSubject).doesNotHaveDuplicates();
+      assertThat(registry.struct(type).getFields()).as(type)
+          .extracting(Schema.Field::getName).contains("k", "k2");
+    }
+    if (format != SchemaType.PROTOBUF) {
+      return;
+    }
+    // A file another tool registered, imported by a path of its own choosing.
+    String common = "syntax = \"proto3\";\n\nmessage PostalAddress {\n  string street = 1;\n}\n";
+    registry.client.register("common", new ProtobufSchema(common));
+    SchemaReference reference = new SchemaReference("common.proto", "common", 1);
+    registry.client.register("cust", new ProtobufSchema("syntax = \"proto3\";\n\n"
+        + "import \"common.proto\";\n\nmessage Cust {\n  string id = 1;\n"
+        + "  optional .PostalAddress billing = 2;\n}\n", List.of(reference),
+        Map.of("common.proto", common), null, null));
+    registry.alter("cust", new AddAttribute("shipping", "common"));
+    assertThat(version("cust")).isEqualTo(2);
+    assertThat(registry.latest("cust").getReferences()).containsExactly(reference);
+  }
+
+  // A type's own name is how the types that refer to it name it: a type it refers to is not
+  // given that name, and a type whose name is met again below it, as another type's, is one
+  // no type can refer to.
+  @ParameterizedTest
+  @EnumSource(value = SchemaType.class, names = {"AVRO", "PROTOBUF"})
+  void aReferenceIsNotGivenTheNameOfTheTypeThatHasIt(SchemaType format) {
+    registry.create(":.c:inner", "x.inner", format, BodyKind.STRUCT, "(q BIGINT)");
+    registry.create(":.c:pair", "pair", format, BodyKind.STRUCT, "(a STRING, i inner)");
+    // Its own inner below it, through pair, with no reference renamed.
+    create("inner", format, "(id INT NOT NULL, p `:.c:pair`)");
+    assertThatThrownBy(() -> create("u", format, "(id INT NOT NULL, d inner)"))
+        .isInstanceOf(TypeRefusedException.class).hasMessage("Types inner and :.c:inner would "
+            + "both be referred to as inner, which can name only one of them");
+
+    // Altered or created with both, its reference to the other inner keeps the name given.
+    for (boolean altered : new boolean[] {true, false}) {
+      String type = altered ? "inner" : ":.d:inner";
+      try {
+        if (altered) {
+          registry.alter(type, new AddAttribute("k", "`:.c:inner`"));
+        } else {
+          registry.create(type, "y.inner", format, BodyKind.STRUCT,
+              "(id INT NOT NULL, k `:.c:inner`, p `:.c:pair`)");
+        }
+      } catch (TypeRefusedException | IllegalStateException e) {
+        // A Protobuf file cannot import the one type by two names: refused here when
+        // altered, and by the registry when created.
+        assertThat(format).isEqualTo(SchemaType.PROTOBUF);
+        assertThat(e.getMessage()).containsAnyOf("Duplicate named type",
+            "Invalid schema of type PROTOBUF");
+        continue;
+      }
+      assertThat(registry.latest(type).getReferences()).as(type)
+          .extracting(SchemaReference::getName).doesNotContain("inner");
+    }
+  }
+
   // A version stored so, as another tool registers one, is altered only by a statement that
   // leaves it one version of the type.
   @Test

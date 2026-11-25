@@ -672,6 +672,10 @@ class LogicalTypeToDdlConverterTest {
     assertTrue(qualified.startsWith(
         "NAMESPACE shop; USING TYPE Customer.Geo FOR Customer.Geo; "), qualified);
     assertEquals(Set.of("Customer.Geo"), parse(qualified).getExternalTypes(), qualified);
+    // A name that only begins with the namespace's letters carries no namespace.
+    String other = LogicalTypeToDdlConverter.toDdl(new LogicalType("shopCustomer", "shop",
+        root, Map.of(), Set.of("Customer.Geo"), Map.of(), List.of(), Map.of(), Map.of()), true);
+    assertFalse(other.contains("USING TYPE Customer.Geo FOR Customer.Geo"), other);
   }
 
   @Test
