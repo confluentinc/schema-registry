@@ -462,12 +462,17 @@ identifier
     | nonReservedKeyword
     ;
 
+// A keyword of ours needs backticks as a name exactly when Flink reserves it. Two kinds of
+// exception: INTERVAL, REF and VARIANT, which Flink reserves, stay names as they have been.
 nonReservedKeyword
     : ENUM
     | INTERVAL
     | MAP
+    | MESSAGE
     | NAMESPACE
     | REF
+    | RETURNING
+    | STRUCT
     | TAGS
     | TYPE
     | VARIANT
