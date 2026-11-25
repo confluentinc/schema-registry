@@ -1777,6 +1777,16 @@ public final class TypeAlter {
   private void refuseTakenNames(Descriptor was, Descriptor now) {
     for (FieldDescriptor old : was.getFields()) {
       FieldDescriptor kept = now.findFieldByNumber(old.getNumber());
+      // A union's member is named for its branch, or after the union when a field has that
+      // name: one the writer names otherwise, for another field to take its name.
+      if (kept != null && old.getRealContainingOneof() != null
+          && !kept.getName().equals(old.getName())
+          && now.findFieldByName(old.getName()) != null) {
+        throw new TypeRefusedException(refused() + ": " + old.getName() + ", a member of union "
+            + old.getRealContainingOneof().getName() + " in Protobuf message " + was.getName()
+            + ", would be renamed " + kept.getName() + ", as another attribute or member of "
+            + "the message would have its name; give that one another name");
+      }
       if (kept == null || kept.getType() != old.getType()) {
         continue;
       }

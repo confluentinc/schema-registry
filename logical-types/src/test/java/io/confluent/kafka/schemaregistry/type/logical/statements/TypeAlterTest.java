@@ -1336,6 +1336,46 @@ class TypeAlterTest {
     assertThat(numbers(message("po"))).contains(card + "=");
   }
 
+  // A union's member is a field of the message, named for its branch unless a field before
+  // it has that name. One that would be named otherwise, for a new field to take its name,
+  // is refused: the names would move between the two fields.
+  @Test
+  void aProtobufUnionMemberWhoseNameAnotherFieldWouldTakeIsRefused() {
+    String renamed = ", would be renamed ";
+    create("um", SchemaType.PROTOBUF, "(id INT NOT NULL, k INT, t UNION(a INT, b STRING))");
+    assertThatThrownBy(() -> registry.alter("um",
+        new AlterAttributeType("k", "UNION(a STRING, c INT)")))
+        .isInstanceOf(TypeRefusedException.class).hasMessage("Type um cannot be changed so: a, "
+            + "a member of union t in Protobuf message um" + renamed + "t_a, as another "
+            + "attribute or member of the message would have its name; give that one another "
+            + "name");
+    assertThatThrownBy(() -> registry.alter("um", new DropAttribute("k", false),
+        new AddAttribute("a", "INT"))).isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("a, a member of union t in Protobuf message um" + renamed + "t_a");
+    create("uv", SchemaType.PROTOBUF, "(id INT NOT NULL, u UNION(x INT), v UNION(a INT))");
+    assertThatThrownBy(() -> registry.alter("uv",
+        new AlterAttributeType("u", "UNION(x INT, a STRING)")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("a, a member of union v in Protobuf message uv" + renamed + "v_a");
+    assertThat(version("um")).isEqualTo(1);
+    assertThat(version("uv")).isEqualTo(1);
+
+    // Named otherwise, the new member is added, and the fields are as they were after it.
+    registry.alter("um", new AlterAttributeType("k", "UNION(a2 STRING, c INT)"));
+    assertThat(numbers(message("um"))).contains("a=3", "b=4", "a2=5", "c=6");
+    assertThat(registry.alter("um", new AddAttribute("z", "INT"),
+        new DropAttribute("z", false)).edited()).isNull();
+
+    // A new member is the one named after its union when a field has its name, a union
+    // renamed takes its members' names with it, and two attributes may swap their names.
+    create("uk", SchemaType.PROTOBUF, "(id INT NOT NULL, t UNION(b STRING), a INT, c INT)");
+    registry.alter("uk", new AlterAttributeType("t", "UNION(a INT, b STRING)"));
+    assertThat(numbers(message("uk"))).contains("b=2", "a=3", "t_a=5");
+    registry.alter("uk", new RenameAttribute("t", "tt"), new RenameAttribute("a", "x"),
+        new RenameAttribute("c", "a"), new RenameAttribute("x", "c"));
+    assertThat(numbers(message("uk"))).contains("b=2", "c=3", "a=4", "tt_a=5");
+  }
+
   // An enum's name is one of the message's as a nested message's is.
   @Test
   void anAttributeNamedAsAnEnumOfItsProtobufTypeIsRefused() {
