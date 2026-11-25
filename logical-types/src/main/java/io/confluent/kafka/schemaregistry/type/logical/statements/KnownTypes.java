@@ -52,6 +52,11 @@ final class KnownTypes {
     return own.getOrDefault(type, this);
   }
 
+  /** Whether a type is the root of a type referred to. */
+  boolean isReferred(Schema type) {
+    return own.containsKey(type);
+  }
+
   void put(String name, Schema type) {
     types.put(name, type);
   }

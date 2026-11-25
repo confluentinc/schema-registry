@@ -21,6 +21,7 @@ import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
+import io.confluent.protobuf.type.Variant;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTypeConverter;
@@ -143,7 +144,8 @@ public final class TypeReferences {
 
   // A Protobuf type that is a value and no row is a google.protobuf wrapper, which a field
   // of is read as the value it wraps: the type referring to it would be read as one that
-  // does not, and written otherwise than it is stored.
+  // does not, and written otherwise than it is stored. So is a VARIANT, which is written
+  // as the format's own message of that name.
   private static void refuseWrappedValue(String name, ParsedSchema parsed) {
     Descriptor root;
     try {
@@ -151,7 +153,8 @@ public final class TypeReferences {
     } catch (RuntimeException e) {
       return;
     }
-    if (root != null && ProtoToLogicalTypeConverter.isScalarWrapper(root)) {
+    if (root != null && (ProtoToLogicalTypeConverter.isScalarWrapper(root)
+        || root.getFullName().equals(Variant.getDescriptor().getFullName()))) {
       throw new TypeRefusedException("Type " + name + " cannot be used in a PROTOBUF type: "
           + "it is a value and no row, written as a " + root.getFullName() + ", and an "
           + "attribute of it would be read as that value and not as the type. Give the "

@@ -2713,6 +2713,31 @@ class TypeAlterTest {
         .doesNotContain("d1p#/$defs/d1in");
     assertThat(registry.struct("d1w").getField("i").getSchema().getType())
         .isEqualTo(Schema.Type.NAMED_TYPE_REF);
+    // A name the type has for a definition of a type it refers to is of that definition,
+    // though that type refers to a document of the name: the type itself does not.
+    create("E", SchemaType.JSON, "(k INT NOT NULL)");
+    registry.client.register("lib", new JsonSchema("{\"type\":\"object\",\"title\":\"lib\","
+        + "\"properties\":{\"r\":{\"$ref\":\"E\"}},\"additionalProperties\":false,"
+        + "\"$defs\":{\"E\":{\"enum\":[\"X\",\"Y\"],\"title\":\"E\"}}}",
+        List.of(new SchemaReference("E", "E", 1)),
+        Map.of("E", registry.latest("E").getSchema()), null));
+    Map<String, String> resolved = new LinkedHashMap<>();
+    resolved.put("E", registry.latest("E").getSchema());
+    resolved.put("lib", registry.latest("lib").getSchema());
+    registry.client.register("h", new JsonSchema("{\"type\":\"object\",\"title\":\"h\","
+        + "\"properties\":{\"id\":{\"type\":\"integer\"},\"e\":"
+        + "{\"$ref\":\"lib#/$defs/E\"}},\"additionalProperties\":false}",
+        List.of(new SchemaReference("lib", "lib", 1)), resolved, null));
+    registry.alter("h", new AddAttribute("z", "INT"));
+    assertThat(registry.schema("h").canonicalString()).contains("\"$ref\":\"lib#/$defs/E\"")
+        .doesNotContain("{\"$ref\":\"E\"}");
+    ((JsonSchema) registry.schema("h")).validate(new ObjectMapper().readTree("{\"e\":\"X\"}"));
+    // The document of that name cannot be the type's as well: one name is one type's.
+    assertThatThrownBy(() -> registry.alter("h", new AddAttribute("w", "E")))
+        .isInstanceOf(TypeRefusedException.class).hasMessage("Type h cannot be changed so: "
+            + "it has a type named E already, a definition of a type it refers to, and would "
+            + "have type E by that name as well");
+    assertThat(version("h")).isEqualTo(2);
   }
 
   // The names in a type referred to are its own: a type whose root is a name, or a union
@@ -2878,7 +2903,7 @@ class TypeAlterTest {
   // Each row's names are its own type's: two rows that name types of one name are judged
   // by what each one's is, in a context as out of one.
   @Test
-  void aJsonUnionsRowsAreJudgedEachByItsOwnTypesNames() {
+  void aJsonUnionsRowsAreJudgedEachByItsOwnTypesNames() throws Exception {
     for (String ctx : List.of("", ":.ctx:")) {
       registry.create(ctx + "e1", SchemaType.JSON, BodyKind.ENUM, "('A')");
       registry.create(ctx + "e2", SchemaType.JSON, BodyKind.ENUM, "('B')");
@@ -2895,6 +2920,16 @@ class TypeAlterTest {
     jsonRefused("smapno", "(u UNION(a ma, b MAP<STRING, wa>))");
     create("dok", SchemaType.JSON, "(u UNION(a `:.ctx:wa`, b `:.ctx:wb`))");
     jsonRefused("dno", "(u UNION(a `:.ctx:wa`, b `:.ctx:wa2`))");
+    // An attribute of a type referred to that may itself be null takes a null whatever
+    // it says of itself, and tells no row from another, nor from a map.
+    registry.create("hu", SchemaType.JSON, BodyKind.OTHER, "INT");
+    registry.create("hn", SchemaType.JSON, BodyKind.OTHER, "INT NOT NULL");
+    jsonRefused("n1", "(u UNION(r1 STRUCT<a hu NOT NULL>, r2 STRUCT<a STRING>) NOT NULL)");
+    jsonRefused("n2", "(u UNION(r1 STRUCT<a hu NOT NULL>, r2 MAP<STRING, STRING>) NOT NULL)");
+    create("n3", SchemaType.JSON,
+        "(u UNION(r1 STRUCT<a hn NOT NULL>, r2 STRUCT<a STRING>) NOT NULL)");
+    create("n4", SchemaType.JSON,
+        "(u UNION(r1 STRUCT<a hn NOT NULL>, r2 MAP<STRING, STRING>) NOT NULL)");
     // A type two of the referred types refer to.
     create("mx", SchemaType.JSON, "(t e1 NOT NULL, f e2)");
     create("my", SchemaType.JSON, "(t e2 NOT NULL)");
@@ -3005,6 +3040,30 @@ class TypeAlterTest {
           .isInstanceOf(RuntimeException.class);
       assertThat(registry.latest("u" + file.getKey())).as(file.getKey()).isNull();
     }
+    // Nor is a copy in another syntax, or one whose field has a default.
+    registry.client.register("vd2", new ProtobufSchema("syntax = \"proto2\";\n"
+        + "package google.type;\n\nmessage Date {\n  optional int32 year = 1;\n"
+        + "  optional int32 month = 2;\n  optional int32 day = 3;\n}\n"));
+    assertThatThrownBy(() -> create("uvd2", SchemaType.PROTOBUF, "(id INT, d vd2)"))
+        .isInstanceOf(RuntimeException.class);
+    assertThat(registry.latest("uvd2")).isNull();
+    registry.client.register("vd3", new ProtobufSchema("syntax = \"proto2\";\n"
+        + "package google.type;\n\nmessage Date {\n  optional int32 year = 1 [default = 5];\n"
+        + "  optional int32 month = 2;\n  optional int32 day = 3;\n}\n"));
+    registry.client.register("hvd3", new ProtobufSchema(p3 + "\nimport \"vd3\";\n\n"
+        + "message Hvd3 {\n  int32 id = 1;\n  google.type.Date d = 2;\n}\n",
+        List.of(new SchemaReference("vd3", "vd3", 1)),
+        Map.of("vd3", registry.latest("vd3").getSchema()), null, null));
+    assertThatThrownBy(() -> registry.alter("hvd3", new AddAttribute("z", "INT")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("is a google.type.Date that is not the one");
+    // A type that is a VARIANT is a value and no row, as one that is a wrapper is.
+    registry.create("pv", SchemaType.PROTOBUF, BodyKind.OTHER, "VARIANT");
+    assertThatThrownBy(() -> create("upv", SchemaType.PROTOBUF, "(id INT, s pv)"))
+        .isInstanceOf(TypeRefusedException.class).hasMessage("Type pv cannot be used in a "
+            + "PROTOBUF type: it is a value and no row, written as a confluent.type.Variant, "
+            + "and an attribute of it would be read as that value and not as the type. Give "
+            + "the attribute the value's type");
     // A referred file that imports a file one of the format's own imports is no such file.
     registry.client.register("ds", new ProtobufSchema(p3
         + "import \"google/protobuf/descriptor.proto\";\n\nmessage Ds {\n"
@@ -3078,12 +3137,54 @@ class TypeAlterTest {
       assertThat(version(type)).as(type).isEqualTo(2);
     }
     assertThat(registry.schema("jei").canonicalString()).contains("\"type\":\"array\"");
+    // A map of other keys given string keys is what the statement asks: it was stored as
+    // it is written.
+    create("jmk", SchemaType.JSON, "(id INT, x MAP<INT, INT>, y MULTISET<INT>)");
+    registry.alter("jmk", new AddAttribute("z", "INT"));
+    registry.alter("jmk", new AlterAttributeType("x", "MAP<STRING, INT>"),
+        new AlterAttributeType("y", "MULTISET<STRING>"));
+    assertThat(version("jmk")).isEqualTo(3);
+    // One in a row, in another map's value, or in a row that is another map's key.
+    Map<String, String> within = new LinkedHashMap<>();
+    within.put("jen", "{\"type\":\"object\",\"properties\":{\"inner\":" + entries
+        + "}},\"additionalProperties\":false}");
+    within.put("jev", "{\"type\":\"object\",\"connect.type\":\"map\","
+        + "\"additionalProperties\":" + entries + "}}");
+    within.put("jek", "{\"type\":\"array\",\"connect.type\":\"map\",\"items\":{\"type\":"
+        + "\"object\",\"properties\":{\"key\":{\"type\":\"object\",\"properties\":{\"m\":"
+        + entries + "}},\"additionalProperties\":false},\"value\":{\"type\":\"integer\"}}}}");
+    for (Map.Entry<String, String> map : within.entrySet()) {
+      registry.client.register(map.getKey(), new JsonSchema("{\"type\":\"object\",\"title\":\""
+          + map.getKey() + "\",\"properties\":{\"id\":{\"type\":\"integer\"},\"x\":"
+          + map.getValue() + "},\"additionalProperties\":false}"));
+      assertThatThrownBy(() -> registry.alter(map.getKey(), new AddAttribute("z", "INT")))
+          .as(map.getKey()).isInstanceOf(TypeRefusedException.class)
+          .hasMessageContaining("attribute x has a map stored as an array of key and value");
+    }
+    // A type that is such a map has no attribute to tell, or to drop.
+    registry.client.register("jroot", new JsonSchema(entries + ",\"title\":\"jroot\"}"));
+    assertThatThrownBy(() -> registry.alter("jroot", new SetDataType("MAP<STRING, BIGINT>")))
+        .isInstanceOf(TypeRefusedException.class).hasMessage("Type jroot cannot be altered: "
+            + "it is, or holds, a map stored as an array of key and value entries, which "
+            + "would be written as an object, so its stored values would be read wrongly. "
+            + "Register its new version as a JSON schema");
+    // A type referred to is not this type's to write: one whose new version has the map
+    // as an object is referred to at that version as at any other.
+    registry.client.register("jw", new JsonSchema("{\"type\":\"object\",\"title\":\"jw\","
+        + "\"properties\":{\"m\":" + entries + "}},\"additionalProperties\":false}"));
+    create("jt", SchemaType.JSON, "(id INT, r jw)");
+    registry.client.register("jw", new JsonSchema("{\"type\":\"object\",\"title\":\"jw\","
+        + "\"properties\":{\"m\":{\"type\":\"object\",\"connect.type\":\"map\","
+        + "\"additionalProperties\":{\"type\":\"integer\",\"connect.type\":\"int32\"}}},"
+        + "\"additionalProperties\":false}"));
+    registry.alter("jt", new AddAttribute("r2", "jw"));
+    assertThat(version("jt")).isEqualTo(2);
   }
 
   // A number said for a new Protobuf attribute is its number where no field has it and
   // none of a version had; it is not left out without a word.
   @Test
-  void aProtobufAttributeIsAddedWithTheNumberSaid() {
+  void aProtobufAttributeIsAddedWithTheNumberSaid() throws Exception {
     create("pnn", SchemaType.PROTOBUF, "(a INT, b STRING, u UNION(x INT, y STRING))");
     registry.alter("pnn", new AddAttribute("e", "INT WITH ('protobuf.field.number' = '9')"));
     assertThat(numbers(message("pnn"))).contains("e=9");
@@ -3133,6 +3234,40 @@ class TypeAlterTest {
     registry.alter("pnm", new AddAttribute("e", "INT"));
     assertThat(numbers(message("pnm")).split(" "))
         .containsExactlyInAnyOrder("a=1", "c=536870911", "d=3", "x=5", "y=6", "e=4");
+    // The last number is taken before the lowest never used, which may be 1, and is none
+    // of those of a field or a member, nor of those Protobuf keeps for itself.
+    create("pn4", SchemaType.PROTOBUF, "(a INT, b STRING)");
+    registry.alter("pn4", new AddAttribute("c",
+        "STRING WITH ('protobuf.field.number' = '536870910')"));
+    registry.alter("pn4", new AddAttribute("d", "INT"));
+    registry.alter("pn4", new AddAttribute("e", "INT"));
+    assertThat(numbers(message("pn4")).split(" "))
+        .containsExactlyInAnyOrder("a=1", "b=2", "c=536870910", "d=536870911", "e=3");
+    create("pn5", SchemaType.PROTOBUF, "(a INT WITH ('protobuf.field.number' = '5'), "
+        + "b STRING WITH ('protobuf.field.number' = '536870911'))");
+    registry.alter("pn5", new AddAttribute("d", "INT"));
+    assertThat(numbers(message("pn5")).split(" ")).contains("d=1");
+    create("pn8", SchemaType.PROTOBUF, "(a INT, b STRING)");
+    registry.alter("pn8", new AddAttribute("c",
+        "STRING WITH ('protobuf.field.number' = '536870911')"),
+        new AddAttribute("e", "INT WITH ('protobuf.field.number' = '4')"));
+    registry.alter("pn8", new AddAttribute("u", "UNION(x INT, y STRING)"));
+    assertThat(numbers(message("pn8")).split(" ")).contains("e=4", "x=5", "y=6");
+    create("pn9", SchemaType.PROTOBUF, "(a INT, b STRING, u UNION(x INT, y STRING))");
+    registry.alter("pn9", new AddAttribute("c",
+        "STRING WITH ('protobuf.field.number' = '536870911')"));
+    registry.alter("pn9", new AlterAttributeType("u", "INT"));
+    assertThat(numbers(message("pn9")).split(" ")).contains("u=5");
+    registry.alter("pn9", new AlterAttributeType("b", "UNION(p INT, q STRING)"));
+    assertThat(numbers(message("pn9")).split(" ")).contains("p=6", "q=7");
+    StringBuilder big = new StringBuilder("syntax = \"proto3\";\n\nmessage Big {\n");
+    for (int i = 1; i <= 18999; i++) {
+      big.append("  int32 f").append(i).append(" = ").append(i).append(";\n");
+    }
+    registry.client.register("big", new ProtobufSchema(
+        big.append("  int32 last = 536870911;\n}\n").toString()));
+    registry.alter("big", new AddAttribute("z", "INT"));
+    assertThat(message("big").findFieldByName("z").getNumber()).isEqualTo(20000);
     // As in a row's message, and for a union in it.
     create("pnr", SchemaType.PROTOBUF, "(a INT, "
         + "r STRUCT(x INT, y INT WITH ('protobuf.field.number' = '536870911')) NOT NULL)");

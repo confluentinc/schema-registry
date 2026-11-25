@@ -18,12 +18,14 @@ package io.confluent.kafka.schemaregistry.type.logical.statements;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
 import io.confluent.kafka.schemaregistry.type.logical.statements.TypeScripts.BodyKind;
+import java.time.Duration;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -159,6 +161,55 @@ class FormatsTest {
     assertThat(Formats.newlyOverlapping(union, before, before, null)).isNull();
     assertThat(Formats.newlyOverlapping(union, before, after, null))
         .containsExactly("u", "x", "y");
+  }
+
+  // Rows that name each other are come to by as many ways as there are orders of them: two
+  // compared once are not compared again by each.
+  @Test
+  void aJsonUnionsRowsThatNameEachOtherAreComparedOnce() {
+    StringBuilder script = new StringBuilder();
+    for (String family : new String[] {"A", "B"}) {
+      for (int i = 0; i < 14; i++) {
+        script.append("STRUCT ").append(family).append(i).append(" (");
+        for (int j = 0; j < 14; j++) {
+          script.append("c").append(j).append(" UNION(link ").append(family).append(j)
+              .append(", leaf INT) NOT NULL, ");
+        }
+        script.append("tag ENUM('").append(family).append("') NOT NULL); ");
+      }
+    }
+    LogicalType lt = TypeScripts.parse(script + "STRUCT t (u UNION(x A0, y B0)); TYPE t;");
+    assertTimeoutPreemptively(Duration.ofSeconds(20),
+        () -> Formats.refuseUnwritable(SchemaType.JSON, lt));
+  }
+
+  // Two rows come to again while they are compared are taken to match; two compared once
+  // and told apart are so wherever they are come to again.
+  @Test
+  void aJsonUnionsRowsComeToAgainAreJudgedAsTheyWere() {
+    assertThatThrownBy(() -> Formats.refuseUnwritable(SchemaType.JSON, TypeScripts.parse(
+        "STRUCT A (inner B NOT NULL); STRUCT B (inner A, k INT); "
+            + "STRUCT t (u UNION(x A, y B)); TYPE t;")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("cannot have branches x and y");
+    Formats.refuseUnwritable(SchemaType.JSON, TypeScripts.parse(
+        "STRUCT R1 (k INT NOT NULL); STRUCT R2 (k STRING NOT NULL); "
+            + "STRUCT S1 (a R1 NOT NULL, t1 INT NOT NULL); "
+            + "STRUCT S2 (a R1 NOT NULL, t2 INT NOT NULL); "
+            + "STRUCT T (a R2 NOT NULL, t2 INT NOT NULL); "
+            + "STRUCT t (u UNION(x UNION(s1 S1, s2 S2), y T)); TYPE t;"));
+  }
+
+  // An enum value's number may be 0 or less, as a field's may not.
+  @Test
+  void aProtobufEnumValuesNumberMayBeZeroOrLess() {
+    Formats.refuseUnwritable(SchemaType.PROTOBUF, struct("(e ENUM("
+        + "'A' WITH ('protobuf.enum.number' = '0'), "
+        + "'B' WITH ('protobuf.enum.number' = '-1')))"));
+    assertThatThrownBy(() -> Formats.refuseUnwritable(SchemaType.PROTOBUF,
+        struct("(a INT WITH ('protobuf.field.number' = '0'))")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("is not a field's number, which is 1 or more: '0'");
   }
 
   // Rows, arrays and maps are written as objects and arrays: two branches are refused where

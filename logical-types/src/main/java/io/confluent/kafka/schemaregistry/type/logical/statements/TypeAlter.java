@@ -661,30 +661,45 @@ public final class TypeAlter {
     }
     String in = new EntriesWalk(was, now).find(was.getRootSchema(), now.getRootSchema(), null);
     if (in != null) {
-      throw new TypeRefusedException("Type " + subject + " cannot be " + done + ": " + in
-          + " has a map stored as an array of key and value entries, which would be written "
-          + "as an object, so its stored values would be read wrongly. Drop the attribute, "
-          + "or register its new version as a JSON schema");
+      // A type that is no row has no attribute to tell, or to drop.
+      throw new TypeRefusedException("Type " + subject + " cannot be " + done + ": "
+          + (in.isEmpty() ? "it is, or holds," : in + " has") + " a map stored as an array "
+          + "of key and value entries, which would be written as an object, so its stored "
+          + "values would be read wrongly. "
+          + (in.isEmpty() ? "Register" : "Drop the attribute, or register")
+          + " its new version as a JSON schema");
     }
   }
 
   // Finds the first such map that the type written in its place still has as a map, and
   // tells the attribute it is in. A named type is come to from the attributes that are of
-  // it: one that none is of any more is written as no value is, and is not judged.
+  // it: one that none is of any more is written as no value is, and is not judged. Nor is
+  // a type referred to, which no statement on this one writes.
   private static final class EntriesWalk {
+    private final LogicalType stored;
     private final Map<String, Schema> wasNamed;
     private final Map<String, Schema> nowNamed;
     private final Set<String> seen = new HashSet<>();
 
     EntriesWalk(LogicalType was, LogicalType now) {
+      this.stored = was;
       this.wasNamed = was.getNamedTypes();
       this.nowNamed = now.getNamedTypes();
+    }
+
+    // A map of other keys is stored as entries and written as them: only one keyed by
+    // strings is written otherwise.
+    private static boolean keyedByStrings(Schema key) {
+      return key.getType() == Schema.Type.VARCHAR || key.getType() == Schema.Type.CHAR;
     }
 
     // One given another kind of type is written anew.
     String find(Schema was, Schema now, String in) {
       if (was != null && was.getType() == Schema.Type.NAMED_TYPE_REF) {
         String name = was.getQualifiedName();
+        if (stored.isExternal(name)) {
+          return null;
+        }
         was = wasNamed.get(name);
         now = now != null && now.getType() == Schema.Type.NAMED_TYPE_REF
             ? nowNamed.get(now.getQualifiedName()) : now;
@@ -720,14 +735,15 @@ public final class TypeAlter {
         case ARRAY:
           return find(was.getElementType(), now.getElementType(), in);
         case MULTISET:
-          if (isEntries(was.getElementNativeNames())
+          if (isEntries(was.getElementNativeNames()) && keyedByStrings(was.getElementType())
               && !isEntries(now.getElementNativeNames())) {
-            return in != null ? in : "it";
+            return in != null ? in : "";
           }
           return find(was.getElementType(), now.getElementType(), in);
         case MAP:
-          if (isEntries(was.getKeyNativeNames()) && !isEntries(now.getKeyNativeNames())) {
-            return in != null ? in : "it";
+          if (isEntries(was.getKeyNativeNames()) && keyedByStrings(was.getKeyType())
+              && !isEntries(now.getKeyNativeNames())) {
+            return in != null ? in : "";
           }
           found = find(was.getKeyType(), now.getKeyType(), in);
           return found != null ? found : find(was.getValueType(), now.getValueType(), in);
@@ -1787,6 +1803,8 @@ public final class TypeAlter {
     LogicalType lt = parseWithReferences(builder, names);
     parsedTypes = lt.getNamedTypes();
     parsedImports = lt.getExternalImports();
+    Set<String> defined = new HashSet<>(externalTypes);
+    references.forEach(r -> defined.remove(r.getName()));
     externalTypes.addAll(lt.getExternalTypes());
     boolean moved = false;
     // A hand-written schema may name a reference otherwise than its subject, as Avro by its
@@ -1807,6 +1825,13 @@ public final class TypeAlter {
           moved = true;
         }
         found |= format != SchemaType.JSON || r.getName().equals(ref.getName());
+      }
+      // A JSON name is one type's: a definition of a type referred to that the type has
+      // under a name, and a type of that name, would both be written as the one.
+      if (!found && format == SchemaType.JSON && defined.contains(ref.getName())) {
+        throw new TypeRefusedException(refused() + ": it has a type named " + ref.getName()
+            + " already, a definition of a type it refers to, and would have type "
+            + ref.getSubject() + " by that name as well");
       }
       if (!found) {
         // One the statement dropped and names again is the reference it was, by the name it

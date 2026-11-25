@@ -33,6 +33,7 @@ import io.confluent.kafka.schemaregistry.type.logical.protobuf.LogicalTypeToProt
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -305,9 +306,10 @@ public final class Formats {
       written.add(written(b.getSchema(), named));
     }
     List<String[]> pairs = new ArrayList<>();
+    Pairs comparing = new Pairs();
     for (int j = 1; j < branches.size(); j++) {
       for (int i = 0; i < j; i++) {
-        if (matchBoth(written.get(i), written.get(j), new HashSet<>())) {
+        if (matchBoth(written.get(i), written.get(j), comparing)) {
           pairs.add(new String[] {branches.get(i).getName(), branches.get(j).getName()});
         }
       }
@@ -429,10 +431,19 @@ public final class Formats {
     }
   }
 
+  // The rows being compared, by the two types, and what two compared were found to be: rows
+  // that name each other are come to by as many ways as there are orders of them.
+  private static final class Pairs {
+    final Set<List<Integer>> open = new HashSet<>();
+    final Map<List<Integer>, Boolean> found = new HashMap<>();
+    // How many times two being compared were come to again.
+    int again;
+  }
+
   // comparing: the rows being compared, by the two types: a row that has an attribute of
   // its own type is come to again while it is compared.
   private static boolean matchBoth(List<Written> one, List<Written> other,
-      Set<List<Integer>> comparing) {
+      Pairs comparing) {
     // A VARIANT is written as any JSON value, so a value of any other branch, a struct or
     // a collection as much as a scalar, matches it too.
     if (one.stream().anyMatch(t -> "any".equals(jsonKind(t.type)))
@@ -443,7 +454,7 @@ public final class Formats {
         .anyMatch(b -> matchBoth(a, b, comparing)));
   }
 
-  private static boolean matchBoth(Written one, Written other, Set<List<Integer>> comparing) {
+  private static boolean matchBoth(Written one, Written other, Pairs comparing) {
     Schema a = one.type;
     Schema b = other.type;
     if (a.getType() == Schema.Type.ENUM && b.getType() == Schema.Type.ENUM) {
@@ -470,17 +481,28 @@ public final class Formats {
     // Two come to while they are compared tell nothing of themselves: the attributes that
     // come after do.
     List<Integer> pair = List.of(System.identityHashCode(a), System.identityHashCode(b));
-    if (!comparing.add(pair)) {
+    Boolean found = comparing.found.get(pair);
+    if (found != null) {
+      return found;
+    }
+    if (!comparing.open.add(pair)) {
+      comparing.again++;
       return true;
     }
+    int again = comparing.again;
     try {
-      if (rowA && rowB) {
-        return !toldApart(one, other, comparing) && (readsAs(a, b) || readsAs(b, a));
-      }
       // A map written as an object takes any property whose value is one of its values'.
-      return !toldFromMap(rowA ? one : other, rowA ? other : one, comparing);
+      boolean both = rowA && rowB
+          ? !toldApart(one, other, comparing) && (readsAs(a, b) || readsAs(b, a))
+          : !toldFromMap(rowA ? one : other, rowA ? other : one, comparing);
+      // Two told apart are so however they were come to; two that are not may be only
+      // for the two taken to match on the way.
+      if (!both || again == comparing.again) {
+        comparing.found.put(pair, both);
+      }
+      return both;
     } finally {
-      comparing.remove(pair);
+      comparing.open.remove(pair);
     }
   }
 
@@ -496,10 +518,11 @@ public final class Formats {
   // Two rows are told apart by an attribute both have whose value in the one is never one
   // in the other, and that one of them requires: a null, which both take where neither
   // does, tells nothing.
-  private static boolean toldApart(Written row, Written other, Set<List<Integer>> comparing) {
+  private static boolean toldApart(Written row, Written other, Pairs comparing) {
     for (Field f : row.type.getFields()) {
       Field g = other.type.getField(f.getName());
-      if (g != null && (!f.getSchema().isNullable() || !g.getSchema().isNullable())
+      if (g != null && (!takesNull(f.getSchema(), row.named)
+            || !takesNull(g.getSchema(), other.named))
           && neverMatch(written(f.getSchema(), row.named),
               written(g.getSchema(), other.named), comparing)) {
         return true;
@@ -510,16 +533,34 @@ public final class Formats {
 
   // A row is told from a map written as an object by an attribute it requires whose value
   // is never one of the map's.
-  private static boolean toldFromMap(Written row, Written map, Set<List<Integer>> comparing) {
+  private static boolean toldFromMap(Written row, Written map, Pairs comparing) {
     List<Written> value = written(map.type.getType() == Schema.Type.MAP
         ? map.type.getValueType() : Schema.create(Schema.Type.INT), map.named);
-    return row.type.getFields().stream().anyMatch(f -> !f.getSchema().isNullable()
+    return row.type.getFields().stream().anyMatch(f -> !takesNull(f.getSchema(), row.named)
         && neverMatch(written(f.getSchema(), row.named), value, comparing));
+  }
+
+  // Whether a null is a value of an attribute's type: one that may be null, or a name of a
+  // type referred to whose own root may be, whatever the attribute says of itself.
+  private static boolean takesNull(Schema type, KnownTypes named) {
+    for (int depth = 0; depth < 16; depth++) {
+      if (type.isNullable()) {
+        return true;
+      }
+      Schema of = type.getType() == Schema.Type.NAMED_TYPE_REF
+          ? named.get(type.getQualifiedName()) : null;
+      if (of == null || !named.isReferred(of)) {
+        return false;
+      }
+      named = named.within(of);
+      type = of;
+    }
+    return true;
   }
 
   // Whether no value of one type is a value of the other; false where either is not known.
   private static boolean neverMatch(List<Written> one, List<Written> other,
-      Set<List<Integer>> comparing) {
+      Pairs comparing) {
     return !one.isEmpty() && !other.isEmpty() && !matchBoth(one, other, comparing);
   }
 

@@ -244,9 +244,11 @@ public class LogicalTypeToJsonConverter {
       return;
     }
     Map<String, Schema> localNamedTypes = ctx.getLogicalType().getLocalNamedTypes();
-    // Nor one of the name of another document the type refers to whole, which that name
-    // is of; a document may hold a definition of its own name.
-    Set<String> documents = ctx.getLogicalType().getResolvedReferences().keySet();
+    // Nor one of the name of another document the type itself refers to whole, which that
+    // name is of; a document may hold a definition of its own name. One that only a type
+    // referred to refers to is no name of this type's.
+    Set<String> documents = new HashSet<>();
+    ctx.getLogicalType().getReferences().forEach(ref -> documents.add(ref.getName()));
     Iterator<String> names = container.fieldNames();
     while (names.hasNext()) {
       String name = names.next();
