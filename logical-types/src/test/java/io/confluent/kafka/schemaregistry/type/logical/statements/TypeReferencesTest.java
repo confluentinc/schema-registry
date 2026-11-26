@@ -132,6 +132,11 @@ class TypeReferencesTest {
     assertThatThrownBy(() -> TypeReferences.definedNames(down, "order",
         order.getReferences().get(0)))
         .isInstanceOf(IllegalStateException.class).hasMessage("The registry cannot be reached");
+    // As is a referred type a union's branches are judged by: it is not left out as one
+    // that cannot be read.
+    assertThatThrownBy(() -> TypeReferences.referredTypes(down, "order",
+        order.getReferences(), Map.of()))
+        .isInstanceOf(IllegalStateException.class).hasMessage("The registry cannot be reached");
     // Dropping the attribute of one type asks which references are still used.
     assertThatThrownBy(() -> TypeAlter.alter(down, "order",
         List.of(new AlterAction.DropAttribute("at", false)), new TypeAlter.Options()))
