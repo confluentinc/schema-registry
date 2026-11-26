@@ -48,10 +48,21 @@ public class BackupReferenceResolver {
   private static final int MAX_DEPTH = SchemaBackupConfig.MAX_REFERENCE_DEPTH;
 
   private final SchemaRegistryClient schemaRegistry;
+  private final boolean autoRegister;
   private final Map<String, Integer> registrationCache = new ConcurrentHashMap<>();
 
   public BackupReferenceResolver(SchemaRegistryClient schemaRegistry) {
+    this(schemaRegistry, true);
+  }
+
+  /**
+   * @param autoRegister when false, referenced schemas are not registered; they must
+   *     already exist on the target registry and are only looked up (mirrors the
+   *     serializer's {@code auto.register.schemas=false}).
+   */
+  public BackupReferenceResolver(SchemaRegistryClient schemaRegistry, boolean autoRegister) {
     this.schemaRegistry = schemaRegistry;
+    this.autoRegister = autoRegister;
   }
 
   public static class ResolutionResult {
@@ -255,7 +266,9 @@ public class BackupReferenceResolver {
     try {
       ParsedSchema refSchema = factory.create(
           entry.getSchema(), childTargetRefs, childResolvedSchemas);
-      schemaRegistry.register(ref.getSubject(), refSchema);
+      if (autoRegister) {
+        schemaRegistry.register(ref.getSubject(), refSchema);
+      }
       targetVersion = schemaRegistry.getVersion(
           ref.getSubject(), refSchema);
       registrationCache.put(cacheKey, targetVersion);

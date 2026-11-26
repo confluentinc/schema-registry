@@ -34,9 +34,12 @@ import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
+import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import io.confluent.kafka.serializers.schema.id.SchemaId;
 import io.confluent.kafka.serializers.schema.id.SchemaIdDeserializer;
 import io.confluent.kafka.serializers.schema.id.SchemaIdSerializer;
+import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
+import io.confluent.kafka.serializers.context.strategy.ContextNameStrategy;
 import io.confluent.kafka.serializers.subject.strategy.SubjectNameStrategy;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -44,6 +47,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.connect.data.Schema;
@@ -109,6 +113,13 @@ public class SchemaBackupAwareByteArrayConverter implements Converter {
   private SchemaIdDeserializer schemaIdDeserializer;
   private SchemaIdSerializer schemaIdSerializer;
   private SubjectNameStrategy subjectNameStrategy;
+  private ContextNameStrategy contextNameStrategy;
+  private boolean autoRegisterSchema;
+  private boolean normalizeSchema;
+  private boolean propagateSchemaTags;
+  // Restore-time rejection: set when a serializer setting would label the original
+  // payload bytes with a schema other than the backed-up writer schema.
+  private String writerSchemaOverride;
   private boolean backupEnabled;
   private boolean isKey;
   private Schema wrapperSchema;
@@ -145,14 +156,22 @@ public class SchemaBackupAwareByteArrayConverter implements Converter {
           configs,
           cfg.requestHeaders());
     }
+    this.autoRegisterSchema = cfg.autoRegisterSchema();
+    this.normalizeSchema = cfg.normalizeSchema();
+    this.propagateSchemaTags = cfg.propagateSchemaTags();
+    this.contextNameStrategy = cfg.contextNameStrategy();
+    this.writerSchemaOverride = findWriterSchemaOverride(cfg);
     this.schemaFetcher = new BackupSchemaFetcher(schemaRegistry);
-    this.referenceResolver = new BackupReferenceResolver(schemaRegistry);
+    this.referenceResolver = new BackupReferenceResolver(schemaRegistry, autoRegisterSchema);
     this.schemaIdDeserializer = isKey
         ? cfg.keySchemaIdDeserializer() : cfg.valueSchemaIdDeserializer();
     this.schemaIdSerializer = isKey
         ? cfg.keySchemaIdSerializer() : cfg.valueSchemaIdSerializer();
     this.subjectNameStrategy = isKey
         ? cfg.keySubjectNameStrategy() : cfg.valueSubjectNameStrategy();
+    // Same as AbstractKafkaSchemaSerDe: strategies such as the default
+    // AssociatedNameStrategy need the client, otherwise they fall back to <topic>-value.
+    this.subjectNameStrategy.setSchemaRegistryClient(schemaRegistry);
     this.wrapperSchema = BackupWrapper.buildSchema(Schema.OPTIONAL_BYTES_SCHEMA);
   }
 
@@ -241,7 +260,7 @@ public class SchemaBackupAwareByteArrayConverter implements Converter {
           info.getRawSchema(),
           info.getDirectReferences(),
           flattenTreeToResolvedMap(info));
-      String subject = subjectNameStrategy.subjectName(topic, isKey, parsed);
+      String subject = subjectName(topic, parsed);
       Integer version = info.getVersionForSubject(subject);
 
       BackupWrapper.WrapperFields fields = new BackupWrapper.WrapperFields(
@@ -258,6 +277,13 @@ public class SchemaBackupAwareByteArrayConverter implements Converter {
   }
 
   private byte[] restoreFromWrapper(String topic, Headers headers, Struct wrapper) {
+    if (writerSchemaOverride != null) {
+      throw new ConfigException(writerSchemaOverride
+          + " is not supported by SchemaBackupAwareByteArrayConverter on restore. It"
+          + " restores the original payload bytes unchanged, so they must be labelled"
+          + " with the backed-up writer schema; this setting would label them with a"
+          + " different schema and consumers would decode them with the wrong schema.");
+    }
     try {
       Schema wschema = wrapper.schema();
       if (wschema.field(BackupWrapper.FIELD_DATA) == null) {
@@ -324,9 +350,13 @@ public class SchemaBackupAwareByteArrayConverter implements Converter {
       // The wrapper's FIELD_SCHEMA_SUBJECT records the SOURCE subject and is not used
       // here on purpose: after a topic rename during restore (e.g. restore.topic.prefix),
       // the target subject follows the target topic.
-      String subject = subjectNameStrategy.subjectName(topic, isKey, parsedSchema);
-      RegisterSchemaResponse response = schemaRegistry.registerWithResponse(
-          subject, parsedSchema, false, false);
+      // Same choice as AbstractKafkaAvroSerializer.serializeImpl: register when
+      // auto.register.schemas=true, otherwise look up the existing ID.
+      String subject = subjectName(topic, parsedSchema);
+      RegisterSchemaResponse response = autoRegisterSchema
+          ? schemaRegistry.registerWithResponse(
+              subject, parsedSchema, normalizeSchema, propagateSchemaTags)
+          : schemaRegistry.getIdWithResponse(subject, parsedSchema, normalizeSchema);
 
       SchemaId tgt = new SchemaId(schemaType, response.getId(), response.getGuid());
       if (!src.getMessageIndexes().isEmpty()) {
@@ -396,6 +426,41 @@ public class SchemaBackupAwareByteArrayConverter implements Converter {
           + " may have been altered by a non-ByteArray header.converter.", e);
     }
     src.setMessageIndexes(fromHeader.getMessageIndexes());
+  }
+
+  /**
+   * Subject for {@code topic}, qualified by {@code context.name.strategy} when it yields
+   * a context. Mirrors AbstractKafkaSchemaSerDe#getSubjectName.
+   */
+  private String subjectName(String topic, ParsedSchema schema) {
+    String subject = subjectNameStrategy.subjectName(topic, isKey, schema);
+    String contextName = contextNameStrategy.contextName(topic);
+    if (contextName == null) {
+      return subject;
+    }
+    contextName = QualifiedSubject.normalizeContext(contextName);
+    return subject != null ? contextName + subject : contextName;
+  }
+
+  /**
+   * Returns the first configured setting that would make the restored ID differ from
+   * the backed-up writer schema, or null when none is set.
+   */
+  private static String findWriterSchemaOverride(
+      SchemaBackupAwareByteArrayConverterConfig cfg) {
+    if (cfg.useLatestVersion()) {
+      return AbstractKafkaSchemaSerDeConfig.USE_LATEST_VERSION + "=true";
+    }
+    if (cfg.getLatestWithMetadataSpec() != null) {
+      return AbstractKafkaSchemaSerDeConfig.USE_LATEST_WITH_METADATA;
+    }
+    if (cfg.useSchemaId() != AbstractKafkaSchemaSerDeConfig.USE_SCHEMA_ID_DEFAULT) {
+      return AbstractKafkaSchemaSerDeConfig.USE_SCHEMA_ID;
+    }
+    if (cfg.useSchemaGuid() != null) {
+      return AbstractKafkaSchemaSerDeConfig.USE_SCHEMA_GUID;
+    }
+    return null;
   }
 
   private String schemaIdHeaderName() {
