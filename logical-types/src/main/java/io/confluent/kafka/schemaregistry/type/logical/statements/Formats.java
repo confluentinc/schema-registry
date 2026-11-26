@@ -374,6 +374,18 @@ public final class Formats {
   // beside a row or another such map; and two rows one of whose values is the other's.
   private static void refuseOverlappingBranches(Schema union, KnownTypes named,
       String within) {
+    // A branch of a type referred to whose own root may be null takes a null itself, which
+    // the writer cannot take out of that type: a null would match the branch and the
+    // union's own null, or be taken by a union that takes none.
+    for (UnionBranch b : union.getBranches()) {
+      if (nullWithin(b.getSchema(), named, 0)) {
+        throw new TypeRefusedException("A UNION "
+            + (within != null ? "of attribute " + within + " " : "")
+            + "in a JSON type cannot have branch " + b.getName() + ", which is of a type that "
+            + "takes a null of its own: a null would match the branch as well as the union's "
+            + "own null, or be taken where the union takes none");
+      }
+    }
     String[] both = overlappingBranches(union, named);
     if (both != null) {
       throw new TypeRefusedException("A UNION "
@@ -463,11 +475,11 @@ public final class Formats {
         return null;
       case UNION: {
         // Two that did before are left: a type stored so is altered as it was.
-        Set<String> were = new HashSet<>();
+        Set<List<String>> were = new HashSet<>();
         overlappingPairs(type, before, false)
-            .forEach(pair -> were.add(pair[0] + " " + pair[1]));
+            .forEach(pair -> were.add(List.of(pair[0], pair[1])));
         for (String[] pair : overlappingPairs(type, after, false)) {
-          if (!were.contains(pair[0] + " " + pair[1])) {
+          if (!were.contains(List.of(pair[0], pair[1]))) {
             return new String[] {within, pair[0], pair[1]};
           }
         }

@@ -63,6 +63,7 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -977,8 +978,11 @@ public class LogicalTypeToProtoConverter {
     final List<String> shape = new ArrayList<>();
     for (DescriptorProto message : messages) {
       shape.add("message " + message.getName());
-      // With the oneof a field is a member of, and whether it tells that it is set.
-      message.getFieldList().forEach(f -> shape.add(f.getName() + " " + f.getNumber() + " "
+      // With the oneof a field is a member of, and whether it tells that it is set: by the
+      // fields' numbers, as the order they are declared in is nothing to a reader.
+      message.getFieldList().stream()
+          .sorted(Comparator.comparingInt(FieldDescriptorProto::getNumber))
+          .forEach(f -> shape.add(f.getName() + " " + f.getNumber() + " "
           + f.getLabel() + " " + f.getType() + " " + f.getTypeName() + " "
           + (f.hasOneofIndex() ? message.getOneofDecl(f.getOneofIndex()).getName() : "") + " "
           + f.getProto3Optional() + " " + f.getDefaultValue()));

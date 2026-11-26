@@ -136,8 +136,10 @@ public final class TypeReferences {
     if (!aliases.isEmpty()) {
       lt = TypeScripts.parse(builder.build(aliases));
     }
-    if (bound != null) {
-      nameAsBound(referrer, references, resolved, bound);
+    if (bound != null && nameAsBound(referrer, references, resolved, bound)) {
+      // What a name was held for may be what a type named beside it needs by that name.
+      resolved.clear();
+      resolved.putAll(resolve(lookup, referrer, references));
     }
     return TypeScripts.withReferences(lt, references, resolved);
   }
@@ -164,8 +166,9 @@ public final class TypeReferences {
 
   // Gives a reference the name a type named beside it refers to its subject by, where it has
   // another: its schema is then held once, under the one name.
-  private static void nameAsBound(String referrer, List<SchemaReference> references,
+  private static boolean nameAsBound(String referrer, List<SchemaReference> references,
       Map<String, String> resolved, Map<String, String> bound) {
+    boolean renamed = false;
     for (int i = 0; i < references.size(); i++) {
       SchemaReference ref = references.get(i);
       String name = bound.get(referenced(referrer, ref.getSubject()));
@@ -174,8 +177,9 @@ public final class TypeReferences {
         continue;
       }
       references.set(i, new SchemaReference(name, ref.getSubject(), ref.getVersion()));
-      resolved.remove(ref.getName());
+      renamed = true;
     }
+    return renamed;
   }
 
   /**

@@ -2825,8 +2825,9 @@ class TypeAlterTest {
         .containsExactly(1);
 
     // A name of a name: a branch is what the type its type refers to is.
-    registry.create("nu1", SchemaType.JSON, BodyKind.OTHER, "UNION(c STRUCT(a INT), d BOOLEAN)");
-    registry.create("nu2", SchemaType.JSON, BodyKind.OTHER, "UNION(e nu1, f STRING)");
+    registry.create("nu1", SchemaType.JSON, BodyKind.OTHER,
+        "UNION(c STRUCT(a INT), d BOOLEAN) NOT NULL");
+    registry.create("nu2", SchemaType.JSON, BodyKind.OTHER, "UNION(e nu1, f STRING) NOT NULL");
     assertThatThrownBy(() -> create("nu3", SchemaType.JSON, "(u UNION(x BOOLEAN, y nu2))"))
         .isInstanceOf(TypeRefusedException.class)
         .hasMessageContaining("cannot have branches x and y");
@@ -3265,9 +3266,11 @@ class TypeAlterTest {
   void aJsonUnionsBranchIsJudgedByTheNamesOfTheTypeItIsOf() {
     registry.create("je", SchemaType.JSON, BodyKind.ENUM, "('A', 'B')");
     registry.create("jk", SchemaType.JSON, BodyKind.STRUCT, "(k INT)");
-    registry.create("jalias", SchemaType.JSON, BodyKind.OTHER, "je");
-    registry.create("jkalias", SchemaType.JSON, BodyKind.OTHER, "jk");
-    registry.create("jdom", SchemaType.JSON, BodyKind.OTHER, "UNION(p je, q BOOLEAN)");
+    // Each takes no null of its own, as a union's branch must not.
+    registry.create("jalias", SchemaType.JSON, BodyKind.OTHER, "je NOT NULL");
+    registry.create("jkalias", SchemaType.JSON, BodyKind.OTHER, "jk NOT NULL");
+    registry.create("jdom", SchemaType.JSON, BodyKind.OTHER,
+        "UNION(p je, q BOOLEAN) NOT NULL");
     for (String union : List.of("UNION(a STRING, b jalias)",
         "UNION(a STRUCT(k INT), b jkalias)", "UNION(a STRING, b jdom)",
         "UNION(a BOOLEAN, b jdom)")) {

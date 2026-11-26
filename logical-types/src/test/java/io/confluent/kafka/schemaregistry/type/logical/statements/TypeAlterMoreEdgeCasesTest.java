@@ -19,6 +19,7 @@ package io.confluent.kafka.schemaregistry.type.logical.statements;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.protobuf.Descriptors.Descriptor;
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
@@ -438,6 +439,68 @@ class TypeAlterMoreEdgeCasesTest {
         .as(subject).isInstanceOf(TypeRefusedException.class)
         .hasMessageMatching(TestRegistry.readAsOne("altered", name, one, other));
     assertThat(version(subject)).isEqualTo(1);
+  }
+
+  // A JSON union's branch of a type referred to whose own root may be null takes a null
+  // itself: with the union's own a null matches twice, and a NOT NULL union takes one. It
+  // is refused; a type whose root takes none is a branch, and a type stored so is altered.
+  @Test
+  void aJsonUnionsBranchOfATypeThatTakesANullIsRefused() throws Exception {
+    registry.create("hu", SchemaType.JSON, BodyKind.OTHER, "INT");
+    registry.create("hn", SchemaType.JSON, BodyKind.OTHER, "INT NOT NULL");
+    // A name for another type, and a union, take a null too unless they say NOT NULL.
+    registry.create("ha", SchemaType.JSON, BodyKind.OTHER, "hn");
+    registry.create("hd", SchemaType.JSON, BodyKind.OTHER, "UNION(p hn, q STRING)");
+    for (String union : List.of("UNION(a hu, b BOOLEAN)", "UNION(a hu, b BOOLEAN) NOT NULL",
+        "UNION(a BOOLEAN, b UNION(c hu, d STRING))", "UNION(a ha, b BOOLEAN)",
+        "UNION(a hd, b BOOLEAN)")) {
+      assertThatThrownBy(() -> create("nu", SchemaType.JSON, "(id INT, u " + union + ")"))
+          .as(union).isInstanceOf(TypeRefusedException.class)
+          .hasMessageContaining("A UNION of attribute u in a JSON type cannot have branch")
+          .hasMessageContaining("which is of a type that takes a null of its own");
+    }
+    create("nn", SchemaType.JSON, "(id INT, u UNION(a hn, b BOOLEAN))");
+    JsonSchema written = (JsonSchema) registry.schema("nn");
+    written.validate(new ObjectMapper().readTree("{\"id\":1,\"u\":null}"));
+    written.validate(new ObjectMapper().readTree("{\"id\":1,\"u\":5}"));
+    json("ns", head("ns") + "\"u\":{\"oneOf\":[{\"type\":\"null\"},{\"$ref\":\"hu\"},"
+        + "{\"type\":\"boolean\"}]}" + CLOSED, "hu");
+    registry.alter("ns", new AddAttribute("z", "INT"));
+    assertThat(version("ns")).isEqualTo(2);
+    refused("A UNION of attribute w in a JSON type cannot have branch a", "ns",
+        new AddAttribute("w", "UNION(a hu, b BOOLEAN)"));
+  }
+
+  // A Protobuf file that imports one subject by another's name: the reference to that
+  // other takes the name the file has for it, and the file still has what it imports by
+  // the name, in a type created again as in one created.
+  @Test
+  void aReferenceNamedAsAFileImportsAnotherKeepsWhatTheFileImports() throws Exception {
+    proto("a", "syntax = \"proto3\";\nmessage A {\n  int32 x = 1;\n}\n");
+    proto("c", "syntax = \"proto3\";\nmessage C {\n  int32 y = 1;\n}\n");
+    Map<String, String> resolved = new LinkedHashMap<>();
+    resolved.put("a.proto", registry.latest("a").getSchema());
+    resolved.put("a", registry.latest("c").getSchema());
+    registry.client.register("pair", new ProtobufSchema("syntax = \"proto3\";\nimport "
+        + "\"a.proto\";\nimport \"a\";\n\nmessage Pair {\n  A a = 1;\n  C c = 2;\n}\n",
+        List.of(new SchemaReference("a.proto", "a", 1), new SchemaReference("a", "c", 1)),
+        resolved, null, null));
+    create("pq", SchemaType.PROTOBUF, "(id INT, p pair, q a)");
+    registry.drop("pq");
+    create("pq", SchemaType.PROTOBUF, "(id INT, p pair, q a, n INT)");
+    assertThat(references("pq")).containsExactly("a.proto", "pair");
+    assertThat(message("pq").findFieldByName("p").getMessageType().findFieldByName("c")
+        .getMessageType().getName()).isEqualTo("C");
+  }
+
+  // A copy of one of the format's own files is that file whatever order it declares its
+  // fields in: a type referring to it is created.
+  @Test
+  void aCopyOfAFormatsFileWithItsFieldsInAnotherOrderIsThatFile() throws Exception {
+    proto("mydate", "syntax = \"proto3\";\npackage google.type;\n\nmessage Date {\n"
+        + "  int32 day = 3;\n  int32 year = 1;\n  int32 month = 2;\n}\n");
+    create("dd", SchemaType.PROTOBUF, "(id INT, d mydate)");
+    assertThat(references("dd")).containsExactly("mydate");
   }
 
   // A document read into an attribute, under allOf, is the schema's own to write: a
