@@ -44,6 +44,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
@@ -285,12 +286,29 @@ public class SchemaBackupAwareByteArrayConverter implements Converter {
             + "' bytes for topic " + topic);
       }
 
-      // Re-parse with the correct type so PROTOBUF message indexes are extracted.
+      // The wrapper records how the stored bytes were framed at backup time:
+      // a schema ID means prefix framing, a GUID alone means header framing.
+      // Use that instead of the restore record's headers, which may be missing,
+      // damaged, or unrelated to the stored bytes.
       SchemaId src = new SchemaId(schemaType);
-      ByteBuffer payloadBuf =
-          schemaIdDeserializer.deserialize(topic, isKey, headers, originalBytes, src);
-      byte[] payloadBytes = new byte[payloadBuf.remaining()];
-      payloadBuf.get(payloadBytes);
+      Integer srcId = optionalInt32(wrapper, wschema, BackupWrapper.FIELD_SCHEMA_ID);
+      String srcGuid = optionalString(wrapper, wschema, BackupWrapper.FIELD_SCHEMA_GUID);
+      byte[] payloadBytes;
+      if (srcId != null) {
+        payloadBytes = stripPrefixFraming(topic, originalBytes, src, srcId);
+      } else if (srcGuid != null) {
+        // Header framing: the stored bytes are the bare payload.
+        payloadBytes = originalBytes;
+        if (SchemaBackupConfig.TYPE_PROTOBUF.equals(schemaType)) {
+          copyMessageIndexesFromHeader(topic, headers, src);
+        }
+      } else {
+        // Wrapper without ID or GUID: keep the original header-driven parsing.
+        ByteBuffer payloadBuf =
+            schemaIdDeserializer.deserialize(topic, isKey, headers, originalBytes, src);
+        payloadBytes = new byte[payloadBuf.remaining()];
+        payloadBuf.get(payloadBytes);
+      }
 
       BackupReferenceResolver.ResolutionResult resolved =
           referenceResolver.resolveFromWrapper(wschema, wrapper, factory);
@@ -314,10 +332,82 @@ public class SchemaBackupAwareByteArrayConverter implements Converter {
       if (!src.getMessageIndexes().isEmpty()) {
         tgt.setMessageIndexes(src.getMessageIndexes());
       }
+      // Drop the source schema ID header so the target framing is the only one on
+      // the record. Consumers read this header before the prefix, so a stale source
+      // GUID would make them look up the wrong schema on the target registry.
+      if (headers != null) {
+        headers.remove(schemaIdHeaderName());
+      }
       return schemaIdSerializer.serialize(topic, isKey, headers, payloadBytes, tgt);
     } catch (Exception e) {
       throw BackupExceptionMapper.classify("restore for topic " + topic, e);
     }
+  }
+
+  /**
+   * Parses the prefix framing of the stored bytes (ignoring headers) and returns the
+   * payload. Fails if the bytes do not carry the schema ID the wrapper recorded.
+   */
+  private static byte[] stripPrefixFraming(
+      String topic, byte[] originalBytes, SchemaId src, int expectedId) {
+    ByteBuffer payloadBuf;
+    try {
+      payloadBuf = src.fromBytes(ByteBuffer.wrap(originalBytes));
+    } catch (RuntimeException e) {
+      throw new DataException(
+          "Backup wrapper for topic " + topic + " records schema ID " + expectedId
+          + " (prefix framing), but the stored bytes do not start with a valid"
+          + " schema ID prefix. Backup may be corrupted.", e);
+    }
+    if (src.getId() == null || src.getId() != expectedId) {
+      throw new DataException(
+          "Backup wrapper for topic " + topic + " records schema ID " + expectedId
+          + ", but the stored bytes carry schema ID " + src.getId()
+          + ". Backup may be corrupted.");
+    }
+    byte[] payloadBytes = new byte[payloadBuf.remaining()];
+    payloadBuf.get(payloadBytes);
+    return payloadBytes;
+  }
+
+  /**
+   * For Protobuf with header (GUID) framing, the message indexes live in the schema ID
+   * header, not in the stored bytes, so they are read from the restored record's header.
+   * Fails loudly when the header is missing or unreadable instead of guessing.
+   */
+  private void copyMessageIndexesFromHeader(String topic, Headers headers, SchemaId src) {
+    String headerName = schemaIdHeaderName();
+    Header header = headers != null ? headers.lastHeader(headerName) : null;
+    if (header == null || header.value() == null) {
+      throw new DataException(
+          "Protobuf record for topic " + topic + " was backed up with header (GUID)"
+          + " framing, but the " + headerName + " header is missing on restore. Its"
+          + " message indexes are required. Use"
+          + " header.converter=org.apache.kafka.connect.converters.ByteArrayConverter"
+          + " on both backup and restore so headers round-trip unchanged.");
+    }
+    SchemaId fromHeader = new SchemaId(SchemaBackupConfig.TYPE_PROTOBUF);
+    try {
+      fromHeader.fromBytes(ByteBuffer.wrap(header.value()));
+    } catch (RuntimeException e) {
+      throw new DataException(
+          "Protobuf record for topic " + topic + ": the " + headerName + " header"
+          + " cannot be parsed, so its message indexes are unavailable. The header"
+          + " may have been altered by a non-ByteArray header.converter.", e);
+    }
+    src.setMessageIndexes(fromHeader.getMessageIndexes());
+  }
+
+  private String schemaIdHeaderName() {
+    return isKey ? SchemaId.KEY_SCHEMA_ID_HEADER : SchemaId.VALUE_SCHEMA_ID_HEADER;
+  }
+
+  private static Integer optionalInt32(Struct wrapper, Schema schema, String field) {
+    return schema.field(field) != null ? wrapper.getInt32(field) : null;
+  }
+
+  private static String optionalString(Struct wrapper, Schema schema, String field) {
+    return schema.field(field) != null ? wrapper.getString(field) : null;
   }
 
   /**
