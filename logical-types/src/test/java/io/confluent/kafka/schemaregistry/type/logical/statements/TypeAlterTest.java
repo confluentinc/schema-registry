@@ -5050,4 +5050,179 @@ class TypeAlterTest {
         new AddAttribute("e.x", "STRING"))).isInstanceOf(TypeRefusedException.class)
         .hasMessageStartingWith("Attribute `e.x` is dropped by this statement");
   }
+
+  // A reference no attribute is of may give a name below another reference its version:
+  // listed first, it is the one that name is read as there. It is not dropped as one of
+  // no use, which would leave the other reference's attribute another type: the type is
+  // told as the two versions it has.
+  @Test
+  void aJsonReferenceThatBindsANameBelowAnotherIsNotDropped() throws Exception {
+    String row = "{\"type\":\"object\",\"title\":\"%s\",\"properties\":{\"%s\":%s},"
+        + "\"required\":[\"%2$s\"],\"additionalProperties\":false}";
+    json("o5s", String.format(row, "o5s", "o", "{\"type\":\"string\"}"));
+    json("bv", String.format(row, "bv", "k", "{\"type\":\"integer\"}"));
+    json("abv", String.format(row, "abv", "in", "{\"$ref\":\"bv\"}"), "bv");
+    json("bv", String.format(row, "bv", "p", "{\"type\":\"integer\"}"));
+    Map<String, String> resolved = new LinkedHashMap<>();
+    resolved.put("bv", registry.version("bv", 2).getSchema());
+    resolved.put("abv", registry.latest("abv").getSchema());
+    resolved.put("o5s", registry.latest("o5s").getSchema());
+    List<SchemaReference> two = List.of(new SchemaReference("bv", "bv", 2),
+        new SchemaReference("abv", "abv", 1));
+    registry.client.register("b1", new JsonSchema(String.format(JSON_HEAD, "b1")
+        + "\"a\":{\"$ref\":\"abv\"}},\"additionalProperties\":false}", two, resolved, null));
+    List<SchemaReference> three = new ArrayList<>(two);
+    three.add(new SchemaReference("o5s", "o5s", 1));
+    registry.client.register("b2", new JsonSchema(String.format(JSON_HEAD, "b2")
+        + "\"a\":{\"$ref\":\"abv\"},\"b\":{\"$ref\":\"o5s\"}},\"additionalProperties\":false}",
+        three, resolved, null));
+    assertThatThrownBy(() -> registry.alter("b1", new AddAttribute("z", "INT")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("it would refer to two versions of type bv, version 2 (named "
+            + "directly) and version 1 (through version 1 of type abv)");
+    // As where the statement leaves another reference no attribute.
+    assertThatThrownBy(() -> registry.alter("b2", new DropAttribute("b", false)))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("it would refer to two versions of type bv");
+    assertThat(version("b1")).isEqualTo(1);
+    assertThat(version("b2")).isEqualTo(1);
+  }
+
+  // A definition is read wherever a $ref is to it, under a word of a tool's own too: one
+  // there that is of a definition named as a document referred to is told. What is under a
+  // word the reader does not read a type through, and beside a $ref, is not.
+  @Test
+  void aJsonRefIsFollowedWhereItIsToAndNotUnderWordsNotRead() throws Exception {
+    create("o5s", SchemaType.JSON, "(o STRING NOT NULL)");
+    String loc = "{\"type\":\"object\",\"properties\":{\"p\":{\"type\":\"integer\"}},"
+        + "\"required\":[\"p\"],\"additionalProperties\":false}";
+    json("lib", "{\"type\":\"object\",\"title\":\"lib\",\"properties\":{\"q\":{\"type\":"
+        + "\"integer\"}},\"additionalProperties\":false,\"$defs\":{\"o5s\":{\"enum\":[\"X\"]},"
+        + "\"Loc\":" + loc + "}}");
+    json("xt", String.format(JSON_HEAD, "xt") + "\"x\":{\"$ref\":\"#/x-types/$defs/A\"},"
+        + "\"w\":{\"$ref\":\"o5s\"}},\"additionalProperties\":false,\"x-types\":{\"$defs\":"
+        + "{\"A\":{\"type\":\"object\",\"properties\":{\"v\":{\"$ref\":\"lib#/$defs/o5s\"}}}}}}",
+        "lib", "o5s");
+    assertThatThrownBy(() -> registry.alter("xt", new AddAttribute("z", "INT")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("it has a definition named o5s of lib, and refers to a type by "
+            + "that name");
+    String own = "\"x\":{\"$ref\":\"#/$defs/Loc\"}},\"additionalProperties\":false,\"$defs\":"
+        + "{\"Loc\":{\"type\":\"object\",\"properties\":{\"q\":{\"type\":\"string\"}}}}";
+    String other = "{\"$ref\":\"lib#/$defs/Loc\"}";
+    Map<String, String> unread = new LinkedHashMap<>();
+    unread.put("np", ",\"patternProperties\":{\"^x-\":" + other + "}}");
+    unread.put("nd", ",\"dependencies\":{\"id\":{\"properties\":{\"x\":" + other + "}}}}");
+    unread.put("nc", ",\"propertyNames\":" + other + "}");
+    for (Map.Entry<String, String> type : unread.entrySet()) {
+      json(type.getKey(), String.format(JSON_HEAD, type.getKey()) + own + type.getValue(),
+          "lib");
+      registry.alter(type.getKey(), new AddAttribute("z", "INT"));
+      assertThat(version(type.getKey())).as(type.getKey()).isEqualTo(2);
+    }
+    json("ns", String.format(JSON_HEAD, "ns") + "\"x\":{\"$ref\":\"#/$defs/Loc\","
+        + "\"properties\":{\"zz\":" + other + "}}},\"additionalProperties\":false,\"$defs\":"
+        + "{\"Loc\":{\"type\":\"object\",\"properties\":{\"q\":{\"type\":\"string\"}}}}}", "lib");
+    registry.alter("ns", new AddAttribute("z", "INT"));
+    assertThat(version("ns")).isEqualTo(2);
+    // Under a word the reader reads, it is the second definition it is.
+    json("na", String.format(JSON_HEAD, "na") + "\"x\":{\"$ref\":\"#/$defs/Loc\"},\"y\":"
+        + "{\"type\":\"array\",\"items\":" + other + "}},\"additionalProperties\":false,"
+        + "\"$defs\":{\"Loc\":{\"type\":\"object\",\"properties\":{\"q\":{\"type\":\"string\"}}}}}",
+        "lib");
+    assertThatThrownBy(() -> registry.alter("na", new AddAttribute("z", "INT")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("it has two definitions named Loc, #/$defs/Loc and "
+            + "lib#/$defs/Loc");
+    // A schema of an older draft names itself by id.
+    json("n4", "{\"$schema\":\"http://json-schema.org/draft-04/schema#\",\"id\":"
+        + "\"x-test://n4/n4.json\"," + String.format(JSON_HEAD, "n4").substring(1)
+        + "\"x\":{\"$ref\":\"#/definitions/Loc\"},\"y\":{\"$ref\":"
+        + "\"x-test://n4/n4.json#/definitions/Loc\"}},\"additionalProperties\":false,"
+        + "\"definitions\":{\"Loc\":" + loc + "}}");
+    registry.alter("n4", new AddAttribute("z", "INT"));
+    assertThat(version("n4")).isEqualTo(2);
+  }
+
+  // A document named with a # and no more after its name is the document: named so and
+  // plainly, it is one type; and it is told as a type referred to whole, and no part.
+  @Test
+  void aJsonDocumentNamedWithAHashIsTheDocument() throws Exception {
+    create("Ref1", SchemaType.JSON, "(k1 INT NOT NULL)");
+    create("o5s", SchemaType.JSON, "(o STRING NOT NULL)");
+    json("h1", String.format(JSON_HEAD, "h1") + "\"a\":{\"$ref\":\"Ref1#\"},\"b\":{\"$ref\":"
+        + "\"Ref1\"}},\"additionalProperties\":false}", "Ref1");
+    registry.alter("h1", new AddAttribute("z", "INT"));
+    assertThat(version("h1")).isEqualTo(2);
+    assertThat(registry.schema("h1").canonicalString())
+        .contains("\"a\":{\"connect.index\":0,\"oneOf\":[{\"type\":\"null\"},{\"$ref\":\"Ref1\"}]}")
+        .contains("\"b\":{\"connect.index\":1,\"oneOf\":[{\"type\":\"null\"},{\"$ref\":\"Ref1\"}]}");
+    assertThat(references("h1")).containsExactly("Ref1");
+    json("h2", String.format(JSON_HEAD, "h2") + "\"a\":{\"$ref\":\"o5s#\"},\"b\":{\"$ref\":"
+        + "\"#/$defs/Ref1\"}},\"additionalProperties\":false,\"$defs\":{\"Ref1\":{\"type\":"
+        + "\"object\",\"properties\":{\"k\":{\"type\":\"integer\"}}}}}", "o5s");
+    assertThatThrownBy(() -> registry.alter("h2", new AddAttribute("z", "INT")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("which is what a type is called that it refers to whole: o5s#.");
+  }
+
+  // A oneof wrapped in a message is told by the attribute that continues its field,
+  // whatever the statement names it and whatever else it renames or drops: a union still,
+  // it would be written as a oneof of the message. Dropped, it is no more, whatever is
+  // done to a oneof the message has itself.
+  @Test
+  void aWrappedOneofIsToldByTheAttributeThatContinuesIt() throws Exception {
+    String head = "syntax = \"proto3\";\n\nimport \"confluent/meta.proto\";\n\nmessage T {\n";
+    String wrapper = "\n  message W {\n    oneof value {\n      int32 a = %d;\n      string b = "
+        + "%d;\n    }\n  }\n}\n";
+    // A oneof of the message of other members, and one of the wrapper's own.
+    String other = head + "  int32 id = 1;\n  W w = 2 " + WRAPPED + ";\n  oneof u {\n"
+        + "    int32 c = 3;\n    string d = 4;\n  }\n  int32 z = 5;\n" + String.format(wrapper, 7, 8);
+    String same = head + "  int32 id = 5;\n  W w = 2 " + WRAPPED + ";\n  oneof u {\n"
+        + "    int32 a = 1;\n    string b = 3;\n  }\n  int32 z = 6;\n" + String.format(wrapper, 1, 3);
+    String told = "field w of message T is a oneof wrapped in a message";
+    registry.client.register("s1", new ProtobufSchema(other));
+    assertThatThrownBy(() -> registry.alter("s1", new RenameAttribute("u", "u2"),
+        new RenameAttribute("w", "u"))).isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining(told);
+    registry.client.register("s2", new ProtobufSchema(same));
+    assertThatThrownBy(() -> registry.alter("s2", new DropAttribute("u", false),
+        new RenameAttribute("w", "x"))).isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining(told);
+    assertThatThrownBy(() -> registry.alter("s2", new AlterAttributeType("u", "INT"),
+        new RenameAttribute("w", "x"))).isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining(told);
+    assertThat(version("s1")).isEqualTo(1);
+    assertThat(version("s2")).isEqualTo(1);
+    // Dropped, with the message's oneof renamed and given a member.
+    registry.alter("s2", new DropAttribute("w", false), new RenameAttribute("u", "x"),
+        new AlterAttributeType("x", "UNION(a INT, b STRING, e INT)"));
+    assertThat(message("s2").getFields().stream().map(f -> f.getName() + "=" + f.getNumber())
+        .sorted().collect(Collectors.joining(" "))).isEqualTo("a=1 b=3 e=7 id=5 z=6");
+    // Of two fields of one wrapper, the one that stays is told.
+    registry.client.register("s3", new ProtobufSchema(head + "  int32 id = 5;\n  W w = 2 "
+        + WRAPPED + ";\n  W w2 = 7 " + WRAPPED + ";\n  int32 z = 6;\n"
+        + String.format(wrapper, 1, 3)));
+    assertThatThrownBy(() -> registry.alter("s3", new DropAttribute("w", false)))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("field w2 of message T is a oneof wrapped in a message");
+    // What no schema can be made of for another reason, the wrapped oneof dropped, is
+    // told as that.
+    String five = " WITH ('protobuf.field.number' = '5')";
+    registry.client.register("s4", new ProtobufSchema(other));
+    assertThatThrownBy(() -> registry.alter("s4", new DropAttribute("w", false),
+        new AddAttribute("v", "UNION(a INT, b STRING)"),
+        new AddAttribute("l", "ARRAY<UNION(p INT" + five + ", q STRING" + five + ")>")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("Duplicate protobuf.field.number 5");
+    // A rename writes the type before the statement is done: where a member's number is
+    // a field's, it is told as the wrapped oneof too.
+    registry.client.register("s5", new ProtobufSchema(head + "  int32 id = 1;\n  W w = 2 "
+        + WRAPPED + ";\n  int32 z = 3;\n" + String.format(wrapper, 1, 2)));
+    for (AlterAction rename : List.of(new RenameAttribute("z", "z2"),
+        new RenameAttribute("w", "v"))) {
+      assertThatThrownBy(() -> registry.alter("s5", rename))
+          .isInstanceOf(TypeRefusedException.class).hasMessageContaining(told);
+    }
+  }
 }

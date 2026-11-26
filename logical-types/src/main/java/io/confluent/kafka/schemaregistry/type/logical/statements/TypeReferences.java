@@ -443,6 +443,35 @@ public final class TypeReferences {
     }
   }
 
+  /**
+   * Whether a reference's name is one another of the references has below it for another
+   * type or version: the first met binds a name, so taken away the reference may leave what
+   * the other is of another type.
+   */
+  static boolean bindsBelow(TypeLookup lookup, String referrer, SchemaReference ref,
+      List<SchemaReference> references) {
+    String subject = referenced(referrer, ref.getSubject());
+    Map<String, SchemaMetadata> versions = new HashMap<>();
+    for (SchemaReference other : references) {
+      if (other == ref) {
+        continue;
+      }
+      Map<String, String[]> alone = new LinkedHashMap<>();
+      try {
+        bind(lookup, referrer, null, List.of(other), alone, versions, "");
+      } catch (TypeRefusedException e) {
+        // Two of a name below it already: told as that.
+        return true;
+      }
+      String[] below = alone.get(ref.getName());
+      if (below != null && below[2] != null && !(below[0].equals(subject)
+          && below[1].equals(String.valueOf(ref.getVersion())))) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   // Each name at the type and version, and through the type, it is first met, which is the
   // one that binds it; via is null for the reference itself, and else the referring type and
   // its version. A version is looked up once. The reference's own name met again below it,
