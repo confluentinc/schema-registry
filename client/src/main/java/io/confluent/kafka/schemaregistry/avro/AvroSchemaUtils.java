@@ -27,9 +27,7 @@ import com.fasterxml.jackson.databind.util.TokenBuffer;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import io.confluent.avro.type.LogicalMapConversion;
-import io.confluent.avro.type.LogicalMapFactory;
 import io.confluent.avro.type.VariantConversion;
-import io.confluent.avro.type.VariantLogicalTypeFactory;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -102,23 +100,11 @@ public class AvroSchemaUtils {
   private static final SpecificData SPECIFIC_DATA_INSTANCE_WITH_LOGICAL = new SpecificData();
 
   static {
-    registerLogicalTypeIfAbsent(new LogicalMapFactory());
-    registerLogicalTypeIfAbsent(new VariantLogicalTypeFactory());
+    AvroLogicalTypes.ensureRegistered();
     addLogicalTypeConversion(GENERIC_DATA_INSTANCE_WITH_LOGICAL);
     addLogicalTypeConversion(REFLECT_DATA_INSTANCE_WITH_LOGICAL);
     addLogicalTypeConversion(REFLECT_DATA_ALLOW_NULL_INSTANCE_WITH_LOGICAL);
     addLogicalTypeConversion(SPECIFIC_DATA_INSTANCE_WITH_LOGICAL);
-  }
-
-  // Avro's LogicalTypes registry is a single JVM-global map keyed by name, so an
-  // unconditional register() would clobber another library's factory for the same name
-  // (e.g. Apache Iceberg also registers "map" and "variant"). Iceberg's own registration is
-  // unconditional, so leaving ours conditional lets whichever library claimed the name first
-  // keep owning it, while still registering when no other library has.
-  private static void registerLogicalTypeIfAbsent(LogicalTypes.LogicalTypeFactory factory) {
-    if (!LogicalTypes.getCustomRegisteredTypes().containsKey(factory.getTypeName())) {
-      LogicalTypes.register(factory);
-    }
   }
 
   private static final ThreadLocal<GenericData> genericData = new ThreadLocal<>();

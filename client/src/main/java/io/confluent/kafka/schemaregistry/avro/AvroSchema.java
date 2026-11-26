@@ -97,6 +97,11 @@ public class AvroSchema implements ParsedSchema {
 
   private static final ObjectMapper jsonMapper = JacksonMapper.INSTANCE;
 
+  static {
+    // A schema parsed before its logical type is registered does not carry it
+    AvroLogicalTypes.ensureRegistered();
+  }
+
   public AvroSchema(String schemaString) {
     this(schemaString, Collections.emptyList(), Collections.emptyMap(), null);
   }
