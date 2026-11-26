@@ -19,6 +19,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.google.common.annotations.VisibleForTesting;
 import io.confluent.connect.schema.backup.api.BackupWrapper;
 import io.confluent.connect.schema.backup.api.SchemaBackupConfig;
+import io.confluent.connect.schema.backup.core.BackupCaches;
 import io.confluent.connect.schema.backup.core.BackupConverterHelper;
 import io.confluent.connect.schema.backup.core.BackupExceptionMapper;
 import io.confluent.connect.schema.backup.core.BackupReferenceResolver;
@@ -54,7 +55,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Implementation of Converter that supports JSON with JSON Schema.
@@ -77,7 +77,7 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
   private boolean backupEnvelopeMode;
   private BackupConverterHelper backupHelper;
   private final Map<Schema, Schema> wrapperSchemaCache =
-      new ConcurrentHashMap<>();
+      BackupCaches.newBoundedMap();
 
   public JsonSchemaConverter() {
   }
@@ -189,14 +189,9 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
             + "' for topic " + topic + ". Cannot guarantee pristine restore.");
       }
 
-      BackupReferenceResolver.ResolutionResult resolved =
-          backupHelper.getReferenceResolver().resolveFromWrapper(
-              wrapperSchema, wrapper, JSON_SCHEMA_FACTORY);
-
-      JsonSchema jsonSchema = resolved.hasReferences()
-          ? new JsonSchema(rawSchema, resolved.getTargetRefs(),
-              resolved.getResolvedSchemas(), null)
-          : new JsonSchema(rawSchema);
+      JsonSchema jsonSchema = (JsonSchema)
+          backupHelper.getReferenceResolver().resolveRestoreSchema(
+              wrapperSchema, wrapper, rawSchema, JSON_SCHEMA_FACTORY);
       JsonNode jsonValue = jsonSchemaData.fromConnectData(actualConnectSchema, actualData);
       return serializer.serialize(topic, headers, isKey, jsonValue, jsonSchema);
     } catch (Exception e) {

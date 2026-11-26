@@ -120,6 +120,13 @@ public class SchemaBackupAwareByteArrayConverterRegistrationTest {
           + "{\"name\":\"" + FIELD_ID + "\",\"type\":\"string\"},"
           + "{\"name\":\"" + FIELD_SHIP_TO + "\",\"type\":\"" + ADDRESS_NAME + "\"}"
           + "]}";
+  /** Address v2 adds an optional zip; Order's text is unchanged but references it. */
+  private static final String FIELD_ZIP = "zip";
+  private static final String ZIP_VALUE = "600001";
+  private static final String ADDRESS_V2_SCHEMA =
+      "{\"type\":\"record\",\"name\":\"Address\",\"namespace\":\"" + NAMESPACE + "\","
+          + "\"fields\":[{\"name\":\"" + FIELD_CITY + "\",\"type\":\"string\"},"
+          + "{\"name\":\"" + FIELD_ZIP + "\",\"type\":[\"null\",\"string\"],\"default\":null}]}";
   /** Order without references, for tests that only need one schema. */
   private static final String SIMPLE_SCHEMA =
       "{\"type\":\"record\",\"name\":\"Order\",\"namespace\":\"" + NAMESPACE + "\","
@@ -140,6 +147,8 @@ public class SchemaBackupAwareByteArrayConverterRegistrationTest {
   private static final String FILLER_SUBJECT = "filler" + VALUE_SUFFIX;
   private static final String FILLER_SCHEMA = "\"string\"";
   private static final ObjectMapper JSON = new ObjectMapper();
+  /** Three restores on one converter plus one after a restart. */
+  private static final int REPEATED_RESTORES = 4;
 
   private enum Format { AVRO, PROTOBUF, JSON_SCHEMA }
 
@@ -330,6 +339,114 @@ public class SchemaBackupAwareByteArrayConverterRegistrationTest {
     assertAutoRegisterFalseFailsWhenMissing(Format.JSON_SCHEMA);
   }
 
+  // ---------------- Restore schema cache: IDs, versions and restarts unchanged ----------------
+
+  @Test
+  public void testAvroRepeatedRestoreAsksTargetForEveryRecordAndSurvivesRestart()
+      throws Exception {
+    assertRepeatedRestoreStable(Format.AVRO);
+  }
+
+  @Test
+  public void testProtobufRepeatedRestoreAsksTargetForEveryRecordAndSurvivesRestart()
+      throws Exception {
+    assertRepeatedRestoreStable(Format.PROTOBUF);
+  }
+
+  @Test
+  public void testJsonSchemaRepeatedRestoreAsksTargetForEveryRecordAndSurvivesRestart()
+      throws Exception {
+    assertRepeatedRestoreStable(Format.JSON_SCHEMA);
+  }
+
+  @Test
+  public void testDifferentSchemasOnOneRestoreConverterKeepTheirOwnTargetIds()
+      throws Exception {
+    byte[] simple = produceSimple(Format.AVRO);
+    byte[] withRef = orderWithReferenceBytes();
+    SchemaAndValue simpleWrapped = wrap(simple);
+    SchemaAndValue withRefWrapped = wrap(withRef);
+    SchemaBackupAwareByteArrayConverter restore = newConverter(target, converterConfig());
+
+    byte[] simpleRestored = restoreWith(restore, simpleWrapped);
+    byte[] withRefRestored = restoreWith(restore, withRefWrapped);
+    byte[] simpleAgain = restoreWith(restore, simpleWrapped);
+
+    assertNotEquals(schemaIdOf(simpleRestored), schemaIdOf(withRefRestored));
+    assertEquals(source.getSchemaById(schemaIdOf(simple)).canonicalString(),
+        target.getSchemaById(schemaIdOf(simpleRestored)).canonicalString());
+    assertEquals(source.getSchemaById(schemaIdOf(withRef)).canonicalString(),
+        target.getSchemaById(schemaIdOf(withRefRestored)).canonicalString());
+    assertArrayEquals(simpleRestored, simpleAgain);
+    assertPayloadUnchanged(simple, simpleRestored);
+    assertPayloadUnchanged(withRef, withRefRestored);
+    assertEquals(ID_VALUE, deserializeOnTarget(simpleRestored).get(FIELD_ID).toString());
+    assertOrderRecord(deserializeOnTarget(withRefRestored));
+  }
+
+  @Test
+  public void testReferenceEvolutionWithSameOrderTextRestoresEachReferenceVersion()
+      throws Exception {
+    byte[] withAddressV1 = orderWithReferenceBytes();
+    byte[] withAddressV2 = orderWithEvolvedReferenceBytes();
+    assertNotEquals("Order referencing Address v2 is a new schema on the source",
+        schemaIdOf(withAddressV1), schemaIdOf(withAddressV2));
+    SchemaAndValue wrappedV1 = wrap(withAddressV1);
+    SchemaAndValue wrappedV2 = wrap(withAddressV2);
+    SchemaBackupAwareByteArrayConverter restore = newConverter(target, converterConfig());
+
+    byte[] restoredV1 = restoreWith(restore, wrappedV1);
+    byte[] restoredV2 = restoreWith(restore, wrappedV2);
+    byte[] restoredV1Again = restoreWith(restore, wrappedV1);
+
+    assertNotEquals(schemaIdOf(restoredV1), schemaIdOf(restoredV2));
+    assertArrayEquals(restoredV1, restoredV1Again);
+    assertEquals(Arrays.asList(1, 2), target.getAllVersions(ADDRESS_SUBJECT));
+    assertEquals(Arrays.asList(1, 2), target.getAllVersions(RESTORE_TOPIC + VALUE_SUFFIX));
+    assertEquals(Collections.singletonList(new SchemaReference(ADDRESS_NAME, ADDRESS_SUBJECT, 1)),
+        target.getSchemaById(schemaIdOf(restoredV1)).references());
+    assertEquals(Collections.singletonList(new SchemaReference(ADDRESS_NAME, ADDRESS_SUBJECT, 2)),
+        target.getSchemaById(schemaIdOf(restoredV2)).references());
+    assertPayloadUnchanged(withAddressV1, restoredV1);
+    assertPayloadUnchanged(withAddressV2, restoredV2);
+    assertOrderRecord(deserializeOnTarget(restoredV1));
+    GenericRecord v2 = deserializeOnTarget(restoredV2);
+    assertOrderRecord(v2);
+    assertEquals(ZIP_VALUE, ((GenericRecord) v2.get(FIELD_SHIP_TO)).get(FIELD_ZIP).toString());
+  }
+
+  /**
+   * Restores the same backed-up record three times on one converter, then once on a new
+   * converter (a task restart). Every record must still go to the target registry, so the
+   * target ID always comes from the target, and all four restored records are identical.
+   */
+  private void assertRepeatedRestoreStable(Format format) throws Exception {
+    SchemaAndValue wrapped = wrap(produceSimple(format));
+    SchemaBackupAwareByteArrayConverter restore = newConverter(target, converterConfig());
+
+    byte[] first = restoreWith(restore, wrapped);
+    assertArrayEquals(first, restoreWith(restore, wrapped));
+    assertArrayEquals(first, restoreWith(restore, wrapped));
+    byte[] afterRestart = restoreWith(newConverter(target, converterConfig()), wrapped);
+
+    assertArrayEquals(first, afterRestart);
+    assertEquals(Collections.nCopies(REPEATED_RESTORES, RESTORE_TOPIC + VALUE_SUFFIX),
+        target.registeredSubjects);
+    assertEquals(Collections.singletonList(1),
+        target.getAllVersions(RESTORE_TOPIC + VALUE_SUFFIX));
+    assertEquals(ID_VALUE, decodeIdOnTarget(format, afterRestart));
+  }
+
+  private SchemaAndValue wrap(byte[] original) {
+    return newConverter(source, converterConfig()).toConnectData(SOURCE_TOPIC, original);
+  }
+
+  private static byte[] restoreWith(
+      SchemaBackupAwareByteArrayConverter restore, SchemaAndValue wrapped) {
+    return restore.fromConnectData(
+        RESTORE_TOPIC, new RecordHeaders(), wrapped.schema(), wrapped.value());
+  }
+
   private void assertRestoreUsesTargetSchemaId(Format format) throws Exception {
     byte[] original = produceSimple(format);
     byte[] restored = backupThenRestore(original, Collections.emptyMap());
@@ -479,6 +596,28 @@ public class SchemaBackupAwareByteArrayConverterRegistrationTest {
     GenericRecord address =
         new GenericData.Record(avro.getField(FIELD_SHIP_TO).schema());
     address.put(FIELD_CITY, CITY_VALUE);
+    GenericRecord record = new GenericData.Record(avro);
+    record.put(FIELD_ID, ID_VALUE);
+    record.put(FIELD_SHIP_TO, address);
+    return prefixed(id, encode(avro, record));
+  }
+
+  /**
+   * Registers Address v2 and an Order with the same text that references it, and returns
+   * Order wire bytes. Call after {@link #orderWithReferenceBytes()}.
+   */
+  private byte[] orderWithEvolvedReferenceBytes() throws Exception {
+    source.register(ADDRESS_SUBJECT, new AvroSchema(ADDRESS_V2_SCHEMA));
+    AvroSchema order = new AvroSchema(ORDER_SCHEMA,
+        Collections.singletonList(new SchemaReference(ADDRESS_NAME, ADDRESS_SUBJECT, 2)),
+        Collections.singletonMap(ADDRESS_NAME, ADDRESS_V2_SCHEMA), null);
+    int id = source.register(SOURCE_TOPIC + VALUE_SUFFIX, order);
+    source.resetRecording();
+
+    org.apache.avro.Schema avro = order.rawSchema();
+    GenericRecord address = new GenericData.Record(avro.getField(FIELD_SHIP_TO).schema());
+    address.put(FIELD_CITY, CITY_VALUE);
+    address.put(FIELD_ZIP, ZIP_VALUE);
     GenericRecord record = new GenericData.Record(avro);
     record.put(FIELD_ID, ID_VALUE);
     record.put(FIELD_SHIP_TO, address);

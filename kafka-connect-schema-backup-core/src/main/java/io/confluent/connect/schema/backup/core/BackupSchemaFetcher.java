@@ -31,7 +31,6 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Fetches schema metadata and builds reference trees from Schema Registry for backup.
@@ -42,8 +41,8 @@ public class BackupSchemaFetcher {
   private static final int MAX_DEPTH = SchemaBackupConfig.MAX_REFERENCE_DEPTH;
 
   private final SchemaRegistryClient schemaRegistry;
-  private final Map<Integer, BackupSchemaInfo> cache = new ConcurrentHashMap<>();
-  private final Map<String, BackupSchemaInfo> guidCache = new ConcurrentHashMap<>();
+  private final Map<Integer, BackupSchemaInfo> cache = BackupCaches.newBoundedMap();
+  private final Map<String, BackupSchemaInfo> guidCache = BackupCaches.newBoundedMap();
 
   public BackupSchemaFetcher(SchemaRegistryClient schemaRegistry) {
     this.schemaRegistry = schemaRegistry;
@@ -140,6 +139,8 @@ public class BackupSchemaFetcher {
     private final String directRefsJson;
     private final Map<String, Integer> versionsBySubject;
     private final String schemaType;
+    // Parsed form of rawSchema, filled on first parse(); not part of the value.
+    private volatile ParsedMemo parsed;
 
     public BackupSchemaInfo(
         String rawSchema,
@@ -198,6 +199,38 @@ public class BackupSchemaFetcher {
 
     public String getSchemaType() {
       return schemaType;
+    }
+
+    /**
+     * Parses this schema with {@code factory}, the same way the backup path did per
+     * record, and keeps the result so repeated records with this schema reuse it.
+     * The parsed schema depends only on this immutable info and the factory.
+     */
+    public ParsedSchema parse(BackupReferenceResolver.ParsedSchemaFactory factory) {
+      ParsedMemo memo = parsed;
+      if (memo != null && memo.factory == factory) {
+        return memo.schema;
+      }
+      Map<String, String> resolved = new LinkedHashMap<>();
+      if (!directReferences.isEmpty()) {
+        for (Map.Entry<String, RefTreeEntry> e : referenceTree.entrySet()) {
+          resolved.put(e.getKey(), e.getValue().getSchema());
+        }
+      }
+      ParsedSchema schema = factory.create(rawSchema, directReferences, resolved);
+      parsed = new ParsedMemo(factory, schema);
+      return schema;
+    }
+
+    private static final class ParsedMemo {
+      private final BackupReferenceResolver.ParsedSchemaFactory factory;
+      private final ParsedSchema schema;
+
+      private ParsedMemo(
+          BackupReferenceResolver.ParsedSchemaFactory factory, ParsedSchema schema) {
+        this.factory = factory;
+        this.schema = schema;
+      }
     }
   }
 
