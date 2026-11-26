@@ -4928,4 +4928,44 @@ class TypeAlterTest {
         .contains("{\"$ref\":\"o5s#/properties/o\",\"logical.ref\":true}");
     assertThat(references("s1")).containsExactly("Ref1", "o5s");
   }
+
+  // A oneof the stored message has itself, a member of which is named and numbered as one
+  // of the wrapper's, is not the wrapper's oneof written: the wrapped field is dropped or
+  // given another type beside it. Kept, the field is refused as before.
+  @Test
+  void aOneofOfTheMessageIsNotTakenForAWrappedOneofWritten() throws Exception {
+    String text = "syntax = \"proto3\";\n\nimport \"confluent/meta.proto\";\n\nmessage T {\n"
+        + "  int32 id = 5;\n  WOneofWrapper w = 2 " + WRAPPED + ";\n  int32 z = 6;\n"
+        + "  oneof u {\n    int32 a = 1;\n    string q = 7;\n  }\n\n  message WOneofWrapper {\n"
+        + "    oneof value {\n      int32 a = 1;\n      string b = 3;\n    }\n  }\n}\n";
+    for (String type : List.of("fo1", "fo2", "fo3", "fo4", "fo5")) {
+      registry.client.register(type, new ProtobufSchema(text));
+    }
+    registry.alter("fo1", new DropAttribute("w", false));
+    assertThat(message("fo1").getFields().stream().map(f -> f.getName() + "=" + f.getNumber())
+        .sorted().collect(Collectors.joining(" "))).isEqualTo("a=1 id=5 q=7 z=6");
+    registry.alter("fo2", new AlterAttributeType("w", "INT"));
+    assertThat(message("fo2").findFieldByNumber(2)).isNull();
+    assertThat(message("fo2").findFieldByName("w").getJavaType())
+        .isEqualTo(FieldDescriptor.JavaType.INT);
+    // As where the message's oneof is renamed, or given a member, by the statement.
+    registry.alter("fo3", new DropAttribute("w", false), new RenameAttribute("u", "x"));
+    assertThat(message("fo3").getRealOneofs()).extracting(o -> o.getName())
+        .containsExactly("x");
+    registry.alter("fo1", new AlterAttributeType("u", "UNION(a INT, q STRING, c INT)"));
+    assertThat(version("fo1")).isEqualTo(3);
+    for (AlterAction action : List.of(new AddAttribute("n", "INT"),
+        new DropAttribute("u", false))) {
+      assertThatThrownBy(() -> registry.alter("fo4", action))
+          .isInstanceOf(TypeRefusedException.class)
+          .hasMessageContaining("field w of message T is a oneof wrapped in a message");
+    }
+    // What no schema can be made of for another reason is told as that.
+    assertThatThrownBy(() -> registry.alter("fo5", new DropAttribute("w", false),
+        new AddAttribute("a", "INT"))).isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("keeps its field name 'a'")
+        .hasMessageNotContaining("wrapped in a message");
+    assertThat(version("fo4")).isEqualTo(1);
+    assertThat(version("fo5")).isEqualTo(1);
+  }
 }

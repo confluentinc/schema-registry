@@ -26,6 +26,7 @@ import com.google.protobuf.DescriptorProtos.FieldDescriptorProto;
 import com.google.protobuf.DescriptorProtos.FileDescriptorProto;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
+import com.google.protobuf.Descriptors.OneofDescriptor;
 import io.confluent.kafka.schemaregistry.CompatibilityLevel;
 import io.confluent.kafka.schemaregistry.CompatibilityPolicy;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
@@ -878,9 +879,12 @@ public final class TypeAlter {
       }
       Set<String> members = new HashSet<>();
       field.getMessageType().getFields().forEach(member -> members.add(member.getName()));
+      // A oneof the message has itself is no wrapper's, though a member is named as one.
+      Set<String> had = new HashSet<>();
+      was.getRealOneofs().forEach(oneof -> had.add(oneof.getName()));
       for (Field f : target.getFields()) {
         if (f.getSchema().getType() == Schema.Type.UNION && (f.getName().equals(field.getName())
-            || f.getSchema().getBranches().stream()
+            || !had.contains(f.getName()) && f.getSchema().getBranches().stream()
                 .anyMatch(b -> members.contains(b.getName())))) {
           throw new TypeRefusedException("Type " + subject + " cannot be altered: field "
               + field.getName() + " of message " + was.getName() + " is a oneof wrapped in "
@@ -915,14 +919,26 @@ public final class TypeAlter {
 
   // Whether the message written has, as a oneof of its own, the oneof a field's message
   // wraps: one of the field's name, or one a member of which is a member of that one, by
-  // its name and number, as the attribute may be given another name.
+  // its name and number, as the attribute may be given another name. Not a oneof the
+  // message stored has itself, whose members may be named and numbered as the wrapper's:
+  // one of its name, or one every member of which is a member of it.
   private static boolean writtenAsOneof(FieldDescriptor field, Descriptor now) {
     List<FieldDescriptor> wrapped = field.getMessageType().getFields();
+    List<OneofDescriptor> had = field.getContainingType().getRealOneofs();
     return now.getRealOneofs().stream().anyMatch(oneof -> oneof.getName().equals(
-        field.getName()) || oneof.getFields().stream().anyMatch(member -> wrapped.stream()
-        .anyMatch(w -> w.getNumber() == member.getNumber()
-            && (member.getName().equals(w.getName())
-              || member.getName().endsWith("_" + w.getName())))));
+        field.getName()) || had.stream().noneMatch(stored -> stored.getName().equals(
+            oneof.getName()) || within(oneof, stored))
+        && oneof.getFields().stream().anyMatch(member -> wrapped.stream()
+            .anyMatch(w -> w.getNumber() == member.getNumber()
+                && (member.getName().equals(w.getName())
+                  || member.getName().endsWith("_" + w.getName())))));
+  }
+
+  // Whether every member of a oneof is one of another's, by its name and number.
+  private static boolean within(OneofDescriptor oneof, OneofDescriptor other) {
+    return oneof.getFields().stream().allMatch(member -> other.getFields().stream()
+        .anyMatch(o -> o.getNumber() == member.getNumber()
+            && o.getName().equals(member.getName())));
   }
 
   // The first field whose integer encoding the logical type does not carry, or null.
