@@ -111,11 +111,11 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
   }
 
   public CachedSchemaRegistryClient(String baseUrl, int cacheCapacity) {
-    this(new RestService(baseUrl), cacheCapacity);
+    this(defaultRestService(baseUrl), cacheCapacity);
   }
 
   public CachedSchemaRegistryClient(List<String> baseUrls, int cacheCapacity) {
-    this(new RestService(baseUrls), cacheCapacity);
+    this(defaultRestService(baseUrls), cacheCapacity);
   }
 
   public CachedSchemaRegistryClient(RestService restService, int cacheCapacity) {
@@ -141,7 +141,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       int cacheCapacity,
       List<SchemaProvider> providers,
       Map<String, ?> originals) {
-    this(new RestService(baseUrls), cacheCapacity, providers, originals, null);
+    this(defaultRestService(baseUrls), cacheCapacity, providers, originals, null);
   }
 
   public CachedSchemaRegistryClient(
@@ -149,7 +149,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       int identityMapCapacity,
       List<SchemaProvider> providers,
       Map<String, ?> originals) {
-    this(new RestService(baseUrls), identityMapCapacity, providers, originals, null);
+    this(defaultRestService(baseUrls), identityMapCapacity, providers, originals, null);
   }
 
   public CachedSchemaRegistryClient(
@@ -164,7 +164,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       int cacheCapacity,
       Map<String, ?> originals,
       Map<String, String> httpHeaders) {
-    this(new RestService(baseUrl), cacheCapacity, null, originals, httpHeaders);
+    this(defaultRestService(baseUrl), cacheCapacity, null, originals, httpHeaders);
   }
 
   public CachedSchemaRegistryClient(
@@ -172,7 +172,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       int cacheCapacity,
       Map<String, ?> originals,
       Map<String, String> httpHeaders) {
-    this(new RestService(baseUrls), cacheCapacity, null, originals, httpHeaders);
+    this(defaultRestService(baseUrls), cacheCapacity, null, originals, httpHeaders);
   }
 
   public CachedSchemaRegistryClient(
@@ -181,7 +181,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       List<SchemaProvider> providers,
       Map<String, ?> originals,
       Map<String, String> httpHeaders) {
-    this(new RestService(baseUrls), cacheCapacity, providers, originals, httpHeaders);
+    this(defaultRestService(baseUrls), cacheCapacity, providers, originals, httpHeaders);
   }
 
   public CachedSchemaRegistryClient(
@@ -190,7 +190,7 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
           List<SchemaProvider> providers,
           Map<String, ?> originals,
           Map<String, String> httpHeaders) {
-    this(new RestService(baseUrls), cacheCapacity, providers, originals, httpHeaders);
+    this(defaultRestService(baseUrls), cacheCapacity, providers, originals, httpHeaders);
   }
 
   public CachedSchemaRegistryClient(
@@ -208,6 +208,21 @@ public class CachedSchemaRegistryClient implements SchemaRegistryClient {
       Map<String, ?> configs,
       Map<String, String> httpHeaders) {
     this(restService, cacheCapacity, providers, configs, httpHeaders, Ticker.systemTicker());
+  }
+
+  // URL-based constructors build their own RestService, so apply the safer defaults
+  // here. A caller-supplied RestService keeps whatever configuration it already has,
+  // and explicit configs passed to this client still override the defaults below.
+  private static RestService defaultRestService(String baseUrl) {
+    RestService restService = new RestService(baseUrl);
+    restService.configure(Collections.emptyMap());
+    return restService;
+  }
+
+  private static RestService defaultRestService(List<String> baseUrls) {
+    RestService restService = new RestService(baseUrls);
+    restService.configure(Collections.emptyMap());
+    return restService;
   }
 
   public CachedSchemaRegistryClient(

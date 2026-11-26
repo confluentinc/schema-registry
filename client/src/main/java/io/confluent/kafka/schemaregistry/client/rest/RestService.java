@@ -292,6 +292,15 @@ public class RestService implements Closeable, Configurable {
     // ensure retry executor is set for tests
     this.retryExecutor = new RetryExecutor(0, 0, 0);
     this.useApacheHttpClient = useApacheHttpClient;
+    // Bound the pool and the wait for a pooled connection even when configure() is never
+    // called. Zero disables the connection request timeout and leaves the pool unbounded.
+    // configure() and the setters still override these values.
+    this.httpConnectionRequestTimeoutMs =
+        SchemaRegistryClientConfig.HTTP_CONNECTION_REQUEST_TIMEOUT_MS_DEFAULT;
+    this.httpClientPoolMaxTotalConnections =
+        SchemaRegistryClientConfig.HTTP_CLIENT_POOL_MAX_TOTAL_CONNECTIONS_DEFAULT;
+    this.httpClientPoolMaxPerRouteConnections =
+        SchemaRegistryClientConfig.HTTP_CLIENT_POOL_MAX_PER_ROUTE_CONNECTIONS_DEFAULT;
   }
 
   @Override
@@ -375,7 +384,11 @@ public class RestService implements Closeable, Configurable {
         .build();
 
 
-    HttpClientBuilder httpClientBuilder = HttpClients.custom();
+    HttpClientBuilder httpClientBuilder = HttpClients.custom()
+        // Disable Apache's own automatic retries: they would re-send a 429/503 even with
+        // max.retries=0 and bypass RetryExecutor's configured backoff. AsyncRestService
+        // already does this.
+        .disableAutomaticRetries();
 
     httpClientBuilder
         .setDefaultRequestConfig(requestConfig);
