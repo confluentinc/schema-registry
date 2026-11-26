@@ -18,6 +18,7 @@ package io.confluent.connect.avro;
 
 import io.confluent.connect.schema.backup.api.BackupWrapper;
 import io.confluent.connect.schema.backup.api.SchemaBackupConfig;
+import io.confluent.connect.schema.backup.core.BackupCaches;
 import io.confluent.connect.schema.backup.core.BackupConverterHelper;
 import io.confluent.connect.schema.backup.core.BackupExceptionMapper;
 import io.confluent.connect.schema.backup.core.BackupReferenceResolver;
@@ -59,7 +60,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Implementation of Converter that uses Avro schemas and objects.
@@ -83,7 +83,7 @@ public class AvroConverter implements Converter {
   private boolean backupEnvelopeMode;
   private BackupConverterHelper backupHelper;
   private final Map<Schema, Schema> wrapperSchemaCache =
-      new ConcurrentHashMap<>();
+      BackupCaches.newBoundedMap();
 
   public AvroConverter() {
   }
@@ -175,6 +175,8 @@ public class AvroConverter implements Converter {
           BackupWrapper.FIELD_DATA,
           BackupWrapper.FIELD_SCHEMA_TYPE,
           BackupWrapper.FIELD_RAW_SCHEMA);
+      BackupWrapper.requireDataEncoding(wrapperSchema, wrapper,
+          BackupWrapper.DATA_ENCODING_CONNECT, getClass().getSimpleName());
       String schemaType = wrapper.getString(BackupWrapper.FIELD_SCHEMA_TYPE);
       if (!SchemaBackupConfig.TYPE_AVRO.equals(schemaType)) {
         throw new DataException(
@@ -190,19 +192,14 @@ public class AvroConverter implements Converter {
             + "' for topic " + topic + ". Cannot guarantee pristine restore.");
       }
 
-      BackupReferenceResolver.ResolutionResult resolved =
-          backupHelper.getReferenceResolver().resolveFromWrapper(
-              wrapperSchema, wrapper, AVRO_SCHEMA_FACTORY);
+      AvroSchema serializeSchema = (AvroSchema)
+          backupHelper.getReferenceResolver().resolveRestoreSchema(
+              wrapperSchema, wrapper, rawSchema, AVRO_SCHEMA_FACTORY);
 
       org.apache.avro.Schema avroSchema =
           restoreAvroData.fromConnectSchema(actualConnectSchema);
       Object avroValue = restoreAvroData.fromConnectData(
           actualConnectSchema, avroSchema, actualData);
-
-      AvroSchema serializeSchema = resolved.hasReferences()
-          ? new AvroSchema(rawSchema, resolved.getTargetRefs(),
-              resolved.getResolvedSchemas(), null)
-          : new AvroSchema(rawSchema);
 
       return serializer.serialize(topic, isKey, headers, avroValue, serializeSchema);
     } catch (Exception e) {

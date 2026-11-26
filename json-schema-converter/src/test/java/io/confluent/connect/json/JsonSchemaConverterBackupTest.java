@@ -1356,4 +1356,92 @@ public class JsonSchemaConverterBackupTest {
     assertBytesExact(originalBytes, restoredBytes);
     assertWireSchemaIdPreserved(originalBytes, restoredBytes);
   }
+
+  // ---------------- dataEncoding ----------------
+
+  private static final String SAME_CONVERTER_HINT =
+      "Restore with the same converter class that was used for the backup";
+
+  private SchemaAndValue wrappedSample() {
+    Schema schema = SchemaBuilder.struct()
+        .field(FIELD_NAME, Schema.STRING_SCHEMA)
+        .build();
+    Struct value = new Struct(schema).put(FIELD_NAME, "encoding");
+    byte[] serialized = plainConverter.fromConnectData(TOPIC, schema, value);
+    return converter.toConnectData(TOPIC, serialized);
+  }
+
+  private static Struct withDataEncoding(Struct source, String dataEncoding) {
+    Struct copy = new Struct(source.schema());
+    for (org.apache.kafka.connect.data.Field field : source.schema().fields()) {
+      copy.put(field, source.get(field));
+    }
+    copy.put(BackupWrapper.FIELD_DATA_ENCODING, dataEncoding);
+    return copy;
+  }
+
+  private static boolean causeChainContains(Throwable t, String expected) {
+    for (Throwable cur = t; cur != null; cur = cur.getCause()) {
+      if (cur.getMessage() != null && cur.getMessage().contains(expected)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  @Test
+  public void testBackupWrapperRecordsConnectDataEncoding() {
+    Struct wrapper = (Struct) wrappedSample().value();
+    assertEquals(BackupWrapper.DATA_ENCODING_CONNECT,
+        wrapper.getString(BackupWrapper.FIELD_DATA_ENCODING));
+  }
+
+  @Test
+  public void testRestoreRejectsWireBytesBackup() {
+    SchemaAndValue wrapped = wrappedSample();
+    Struct wireBytes = withDataEncoding(
+        (Struct) wrapped.value(), BackupWrapper.DATA_ENCODING_WIRE_BYTES);
+    try {
+      targetConverter.fromConnectData(TOPIC, wrapped.schema(), wireBytes);
+      fail("Expected restore to reject a wrapper written by the byte-array converter");
+    } catch (DataException e) {
+      assertTrue(e.getMessage(), causeChainContains(e, SAME_CONVERTER_HINT));
+    }
+  }
+
+  @Test
+  public void testRestoreAcceptsBackupWithoutDataEncoding() {
+    SchemaAndValue wrapped = wrappedSample();
+    Struct older = withDataEncoding((Struct) wrapped.value(), null);
+    assertNotNull(targetConverter.fromConnectData(TOPIC, wrapped.schema(), older));
+  }
+
+  /**
+   * Rebuilds the wrapper without the dataEncoding field, as written by earlier versions.
+   */
+  private static SchemaAndValue withoutDataEncodingField(SchemaAndValue wrapped) {
+    SchemaBuilder builder = SchemaBuilder.struct().name(wrapped.schema().name());
+    for (org.apache.kafka.connect.data.Field field : wrapped.schema().fields()) {
+      if (!BackupWrapper.FIELD_DATA_ENCODING.equals(field.name())) {
+        builder.field(field.name(), field.schema());
+      }
+    }
+    Schema olderShape = builder.build();
+    Struct source = (Struct) wrapped.value();
+    Struct older = new Struct(olderShape);
+    for (org.apache.kafka.connect.data.Field field : olderShape.fields()) {
+      older.put(field, source.get(field.name()));
+    }
+    return new SchemaAndValue(olderShape, older);
+  }
+
+  @Test
+  public void testRestoreOfBackupWrittenBeforeDataEncodingMatchesCurrentRestore() {
+    SchemaAndValue wrapped = wrappedSample();
+    SchemaAndValue older = withoutDataEncodingField(wrapped);
+    assertNull(older.schema().field(BackupWrapper.FIELD_DATA_ENCODING));
+    byte[] current = targetConverter.fromConnectData(TOPIC, wrapped.schema(), wrapped.value());
+    byte[] restored = targetConverter.fromConnectData(TOPIC, older.schema(), older.value());
+    assertArrayEquals(current, restored);
+  }
 }

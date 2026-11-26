@@ -41,6 +41,20 @@ public final class BackupWrapper {
   public static final String FIELD_REFERENCE_TREE = "referenceTree";
   public static final String FIELD_DIRECT_REFS = "directRefs";
   public static final String FIELD_SCHEMA_GUID = "schemaGuid";
+  /**
+   * How {@link #FIELD_DATA} is encoded. Optional; null in wrappers written before this
+   * field was added.
+   */
+  public static final String FIELD_DATA_ENCODING = "dataEncoding";
+
+  /**
+   * {@link #FIELD_DATA} holds a Connect value.
+   */
+  public static final String DATA_ENCODING_CONNECT = "CONNECT";
+  /**
+   * {@link #FIELD_DATA} holds Schema Registry wire-format bytes.
+   */
+  public static final String DATA_ENCODING_WIRE_BYTES = "WIRE_BYTES";
 
   private BackupWrapper() {
   }
@@ -57,6 +71,7 @@ public final class BackupWrapper {
     private final String referenceTreeJson;
     private final String directRefsJson;
     private final String schemaGuid;
+    private final String dataEncoding;
 
     public WrapperFields(Integer schemaId, Integer schemaVersion,
         String schemaType, String subject, String rawSchema,
@@ -69,6 +84,15 @@ public final class BackupWrapper {
         String schemaType, String subject, String rawSchema,
         String referenceTreeJson, String directRefsJson,
         String schemaGuid) {
+      this(schemaId, schemaVersion, schemaType, subject, rawSchema,
+          referenceTreeJson, directRefsJson, schemaGuid, null);
+    }
+
+    public WrapperFields(Integer schemaId, Integer schemaVersion,
+        String schemaType, String subject, String rawSchema,
+        String referenceTreeJson, String directRefsJson,
+        String schemaGuid, String dataEncoding) {
+      this.dataEncoding = dataEncoding;
       this.schemaId = schemaId;
       this.schemaVersion = schemaVersion;
       this.schemaType = schemaType;
@@ -110,6 +134,10 @@ public final class BackupWrapper {
     public String getSchemaGuid() {
       return schemaGuid;
     }
+
+    public String getDataEncoding() {
+      return dataEncoding;
+    }
   }
 
   public static Schema buildSchema(Schema dataSchema) {
@@ -126,6 +154,7 @@ public final class BackupWrapper {
         .field(FIELD_RAW_SCHEMA, Schema.OPTIONAL_STRING_SCHEMA)
         .field(FIELD_REFERENCE_TREE, Schema.OPTIONAL_STRING_SCHEMA)
         .field(FIELD_DIRECT_REFS, Schema.OPTIONAL_STRING_SCHEMA)
+        .field(FIELD_DATA_ENCODING, Schema.OPTIONAL_STRING_SCHEMA)
         .build();
   }
 
@@ -141,11 +170,43 @@ public final class BackupWrapper {
     wrapper.put(FIELD_REFERENCE_TREE, fields.getReferenceTreeJson());
     wrapper.put(FIELD_DIRECT_REFS, fields.getDirectRefsJson());
     wrapper.put(FIELD_SCHEMA_GUID, fields.getSchemaGuid());
+    if (wrapperSchema.field(FIELD_DATA_ENCODING) != null) {
+      wrapper.put(FIELD_DATA_ENCODING, fields.getDataEncoding());
+    }
     return wrapper;
   }
 
   public static boolean isWrapper(Schema schema) {
     return schema != null && NAME.equals(schema.name());
+  }
+
+  /**
+   * Throws when the data encoding is set and differs from {@code expected}. A missing
+   * encoding is accepted.
+   */
+  public static void requireDataEncoding(
+      Schema wrapperSchema, Struct wrapper, String expected, String converterName) {
+    if (wrapperSchema.field(FIELD_DATA_ENCODING) == null) {
+      return;
+    }
+    String actual = wrapper.getString(FIELD_DATA_ENCODING);
+    if (actual == null || actual.equals(expected)) {
+      return;
+    }
+    throw new DataException(
+        "Backup data was written with " + FIELD_DATA_ENCODING + "=" + actual + " ("
+        + converterFamily(actual) + "), but " + converterName + " expects " + expected
+        + ". Restore with the same converter class that was used for the backup.");
+  }
+
+  private static String converterFamily(String dataEncoding) {
+    if (DATA_ENCODING_WIRE_BYTES.equals(dataEncoding)) {
+      return "SchemaBackupAwareByteArrayConverter";
+    }
+    if (DATA_ENCODING_CONNECT.equals(dataEncoding)) {
+      return "AvroConverter, ProtobufConverter or JsonSchemaConverter";
+    }
+    return "unknown converter";
   }
 
   public static void requireFields(Schema wrapperSchema, String... fields) {

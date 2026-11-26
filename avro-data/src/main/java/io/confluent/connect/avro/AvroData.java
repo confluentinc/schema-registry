@@ -266,12 +266,19 @@ public class AvroData {
         return Timestamp.toLogical(schema, (long) value);
       }
     });
+
   }
 
   static final String AVRO_PROP = "avro";
   static final String AVRO_LOGICAL_TYPE_PROP = "logicalType";
   static final String AVRO_LOGICAL_TIMESTAMP_MILLIS = "timestamp-millis";
+  static final String AVRO_LOGICAL_TIMESTAMP_MICROS = "timestamp-micros";
+  static final String AVRO_LOGICAL_TIMESTAMP_NANOS = "timestamp-nanos";
+  static final String AVRO_LOGICAL_LOCAL_TIMESTAMP_MILLIS = "local-timestamp-millis";
+  static final String AVRO_LOGICAL_LOCAL_TIMESTAMP_MICROS = "local-timestamp-micros";
+  static final String AVRO_LOGICAL_LOCAL_TIMESTAMP_NANOS = "local-timestamp-nanos";
   static final String AVRO_LOGICAL_TIME_MILLIS = "time-millis";
+  static final String AVRO_LOGICAL_TIME_MICROS = "time-micros";
   static final String AVRO_LOGICAL_DATE = "date";
   static final String AVRO_LOGICAL_DECIMAL = "decimal";
   static final String AVRO_LOGICAL_DECIMAL_SCALE_PROP = "scale";
@@ -619,7 +626,10 @@ public class AvroData {
           //This handles the inverting of a union which is held as a struct, where each field is
           // one of the union types.
           if (isUnionSchema(schema)) {
-            for (Field field : schema.fields()) {
+            List<Field> fields = schema.fields();
+            int numFields = fields.size();
+            for (int i = 0; i < numFields; i++) {
+              Field field = fields.get(i);
               Object object = ignoreDefaultForNullables
                   ? struct.getWithoutDefault(field.name()) : struct.get(field);
               if (object != null) {
@@ -637,7 +647,10 @@ public class AvroData {
             org.apache.avro.Schema underlyingAvroSchema = avroSchemaForUnderlyingTypeIfOptional(
                 schema, avroSchema, scrubInvalidNames);
             GenericRecordBuilder convertedBuilder = new GenericRecordBuilder(underlyingAvroSchema);
-            for (Field field : schema.fields()) {
+            List<Field> fields = schema.fields();
+            int numFields = fields.size();
+            for (int i = 0; i < numFields; i++) {
+              Field field = fields.get(i);
               String fieldName = scrubName(field.name(), scrubInvalidNames);
               org.apache.avro.Schema.Field theField = underlyingAvroSchema.getField(fieldName);
               org.apache.avro.Schema fieldAvroSchema = theField.schema();
@@ -1761,7 +1774,10 @@ public class AvroData {
                   valueRecord.getSchema(), true, null, null, toConnectContext);
             }
             int index = 0;
-            for (Field field : schema.fields()) {
+            List<Field> fields = schema.fields();
+            int numFields = fields.size();
+            for (int i = 0; i < numFields; i++) {
+              Field field = fields.get(i);
               Schema fieldSchema = field.schema();
               if (isInstanceOfAvroSchemaTypeForSimpleSchema(fieldSchema, value, index)
                   || (valueRecordSchema != null && schemaEquals(valueRecordSchema, fieldSchema))) {
@@ -1781,7 +1797,10 @@ public class AvroData {
             Map<CharSequence, Object> original = (Map<CharSequence, Object>) value;
             trackConvertedContainer(toConnectContext);
             Struct result = new Struct(schema);
-            for (Field field : schema.fields()) {
+            List<Field> fields = schema.fields();
+            int numFields = fields.size();
+            for (int i = 0; i < numFields; i++) {
+              Field field = fields.get(i);
               String fieldName = scrubName(field.name());
               Object convertedFieldValue = toConnectData(field.schema(),
                   original.getOrDefault(fieldName, field.schema().defaultValue()),
@@ -1793,7 +1812,10 @@ public class AvroData {
             IndexedRecord original = (IndexedRecord) value;
             trackConvertedContainer(toConnectContext);
             Struct result = new Struct(schema);
-            for (Field field : schema.fields()) {
+            List<Field> fields = schema.fields();
+            int numFields = fields.size();
+            for (int i = 0; i < numFields; i++) {
+              Field field = fields.get(i);
               String fieldName = scrubName(field.name());
               int avroFieldIndex = original.getSchema().getField(fieldName).pos();
               Object convertedFieldValue =
@@ -1977,6 +1999,18 @@ public class AvroData {
       case LONG:
         if (AVRO_LOGICAL_TIMESTAMP_MILLIS.equalsIgnoreCase(logicalType)) {
           builder = Timestamp.builder();
+        } else if (AVRO_LOGICAL_TIMESTAMP_MICROS.equalsIgnoreCase(logicalType)) {
+          builder = SchemaBuilder.int64().name(AVRO_LOGICAL_TIMESTAMP_MICROS);
+        } else if (AVRO_LOGICAL_TIMESTAMP_NANOS.equalsIgnoreCase(logicalType)) {
+          builder = SchemaBuilder.int64().name(AVRO_LOGICAL_TIMESTAMP_NANOS);
+        } else if (AVRO_LOGICAL_LOCAL_TIMESTAMP_MILLIS.equalsIgnoreCase(logicalType)) {
+          builder = SchemaBuilder.int64().name(AVRO_LOGICAL_LOCAL_TIMESTAMP_MILLIS);
+        } else if (AVRO_LOGICAL_LOCAL_TIMESTAMP_MICROS.equalsIgnoreCase(logicalType)) {
+          builder = SchemaBuilder.int64().name(AVRO_LOGICAL_LOCAL_TIMESTAMP_MICROS);
+        } else if (AVRO_LOGICAL_LOCAL_TIMESTAMP_NANOS.equalsIgnoreCase(logicalType)) {
+          builder = SchemaBuilder.int64().name(AVRO_LOGICAL_LOCAL_TIMESTAMP_NANOS);
+        } else if (AVRO_LOGICAL_TIME_MICROS.equalsIgnoreCase(logicalType)) {
+          builder = SchemaBuilder.int64().name(AVRO_LOGICAL_TIME_MICROS);
         } else {
           builder = SchemaBuilder.int64();
         }

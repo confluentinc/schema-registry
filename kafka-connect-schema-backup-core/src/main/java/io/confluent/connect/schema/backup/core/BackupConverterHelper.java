@@ -29,7 +29,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -83,16 +82,7 @@ public class BackupConverterHelper {
     }
     String rawSchema = info.getRawSchema();
 
-    Map<String, String> resolved = new LinkedHashMap<>();
-    if (!info.getDirectReferences().isEmpty()) {
-      for (Map.Entry<String, BackupSchemaFetcher.RefTreeEntry> e
-          : info.getReferenceTree().entrySet()) {
-        resolved.put(e.getKey(), e.getValue().getSchema());
-      }
-    }
-
-    ParsedSchema parsed = schemaFactory.create(
-        rawSchema, info.getDirectReferences(), resolved);
+    ParsedSchema parsed = info.parse(schemaFactory);
     String subject = subjectComputer.computeSubjectName(topic, isKey, parsed);
     Integer schemaVersion = info.getVersionForSubject(subject);
 
@@ -107,7 +97,7 @@ public class BackupConverterHelper {
     BackupWrapper.WrapperFields fields = new BackupWrapper.WrapperFields(
         schemaId, schemaVersion, schemaType, subject,
         rawSchema, info.getReferenceTreeJson(), info.getDirectRefsJson(),
-        schemaGuid);
+        schemaGuid, BackupWrapper.DATA_ENCODING_CONNECT);
     Struct wrapper = BackupWrapper.buildWrapper(
         wrapperSchema, original.value(), fields);
 

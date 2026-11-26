@@ -24,7 +24,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import org.apache.kafka.common.errors.SerializationException;
-import org.apache.kafka.common.utils.ByteUtils;
+import org.apache.kafka.common.utils.internals.ByteUtils;
 
 /**
  * A {@link SchemaId} is used to identify a schema. It can be either an ID or a GUID.
@@ -219,10 +219,6 @@ public class SchemaId {
 
     public static SchemaMessageIndexes readFrom(ByteBuffer buffer) {
       int size = ByteUtils.readVarint(buffer);
-      // each index takes at least one byte
-      if (size < 0 || size > buffer.remaining()) {
-        throw new SerializationException("Invalid message index count: " + size);
-      }
       if (size == 0) {
         // optimization
         return new SchemaMessageIndexes(DEFAULT_INDEX);

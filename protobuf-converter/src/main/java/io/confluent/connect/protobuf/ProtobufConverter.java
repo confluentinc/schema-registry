@@ -18,6 +18,7 @@ package io.confluent.connect.protobuf;
 import com.google.protobuf.Message;
 import io.confluent.connect.schema.backup.api.BackupWrapper;
 import io.confluent.connect.schema.backup.api.SchemaBackupConfig;
+import io.confluent.connect.schema.backup.core.BackupCaches;
 import io.confluent.connect.schema.backup.core.BackupConverterHelper;
 import io.confluent.connect.schema.backup.core.BackupExceptionMapper;
 import io.confluent.connect.schema.backup.core.BackupReferenceResolver;
@@ -52,7 +53,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Implementation of Converter that uses Protobuf schemas and objects.
@@ -75,7 +75,7 @@ public class ProtobufConverter implements Converter {
   private boolean backupEnvelopeMode;
   private BackupConverterHelper backupHelper;
   private final Map<Schema, Schema> wrapperSchemaCache =
-      new ConcurrentHashMap<>();
+      BackupCaches.newBoundedMap();
 
   public ProtobufConverter() {
   }
@@ -174,6 +174,8 @@ public class ProtobufConverter implements Converter {
           BackupWrapper.FIELD_DATA,
           BackupWrapper.FIELD_SCHEMA_TYPE,
           BackupWrapper.FIELD_RAW_SCHEMA);
+      BackupWrapper.requireDataEncoding(wrapperSchema, wrapper,
+          BackupWrapper.DATA_ENCODING_CONNECT, getClass().getSimpleName());
       String schemaType = wrapper.getString(BackupWrapper.FIELD_SCHEMA_TYPE);
       if (!SchemaBackupConfig.TYPE_PROTOBUF.equals(schemaType)) {
         throw new DataException(
@@ -189,18 +191,13 @@ public class ProtobufConverter implements Converter {
             + "' for topic " + topic + ". Cannot guarantee pristine restore.");
       }
 
-      BackupReferenceResolver.ResolutionResult resolved =
-          backupHelper.getReferenceResolver().resolveFromWrapper(
-              wrapperSchema, wrapper, PROTOBUF_SCHEMA_FACTORY);
+      ProtobufSchema serializeSchema = (ProtobufSchema)
+          backupHelper.getReferenceResolver().resolveRestoreSchema(
+              wrapperSchema, wrapper, rawSchema, PROTOBUF_SCHEMA_FACTORY);
 
       ProtobufSchemaAndValue schemaAndValue =
           protobufData.fromConnectData(actualConnectSchema, actualData);
       Object v = schemaAndValue.getValue();
-
-      ProtobufSchema serializeSchema = resolved.hasReferences()
-          ? new ProtobufSchema(rawSchema, resolved.getTargetRefs(),
-              resolved.getResolvedSchemas(), null, null)
-          : new ProtobufSchema(rawSchema);
 
       if (v instanceof Message) {
         return serializer.serialize(topic, isKey, headers,

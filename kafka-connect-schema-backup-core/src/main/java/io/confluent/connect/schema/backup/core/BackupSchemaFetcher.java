@@ -31,7 +31,6 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Fetches schema metadata and builds reference trees from Schema Registry for backup.
@@ -42,8 +41,8 @@ public class BackupSchemaFetcher {
   private static final int MAX_DEPTH = SchemaBackupConfig.MAX_REFERENCE_DEPTH;
 
   private final SchemaRegistryClient schemaRegistry;
-  private final Map<Integer, BackupSchemaInfo> cache = new ConcurrentHashMap<>();
-  private final Map<String, BackupSchemaInfo> guidCache = new ConcurrentHashMap<>();
+  private final Map<Integer, BackupSchemaInfo> cache = BackupCaches.newBoundedMap();
+  private final Map<String, BackupSchemaInfo> guidCache = BackupCaches.newBoundedMap();
 
   public BackupSchemaFetcher(SchemaRegistryClient schemaRegistry) {
     this.schemaRegistry = schemaRegistry;
@@ -73,7 +72,7 @@ public class BackupSchemaFetcher {
     }
 
     BackupSchemaInfo info = new BackupSchemaInfo(rawText, directRefs, tree,
-        treeJson, directRefsJson, versionsBySubject);
+        treeJson, directRefsJson, versionsBySubject, fullSchema.schemaType());
     cache.put(schemaId, info);
     return info;
   }
@@ -98,7 +97,7 @@ public class BackupSchemaFetcher {
     String directRefsJson = directRefs != null && !directRefs.isEmpty()
         ? JSON.writeValueAsString(directRefs) : null;
     BackupSchemaInfo info = new BackupSchemaInfo(rawText, directRefs, tree,
-        treeJson, directRefsJson, Collections.emptyMap());
+        treeJson, directRefsJson, Collections.emptyMap(), fullSchema.schemaType());
     guidCache.put(guid, info);
     return info;
   }
@@ -139,6 +138,9 @@ public class BackupSchemaFetcher {
     private final String referenceTreeJson;
     private final String directRefsJson;
     private final Map<String, Integer> versionsBySubject;
+    private final String schemaType;
+    // Result of parse(), cached per factory.
+    private volatile ParsedMemo parsed;
 
     public BackupSchemaInfo(
         String rawSchema,
@@ -147,6 +149,18 @@ public class BackupSchemaFetcher {
         String referenceTreeJson,
         String directRefsJson,
         Map<String, Integer> versionsBySubject) {
+      this(rawSchema, directReferences, referenceTree, referenceTreeJson,
+          directRefsJson, versionsBySubject, null);
+    }
+
+    public BackupSchemaInfo(
+        String rawSchema,
+        List<SchemaReference> directReferences,
+        Map<String, RefTreeEntry> referenceTree,
+        String referenceTreeJson,
+        String directRefsJson,
+        Map<String, Integer> versionsBySubject,
+        String schemaType) {
       this.rawSchema = rawSchema;
       this.directReferences = directReferences != null
           ? directReferences : Collections.emptyList();
@@ -156,6 +170,7 @@ public class BackupSchemaFetcher {
       this.directRefsJson = directRefsJson;
       this.versionsBySubject = versionsBySubject != null
           ? versionsBySubject : Collections.emptyMap();
+      this.schemaType = schemaType;
     }
 
     public String getRawSchema() {
@@ -180,6 +195,40 @@ public class BackupSchemaFetcher {
 
     public Integer getVersionForSubject(String subject) {
       return versionsBySubject.get(subject);
+    }
+
+    public String getSchemaType() {
+      return schemaType;
+    }
+
+    /**
+     * Parses this schema and its references with {@code factory}. The result is cached.
+     */
+    public ParsedSchema parse(BackupReferenceResolver.ParsedSchemaFactory factory) {
+      ParsedMemo memo = parsed;
+      if (memo != null && memo.factory == factory) {
+        return memo.schema;
+      }
+      Map<String, String> resolved = new LinkedHashMap<>();
+      if (!directReferences.isEmpty()) {
+        for (Map.Entry<String, RefTreeEntry> e : referenceTree.entrySet()) {
+          resolved.put(e.getKey(), e.getValue().getSchema());
+        }
+      }
+      ParsedSchema schema = factory.create(rawSchema, directReferences, resolved);
+      parsed = new ParsedMemo(factory, schema);
+      return schema;
+    }
+
+    private static final class ParsedMemo {
+      private final BackupReferenceResolver.ParsedSchemaFactory factory;
+      private final ParsedSchema schema;
+
+      private ParsedMemo(
+          BackupReferenceResolver.ParsedSchemaFactory factory, ParsedSchema schema) {
+        this.factory = factory;
+        this.schema = schema;
+      }
     }
   }
 
