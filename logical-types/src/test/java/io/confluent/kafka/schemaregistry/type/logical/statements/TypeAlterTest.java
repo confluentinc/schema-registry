@@ -710,6 +710,33 @@ class TypeAlterTest {
     assertThatThrownBy(() -> registry.alter("gw", new DropAttribute("sv", false)))
         .isInstanceOf(TypeRefusedException.class)
         .hasMessageContaining("field w of message W is a google.protobuf.Int32Value");
+
+    // Nor is a oneof wrapped in a message of its own, which is read as a union and would be
+    // written as a oneof of the message itself: its field, and what is stored in it, gone.
+    String oneof = "syntax = \"proto3\";\n\nimport \"confluent/meta.proto\";\n\n"
+        + "message T {\n  int32 id = 5;\n  WOneofWrapper w = %d [(confluent.field_meta) = {\n"
+        + "    params: [{\n      key: \"flink.wrapped\",\n      value: \"true\"\n    }]\n  }];\n"
+        + "  int32 z = 6;\n\n  message WOneofWrapper {\n    oneof value {\n      int32 a = 1;\n"
+        + "      string b = 3;\n    }\n  }\n}\n";
+    // Whether a member of it has the field's number or none has.
+    for (int number : new int[] {2, 1}) {
+      String type = "ow" + number;
+      registry.client.register(type, new ProtobufSchema(String.format(oneof, number)));
+      assertThat(registry.struct(type).getField("w").getSchema().getType()).as(type)
+          .isEqualTo(Schema.Type.UNION);
+      for (AlterAction action : List.of(new AddAttribute("n", "INT"),
+          new MoveAttribute("z", Position.first()))) {
+        assertThatThrownBy(() -> registry.alter(type, action)).as(type)
+            .isInstanceOf(TypeRefusedException.class)
+            .hasMessage("Type " + type + " cannot be altered: field w of message T is a "
+                + "oneof wrapped in a message, which would be written as a oneof of the "
+                + "message itself, so its stored values would be read as none. Drop the "
+                + "attribute, or register its new version as a Protobuf schema");
+      }
+      assertThat(version(type)).as(type).isEqualTo(1);
+      registry.alter(type, new DropAttribute("w", false));
+      assertThat(numbers(message(type))).as(type).isEqualTo("id=5 z=6");
+    }
     assertThat(version("gw")).isEqualTo(1);
     registry.alter("gw", new DropAttribute("sv", false), new DropAttribute("w", false),
         new AddAttribute("c", "INT"));

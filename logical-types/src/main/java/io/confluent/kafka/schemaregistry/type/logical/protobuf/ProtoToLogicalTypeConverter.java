@@ -958,8 +958,11 @@ public class ProtoToLogicalTypeConverter {
     return true;
   }
 
-  // A singular field holding a flink.wrapped wrapper whose payload is a oneof.
-  private static boolean wrapsUnion(FieldDescriptor field) {
+  /**
+   * True for a singular field holding a flink.wrapped wrapper whose payload is a oneof: it is
+   * read as a union. The writer writes a union as a oneof of the message, not as that field.
+   */
+  public static boolean wrapsUnion(FieldDescriptor field) {
     if (field.isRepeated() || field.getJavaType() != FieldDescriptor.JavaType.MESSAGE
         || !isFlinkWrapped(field)) {
       return false;

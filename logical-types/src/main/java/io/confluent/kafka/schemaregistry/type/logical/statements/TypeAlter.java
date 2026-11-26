@@ -622,11 +622,12 @@ public final class TypeAlter {
     }
   }
 
-  // Three kinds of field are written otherwise than the file declares them. A map is written
+  // Four kinds of field are written otherwise than the file declares them. A map is written
   // as a repeated field of an entry message: the same bytes, and another kind of field to
   // the registry and to generated code. A google.protobuf wrapper is written as the scalar
-  // it wraps, which is other bytes. And an entry's key and value are numbered as the writer
-  // numbers them. A version that still has a field of such a field's number is refused.
+  // it wraps, which is other bytes. An entry's key and value are numbered as the writer
+  // numbers them. And a oneof wrapped in a message of its own is written as a oneof of the
+  // message that has the field. A version that still has such a field is refused.
   private void refuseWrittenOtherwise(ParsedSchema stored, ParsedSchema written, String done) {
     if (format == SchemaType.JSON) {
       refuseEntriesWrittenAsObject(stored, written, done);
@@ -796,6 +797,14 @@ public final class TypeAlter {
       return null;
     }
     for (FieldDescriptor field : was.getFields()) {
+      // A oneof wrapped in a message is read as a union, which is written as a oneof of
+      // the message itself: the field is no more, and its stored values with it.
+      if (ProtoToLogicalTypeConverter.wrapsUnion(field) && now.getRealOneofs().stream()
+          .anyMatch(oneof -> oneof.getName().equals(field.getName()))) {
+        return field.getName() + " of message " + was.getName() + " is a oneof wrapped in a "
+            + "message, which would be written as a oneof of the message itself, so its "
+            + "stored values would be read as none";
+      }
       FieldDescriptor kept = now.findFieldByNumber(field.getNumber());
       if (kept == null) {
         continue;
