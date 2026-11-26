@@ -35,6 +35,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericContainer;
+import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.io.BinaryDecoder;
 import org.apache.avro.io.DatumReader;
@@ -296,9 +297,33 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
   protected DatumReader<?> getDatumReader(
       String subject, SchemaId writerSchemaId, Schema writerSchema, Schema readerSchema)
       throws ExecutionException {
+    return getCachedDatumReader(subject, writerSchemaId, writerSchema, readerSchema, false);
+  }
+
+  /**
+   * Returns the reader for a read. When {@code rawVariants} is true, the reader must decode each
+   * variant as its raw record, without the variant conversion, since an encrypted variant holds
+   * ciphertext until the READ rules have run; the deserializer converts the variants afterwards.
+   * Otherwise this calls {@link #getDatumReader(String, SchemaId, Schema, Schema)}, so a subclass
+   * overriding that method still supplies the reader for every other read.
+   */
+  protected DatumReader<?> getDatumReader(
+      String subject, SchemaId writerSchemaId, Schema writerSchema, Schema readerSchema,
+      boolean rawVariants)
+      throws ExecutionException {
+    return rawVariants
+        ? getCachedDatumReader(subject, writerSchemaId, writerSchema, readerSchema, true)
+        : getDatumReader(subject, writerSchemaId, writerSchema, readerSchema);
+  }
+
+  private DatumReader<?> getCachedDatumReader(
+      String subject, SchemaId writerSchemaId, Schema writerSchema, Schema readerSchema,
+      boolean rawVariants)
+      throws ExecutionException {
     DatumReader<?> reader = datumReaderCache.get(
-        new DatumReaderKey(subject, writerSchemaId, readerSchema),
-        () -> createDatumReader(subject, writerSchemaId, writerSchema, readerSchema));
+        new DatumReaderKey(subject, writerSchemaId, readerSchema, rawVariants),
+        () -> createDatumReader(
+            subject, writerSchemaId, writerSchema, readerSchema, rawVariants));
     if (reader instanceof SpecificDatumReader && !(reader instanceof ReflectDatumReader)) {
       // A cached reader may be used under another context class loader, which may resolve the
       // classes its schema names differently; the check remembers the loaders already checked
@@ -308,7 +333,8 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
   }
 
   private DatumReader<?> createDatumReader(
-      String subject, SchemaId writerSchemaId, Schema writerSchema, Schema readerSchema) {
+      String subject, SchemaId writerSchemaId, Schema writerSchema, Schema readerSchema,
+      boolean rawVariants) {
     Schema finalReaderSchema =
         getReaderSchema(subject, writerSchemaId, writerSchema, readerSchema);
     // A null writerSchema means there is no distinct writer schema (e.g. post-migration the data
@@ -331,8 +357,29 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
               finalReaderSchema, avroUseLogicalTypeConverters));
     } else {
       return new GenericDatumReader<>(finalWriterSchema, finalReaderSchema,
-          AvroSchemaUtils.getGenericData(avroUseLogicalTypeConverters));
+          getGenericData(rawVariants));
     }
+  }
+
+  private GenericData getGenericData(boolean rawVariants) {
+    return rawVariants
+        ? AvroSchemaUtils.getGenericDataWithRawVariants()
+        : AvroSchemaUtils.getGenericData(avroUseLogicalTypeConverters);
+  }
+
+  /**
+   * Whether variants are decoded as raw records and converted after the READ rules have run.
+   * A variant encrypted by a rule holds ciphertext until then, which the variant conversion
+   * would reject while decoding.
+   */
+  private boolean readsVariantsRaw(AvroSchema schema) {
+    if (!avroUseLogicalTypeConverters || useSchemaReflection || useSpecificAvroReader) {
+      return false;
+    }
+    if (schema.ruleSet() == null || schema.ruleSet().getDomainRules().isEmpty()) {
+      return false;
+    }
+    return AvroSchemaUtils.hasVariant(schema.rawSchema());
   }
 
   /**
@@ -598,13 +645,16 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
 
         Schema writerSchema = writerAvroSchema.rawSchema();
         Schema readerSchema = readerAvroSchema != null ? readerAvroSchema.rawSchema() : null;
+        boolean rawVariants = readsVariantsRaw(
+            readerAvroSchema != null ? readerAvroSchema : writerAvroSchema);
         DatumReader<?> reader;
         if (!migrations.isEmpty()) {
           // if migration is required, then initially use GenericDatumReader
           reader = new GenericDatumReader<>(writerSchema, writerSchema,
-              AvroSchemaUtils.getGenericData(avroUseLogicalTypeConverters));
+              getGenericData(rawVariants));
         } else {
-          reader = getDatumReader(getSubject(), schemaId, writerSchema, readerSchema);
+          reader = getDatumReader(
+              getSubject(), schemaId, writerSchema, readerSchema, rawVariants);
         }
         int length = buffer.remaining();
         Object result;
@@ -646,7 +696,8 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
               // a non-null writer id), and the null writer schema makes createDatumReader read it
               // as an identity against the reader schema. The migration reader depends only on the
               // reader schema.
-              reader = getDatumReader(null, null, null, readerAvroSchema.rawSchema());
+              reader = getDatumReader(
+                  null, null, null, readerAvroSchema.rawSchema(), rawVariants);
               result = AvroSchemaUtils.toObject(
                   (JsonNode) result, readerAvroSchema, (DatumReader<Object>) reader);
             }
@@ -655,6 +706,9 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
             result = executeRules(
                 getSubject(), topic, headers, payload, RuleMode.READ, null, readerAvroSchema, result
             );
+            if (rawVariants) {
+              result = AvroSchemaUtils.toVariants(readerAvroSchema.rawSchema(), result);
+            }
           } finally {
             AvroSchemaUtils.clearThreadLocalData();
           }
@@ -682,10 +736,17 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
   static class DatumReaderKey {
     private final SubjectSchemaId writerKey;
     private final Schema readerSchema;
+    private final boolean rawVariants;
 
     DatumReaderKey(String subject, SchemaId writerSchemaId, Schema readerSchema) {
+      this(subject, writerSchemaId, readerSchema, false);
+    }
+
+    DatumReaderKey(
+        String subject, SchemaId writerSchemaId, Schema readerSchema, boolean rawVariants) {
       this.writerKey = new SubjectSchemaId(subject, writerSchemaId);
       this.readerSchema = readerSchema;
+      this.rawVariants = rawVariants;
     }
 
     @Override
@@ -698,13 +759,14 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
       }
       DatumReaderKey that = (DatumReaderKey) o;
       // Writer dimension compared by subject and schema id, reader dimension by schema content.
-      return Objects.equals(writerKey, that.writerKey)
+      return rawVariants == that.rawVariants
+          && Objects.equals(writerKey, that.writerKey)
           && Objects.equals(readerSchema, that.readerSchema);
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(writerKey, readerSchema);
+      return Objects.hash(writerKey, readerSchema, rawVariants);
     }
 
     @Override
@@ -712,6 +774,7 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
       return "DatumReaderKey{"
           + "writerKey=" + writerKey
           + ", readerSchema=" + readerSchema
+          + ", rawVariants=" + rawVariants
           + '}';
     }
   }
