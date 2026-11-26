@@ -44,6 +44,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -51,11 +52,14 @@ import java.util.List;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import org.apache.avro.*;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.avro.io.DatumReader;
 import org.apache.avro.reflect.ReflectData;
 import org.apache.avro.util.Utf8;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
@@ -72,6 +76,11 @@ import io.confluent.kafka.example.ExtendedUser;
 import io.confluent.kafka.example.User;
 import io.confluent.kafka.example.Grant;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Rule;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleKind;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleMode;
+import io.confluent.kafka.schemaregistry.client.rest.entities.RuleSet;
+import io.confluent.kafka.schemaregistry.type.Variant;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaUtils;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
@@ -2044,6 +2053,68 @@ public class KafkaAvroSerializerTest {
 
   private static int schemaIdOf(byte[] bytes) {
     return ByteBuffer.wrap(bytes, 1, 4).getInt();
+  }
+
+  @Test
+  public void testGetDatumReaderOverrideIsUsed() throws Exception {
+    // A subclass overriding the protected getDatumReader supplies the reader for a read
+    AtomicInteger calls = new AtomicInteger();
+    KafkaAvroDeserializer deserializer =
+        new KafkaAvroDeserializer(schemaRegistry, new HashMap(createDeserializerConfig())) {
+          @Override
+          protected DatumReader<?> getDatumReader(String subject, SchemaId writerSchemaId,
+              Schema writerSchema, Schema readerSchema) throws ExecutionException {
+            calls.incrementAndGet();
+            return super.getDatumReader(subject, writerSchemaId, writerSchema, readerSchema);
+          }
+        };
+    IndexedRecord avroRecord = createUserRecord();
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
+    assertEquals(avroRecord, deserializer.deserialize(topic, headers, bytes));
+    assertEquals(1, calls.get());
+  }
+
+  @Test
+  public void testGetDatumReaderOverrideForRawVariants() throws Exception {
+    // With converters on, a variant schema with domain rules is read by the raw-variant hook
+    AvroSchema schema = new AvroSchema("{\"type\": \"record\", \"name\": \"Doc\", "
+        + "\"fields\": [{\"name\": \"payload\", \"type\": {\"type\": \"record\", "
+        + "\"name\": \"confluent.type.Variant\", \"logicalType\": \"variant\", "
+        + "\"fields\": [{\"name\": \"metadata\", \"type\": \"bytes\"},"
+        + "{\"name\": \"value\", \"type\": \"bytes\"}]}}]}");
+    Rule rule = new Rule("upper", null, RuleKind.TRANSFORM, RuleMode.WRITE,
+        "CEL_FIELD", null, null, "false", null, null, true);
+    AvroSchema withRule = schema.copy(
+        null, new RuleSet(Collections.emptyList(), Collections.singletonList(rule)));
+    Properties props = createDeserializerConfig();
+    props.put(KafkaAvroDeserializerConfig.AVRO_USE_LOGICAL_TYPE_CONVERTERS_CONFIG, true);
+    props.put(KafkaAvroDeserializerConfig.USE_LATEST_VERSION, true);
+    List<Boolean> rawFlags = new ArrayList<>();
+    KafkaAvroDeserializer deserializer =
+        new KafkaAvroDeserializer(schemaRegistry, new HashMap(props)) {
+          @Override
+          protected DatumReader<?> getDatumReader(String subject, SchemaId writerSchemaId,
+              Schema writerSchema, Schema readerSchema, boolean rawVariants)
+              throws ExecutionException {
+            rawFlags.add(rawVariants);
+            return super.getDatumReader(
+                subject, writerSchemaId, writerSchema, readerSchema, rawVariants);
+          }
+        };
+    GenericRecord variant = new GenericData.Record(
+        schema.rawSchema().getField("payload").schema());
+    variant.put("metadata", ByteBuffer.wrap(new byte[] {1, 0, 0}));
+    variant.put("value", ByteBuffer.wrap(new byte[] {0}));
+    GenericRecord avroRecord = new GenericData.Record(schema.rawSchema());
+    avroRecord.put("payload", variant);
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
+    // The reader uses the latest version, which has the rule
+    schemaRegistry.register(topic + "-value", withRule);
+    GenericRecord result = (GenericRecord) deserializer.deserialize(topic, headers, bytes);
+    assertEquals(Collections.singletonList(true), rawFlags);
+    assertEquals(Variant.class, result.get("payload").getClass());
   }
 
   @Test
