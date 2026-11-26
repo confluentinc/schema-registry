@@ -522,6 +522,7 @@ public final class TypeAlter {
           // And by the definitions of the documents referred to, as the two schemas have
           // them: each at the version its reference is to.
           refuseNewOverlaps(stored, written);
+          refuseDefinitionNamedAsCalled(written, "changed so");
         }
         refuseOtherColumns(md, edited, version);
         refuseIncompatible(lookup, subject, format, md, softDeleted, versions, edited, policy,
@@ -1008,11 +1009,13 @@ public final class TypeAlter {
             + fields.get(same).getName());
       }
       refuseDroppedName(a.name());
+      if (format == SchemaType.PROTOBUF) {
+        refuseUnionNumbers(field);
+      }
       Formats.refuseUnwritable(format, field, knownTypes(field.getSchema()));
       Map<String, Object> params = new LinkedHashMap<>(field.getParams());
       Counter numbers = format == SchemaType.PROTOBUF ? counter(fields) : null;
       if (format == SchemaType.PROTOBUF) {
-        refuseUnionNumbers(field);
         params.put(Schema.PROTOBUF_FIELD_NUMBER,
             String.valueOf(numberGiven(field, fields, numbers)));
       }
@@ -1748,6 +1751,9 @@ public final class TypeAlter {
     Set<String> definitions = new HashSet<>(reachable);
     definitions.retainAll(externalTypes);
     definitions.removeAll(documents);
+    // Nor is it what the type as read calls a type or a part of one, which is no name of
+    // a definition.
+    definitions.removeAll(externalImports.keySet());
     // A reference whose defined name cannot be told is kept.
     references.removeIf(ref -> {
       Set<String> names = TypeReferences.definedNames(lookup, subject, ref);
@@ -1758,7 +1764,8 @@ public final class TypeAlter {
     resolved.putAll(TypeReferences.resolve(lookup, subject, references));
   }
 
-  // The names of the definitions a JSON document a reference is to has, wherever in it.
+  // The names of the definitions a JSON document a reference is to has at its root: one
+  // further in it is no name a type has for it.
   private Set<String> definitionsOf(SchemaReference ref) {
     Set<String> names = new HashSet<>();
     String text = format == SchemaType.JSON ? resolved.get(ref.getName()) : null;
@@ -1768,7 +1775,7 @@ public final class TypeAlter {
     try {
       JsonNode document = JacksonMapper.INSTANCE.readTree(text);
       for (String word : List.of("$defs", "definitions")) {
-        document.findValues(word).forEach(defs -> defs.fieldNames().forEachRemaining(names::add));
+        document.path(word).fieldNames().forEachRemaining(names::add);
       }
     } catch (IOException e) {
       // One that is no JSON has none.
@@ -1892,6 +1899,15 @@ public final class TypeAlter {
     } else if (target != replacing) {
       LogicalType.collectNamedRefs(target, used);
     }
+    // As are those of a JSON type's own definitions, which are written whether an
+    // attribute is of them or not.
+    if (format == SchemaType.JSON) {
+      namedTypes.forEach((name, type) -> {
+        if (type != target && !externalTypes.contains(name)) {
+          LogicalType.collectNamedRefs(type, used);
+        }
+      });
+    }
     List<String> todo = new ArrayList<>(used);
     while (!todo.isEmpty()) {
       Schema named = namedTypes.get(todo.remove(todo.size() - 1));
@@ -1915,6 +1931,7 @@ public final class TypeAlter {
     Set<String> documents = new HashSet<>();
     md.getReferences().forEach(r -> documents.add(r.getName()));
     JsonNode schema = ((JsonSchema) stored).toJsonNode();
+    refuseDefinitionNamedAsCalled(stored, "altered");
     List<String> refs = new ArrayList<>();
     collectRefs(schema, refs);
     for (String to : refs) {
@@ -1929,7 +1946,8 @@ public final class TypeAlter {
       JsonNode own = definition(schema, to);
       boolean only = true;
       for (Iterator<String> said = own.fieldNames(); said.hasNext(); ) {
-        only &= SAYS_NOTHING.contains(said.next());
+        String word = said.next();
+        only &= SAYS_NOTHING.contains(word) || word.startsWith("x-");
       }
       if (of.isEmpty() && only && name.equals(own.path("$ref").asText(null))) {
         continue;
@@ -1939,6 +1957,39 @@ public final class TypeAlter {
           + ", and refers to a type by that name. The two are read as one, and the "
           + "definition would be written as that type. Register its new version as a JSON "
           + "schema");
+    }
+  }
+
+  // The type as read calls a document it refers to whole, or a part of one that is no
+  // definition, by a name it makes: Ref1, Ref2. A schema with a definition of such a name is
+  // read with the two as one, and the next statement would write the one as the other.
+  private void refuseDefinitionNamedAsCalled(ParsedSchema schema, String done) {
+    if (!(schema instanceof JsonSchema)) {
+      return;
+    }
+    Map<String, String> called;
+    try {
+      called = LogicalTypeConversion.toLogicalType(schema).getExternalImports();
+    } catch (RuntimeException e) {
+      // A schema that cannot be read is refused as that.
+      return;
+    }
+    JsonNode json = ((JsonSchema) schema).toJsonNode();
+    List<String> refs = new ArrayList<>();
+    collectRefs(json, refs);
+    for (String to : refs) {
+      String name = JsonToLogicalTypeConverter.extractCanonicalDefsKey(to);
+      // A definition of the schema's own that names what is so called is how the name is
+      // written, and no other type.
+      if (name != null && called.containsKey(name) && !to.equals(called.get(name))
+          && !(to.startsWith("#") && called.get(name).equals(
+              definition(json, to).path("$ref").asText(null)))) {
+        throw new TypeRefusedException("Type " + subject + " cannot be " + done + ": it "
+            + "has a definition named " + name + ", which is what a type is called that it "
+            + "refers to whole: " + called.get(name) + ". The two are read as one, and the "
+            + "one would be written as the other. Register its new version as a JSON "
+            + "schema");
+      }
     }
   }
 

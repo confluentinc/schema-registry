@@ -928,8 +928,9 @@ class TypeAlterTest {
     assertThatThrownBy(() -> registry.alter("bn", new AddAttribute("u",
         "UNION(p INT WITH ('protobuf.field.number' = ''), q STRING)")))
         .isInstanceOf(TypeRefusedException.class)
-        .hasMessage("Property protobuf.field.number of branch p of attribute u is not a "
-            + "valid number: ''");
+        .hasMessage("Branch p of attribute u cannot be given a Protobuf field number: the "
+            + "members of a new UNION are numbered as the type's new fields are; give it "
+            + "none");
     // A number above the last there is, or one of those Protobuf keeps, is told by the
     // attribute's path, wherever the attribute is, and not by a message's name.
     String[][] none = {
@@ -2863,6 +2864,29 @@ class TypeAlterTest {
           .extracting(SchemaReference::getName).contains("lib2")
           .hasSize(type.getKey().compareTo("hf2") <= 0 ? 2 : 1);
     }
+    // Under either word for a definition; and for no definition of the name of one of the
+    // type's own.
+    registry.client.register("d7l", new JsonSchema("{\"type\":\"object\",\"title\":\"d7l\","
+        + "\"properties\":{\"q\":{\"type\":\"integer\"}},\"additionalProperties\":false,"
+        + "\"definitions\":{\"G\":{\"enum\":[\"X\",\"Y\"]},\"H\":{\"type\":\"string\"},"
+        + "\"Loc\":{\"type\":\"string\"}}}"));
+    registry.client.register("hd7", new JsonSchema("{\"type\":\"object\",\"title\":\"hd7\","
+        + "\"properties\":{\"id\":{\"type\":\"integer\"},\"g\":{\"$ref\":"
+        + "\"d7l#/definitions/G\"},\"k\":{\"$ref\":\"d7l#/definitions/H\"}},"
+        + "\"additionalProperties\":false}", List.of(new SchemaReference("d7l", "d7l", 1)),
+        Map.of("d7l", registry.latest("d7l").getSchema()), null));
+    registry.alter("hd7", new DropAttribute("g", false));
+    assertThat(registry.latest("hd7").getReferences()).extracting(SchemaReference::getName)
+        .containsExactly("d7l");
+    registry.client.register("hown", new JsonSchema("{\"type\":\"object\",\"title\":\"hown\","
+        + "\"properties\":{\"id\":{\"type\":\"integer\"},\"x\":{\"$ref\":\"#/$defs/Loc\"},"
+        + "\"g\":{\"$ref\":\"d7l#/definitions/G\"}},\"additionalProperties\":false,"
+        + "\"$defs\":{\"Loc\":{\"type\":\"object\",\"properties\":{\"p\":{\"type\":"
+        + "\"integer\"}},\"additionalProperties\":false}}}",
+        List.of(new SchemaReference("d7l", "d7l", 1)),
+        Map.of("d7l", registry.latest("d7l").getSchema()), null));
+    registry.alter("hown", new DropAttribute("g", false));
+    assertThat(registry.latest("hown").getReferences()).isNullOrEmpty();
     // A name the type as read has for a type it refers to is no other type's either.
     registry.create("fhu", SchemaType.JSON, BodyKind.OTHER, "INT");
     create("Ref1", SchemaType.JSON, "(k INT)");
@@ -2927,6 +2951,62 @@ class TypeAlterTest {
         .containsExactly("lib");
     assertThat(registry.schema("hout").canonicalString())
         .contains("\"$ref\":\"lib#/$defs/E\"").doesNotContain("\"x\"");
+    // And what it names is the type's still: a document of that name would be written in
+    // the definition's place.
+    assertThatThrownBy(() -> registry.alter("hout", new AddAttribute("w", "E")))
+        .isInstanceOf(TypeRefusedException.class).hasMessageContaining("it has a type named "
+            + "E already, a definition of a type it refers to");
+    // A document is of use for a definition at its root alone, and for no name the type
+    // as read makes: one added and dropped is referred to no more.
+    registry.client.register("lib4", new JsonSchema("{\"type\":\"object\",\"title\":\"lib4\","
+        + "\"properties\":{\"y\":{\"type\":\"object\",\"properties\":{\"k\":{\"type\":"
+        + "\"integer\"}},\"additionalProperties\":false,\"$defs\":{\"E\":{\"type\":\"string\"}}}},"
+        + "\"additionalProperties\":false,\"$defs\":{\"M\":{\"type\":\"string\"},\"Ref1\":"
+        + "{\"type\":\"string\"}}}"));
+    registry.client.register("hs1", new JsonSchema(registry.version("h", 1).getSchema()
+        .replace("\"title\":\"h\"", "\"title\":\"hs1\""),
+        List.of(new SchemaReference("lib", "lib", 1)), resolved, null));
+    registry.alter("hs1", new AddAttribute("w", "lib4"));
+    registry.alter("hs1", new DropAttribute("w", false));
+    assertThat(registry.latest("hs1").getReferences()).extracting(SchemaReference::getName)
+        .containsExactly("lib");
+    Map<String, String> parts = new LinkedHashMap<>(resolved);
+    parts.put("plain", registry.latest("plain").getSchema());
+    parts.put("lib4", registry.latest("lib4").getSchema());
+    registry.client.register("hs2", new JsonSchema("{\"type\":\"object\",\"title\":\"hs2\","
+        + "\"properties\":{\"id\":{\"type\":\"integer\"},\"a\":{\"$ref\":"
+        + "\"plain#/properties/o\"},\"m\":{\"$ref\":\"lib4#/$defs/M\"}},"
+        + "\"additionalProperties\":false}", List.of(new SchemaReference("plain", "plain", 1),
+        new SchemaReference("lib4", "lib4", 1)), parts, null));
+    registry.alter("hs2", new DropAttribute("m", false));
+    assertThat(registry.latest("hs2").getReferences()).extracting(SchemaReference::getName)
+        .containsExactly("plain");
+    // A definition of the name the type as read makes for a document it refers to whole,
+    // where the document is come to first, is read as that document: such a type is not
+    // altered, nor made by a statement.
+    registry.client.register("hs3", new JsonSchema("{\"type\":\"object\",\"title\":\"hs3\","
+        + "\"properties\":{\"id\":{\"type\":\"integer\"},\"a\":{\"$ref\":\"plain\"},"
+        + "\"r\":{\"$ref\":\"lib4#/$defs/Ref1\"}},\"additionalProperties\":false}",
+        List.of(new SchemaReference("plain", "plain", 1),
+        new SchemaReference("lib4", "lib4", 1)), parts, null));
+    assertThatThrownBy(() -> registry.alter("hs3", new AddAttribute("z", "INT")))
+        .isInstanceOf(TypeRefusedException.class).hasMessage("Type hs3 cannot be altered: it "
+            + "has a definition named Ref1, which is what a type is called that it refers to "
+            + "whole: plain. The two are read as one, and the one would be written as the "
+            + "other. Register its new version as a JSON schema");
+    registry.client.register("hs4", new JsonSchema("{\"type\":\"object\",\"title\":\"hs4\","
+        + "\"properties\":{\"id\":{\"type\":\"integer\"},\"r\":{\"$ref\":"
+        + "\"lib4#/$defs/Ref1\"}},\"additionalProperties\":false}",
+        List.of(new SchemaReference("lib4", "lib4", 1)), parts, null));
+    assertThatThrownBy(() -> registry.alter("hs4",
+        new AddAttribute("a", "plain", Position.first())))
+        .isInstanceOf(TypeRefusedException.class).hasMessageStartingWith("Type hs4 cannot be "
+            + "changed so: it has a definition named Ref1, which is what a type is called "
+            + "that it refers to whole: plain.");
+    // Where the definition is come to first the document is called otherwise.
+    registry.alter("hs4", new AddAttribute("w", "plain"));
+    assertThat(registry.schema("hs4").canonicalString())
+        .contains("\"$ref\":\"lib4#/$defs/Ref1\"").contains("\"$ref\":\"plain\"");
     // A definition's name is in use through a type of the document's own, and is freed by
     // SET DATA TYPE as by a retype.
     registry.client.register("viaown", new JsonSchema("{\"type\":\"object\",\"title\":"
@@ -3042,6 +3122,7 @@ class TypeAlterTest {
     written.put("dlr", "{\"$ref\":\"o5s\",\"logical.ref\":true}");
     written.put("dds", "{\"$ref\":\"o5s\",\"description\":\"the same\"}");
     written.put("dtc", "{\"$ref\":\"o5s\",\"title\":\"O\",\"$comment\":\"as is\"}");
+    written.put("dxo", "{\"$ref\":\"o5s\",\"x-owner\":\"them\"}");
     written.put("dan", "{\"$ref\":\"o5s\",\"default\":{\"q\":\"x\"},\"examples\":[{\"q\":"
         + "\"y\"}],\"deprecated\":true,\"readOnly\":true,\"connect.index\":0}");
     for (Map.Entry<String, String> type : written.entrySet()) {
@@ -3648,6 +3729,33 @@ class TypeAlterTest {
     assertThat(version("jt")).isEqualTo(2);
   }
 
+  // An Avro type's and a Protobuf type's references are of what its attributes name alone;
+  // and in a type given anew the path starts at the attribute as the type has it, where a
+  // topic's column is spelt in another case.
+  @Test
+  void anotherFormatsReferencesAndAColumnsPath() {
+    for (SchemaType format : List.of(SchemaType.AVRO, SchemaType.PROTOBUF)) {
+      String referred = "r" + format.name().toLowerCase();
+      String type = "t" + format.name().toLowerCase();
+      create(referred, format, "(k INT)");
+      create(type, format, "(id INT, x STRUCT<i " + referred + ", j INT>, y ARRAY<STRUCT<i "
+          + referred + ">>)");
+      registry.alter(type, new DropAttribute("x", false), new DropAttribute("y", false));
+      assertThat(registry.latest(type).getReferences()).as(type).isNullOrEmpty();
+    }
+    TypeAlter.Options columns = new TypeAlter.Options().columns(true);
+    create("cj", SchemaType.JSON, "(id INT, Rr STRING)");
+    assertThatThrownBy(() -> registry.alter("cj", columns,
+        new AlterAttributeType("rr", "STRUCT<x INT DEFAULT 5>")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageStartingWith("Attribute Rr.x has a DEFAULT");
+    create("cp", SchemaType.PROTOBUF, "(id INT, Rr STRUCT<k INT>)");
+    assertThatThrownBy(() -> registry.alter("cp", columns, new AlterAttributeType("rr",
+        "STRUCT<k INT WITH ('protobuf.field.number' = '9')>")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageStartingWith("Attribute Rr.k cannot be given the Protobuf field number 9");
+  }
+
   // A number said for a new Protobuf attribute is its number where no field has it and
   // none of a version had; it is not left out without a word.
   @Test
@@ -3707,6 +3815,15 @@ class TypeAlterTest {
         .isInstanceOf(TypeRefusedException.class).hasMessageContaining("a UNION is a oneof");
     assertThat(registry.latest("pnc")).isNull();
     assertThat(version("pnu")).isEqualTo(2);
+    // Whatever the number: one that no field could have is told as a union's all the same.
+    assertThatThrownBy(() -> registry.alter("pnu", new AddAttribute("w",
+        "UNION(c INT, d STRING) WITH ('protobuf.field.number' = '19000')")))
+        .isInstanceOf(TypeRefusedException.class).hasMessage("Attribute w cannot have a "
+            + "Protobuf field number: a UNION is a oneof, which has none; give it none");
+    assertThatThrownBy(() -> registry.alter("pnu", new AddAttribute("w",
+        "UNION(c INT WITH ('protobuf.field.number' = '19000'), d STRING)")))
+        .isInstanceOf(TypeRefusedException.class).hasMessageEndingWith("the members of a new "
+            + "UNION are numbered as the type's new fields are; give it none");
     // The last number there is leaves none above it: the next are the lowest never used,
     // for a field and for a union's members.
     create("pnm", SchemaType.PROTOBUF, "(a INT, b STRING)");

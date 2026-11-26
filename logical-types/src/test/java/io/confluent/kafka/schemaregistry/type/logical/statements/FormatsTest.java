@@ -382,6 +382,47 @@ class FormatsTest {
     });
   }
 
+  // What is in a member's type is told with the member before it; an enum value's number is
+  // no field's, and may be one of those kept for fields or above their last.
+  @Test
+  void aMembersAttributeIsToldWithTheMemberAndAnEnumsNumberIsNoFields() {
+    assertThatThrownBy(() -> Formats.refuseUnwritable(SchemaType.PROTOBUF,
+        struct("(id INT, u UNION(p INT, q STRUCT<k INT DEFAULT 1>))")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageStartingWith("Attribute u.q.k has a DEFAULT");
+    assertThatThrownBy(() -> Formats.refuseUnwritable(SchemaType.JSON,
+        struct("(id INT, l ARRAY<UNION(p INT, q STRUCT<w UNION(a INT, b BIGINT)>)>)")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageStartingWith("A UNION of attribute l.q.w in a JSON type");
+    Formats.refuseUnwritable(SchemaType.PROTOBUF, struct("(id INT, e ENUM('A', "
+        + "'B' WITH ('protobuf.enum.number' = '19000'), "
+        + "'C' WITH ('protobuf.enum.number' = '19999'), "
+        + "'D' WITH ('protobuf.enum.number' = '536870912')))"));
+  }
+
+  // A reference that moves is judged by every two branches before and after, and not by
+  // the first two; the union is told by its path.
+  @Test
+  void aMovedReferenceIsJudgedByEveryTwoBranchesAndToldByItsPath() {
+    String union = "UNION(a INT, b BIGINT, c DOUBLE, r1 N, r2 STRUCT<k INT NOT NULL>)";
+    String[][] rows = {
+        {"STRUCT t (id INT, u " + union + "); TYPE t;", "u"},
+        {"STRUCT t (id INT, u INT, r STRUCT<u " + union + ">); TYPE t;", "r.u"},
+        {"STRUCT t (id INT, o UNION(p INT, q STRUCT<w " + union + ">)); TYPE t;", "o.q.w"}};
+    for (String[] row : rows) {
+      LogicalType before = TypeScripts.parse("STRUCT N (k STRING NOT NULL); " + row[0]);
+      LogicalType after = TypeScripts.parse("STRUCT N (k INT NOT NULL); " + row[0]);
+      Schema root = before.getRootSchema().getType() != Schema.Type.NAMED_TYPE_REF
+          ? before.getRootSchema()
+          : before.getNamedTypes().get(before.getRootSchema().getQualifiedName());
+      assertThat(Formats.newlyOverlapping(root, KnownTypes.of(before.getNamedTypes()),
+          KnownTypes.of(after.getNamedTypes()), null)).as(row[1])
+          .containsExactly(row[1], "r1", "r2");
+      assertThat(Formats.newlyOverlapping(root, KnownTypes.of(before.getNamedTypes()),
+          KnownTypes.of(before.getNamedTypes()), null)).as(row[1]).isNull();
+    }
+  }
+
   // Rows, arrays and maps are written as objects and arrays: two branches are refused where
   // a value of one would be a value of the other.
   @Test

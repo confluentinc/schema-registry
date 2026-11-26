@@ -177,13 +177,14 @@ public final class Formats {
           + format + " type cannot apply: a record without it reads "
           + (format == SchemaType.PROTOBUF ? "the zero value" : "NULL"));
     }
-    refuseBadNumber(format, Schema.PROTOBUF_FIELD_NUMBER, "attribute " + path, f.getParams());
-    // A union is a oneof, which has no number: one said for it is not left out.
+    // A union is a oneof, which has no number: one said for it is not left out, and is
+    // told as that whatever the number, which no other would do for.
     if (format == SchemaType.PROTOBUF && f.getSchema().getType() == Schema.Type.UNION
         && f.getParams().containsKey(Schema.PROTOBUF_FIELD_NUMBER)) {
       throw new TypeRefusedException("Attribute " + path + " cannot have a Protobuf "
           + "field number: a UNION is a oneof, which has none; give it none");
     }
+    refuseBadNumber(format, Schema.PROTOBUF_FIELD_NUMBER, "attribute " + path, f.getParams());
     refuseReservedParams(format, "attribute " + path, f.getParams().keySet());
     refuseUnwritable(format, f.getSchema(), named, path);
   }
