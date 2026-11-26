@@ -73,10 +73,13 @@ import io.confluent.kafka.schemaregistry.rules.WidgetProto.Pii;
 import io.confluent.kafka.schemaregistry.rules.WidgetProto.Widget;
 import io.confluent.kafka.schemaregistry.testutil.FakeClock;
 import io.confluent.kafka.schemaregistry.testutil.MockSchemaRegistry;
+import io.confluent.kafka.schemaregistry.type.Variant;
+import io.confluent.kafka.schemaregistry.type.VariantUtils;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDe;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
+import io.confluent.kafka.serializers.KafkaAvroSerializerConfig;
 import io.confluent.kafka.serializers.json.KafkaJsonSchemaDeserializer;
 import io.confluent.kafka.serializers.json.KafkaJsonSchemaSerializer;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer;
@@ -1549,6 +1552,169 @@ public abstract class FieldEncryptionExecutorTest {
     GenericRecord payload = (GenericRecord) record.get("payload");
     assertEquals(ByteBuffer.wrap(new byte[] {1, 0, 0}), payload.get("metadata"));
     assertEquals(ByteBuffer.wrap(new byte[] {0}), payload.get("value"));
+  }
+
+  private static final String VARIANT_SCHEMA =
+      "{\"type\": \"record\", \"name\": \"confluent.type.Variant\", "
+          + "\"logicalType\": \"variant\", \"fields\": ["
+          + "{\"name\": \"metadata\", \"type\": \"bytes\"},"
+          + "{\"name\": \"value\", \"type\": \"bytes\"}]}";
+
+  private static Variant newVariant() {
+    return VariantUtils.fromJson("{\"name\":\"alice\"}");
+  }
+
+  private static GenericRecord rawVariant(Schema schema, Variant variant) {
+    GenericRecord record = new GenericData.Record(schema);
+    record.put("metadata", variant.getMetadataBuffer().duplicate());
+    record.put("value", variant.getValueBuffer().duplicate());
+    return record;
+  }
+
+  // Serializer and deserializer properties with avro.use.logical.type.converters on
+  private Map<String, Object> convertersProps() throws Exception {
+    Map<String, Object> props = fieldEncryptionProps.getClientProperties("mock://");
+    props.put(CLOCK, fakeClock);
+    props.put(KafkaAvroSerializerConfig.AVRO_USE_LOGICAL_TYPE_CONVERTERS_CONFIG, true);
+    return props;
+  }
+
+  private Schema registerWithPiiRule(String fields) throws Exception {
+    AvroSchema avroSchema = new AvroSchema("{\"namespace\": \"example.avro\", "
+        + "\"type\": \"record\", \"name\": \"User\", \"fields\": [" + fields + "]}");
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
+    avroSchema = avroSchema.copy(getMetadata("kek1"), ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+    return avroSchema.rawSchema();
+  }
+
+  @Test
+  public void testKafkaAvroSerializerVariantWithConverters() throws Exception {
+    Schema schema = registerWithPiiRule("{\"name\": \"payload\", "
+        + "\"confluent:tags\": [\"PII\"], \"type\": " + VARIANT_SCHEMA + "}");
+    KafkaAvroSerializer serializer = new KafkaAvroSerializer(schemaRegistry, convertersProps());
+    KafkaAvroDeserializer deserializer =
+        new KafkaAvroDeserializer(schemaRegistry, convertersProps());
+    Variant variant = newVariant();
+    GenericRecord avroRecord = new GenericData.Record(schema);
+    avroRecord.put("payload", variant);
+
+    int expectedEncryptions = 2;
+    RecordHeaders headers = new RecordHeaders();
+    Cryptor cryptor = addSpyToCryptor(serializer);
+    byte[] bytes = serializer.serialize(topic, headers, avroRecord);
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
+    // The caller's own Variant is not overwritten with ciphertext
+    assertEquals(newVariant(), variant);
+    cryptor = addSpyToCryptor(deserializer);
+    GenericRecord record = (GenericRecord) deserializer.deserialize(topic, headers, bytes);
+    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
+    assertEquals(newVariant(), record.get("payload"));
+  }
+
+  @Test
+  public void testKafkaAvroSerializerVariantContainersWithConverters() throws Exception {
+    Schema schema = registerWithPiiRule("{\"name\": \"inUnion\", "
+        + "\"confluent:tags\": [\"PII\"], \"type\": [\"null\", \"string\", "
+        + VARIANT_SCHEMA + "]},"
+        + "{\"name\": \"inArray\", \"confluent:tags\": [\"PII\"], \"type\": "
+        + "{\"type\": \"array\", \"items\": \"confluent.type.Variant\"}},"
+        + "{\"name\": \"inMap\", \"confluent:tags\": [\"PII\"], \"type\": "
+        + "{\"type\": \"map\", \"values\": \"confluent.type.Variant\"}}");
+    KafkaAvroSerializer serializer = new KafkaAvroSerializer(schemaRegistry, convertersProps());
+    KafkaAvroDeserializer deserializer =
+        new KafkaAvroDeserializer(schemaRegistry, convertersProps());
+    GenericRecord avroRecord = new GenericData.Record(schema);
+    avroRecord.put("inUnion", newVariant());
+    avroRecord.put("inArray", new ArrayList<>(ImmutableList.of(newVariant(), newVariant())));
+    avroRecord.put("inMap", new HashMap<>(ImmutableMap.of("k", newVariant())));
+
+    // metadata and value of each of the four variants
+    int expectedEncryptions = 8;
+    RecordHeaders headers = new RecordHeaders();
+    Cryptor cryptor = addSpyToCryptor(serializer);
+    byte[] bytes = serializer.serialize(topic, headers, avroRecord);
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
+    cryptor = addSpyToCryptor(deserializer);
+    GenericRecord record = (GenericRecord) deserializer.deserialize(topic, headers, bytes);
+    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
+    assertEquals(newVariant(), record.get("inUnion"));
+    assertEquals(ImmutableList.of(newVariant(), newVariant()), record.get("inArray"));
+    Map<?, ?> map = (Map<?, ?>) record.get("inMap");
+    assertEquals(1, map.size());
+    assertEquals(newVariant(), map.values().iterator().next());
+  }
+
+  @Test
+  public void testKafkaAvroDeserializerVariantWithConverters() throws Exception {
+    // Written without converters, as a raw record; read with them
+    Schema schema = registerWithPiiRule("{\"name\": \"payload\", "
+        + "\"confluent:tags\": [\"PII\"], \"type\": " + VARIANT_SCHEMA + "}");
+    KafkaAvroDeserializer deserializer =
+        new KafkaAvroDeserializer(schemaRegistry, convertersProps());
+    GenericRecord avroRecord = new GenericData.Record(schema);
+    avroRecord.put("payload", rawVariant(schema.getField("payload").schema(), newVariant()));
+
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
+    Cryptor cryptor = addSpyToCryptor(deserializer);
+    GenericRecord record = (GenericRecord) deserializer.deserialize(topic, headers, bytes);
+    verify(cryptor, times(2)).decrypt(any(), any(), any());
+    assertEquals(newVariant(), record.get("payload"));
+  }
+
+  @Test
+  public void testKafkaAvroSerializerUntaggedVariantWithConverters() throws Exception {
+    Schema schema = registerWithPiiRule(
+        "{\"name\": \"name\", \"type\": \"string\", \"confluent:tags\": [\"PII\"]},"
+        + "{\"name\": \"payload\", \"type\": " + VARIANT_SCHEMA + "}");
+    KafkaAvroSerializer serializer = new KafkaAvroSerializer(schemaRegistry, convertersProps());
+    KafkaAvroDeserializer deserializer =
+        new KafkaAvroDeserializer(schemaRegistry, convertersProps());
+    Variant variant = newVariant();
+    GenericRecord avroRecord = new GenericData.Record(schema);
+    avroRecord.put("name", "testUser");
+    avroRecord.put("payload", variant);
+
+    int expectedEncryptions = 1;
+    RecordHeaders headers = new RecordHeaders();
+    Cryptor cryptor = addSpyToCryptor(serializer);
+    byte[] bytes = serializer.serialize(topic, headers, avroRecord);
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
+    // An unchanged Variant stays the caller's own object
+    assertTrue(avroRecord.get("payload") == variant);
+    cryptor = addSpyToCryptor(deserializer);
+    GenericRecord record = (GenericRecord) deserializer.deserialize(topic, headers, bytes);
+    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
+    assertEquals("testUser", record.get("name").toString());
+    assertEquals(newVariant(), record.get("payload"));
+  }
+
+  @Test
+  public void testKafkaAvroDeserializerInvalidVariantWithConverters() throws Exception {
+    Schema schema = registerWithPiiRule("{\"name\": \"payload\", "
+        + "\"confluent:tags\": [\"PII\"], \"type\": " + VARIANT_SCHEMA + "}");
+    KafkaAvroDeserializer deserializer =
+        new KafkaAvroDeserializer(schemaRegistry, convertersProps());
+    // Metadata version 0 is not a valid variant, and still is not once decrypted
+    GenericRecord invalid = new GenericData.Record(schema.getField("payload").schema());
+    invalid.put("metadata", ByteBuffer.wrap(new byte[] {0, 0, 0}));
+    invalid.put("value", ByteBuffer.wrap(new byte[] {0}));
+    GenericRecord avroRecord = new GenericData.Record(schema);
+    avroRecord.put("payload", invalid);
+
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
+    SerializationException e = assertThrows(SerializationException.class,
+        () -> deserializer.deserialize(topic, headers, bytes));
+    Throwable cause = e;
+    while (cause.getCause() != null) {
+      cause = cause.getCause();
+    }
+    assertTrue(cause.getMessage(),
+        cause.getMessage().contains("Unsupported variant metadata version"));
   }
 
   @Test

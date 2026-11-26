@@ -28,6 +28,7 @@ import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import io.confluent.avro.type.LogicalMapConversion;
 import io.confluent.avro.type.VariantConversion;
+import io.confluent.avro.type.VariantLogicalType;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -82,6 +83,7 @@ import java.lang.ref.WeakReference;
 import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.Map;
 
@@ -92,9 +94,13 @@ import static io.confluent.kafka.schemaregistry.avro.AvroSchema.NAME_FIELD;
 
 public class AvroSchemaUtils {
 
+  private static final VariantConversion VARIANT_CONVERSION = new VariantConversion();
   private static final GenericData GENERIC_DATA_INSTANCE =
       new NameAwareGenericData(GenericData.get());
   private static final GenericData GENERIC_DATA_INSTANCE_WITH_LOGICAL = new NameAwareGenericData();
+  // Every logical type conversion but the variant one, so a variant decodes as its raw record
+  private static final GenericData GENERIC_DATA_INSTANCE_WITH_RAW_VARIANTS =
+      new NameAwareGenericData();
   private static final ReflectData REFLECT_DATA_INSTANCE_WITH_LOGICAL = new ReflectData();
   private static final ReflectData REFLECT_DATA_ALLOW_NULL_INSTANCE_WITH_LOGICAL = new AllowNull();
   private static final SpecificData SPECIFIC_DATA_INSTANCE_WITH_LOGICAL = new SpecificData();
@@ -102,10 +108,14 @@ public class AvroSchemaUtils {
   static {
     AvroLogicalTypes.ensureRegistered();
     addLogicalTypeConversion(GENERIC_DATA_INSTANCE_WITH_LOGICAL);
+    addLogicalTypeConversion(GENERIC_DATA_INSTANCE_WITH_RAW_VARIANTS, false);
     addLogicalTypeConversion(REFLECT_DATA_INSTANCE_WITH_LOGICAL);
     addLogicalTypeConversion(REFLECT_DATA_ALLOW_NULL_INSTANCE_WITH_LOGICAL);
     addLogicalTypeConversion(SPECIFIC_DATA_INSTANCE_WITH_LOGICAL);
   }
+
+  private static final Cache<Schema, Boolean> variantSchemas =
+      CacheBuilder.newBuilder().weakKeys().build();
 
   private static final ThreadLocal<GenericData> genericData = new ThreadLocal<>();
   private static final ThreadLocal<ReflectData> reflectData = new ThreadLocal<>();
@@ -196,6 +206,111 @@ public class AvroSchemaUtils {
 
   public static GenericData getGenericData() {
     return GENERIC_DATA_INSTANCE_WITH_LOGICAL;
+  }
+
+  /**
+   * A GenericData with every logical type conversion but the variant one. A reader that uses
+   * it decodes a variant as its raw record, to be converted with {@link #toVariants} later.
+   */
+  public static GenericData getGenericDataWithRawVariants() {
+    return GENERIC_DATA_INSTANCE_WITH_RAW_VARIANTS;
+  }
+
+  private static boolean isVariant(Schema schema) {
+    return schema.getType() == Schema.Type.RECORD
+        && schema.getLogicalType() != null
+        && VariantLogicalType.NAME.equals(schema.getLogicalType().getName());
+  }
+
+  /**
+   * Whether the schema is, or contains, a variant.
+   */
+  public static boolean hasVariant(Schema schema) {
+    Boolean cached = variantSchemas.getIfPresent(schema);
+    if (cached == null) {
+      cached = hasVariant(schema, new HashSet<>());
+      variantSchemas.put(schema, cached);
+    }
+    return cached;
+  }
+
+  private static boolean hasVariant(Schema schema, Set<String> seen) {
+    switch (schema.getType()) {
+      case RECORD:
+        if (isVariant(schema)) {
+          return true;
+        }
+        if (!seen.add(schema.getFullName())) {
+          return false;
+        }
+        return schema.getFields().stream().anyMatch(f -> hasVariant(f.schema(), seen));
+      case ARRAY:
+        return hasVariant(schema.getElementType(), seen);
+      case MAP:
+        return hasVariant(schema.getValueType(), seen);
+      case UNION:
+        return schema.getTypes().stream().anyMatch(t -> hasVariant(t, seen));
+      default:
+        return false;
+    }
+  }
+
+  /**
+   * Converts each raw variant record in a value decoded with
+   * {@link #getGenericDataWithRawVariants} into a Variant, in place where it can. The Variant
+   * is validated as the variant conversion validates it.
+   */
+  @SuppressWarnings("unchecked")
+  public static Object toVariants(Schema schema, Object value) {
+    if (value == null || !hasVariant(schema)) {
+      return value;
+    }
+    switch (schema.getType()) {
+      case RECORD:
+        if (!(value instanceof IndexedRecord)) {
+          return value;
+        }
+        IndexedRecord record = (IndexedRecord) value;
+        if (isVariant(schema)) {
+          return VARIANT_CONVERSION.fromRecord(record, record.getSchema(), null);
+        }
+        for (Schema.Field f : record.getSchema().getFields()) {
+          Object old = record.get(f.pos());
+          Object converted = toVariants(f.schema(), old);
+          if (converted != old) {
+            record.put(f.pos(), converted);
+          }
+        }
+        return record;
+      case ARRAY:
+        if (value instanceof List) {
+          List<Object> list = (List<Object>) value;
+          for (int i = 0; i < list.size(); i++) {
+            Object old = list.get(i);
+            Object converted = toVariants(schema.getElementType(), old);
+            if (converted != old) {
+              list.set(i, converted);
+            }
+          }
+        }
+        return value;
+      case MAP:
+        if (value instanceof Map) {
+          for (Map.Entry<Object, Object> entry : ((Map<Object, Object>) value).entrySet()) {
+            Object old = entry.getValue();
+            Object converted = toVariants(schema.getValueType(), old);
+            if (converted != old) {
+              entry.setValue(converted);
+            }
+          }
+        }
+        return value;
+      case UNION:
+        int index = GENERIC_DATA_INSTANCE_WITH_RAW_VARIANTS.resolveUnion(schema, value);
+        return toVariants(schema.getTypes().get(index), value);
+      default:
+        return value;
+    }
   }
 
   public static ReflectData getReflectData(boolean useLogicalTypes, boolean allowNull) {
@@ -431,8 +546,14 @@ public class AvroSchemaUtils {
   }
 
   public static void addLogicalTypeConversion(GenericData avroData) {
+    addLogicalTypeConversion(avroData, true);
+  }
+
+  private static void addLogicalTypeConversion(GenericData avroData, boolean variant) {
     avroData.addLogicalTypeConversion(new LogicalMapConversion());
-    avroData.addLogicalTypeConversion(new VariantConversion());
+    if (variant) {
+      avroData.addLogicalTypeConversion(VARIANT_CONVERSION);
+    }
     avroData.addLogicalTypeConversion(new Conversions.BigDecimalConversion());
     avroData.addLogicalTypeConversion(new Conversions.DecimalConversion());
     avroData.addLogicalTypeConversion(new Conversions.DurationConversion());
