@@ -256,10 +256,7 @@ public class SchemaBackupAwareByteArrayConverter implements Converter {
             + " (topic=" + topic + ")");
       }
 
-      ParsedSchema parsed = factory.create(
-          info.getRawSchema(),
-          info.getDirectReferences(),
-          flattenTreeToResolvedMap(info));
+      ParsedSchema parsed = info.parse(factory);
       String subject = subjectName(topic, parsed);
       Integer version = info.getVersionForSubject(subject);
 
@@ -339,14 +336,8 @@ public class SchemaBackupAwareByteArrayConverter implements Converter {
         payloadBuf.get(payloadBytes);
       }
 
-      BackupReferenceResolver.ResolutionResult resolved =
-          referenceResolver.resolveFromWrapper(wschema, wrapper, factory);
-      ParsedSchema parsedSchema = factory.create(
-          rawSchema,
-          resolved.hasReferences()
-              ? resolved.getTargetRefs() : Collections.emptyList(),
-          resolved.hasReferences()
-              ? resolved.getResolvedSchemas() : Collections.emptyMap());
+      ParsedSchema parsedSchema =
+          referenceResolver.resolveRestoreSchema(wschema, wrapper, rawSchema, factory);
 
       // Derive the target subject from the RESTORE topic via the configured strategy,
       // matching what AvroConverter's serializer.serialize(topic, ...) does internally.
@@ -489,14 +480,5 @@ public class SchemaBackupAwareByteArrayConverter implements Converter {
       return SchemaBackupConfig.TYPE_JSON_SCHEMA;
     }
     return srSchemaType;
-  }
-
-  private static Map<String, String> flattenTreeToResolvedMap(BackupSchemaInfo info) {
-    Map<String, String> resolved = new LinkedHashMap<>();
-    for (Map.Entry<String, BackupSchemaFetcher.RefTreeEntry> e
-        : info.getReferenceTree().entrySet()) {
-      resolved.put(e.getKey(), e.getValue().getSchema());
-    }
-    return resolved;
   }
 }
