@@ -172,6 +172,8 @@ public class JsonSchemaConverter extends AbstractKafkaSchemaSerDe implements Con
           BackupWrapper.FIELD_DATA,
           BackupWrapper.FIELD_SCHEMA_TYPE,
           BackupWrapper.FIELD_RAW_SCHEMA);
+      BackupWrapper.requireDataEncoding(wrapperSchema, wrapper,
+          BackupWrapper.DATA_ENCODING_CONNECT, getClass().getSimpleName());
       String schemaType = wrapper.getString(BackupWrapper.FIELD_SCHEMA_TYPE);
       if (!SchemaBackupConfig.TYPE_JSON_SCHEMA.equals(schemaType)) {
         throw new DataException(

@@ -174,6 +174,8 @@ public class ProtobufConverter implements Converter {
           BackupWrapper.FIELD_DATA,
           BackupWrapper.FIELD_SCHEMA_TYPE,
           BackupWrapper.FIELD_RAW_SCHEMA);
+      BackupWrapper.requireDataEncoding(wrapperSchema, wrapper,
+          BackupWrapper.DATA_ENCODING_CONNECT, getClass().getSimpleName());
       String schemaType = wrapper.getString(BackupWrapper.FIELD_SCHEMA_TYPE);
       if (!SchemaBackupConfig.TYPE_PROTOBUF.equals(schemaType)) {
         throw new DataException(
