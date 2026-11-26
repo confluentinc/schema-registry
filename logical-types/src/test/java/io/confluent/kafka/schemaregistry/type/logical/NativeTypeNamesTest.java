@@ -362,12 +362,62 @@ class NativeTypeNamesTest {
         + "}\n");
   }
 
+  // A name Flink's writer derives is taken as derived, and the type written back takes this
+  // writer's, another type to the registry; read with names as written, it keeps its name.
+  @Test
+  void testProtoNamesFlinkDerivedAreKeptWhenReadAsWritten() {
+    ProtobufSchema original = new ProtobufSchema("syntax = \"proto3\";\n"
+        + "message Record {\n"
+        + "  optional addr_Row addr = 1;\n"
+        + "  repeated item_Row item = 2;\n"
+        + "  optional HomeRow home = 3;\n"
+        + "  message addr_Row { optional string city = 1; }\n"
+        + "  message item_Row { optional string sku = 1; }\n"
+        + "  message HomeRow { optional string city = 1; }\n"
+        + "}\n");
+    LogicalType derived = ProtoToLogicalTypeConverter.toLogicalType(original);
+    assertThat(ddl(derived)).doesNotContain("protobuf.name");
+    assertThat(LogicalTypeToProtoConverter.fromLogicalType(derived, "Record")
+        .isBackwardCompatible(original)).isNotEmpty();
+
+    LogicalType asWritten = ProtoToLogicalTypeConverter.toLogicalType(original, true);
+    assertThat(ddl(asWritten)).contains("'protobuf.name' = 'addr_Row'",
+        "'protobuf.name' = 'item_Row'", "'protobuf.name' = 'HomeRow'");
+    assertThat(LogicalTypeToProtoConverter.fromLogicalType(asWritten, "Record")
+        .isBackwardCompatible(original)).isEmpty();
+  }
+
   private static void assertProtoWritesBack(String proto) {
     ProtobufSchema original = new ProtobufSchema(proto);
     LogicalType logicalType = ProtoToLogicalTypeConverter.toLogicalType(original);
     ProtobufSchema written = LogicalTypeToProtoConverter.fromLogicalType(logicalType, "p");
     assertThat(written.isBackwardCompatible(original)).isEmpty();
     assertEquals(ddl(logicalType), ddl(ProtoToLogicalTypeConverter.toLogicalType(written)));
+  }
+
+  // A member's field name is given, and the others are named around it; read as written,
+  // every member's name is told, which the reading for display leaves out.
+  @Test
+  void testProtoMemberFieldNameIsKeptWhereGiven() {
+    String given = proto("STRUCT p (u UNION(d INT WITH ('protobuf.field.name' = 'u_d')), "
+        + "k UNION(d STRING), w UNION(d BIGINT));");
+    assertThat(given).contains("int32 u_d = 1", "string d = 2", "int64 w_d = 3");
+    assertThat(proto("STRUCT p (u UNION(d INT), k UNION(d STRING));"))
+        .contains("int32 d = 1", "string k_d = 2");
+
+    ProtobufSchema written = new ProtobufSchema(given);
+    assertThat(ddl(ProtoToLogicalTypeConverter.toLogicalType(written)))
+        .doesNotContain("protobuf.field.name");
+    LogicalType asWritten = ProtoToLogicalTypeConverter.toLogicalType(written, true);
+    assertThat(ddl(asWritten)).contains("'protobuf.field.name' = 'u_d'",
+        "'protobuf.field.name' = 'd'", "'protobuf.field.name' = 'w_d'");
+    assertEquals(given,
+        LogicalTypeToProtoConverter.fromLogicalType(asWritten, "p").canonicalString());
+
+    // A name two fields would have is refused.
+    assertThat(assertThrows(ValidationException.class, () -> proto("STRUCT p (d INT, "
+        + "u UNION(d STRING WITH ('protobuf.field.name' = 'd')));")).getMessage())
+        .contains("keeps its field name 'd', which is another field's name");
   }
 
   // A oneof member's name is taken in its message, so a generated type yields to it.

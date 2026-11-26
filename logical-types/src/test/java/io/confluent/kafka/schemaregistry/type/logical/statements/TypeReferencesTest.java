@@ -23,10 +23,12 @@ import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
+import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
 import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.AddAttribute;
 import io.confluent.kafka.schemaregistry.type.logical.statements.TypeScripts.BodyKind;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -132,6 +134,11 @@ class TypeReferencesTest {
     assertThatThrownBy(() -> TypeReferences.definedNames(down, "order",
         order.getReferences().get(0)))
         .isInstanceOf(IllegalStateException.class).hasMessage("The registry cannot be reached");
+    // As is a referred type a union's branches are judged by: it is not left out as one
+    // that cannot be read.
+    assertThatThrownBy(() -> TypeReferences.referredTypes(down, "order",
+        order.getReferences(), Map.of()))
+        .isInstanceOf(IllegalStateException.class).hasMessage("The registry cannot be reached");
     // Dropping the attribute of one type asks which references are still used.
     assertThatThrownBy(() -> TypeAlter.alter(down, "order",
         List.of(new AlterAction.DropAttribute("at", false)), new TypeAlter.Options()))
@@ -189,6 +196,23 @@ class TypeReferencesTest {
         .isInstanceOf(TypeRefusedException.class)
         .hasMessage("Types a and b would both be referred to as shared, which can name only "
             + "one of them");
+  }
+
+  // The registry binds a reference's own name before those of its references: one of them
+  // of that name is read as the reference.
+  @Test
+  void aReferencesNameIsBoundBeforeThoseBelowIt() throws Exception {
+    registry.create("inner", SchemaType.JSON, BodyKind.STRUCT, "(k INT)");
+    registry.client.register("outer", new JsonSchema("{\"type\":\"object\",\"title\":"
+        + "\"outer\",\"properties\":{\"c\":{\"$ref\":\"n\"}},\"additionalProperties\":false}",
+        List.of(new SchemaReference("n", "inner", 1)),
+        Map.of("n", registry.latest("inner").getSchema()), null));
+    assertThat(TypeReferences.firstMet(registry, "t",
+        List.of(new SchemaReference("n", "outer", 1)), new HashMap<>()))
+        .containsExactly(Map.entry("n", "outer@1"));
+    assertThat(TypeReferences.firstMet(registry, "t", List.of(
+        new SchemaReference("o", "outer", 1), new SchemaReference("n", "inner", 1)),
+        new HashMap<>())).containsExactly(Map.entry("o", "outer@1"), Map.entry("n", "inner@1"));
   }
 
   @Test
