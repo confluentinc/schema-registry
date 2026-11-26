@@ -300,9 +300,14 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
     return getCachedDatumReader(subject, writerSchemaId, writerSchema, readerSchema, false);
   }
 
-  // A reader that decodes variants raw has its own cache entries. Any other read goes through
-  // the protected getDatumReader, so a subclass overriding it still supplies the reader.
-  private DatumReader<?> getDatumReader(
+  /**
+   * Returns the reader for a read. When {@code rawVariants} is true, the reader must decode each
+   * variant as its raw record, without the variant conversion, since an encrypted variant holds
+   * ciphertext until the READ rules have run; the deserializer converts the variants afterwards.
+   * Otherwise this calls {@link #getDatumReader(String, SchemaId, Schema, Schema)}, so a subclass
+   * overriding that method still supplies the reader for every other read.
+   */
+  protected DatumReader<?> getDatumReader(
       String subject, SchemaId writerSchemaId, Schema writerSchema, Schema readerSchema,
       boolean rawVariants)
       throws ExecutionException {
