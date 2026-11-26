@@ -90,6 +90,10 @@ public final class ToLogicalContext<T> extends CycleContext<T> {
 
   private boolean foreign;
 
+  // Where each name is first read from and where the $refs of the schema itself are to, by
+  // the names they are read by.
+  private final Map<String, Set<String>> placesReferredTo = new LinkedHashMap<>();
+
   public ToLogicalContext(ParsedSchema parsedSchema) {
     this(parsedSchema, Map.of(), LogicalTypeVersion.V2);
   }
@@ -181,6 +185,26 @@ public final class ToLogicalContext<T> extends CycleContext<T> {
    */
   public void addExternalType(String name) {
     externalTypes.add(name);
+  }
+
+  /**
+   * Records where a name is first read from, or where a {@code $ref} of the schema itself is
+   * to, by the name it is read by. A name is one type: one of two places is two read as one.
+   */
+  public void addPlaceReferredTo(String name, String place) {
+    placesReferredTo.computeIfAbsent(name, n -> new LinkedHashSet<>()).add(place);
+  }
+
+  public Map<String, Set<String>> getPlacesReferredTo() {
+    return placesReferredTo;
+  }
+
+  /**
+   * Whether {@code name} is one the schema has for a schema it refers to.
+   */
+  public boolean isReferenceName(String name) {
+    return parsedSchema != null && parsedSchema.references() != null
+        && parsedSchema.references().stream().anyMatch(ref -> ref.getName().equals(name));
   }
 
   public boolean isExternalType(String name) {

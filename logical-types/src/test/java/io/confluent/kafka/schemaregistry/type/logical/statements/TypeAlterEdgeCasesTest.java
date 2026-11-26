@@ -288,21 +288,21 @@ class TypeAlterEdgeCasesTest {
   private static final String ROW = "{\"type\":\"object\",\"properties\":{\"k\":{\"type\":"
       + "\"integer\"}},";
 
-  // A $ref under each word whose value is a schema, several, or schemas
-  // by name is one the schema is read through: the document's Loc beside the type's own.
+  // A $ref under a word a name is read through is one of the schema's: the document's Loc
+  // beside the type's own is refused. Under allOf the document's is read into the
+  // attribute and no name is, and under a word that is not read nothing is.
   @Test
   void aDefinitionIsReferredToUnderEveryWordATypeIsReadThrough() throws Exception {
     json("lib", LIB);
     Map<String, String> under = new LinkedHashMap<>();
     under.put("items", "{\"type\":\"array\",\"items\":" + LOC + "}");
-    under.put("additionalProperties", ROW + "\"additionalProperties\":" + LOC + "}");
-    under.put("allOf", "{\"allOf\":[" + LOC + "]}");
     under.put("anyOf", "{\"anyOf\":[{\"type\":\"null\"}," + LOC + "]}");
     under.put("oneOf", "{\"oneOf\":[{\"type\":\"null\"}," + LOC + "]}");
     under.put("properties", "{\"type\":\"object\",\"properties\":{\"k\":" + LOC + "},"
         + "\"additionalProperties\":false}");
     // Those a type is not read through, and that are not written again.
     Map<String, String> unread = new LinkedHashMap<>();
+    unread.put("allOf", "{\"allOf\":[" + LOC + "]}");
     unread.put("prefixItems", INTS + "\"prefixItems\":[" + LOC + "]}");
     unread.put("additionalItems", INTS + "\"additionalItems\":" + LOC + "}");
     unread.put("unevaluatedItems", INTS + "\"unevaluatedItems\":" + LOC + "}");
@@ -325,10 +325,8 @@ class TypeAlterEdgeCasesTest {
           continue;
         }
         assertThatThrownBy(() -> registry.alter(type, new AddAttribute("z", "INT")))
-            .as(word.getKey()).isInstanceOf(TypeRefusedException.class).hasMessage("Type "
-                + type + " cannot be altered: it has two definitions named Loc, #/$defs/Loc "
-                + "and lib#/$defs/Loc. The two are read as one, and the one would be written "
-                + "as the other. Register its new version as a JSON schema");
+            .as(word.getKey()).isInstanceOf(TypeRefusedException.class).hasMessageMatching(
+                TestRegistry.readAsOne("altered", "Loc", "#/$defs/Loc", "lib#/$defs/Loc"));
       }
     }
     // And in a definition of the type's own an attribute is of, under either word.
@@ -341,8 +339,8 @@ class TypeAlterEdgeCasesTest {
           "lib");
       assertThatThrownBy(() -> registry.alter(type, new AddAttribute("z", "INT"))).as(word)
           .isInstanceOf(TypeRefusedException.class)
-          .hasMessageContaining("it has two definitions named Loc, #/" + word + "/Loc and "
-              + "lib#/$defs/Loc.");
+          .hasMessageMatching(TestRegistry.readAsOne("altered", "Loc", "#/" + word + "/Loc",
+              "lib#/$defs/Loc"));
     }
     // What is under a word for data, or one of a tool's own, is no schema.
     for (String data : List.of("{\"const\":" + LOC + "}",
@@ -377,10 +375,9 @@ class TypeAlterEdgeCasesTest {
         + "\"x\":{\"$ref\":\"lib#/$defs/Loc\"},\"y\":{\"$ref\":\"b#/$defs/Loc\"}},"
         + "\"additionalProperties\":false}", "lib", "b");
     assertThatThrownBy(() -> registry.alter("i4", new AddAttribute("z", "INT")))
-        .isInstanceOf(TypeRefusedException.class).hasMessage("Type i4 cannot be altered: it "
-            + "has two definitions named Loc, lib#/$defs/Loc and b#/$defs/Loc. The two are "
-            + "read as one, and the one would be written as the other. Register its new "
-            + "version as a JSON schema");
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageMatching(TestRegistry.readAsOne("altered", "Loc",
+            "lib#/$defs/Loc", "b#/$defs/Loc"));
   }
 
   // A lookup that gives a version with no list of references, as a client may.
@@ -439,8 +436,8 @@ class TypeAlterEdgeCasesTest {
     assertThatThrownBy(() -> TypeAlter.alter(nulls(), "p1",
         List.of(new AddAttribute("z", "INT")), new TypeAlter.Options()))
         .isInstanceOf(TypeRefusedException.class)
-        .hasMessageContaining("it has two definitions named Loc, #/$defs/Loc and "
-            + "#/definitions/Loc.");
+        .hasMessageMatching(TestRegistry.readAsOne("altered", "Loc",
+            "#/$defs/Loc", "#/definitions/Loc"));
   }
 
   // A reference nothing is of is looked for in a JSON type alone: a Protobuf import,
@@ -699,8 +696,8 @@ class TypeAlterEdgeCasesTest {
         + "\"y\":{\"$ref\":\"#/$defs/Loc\"}},\"additionalProperties\":false}", "lib");
     assertThatThrownBy(() -> registry.alter("m5", new AddAttribute("z", "INT")))
         .isInstanceOf(TypeRefusedException.class)
-        .hasMessageContaining("it has two definitions named Loc, #/$defs/Loc and "
-            + "lib#/$defs/Loc.");
+        .hasMessageMatching(TestRegistry.readAsOne("altered", "Loc",
+            "#/$defs/Loc", "lib#/$defs/Loc"));
   }
 
   // A $defs that is no object has no entry to leave out, and the type is altered.

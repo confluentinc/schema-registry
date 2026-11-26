@@ -128,9 +128,29 @@ public class JsonToLogicalTypeConverter {
     }
   }
 
+  /**
+   * Where each name is first read from, and where the {@code $ref}s of the schema itself are
+   * to, as the loader resolved them, by the names the type is read by. A {@code $ref} in a
+   * document referred to is that document's, and not among them.
+   */
+  public static Map<String, Set<String>> placesReferredTo(final JsonSchema schema) {
+    final ToLogicalContext<String> ctx =
+        new ToLogicalContext<>(schema, Map.of(), LogicalTypeVersion.V2);
+    try {
+      toLogicalTypeInternal(schema, ctx);
+    } catch (StackOverflowError e) {
+      throw new TypeTooDeepException("JSON schema nests types too deeply to convert");
+    }
+    return ctx.getPlacesReferredTo();
+  }
+
   private static LogicalType toLogicalTypeInternal(
       final JsonSchema schema, final LogicalTypeVersion version) {
-    final ToLogicalContext<String> ctx = new ToLogicalContext<>(schema, Map.of(), version);
+    return toLogicalTypeInternal(schema, new ToLogicalContext<>(schema, Map.of(), version));
+  }
+
+  private static LogicalType toLogicalTypeInternal(
+      final JsonSchema schema, final ToLogicalContext<String> ctx) {
     // Recover named types from $defs (entries are keyed by qualified name).
     recoverNamedTypesFromDefs(schema, ctx);
     final Schema logicalType =
@@ -285,6 +305,14 @@ public class JsonToLogicalTypeConverter {
    * {@code $ref}'d schema (rather than on the ref-using property itself) are
    * not missed.
    */
+  // Where a $ref is to, as the loader resolved it, through any $ref that is all there is
+  // there; as it is said, where the loader has no place for it.
+  private static String placeOf(org.everit.json.schema.Schema ref, String said) {
+    org.everit.json.schema.Schema to = resolveReference(ref);
+    String place = to instanceof ReferenceSchema ? null : to.getSchemaLocation();
+    return place != null ? place : said;
+  }
+
   private static org.everit.json.schema.Schema resolveReference(
       org.everit.json.schema.Schema schema) {
     // A definition that only refers to itself, however indirectly, resolves to no schema.
@@ -374,6 +402,7 @@ public class JsonToLogicalTypeConverter {
       }
       org.everit.json.schema.Schema defSchema =
           (org.everit.json.schema.Schema) entry.getValue();
+      ctx.addPlaceReferredTo(entry.getKey(), placeOf(defSchema, "#/$defs/" + entry.getKey()));
       // Synthetic-wrapper detection: the raw JSON entry carries
       // `"logical.ref": true` alongside `$ref`. Register as a synthetic
       // external and lazy-promote the body via the referred schema, so
@@ -512,6 +541,18 @@ public class JsonToLogicalTypeConverter {
         // placeholder first to short-circuit recursion if the body refers back
         // to its own name.
         boolean wasKnown = ctx.hasNamedType(typeName);
+        // Where the name is first read from, and where each $ref of the schema itself
+        // that is read by it is to.
+        String place = placeOf(refSchema, refValue);
+        if (!wasKnown || !ctx.isForeign()) {
+          ctx.addPlaceReferredTo(typeName, place);
+        }
+        // A definition's name that the schema has for a document it refers to is read as
+        // that document, unless the definition is the document's own.
+        if (!ctx.isForeign() && !synthetic && ctx.isReferenceName(typeName)
+            && !place.startsWith(typeName + "#")) {
+          ctx.addPlaceReferredTo(typeName, typeName);
+        }
         // What a $ref to another document is to is that document's, and so is what a $ref
         // in it is to, a part of that document itself ("#/...") as much as another's.
         boolean foreign = ctx.isForeign() || !refValue.startsWith("#");

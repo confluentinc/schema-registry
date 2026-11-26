@@ -51,11 +51,8 @@ import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTyp
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceReport;
 import java.io.IOException;
-import java.net.URI;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -93,12 +90,7 @@ public final class TypeAlter {
   private static final int RESERVED_FIRST = 19_000;
   private static final int RESERVED_LAST = 19_999;
   private static final int MAX_NUMBER = 536_870_911;
-  // The words of a JSON schema whose values are schemas, those whose values are schemas by
-  // name, and those that say nothing of what a value is.
-  // The words of a JSON schema the reader reads a type through; what is under another, as
-  // not or patternProperties, tells the type nothing and is not written again.
-  private static final Set<String> SCHEMAS = Set.of("items", "additionalProperties", "allOf",
-      "anyOf", "oneOf");
+  // The words of a JSON schema that say nothing of what a value is.
   private static final Set<String> SAYS_NOTHING = Set.of("$ref", "title", "description",
       "$comment", "default", "examples", "deprecated", "readOnly", "writeOnly",
       "contentMediaType", "contentEncoding", "connect.index", "logical.ref");
@@ -223,6 +215,8 @@ public final class TypeAlter {
   private final Map<String, String> externalImports = new LinkedHashMap<>();
   private final List<SchemaReference> references = new ArrayList<>();
   private final Map<String, String> resolved = new LinkedHashMap<>();
+  // Where the $refs of the JSON schema edited go, by the names the type is read by.
+  private Map<String, Set<String>> placesStored = Map.of();
   // The Protobuf field numbers of every version.
   private final TreeSet<Integer> usedNumbers = new TreeSet<>();
   // The root message of the version being edited, and of every version, for the numbers
@@ -499,7 +493,7 @@ public final class TypeAlter {
       dropStaleAliases();
       recompileRules();
       if (format == SchemaType.JSON) {
-        refuseDefinitionNamedAsReference(md);
+        refuseReadAsOne(md);
         restoreDirectRefs();
       }
       dropUnusedReferences();
@@ -533,7 +527,9 @@ public final class TypeAlter {
           // And by the definitions of the documents referred to, as the two schemas have
           // them: each at the version its reference is to.
           refuseNewOverlaps(stored, written);
-          refuseDefinitionNamedAsCalled(written, "changed so");
+          if (written instanceof JsonSchema) {
+            refuseReadAsOne((JsonSchema) written, "changed so");
+          }
         }
         refuseOtherColumns(md, edited, version);
         refuseIncompatible(lookup, subject, format, md, softDeleted, versions, edited, policy,
@@ -1953,10 +1949,12 @@ public final class TypeAlter {
     // of is dropped too, unless taken away it would leave a name another type or version.
     Set<String> freed = new HashSet<>(unused);
     unused.forEach(name -> {
+      // The document of what the name was for: of a definition, the one its $ref was to.
       String uri = externalImports.get(name);
-      if (uri != null) {
-        freed.add(uri.contains("#") ? uri.substring(0, uri.indexOf('#')) : uri);
-      }
+      Set<String> places = uri != null ? Set.of(uri) : placesStored.getOrDefault(name, Set.of());
+      places.stream().filter(place -> place.indexOf('#') != 0)
+          .forEach(place -> freed.add(place.contains("#")
+              ? place.substring(0, place.indexOf('#')) : place));
     });
     Predicate<SchemaReference> unnamed = ref -> !used.contains(ref.getName())
         && definitionsOf(ref).stream().noneMatch(definitions::contains);
@@ -2224,52 +2222,119 @@ public final class TypeAlter {
     return used;
   }
 
-  // A JSON name is one type's. A schema with a definition, its own or one of a document it
-  // refers to, of the name of a document it refers to is read with the two as one, and
-  // would be written with every attribute of the definition as one of the document.
-  private void refuseDefinitionNamedAsReference(SchemaMetadata md) {
+  // A JSON name is one type's, and a definition is read by its name alone, whichever
+  // document it is of. A schema written by hand may have $refs of its own to two places
+  // that are read by one name: the two are read as one, and a statement would write the
+  // one as the other. Told by where the loader has each $ref go. What a document referred
+  // to refers to is not this type's to write.
+  private void refuseReadAsOne(SchemaMetadata md) {
     ParsedSchema stored = lookup.parse(md);
-    if (!(stored instanceof JsonSchema)) {
-      return;
+    if (stored instanceof JsonSchema) {
+      refuseIdOfADocument((JsonSchema) stored);
+      placesStored = refuseReadAsOne((JsonSchema) stored, "altered");
+      refuseNameThatSaysMore(((JsonSchema) stored).toJsonNode());
     }
-    LogicalType read = readAlone(stored);
-    List<Use> uses = uses((JsonSchema) stored, read, true);
-    // A part of the schema itself is called so too, which takes no reference.
-    refuseDefinitionNamedAsCalled((JsonSchema) stored, read, uses, "altered");
-    JsonNode schema = ((JsonSchema) stored).toJsonNode();
-    Set<String> documents = new HashSet<>();
-    if (md.getReferences() != null) {
-      md.getReferences().forEach(r -> documents.add(r.getName()));
+  }
+
+  private Map<String, Set<String>> refuseReadAsOne(JsonSchema schema, String done) {
+    Map<String, Set<String>> places;
+    try {
+      places = places(schema);
+    } catch (BesideARef e) {
+      throw new TypeRefusedException("Type " + subject + " cannot be " + done + ": it refers "
+          + "to " + e.place + ", which is beside the $ref of " + e.ref + " and would be "
+          + "written no more. Register its new version as a JSON schema");
     }
-    for (Use use : uses) {
-      // The name a definition is read by, wherever in a document it is.
-      String to = use.target;
-      String name = JsonToLogicalTypeConverter.extractCanonicalDefsKey(to);
-      String of = to.contains("#") ? to.substring(0, to.indexOf('#')) : to;
-      if (!use.from.isEmpty() || use.entry || use.unnamed || name == null
-          || !documents.contains(name) || name.equals(of)) {
-        continue;
-      }
-      // A definition that only names the document is that document: one that says no more
-      // of what a value is, as the writer writes a name the type has for the document.
-      JsonNode own = definition(schema, to);
-      boolean only = true;
-      for (Iterator<String> said = own.fieldNames(); said.hasNext(); ) {
-        String word = said.next();
-        only &= SAYS_NOTHING.contains(word) || word.startsWith("x-");
-      }
-      if (of.isEmpty() && only && name.equals(own.path("$ref").asText(null))) {
-        continue;
-      }
-      throw new TypeRefusedException("Type " + subject + " cannot be altered: it has a "
-          + "definition named " + name + (of.isEmpty() ? " of its own" : " of " + of)
-          + ", and refers to a type by that name. The two are read as one, and the "
-          + "definition would be written as that type. Register its new version as a JSON "
-          + "schema");
+    if (places == null) {
+      return Map.of();
     }
-    refuseDefinitionsOfOneName(schema, uses, later(schema)
-        ? ((JsonSchema) stored).resolvedReferences().keySet() : Set.of());
-    refuseNameThatSaysMore(schema);
+    for (Map.Entry<String, Set<String>> named : places.entrySet()) {
+      if (named.getValue().size() > 1) {
+        Iterator<String> two = named.getValue().iterator();
+        throw new TypeRefusedException("Type " + subject + " cannot be " + done + ": it refers "
+            + "to " + two.next() + " and to " + two.next() + ", which are both read by the "
+            + "name " + named.getKey() + ". The two are read as one, and the one would be "
+            + "written as the other. Register its new version as a JSON schema");
+      }
+    }
+    return places;
+  }
+
+  // Where the $refs of a schema's own go, and where each name was first read from, by the
+  // names the type as read has: each place as the document it is in has it, under $defs
+  // or definitions. Null where the schema is not read.
+  private static Map<String, Set<String>> places(JsonSchema schema) {
+    Map<String, Set<String>> read;
+    try {
+      read = JsonToLogicalTypeConverter.placesReferredTo(schema);
+    } catch (RuntimeException e) {
+      return null;
+    }
+    Map<String, JsonNode> documents = new HashMap<>();
+    Map<String, Set<String>> places = new LinkedHashMap<>();
+    for (Map.Entry<String, Set<String>> named : read.entrySet()) {
+      for (String place : named.getValue()) {
+        int hash = place.indexOf('#');
+        String in = hash < 0 ? place : place.substring(0, hash);
+        String part = hash < 0 ? "" : place.substring(hash + 1);
+        JsonNode document = documents.computeIfAbsent(in, name -> document(schema, name));
+        part = defined(document, part);
+        if (in.isEmpty()) {
+          refuseBesideARef(document, part);
+        }
+        places.computeIfAbsent(named.getKey(), name -> new LinkedHashSet<>())
+            .add(part.isEmpty() ? (in.isEmpty() ? "#" : in) : in + "#" + part);
+      }
+    }
+    return places;
+  }
+
+  // A place of the schema's own under a schema that is a $ref: what is beside a $ref is
+  // not written again, and a $ref to it would be to nothing.
+  private static void refuseBesideARef(JsonNode document, String part) {
+    for (int at = part.indexOf('/', 1); at > 0; at = part.indexOf('/', at + 1)) {
+      if (definition(document, "#" + part.substring(0, at)).path("$ref").isTextual()) {
+        throw new BesideARef("#" + part, "#" + part.substring(0, at));
+      }
+    }
+  }
+
+  private static final class BesideARef extends RuntimeException {
+    final String place;
+    final String ref;
+
+    BesideARef(String place, String ref) {
+      super(null, null, false, false);
+      this.place = place;
+      this.ref = ref;
+    }
+  }
+
+  // The schema itself, or a document it refers to by the name it has for it.
+  private static JsonNode document(JsonSchema schema, String name) {
+    String text = name.isEmpty() ? null : schema.resolvedReferences().get(name);
+    try {
+      return name.isEmpty() ? schema.toJsonNode() : text == null ? MissingNode.getInstance()
+          : JacksonMapper.INSTANCE.readTree(text);
+    } catch (IOException e) {
+      return MissingNode.getInstance();
+    }
+  }
+
+  // A schema whose own name is the name it has for a document it refers to: the loader has
+  // a $ref by that name go to either, by the order it comes to them.
+  private void refuseIdOfADocument(JsonSchema schema) {
+    JsonNode root = schema.toJsonNode();
+    for (String word : List.of("$id", "id")) {
+      String id = root.path(word).isTextual() ? root.path(word).asText() : "";
+      if (schema.resolvedReferences().containsKey(
+          id.endsWith("#") ? id.substring(0, id.length() - 1) : id)) {
+        throw new TypeRefusedException("Type " + subject + " cannot be altered: its " + word
+            + ", " + id + ", is the name it has for a schema it refers to as well, and what a "
+            + "$ref by that name is to cannot be told. Register its new version as a JSON "
+            + "schema");
+      }
+    }
   }
 
   // A name the type has for what it refers to is written as that name alone. In a later
@@ -2299,69 +2364,6 @@ public final class TypeAlter {
     }
   }
 
-  // A definition is read by its name alone, whichever document it is of: two of one name,
-  // the type's own and a document's or those of two documents, are read as one, and the
-  // next statement would write every attribute of the one as the other's. Told through
-  // the documents the schema refers to, as far as its $refs reach: a name the schema itself
-  // uses, that is, as what two documents have between them is not this type's to write.
-  private void refuseDefinitionsOfOneName(JsonNode root, List<Use> uses,
-      Set<String> references) {
-    Map<String, Set<String>> named = new LinkedHashMap<>();
-    Set<String> own = new HashSet<>();
-    for (Use use : uses) {
-      String name = JsonToLogicalTypeConverter.extractCanonicalDefsKey(use.target);
-      if (name == null || use.entry) {
-        continue;
-      }
-      // A name the type has for what it refers to is that, and no definition of its own.
-      JsonNode called = use.target.startsWith("#") ? definition(root, use.target)
-          : MissingNode.getInstance();
-      named.computeIfAbsent(name, n -> new LinkedHashSet<>())
-          .add(entry(called) ? local(root, called.path("$ref").asText(), references)
-            : use.target);
-      // By a $ref its attributes come to: a definition none is to is not the schema using
-      // the name, nor is what such a one names, as the copies of a document's definitions
-      // that a statement left in it are not. Nor, in a later draft, is a name the type has
-      // for what it refers to: read before all else there, it is written as that whatever
-      // else is so named. In an older draft it is read as any definition is, by its name.
-      if (use.from.isEmpty() && use.reached && !(entry(called) && later(root))) {
-        own.add(name);
-      }
-    }
-    named.forEach((name, targets) -> {
-      if (targets.size() > 1 && own.contains(name)) {
-        Iterator<String> two = targets.iterator();
-        throw new TypeRefusedException("Type " + subject + " cannot be altered: it has two "
-            + "definitions named " + name + ", " + two.next() + " and " + two.next()
-            + ". The two are read as one, and the one would be written as the other. "
-            + "Register its new version as a JSON schema");
-      }
-    });
-  }
-
-  // A $ref a schema is read through: the document it is in, by the name the schema refers
-  // to it by and none for the schema itself; what it is to, a part of the schema itself as
-  // #/..., a document or a part of one by the document's name; and whether it is the $ref
-  // of an entry the writer writes for a name, which is read by that name.
-  // Or no $ref but a definition of the schema's own that the type as read has, though
-  // none is to it: told as a $ref of the schema to it would be. A use is reached where
-  // the schema's attributes come to it, and not where only such a definition does.
-  private static final class Use {
-    final String from;
-    final String target;
-    final boolean entry;
-    final boolean unnamed;
-    final boolean reached;
-
-    Use(String from, String target, boolean entry, boolean unnamed, boolean reached) {
-      this.from = from;
-      this.target = target;
-      this.entry = entry;
-      this.unnamed = unnamed;
-      this.reached = reached;
-    }
-  }
-
   private static boolean entry(JsonNode definition) {
     return definition.path("logical.ref").asBoolean() && definition.path("$ref").isTextual();
   }
@@ -2373,63 +2375,6 @@ public final class TypeAlter {
     } catch (RuntimeException e) {
       return null;
     }
-  }
-
-  // The $refs a schema is read through, from its root: through the parts of itself they
-  // are to, wherever those are, and where asked through the documents it refers to. A
-  // definition of its own that none reaches is gone through where the type as read has it,
-  // as a schema of a later draft is read with each of its $defs.
-  private static List<Use> uses(JsonSchema schema, LogicalType read, boolean below) {
-    JsonNode root = schema.toJsonNode();
-    // From draft 2019-09 on, what is beside a $ref is read with it, each of the root's
-    // $defs is read whether a $ref is to it or not, and a reference's name is that
-    // reference whatever the schema's $id; before, none of the three.
-    boolean beside = later(root);
-    Map<String, JsonNode> documents = new HashMap<>();
-    documents.put("", root);
-    List<Use> uses = new ArrayList<>();
-    Set<String> gone = new HashSet<>();
-    Deque<String[]> todo = new ArrayDeque<>();
-    todo.add(new String[] {"", ""});
-    boolean kept = false;
-    while (!todo.isEmpty() || !kept) {
-      if (todo.isEmpty()) {
-        kept = true;
-        unreached(root, beside ? read : null, gone).forEach(at -> {
-          todo.add(new String[] {"", at});
-          uses.add(new Use("", "#" + at, false, true, false));
-        });
-        continue;
-      }
-      String[] at = todo.pop();
-      if (!gone.add(at[0] + " " + at[1]) || !below && !at[0].isEmpty()) {
-        continue;
-      }
-      JsonNode document = documents.computeIfAbsent(at[0], name -> {
-        try {
-          String text = schema.resolvedReferences().get(name);
-          return text == null ? MissingNode.getInstance()
-              : JacksonMapper.INSTANCE.readTree(text);
-        } catch (IOException e) {
-          return MissingNode.getInstance();
-        }
-      });
-      JsonNode node = at[1].isEmpty() ? document : definition(document, "#" + at[1]);
-      boolean entry = at[0].isEmpty() && entry(node);
-      List<String> refs = new ArrayList<>();
-      collectRefs(node, refs, beside);
-      for (String ref : refs) {
-        String to = local(document, ref,
-            beside ? schema.resolvedReferences().keySet() : Set.of());
-        int hash = to.indexOf('#');
-        String in = hash == 0 ? at[0] : hash < 0 ? to : to.substring(0, hash);
-        String part = defined(hash == 0 ? document : documents.get(in),
-            hash < 0 ? "" : to.substring(hash + 1));
-        todo.add(new String[] {in, part});
-        uses.add(new Use(at[0], part.isEmpty() ? in : in + "#" + part, entry, false, !kept));
-      }
-    }
-    return uses;
   }
 
   private static boolean later(JsonNode root) {
@@ -2452,80 +2397,6 @@ public final class TypeAlter {
     return part;
   }
 
-  // The definitions of the schema's own that no $ref reached and the type as read has all
-  // the same, by their places: a later draft reads each of them, but for one under
-  // definitions of the name of one under $defs, which that one stands for.
-  private static List<String> unreached(JsonNode root, LogicalType read, Set<String> gone) {
-    List<String> places = new ArrayList<>();
-    if (read == null) {
-      return places;
-    }
-    for (String word : List.of("$defs", "definitions")) {
-      root.path(word).fieldNames().forEachRemaining(name -> {
-        // Not a name the type as read has for a document's definition alone.
-        if (!gone.contains(" /" + word + "/" + name) && read.getNamedTypes().containsKey(name)
-            && !read.getExternalTypes().contains(name)
-            && !(word.equals("definitions") && root.path("$defs").has(name))) {
-          places.add("/" + word + "/" + name);
-        }
-      });
-    }
-    return places;
-  }
-
-  // A $ref as it is to the document it is in: one that names the document by its $id (or
-  // id, as an older draft has it), or relative to it, is to a part of the document itself.
-  private static String local(JsonNode document, String ref, Set<String> references) {
-    String id = document.path("$id").asText(document.path("id").asText(""));
-    // A reference's name is that reference, whatever $id the document has.
-    String named = ref.indexOf('#') < 0 ? ref : ref.substring(0, ref.indexOf('#'));
-    if (id.isEmpty() || ref.startsWith("#") || references.contains(named)) {
-      return ref;
-    }
-    String own = id.indexOf('#') < 0 ? id : id.substring(0, id.indexOf('#'));
-    try {
-      String to = URI.create(own).resolve(ref).toString();
-      return to.equals(own) ? "#" : to.startsWith(own + "#") ? to.substring(own.length()) : ref;
-    } catch (IllegalArgumentException e) {
-      return ref;
-    }
-  }
-
-  // The type as read calls a document it refers to whole, or a part of one that is no
-  // definition, by a name it makes: Ref1, Ref2. A schema with a definition of such a name is
-  // read with the two as one, and the next statement would write the one as the other.
-  private void refuseDefinitionNamedAsCalled(ParsedSchema schema, String done) {
-    if (schema instanceof JsonSchema) {
-      LogicalType read = readAlone(schema);
-      refuseDefinitionNamedAsCalled((JsonSchema) schema, read,
-          uses((JsonSchema) schema, read, false), done);
-    }
-  }
-
-  private void refuseDefinitionNamedAsCalled(JsonSchema schema, LogicalType read,
-      List<Use> uses, String done) {
-    if (read == null) {
-      return;
-    }
-    Map<String, String> called = read.getExternalImports();
-    JsonNode json = schema.toJsonNode();
-    for (Use use : uses) {
-      String to = use.target;
-      String name = JsonToLogicalTypeConverter.extractCanonicalDefsKey(to);
-      // A definition of the schema's own that names what is so called is how the name is
-      // written, and no other type.
-      if (use.from.isEmpty() && !use.entry && !use.unnamed && name != null
-          && called.containsKey(name)
-          && !to.equals(called.get(name)) && !(to.startsWith("#") && called.get(name).equals(
-              definition(json, to).path("$ref").asText(null)))) {
-        throw new TypeRefusedException("Type " + subject + " cannot be " + done + ": it "
-            + "has a definition named " + name + ", which is what " + toldAs(called.get(name))
-            + ". The two are read as one, and the one would be written as the other. "
-            + "Register its new version as a JSON schema");
-      }
-    }
-  }
-
   // What the type as read gives a name of its making to, as a refusal tells it: a document
   // whole, with or without a # after its name, or a part of one.
   private static String toldAs(String to) {
@@ -2535,33 +2406,6 @@ public final class TypeAlter {
     }
     return (hash < 0 || hash == to.length() - 1 ? "a type is called that it refers to whole: "
         : "a part of a schema is called that it refers to: ") + to;
-  }
-
-  // The $refs of a schema and of the schemas in it the reader reads a type through: its
-  // properties, whatever their names, and what is under a word for a type's own schemas.
-  // What is under any other word is not read: not, patternProperties, const, examples, a
-  // tool's own. A schema that is a $ref is that alone, unless what is beside it is read
-  // too. A definition is read where a $ref is to it.
-  private static void collectRefs(JsonNode schema, List<String> refs, boolean beside) {
-    if (schema.isArray()) {
-      schema.forEach(item -> collectRefs(item, refs, beside));
-    }
-    if (!schema.isObject()) {
-      return;
-    }
-    if (schema.path("$ref").isTextual()) {
-      refs.add(schema.path("$ref").asText());
-      if (!beside) {
-        return;
-      }
-    }
-    schema.fields().forEachRemaining(said -> {
-      if (said.getKey().equals("properties") && said.getValue().isObject()) {
-        said.getValue().forEach(named -> collectRefs(named, refs, beside));
-      } else if (SCHEMAS.contains(said.getKey())) {
-        collectRefs(said.getValue(), refs, beside);
-      }
-    });
   }
 
   // What a $ref to a part of the schema itself is to, or nothing where it is to none.

@@ -417,14 +417,90 @@ class TypeAlterMoreEdgeCasesTest {
     assertThat(version("q2")).isEqualTo(2);
   }
 
-  // As where the schema's $id is the reference's name: the name is the reference's.
+  // A schema whose $id is the reference's name is not altered: a $ref by that name is to
+  // either, as the loader comes to them.
   @Test
-  void aNameForADocumentsDefinitionIsTheReferencesThoughTheIdIsItsName() throws Exception {
+  void aSchemaWhoseIdIsAReferencesNameIsNotAltered() throws Exception {
     json("lib", String.format(LIBS, "lib", P));
     json("n9", "{\"$id\":\"lib\"," + later("n9").substring(1)
         + String.format(ENTRY, "lib#/$defs/Loc", "lib"), "lib");
-    registry.alter("n9", new AddAttribute("z", "INT"));
-    assertThat(version("n9")).isEqualTo(2);
+    refused("Type n9 cannot be altered: its $id, lib, is the name it has for a schema it "
+        + "refers to as well", "n9", new AddAttribute("z", "INT"));
+    // By either word for a schema's name, whichever the draft reads.
+    json("n8", "{\"id\":\"lib\"," + head("n8").substring(1) + "\"y\":{\"$ref\":"
+        + "\"lib#/$defs/Loc\"}" + CLOSED, "lib");
+    refused("Type n8 cannot be altered: its id, lib, is the name", "n8",
+        new AddAttribute("z", "INT"));
+  }
+
+  private void refusedAsOne(String subject, String name, String one, String other) {
+    assertThatThrownBy(() -> registry.alter(subject, new AddAttribute("z", "INT")))
+        .as(subject).isInstanceOf(TypeRefusedException.class)
+        .hasMessageMatching(TestRegistry.readAsOne("altered", name, one, other));
+    assertThat(version(subject)).isEqualTo(1);
+  }
+
+  // A document read into an attribute, under allOf, is the schema's own to write: a
+  // definition of it named as a name the type has for another, or as a definition of the
+  // type's own that no $ref is to, is read as that one and refused.
+  @Test
+  void aDocumentReadIntoTheTypeIsNotReadAsOneWithTheTypesOwnNames() throws Exception {
+    json("o5", String.format(ROW, "o5", "o", "{\"type\":\"string\"}", ""));
+    json("via2", "{\"type\":\"object\",\"title\":\"via2\",\"properties\":{\"v\":{\"$ref\":"
+        + "\"#/$defs/Y\"}},\"additionalProperties\":false,\"$defs\":{\"Y\":{\"enum\":[\"A\"]}}}");
+    json("ra", later("ra") + "\"a\":{\"$ref\":\"#/$defs/Y\"},\"b\":{\"allOf\":[{\"$ref\":"
+        + "\"via2\"}]}},\"additionalProperties\":false,\"$defs\":{\"Y\":{\"$ref\":\"o5\","
+        + "\"logical.ref\":true}}}", "o5", "via2");
+    refusedAsOne("ra", "Y", "o5", "via2#/$defs/Y");
+    json("lib2", String.format(LIBS, "lib2", P));
+    json("ru", later("ru") + "\"b\":{\"allOf\":[{\"$ref\":\"lib2\"}]}},"
+        + "\"additionalProperties\":false,\"$defs\":{\"Loc\":" + Q + "}}", "lib2");
+    refusedAsOne("ru", "Loc", "#/$defs/Loc", "lib2#/$defs/Loc");
+  }
+
+  // A document's definition under definitions is come to by $defs too, and what it names
+  // is read: the document's Loc beside the type's own is refused. One definition named
+  // by both words is one, and the type is altered again.
+  @Test
+  void aDefinitionUnderDefinitionsIsOneByEitherWord() throws Exception {
+    json("libd", "{\"type\":\"object\",\"title\":\"libd\",\"additionalProperties\":false,"
+        + "\"definitions\":{\"B\":{\"type\":\"object\",\"properties\":{\"in\":{\"$ref\":"
+        + "\"#/definitions/Loc\"}},\"additionalProperties\":false},\"Loc\":" + P + "}}");
+    json("db", head("db") + "\"x\":{\"$ref\":\"#/$defs/Loc\"},\"y\":{\"allOf\":[{\"$ref\":"
+        + "\"libd#/$defs/B\"}]}},\"additionalProperties\":false,\"$defs\":{\"Loc\":" + Q + "}}",
+        "libd");
+    refusedAsOne("db", "Loc", "#/$defs/Loc", "libd#/definitions/Loc");
+    json("dt", head("dt") + "\"a\":{\"$ref\":\"libd#/definitions/Loc\"},\"b\":{\"$ref\":"
+        + "\"#/$defs/Y\"}},\"additionalProperties\":false,\"$defs\":{\"Y\":{\"type\":\"object\","
+        + "\"properties\":{\"v\":{\"$ref\":\"libd#/definitions/Loc\"}}}}}", "libd");
+    registry.alter("dt", new AddAttribute("z", "INT"));
+    registry.alter("dt", new AddAttribute("z2", "INT"));
+    assertThat(version("dt")).isEqualTo(3);
+  }
+
+  // A $schema the loader knows for no draft is read as an older one, where what is beside
+  // a $ref is not read: no second definition is come to, and the type is altered.
+  @Test
+  void aSchemaOfNoDraftTheLoaderKnowsIsReadAsAnOlderOne() throws Exception {
+    json("lib", LIB);
+    json("nd", "{\"$schema\":\"x-test://meta/draft/2020-12/schema\"," + head("nd").substring(1)
+        + "\"x\":{\"$ref\":\"#/$defs/Loc\",\"properties\":{\"zz\":{\"$ref\":\"lib#/$defs/Loc\"}}}},"
+        + "\"additionalProperties\":false,\"$defs\":{\"Loc\":" + Q + "}}", "lib");
+    registry.alter("nd", new AddAttribute("z", "INT"));
+    assertThat(version("nd")).isEqualTo(2);
+  }
+
+  // The document of a definition the statement leaves no attribute of goes with it,
+  // though it binds a name below another that stays: the way out of two versions.
+  @Test
+  void theDocumentOfADefinitionTheStatementFreesGoes() throws Exception {
+    bvBelowTwo();
+    jsonRefs("fd", head("fd") + "\"a\":{\"$ref\":\"libx#/$defs/Loc\"},\"c\":{\"$ref\":\"cbv\"}"
+        + CLOSED, List.of(new SchemaReference("libx", "libx", 1),
+        new SchemaReference("cbv", "cbv", 1)), "bv=bv@1", "libx=libx@1", "cbv=cbv@1");
+    registry.alter("fd", new DropAttribute("a", false));
+    assertThat(version("fd")).isEqualTo(2);
+    assertThat(references("fd")).containsExactly("cbv");
   }
 
   // References as name=subject, at the latest version.
@@ -463,8 +539,8 @@ class TypeAlterMoreEdgeCasesTest {
         "x-test://q/a.json2=lib");
     assertThatThrownBy(() -> registry.alter("l9", new AddAttribute("z", "INT")))
         .isInstanceOf(TypeRefusedException.class)
-        .hasMessageContaining("it has two definitions named Loc, #/$defs/Loc and "
-            + "a.json2#/$defs/Loc.");
+        .hasMessageMatching(TestRegistry.readAsOne("altered", "Loc", "#/$defs/Loc",
+            "x-test://q/a.json2#/$defs/Loc"));
   }
 
   // A definition under definitions that no $ref is to is read by a later draft too.
@@ -475,23 +551,23 @@ class TypeAlterMoreEdgeCasesTest {
         + "false,\"definitions\":{\"Loc\":" + Q + "}}", "lib");
     assertThatThrownBy(() -> registry.alter("y2", new AddAttribute("z", "INT")))
         .isInstanceOf(TypeRefusedException.class)
-        .hasMessageContaining("it has two definitions named Loc, lib#/$defs/Loc and "
-            + "#/definitions/Loc.");
+        .hasMessageMatching(TestRegistry.readAsOne("altered", "Loc",
+            "lib#/$defs/Loc", "#/definitions/Loc"));
   }
 
-  // A name a document has for another's definition is a use of that definition.
+  // A name a document has for another's definition is that document's to read: the type
+  // writes its own of that name and the document whole, and is altered.
   @Test
-  void aDocumentsNameForAnothersDefinitionIsAUseOfIt() throws Exception {
+  void aDocumentsNameForAnothersDefinitionIsTheDocuments() throws Exception {
     json("other", String.format(LIBS, "other", Q));
     json("libe", "{" + LATER + "\"type\":\"object\",\"title\":\"libe\",\"properties\":{\"l\":"
         + "{\"$ref\":\"#/$defs/A\"}},\"additionalProperties\":false,\"$defs\":{\"A\":{\"$ref\":"
         + "\"other#/$defs/Loc\",\"logical.ref\":true}}}", "other");
     json("z6", later("z6") + "\"x\":{\"$ref\":\"#/$defs/Loc\"},\"a\":{\"$ref\":\"libe\"}},"
         + "\"additionalProperties\":false,\"$defs\":{\"Loc\":" + P + "}}", "libe", "other");
-    assertThatThrownBy(() -> registry.alter("z6", new AddAttribute("z", "INT")))
-        .isInstanceOf(TypeRefusedException.class)
-        .hasMessageContaining("it has two definitions named Loc, #/$defs/Loc and "
-            + "other#/$defs/Loc.");
+    registry.alter("z6", new AddAttribute("z", "INT"));
+    assertThat(registry.schema("z6").canonicalString()).contains("{\"$ref\":\"#/$defs/Loc\"}")
+        .contains("{\"$ref\":\"libe\"}").contains("\"required\":[\"p\"]");
   }
 
   // A document that names its own definition by its $id is told by the name the
@@ -517,8 +593,8 @@ class TypeAlterMoreEdgeCasesTest {
         + ",\"B\":" + String.format(row, "#/$defs/Loc") + ",\"Loc\":" + Q + "}}", "lib");
     assertThatThrownBy(() -> registry.alter("z18", new AddAttribute("z", "INT")))
         .isInstanceOf(TypeRefusedException.class)
-        .hasMessageContaining("it has two definitions named Loc, lib#/$defs/Loc and "
-            + "#/$defs/Loc.");
+        .hasMessageMatching(TestRegistry.readAsOne("altered", "Loc",
+            "lib#/$defs/Loc", "#/$defs/Loc"));
   }
 
   // A $ref under not, if, then or else, where no type is read (what

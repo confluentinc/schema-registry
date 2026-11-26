@@ -35,12 +35,24 @@ import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceMockS
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 /**
  * A mock registry that takes logical types DDL in all three formats, as the registry does, and
  * answers this package's lookups as a client of one would.
  */
 final class TestRegistry implements TypeLookup {
+
+  // The refusal of a schema two places of which are read by one name, as a pattern: the
+  // two are told in the order the reader comes to them.
+  static String readAsOne(String done, String name, String one, String other) {
+    String both = Pattern.quote(one) + " and to " + Pattern.quote(other);
+    String turned = Pattern.quote(other) + " and to " + Pattern.quote(one);
+    return "(?s)Type \\S+ cannot be " + done + ": it refers to (" + both + "|" + turned
+        + "), which are both read by the name " + Pattern.quote(name) + "\\. The two are read "
+        + "as one, and the one would be written as the other\\. Register its new version as "
+        + "a JSON schema";
+  }
 
   final SchemaRegistryClient client = new ProvenanceMockSchemaRegistryClient(List.of(
       new LogicalSchemaProvider(new AvroSchemaProvider()),
