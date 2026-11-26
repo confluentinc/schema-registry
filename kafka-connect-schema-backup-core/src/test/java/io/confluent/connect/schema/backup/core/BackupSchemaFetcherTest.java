@@ -317,4 +317,31 @@ public class BackupSchemaFetcherTest {
       assertTrue(expected.getCause() instanceof IOException);
     }
   }
+
+  // ---------------- schemaType (used by SchemaBackupAwareByteArrayConverter) ----------------
+
+  private static final String SCHEMA_TYPE_SUBJECT = "typed-value";
+
+  @Test
+  public void testFetchSchemaInfoRecordsRegistrySchemaType() throws Exception {
+    int schemaId = schemaRegistry.register(SCHEMA_TYPE_SUBJECT, new AvroSchema(USER_SCHEMA));
+    assertEquals(AvroSchema.TYPE, fetcher.fetchSchemaInfo(schemaId).getSchemaType());
+  }
+
+  @Test
+  public void testFetchSchemaInfoByGuidRecordsRegistrySchemaType() throws Exception {
+    String guid = schemaRegistry.registerWithResponse(
+        SCHEMA_TYPE_SUBJECT, new AvroSchema(USER_SCHEMA), false).getGuid();
+    BackupSchemaFetcher.BackupSchemaInfo info = fetcher.fetchSchemaInfoByGuid(guid);
+    assertEquals(AvroSchema.TYPE, info.getSchemaType());
+    assertNull(info.getVersionForSubject(SCHEMA_TYPE_SUBJECT));
+  }
+
+  @Test
+  public void testExistingBackupSchemaInfoConstructorLeavesSchemaTypeNull() {
+    BackupSchemaFetcher.BackupSchemaInfo info = new BackupSchemaFetcher.BackupSchemaInfo(
+        USER_SCHEMA, Collections.emptyList(), Collections.emptyMap(), null, null,
+        Collections.emptyMap());
+    assertNull(info.getSchemaType());
+  }
 }
