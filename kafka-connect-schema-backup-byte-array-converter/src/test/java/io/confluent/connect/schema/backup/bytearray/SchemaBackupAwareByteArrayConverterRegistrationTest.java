@@ -18,15 +18,23 @@ package io.confluent.connect.schema.backup.bytearray;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import io.confluent.connect.schema.backup.api.SchemaBackupConfig;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.protobuf.Descriptors.Descriptor;
+import com.google.protobuf.DynamicMessage;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
+import io.confluent.kafka.schemaregistry.json.JsonSchema;
+import io.confluent.kafka.schemaregistry.json.JsonSchemaUtils;
+import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
@@ -38,6 +46,10 @@ import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
 import io.confluent.kafka.serializers.context.strategy.ContextNameStrategy;
+import io.confluent.kafka.serializers.json.KafkaJsonSchemaDeserializer;
+import io.confluent.kafka.serializers.json.KafkaJsonSchemaSerializer;
+import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer;
+import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer;
 import io.confluent.kafka.serializers.subject.RecordNameStrategy;
 import io.confluent.kafka.serializers.subject.TopicNameStrategy;
 import io.confluent.kafka.serializers.subject.TopicRecordNameStrategy;
@@ -112,6 +124,24 @@ public class SchemaBackupAwareByteArrayConverterRegistrationTest {
   private static final String SIMPLE_SCHEMA =
       "{\"type\":\"record\",\"name\":\"Order\",\"namespace\":\"" + NAMESPACE + "\","
           + "\"fields\":[{\"name\":\"" + FIELD_ID + "\",\"type\":\"string\"}]}";
+
+  /** Protobuf and JSON Schema forms of the simple Order, for per-format checks. */
+  private static final String SIMPLE_PROTO =
+      "syntax = \"proto3\";\n"
+          + "package " + NAMESPACE + ";\n"
+          + "message Order {\n"
+          + "  string " + FIELD_ID + " = 1;\n"
+          + "}\n";
+  private static final String SIMPLE_JSON_SCHEMA =
+      "{\"title\":\"" + ORDER_NAME + "\",\"type\":\"object\","
+          + "\"properties\":{\"" + FIELD_ID + "\":{\"type\":\"string\"}},"
+          + "\"required\":[\"" + FIELD_ID + "\"]}";
+  /** Registered first on the source so source and target schema IDs differ. */
+  private static final String FILLER_SUBJECT = "filler" + VALUE_SUFFIX;
+  private static final String FILLER_SCHEMA = "\"string\"";
+  private static final ObjectMapper JSON = new ObjectMapper();
+
+  private enum Format { AVRO, PROTOBUF, JSON_SCHEMA }
 
   private RecordingSchemaRegistryClient source;
   private RecordingSchemaRegistryClient target;
@@ -249,6 +279,105 @@ public class SchemaBackupAwareByteArrayConverterRegistrationTest {
         ClientCapturingStrategy.class.getName()));
 
     assertNotNull(ClientCapturingStrategy.lastClient);
+  }
+
+  // ---------------- Same checks for every format ----------------
+  // Subject naming, ID rewriting and the auto.register.schemas=false lookup each depend
+  // on the format's own schema type, so they are checked for Avro, Protobuf and JSON Schema.
+
+  @Test
+  public void testAvroRestoreUsesTargetSchemaId() throws Exception {
+    assertRestoreUsesTargetSchemaId(Format.AVRO);
+  }
+
+  @Test
+  public void testProtobufRestoreUsesTargetSchemaId() throws Exception {
+    assertRestoreUsesTargetSchemaId(Format.PROTOBUF);
+  }
+
+  @Test
+  public void testJsonSchemaRestoreUsesTargetSchemaId() throws Exception {
+    assertRestoreUsesTargetSchemaId(Format.JSON_SCHEMA);
+  }
+
+  @Test
+  public void testProtobufRecordNameStrategyUsesMessageName() throws Exception {
+    assertRecordNameStrategy(Format.PROTOBUF);
+  }
+
+  @Test
+  public void testJsonSchemaRecordNameStrategyUsesTitle() throws Exception {
+    assertRecordNameStrategy(Format.JSON_SCHEMA);
+  }
+
+  @Test
+  public void testProtobufAutoRegisterFalseFindsExistingSchema() throws Exception {
+    assertAutoRegisterFalseFindsExistingSchema(Format.PROTOBUF);
+  }
+
+  @Test
+  public void testJsonSchemaAutoRegisterFalseFindsExistingSchema() throws Exception {
+    assertAutoRegisterFalseFindsExistingSchema(Format.JSON_SCHEMA);
+  }
+
+  @Test
+  public void testProtobufAutoRegisterFalseFailsWhenSchemaMissingOnTarget() throws Exception {
+    assertAutoRegisterFalseFailsWhenMissing(Format.PROTOBUF);
+  }
+
+  @Test
+  public void testJsonSchemaAutoRegisterFalseFailsWhenSchemaMissingOnTarget() throws Exception {
+    assertAutoRegisterFalseFailsWhenMissing(Format.JSON_SCHEMA);
+  }
+
+  private void assertRestoreUsesTargetSchemaId(Format format) throws Exception {
+    byte[] original = produceSimple(format);
+    byte[] restored = backupThenRestore(original, Collections.emptyMap());
+
+    int sourceId = schemaIdOf(original);
+    int targetId = schemaIdOf(restored);
+    assertNotEquals("restored bytes must carry the target ID", sourceId, targetId);
+    assertEquals(source.getSchemaById(sourceId).canonicalString(),
+        target.getSchemaById(targetId).canonicalString());
+    assertEquals(Collections.singletonList(RESTORE_TOPIC + VALUE_SUFFIX),
+        target.registeredSubjects);
+    assertPayloadUnchanged(original, restored);
+    assertEquals(ID_VALUE, decodeIdOnTarget(format, restored));
+  }
+
+  private void assertRecordNameStrategy(Format format) throws Exception {
+    byte[] restored = backupThenRestore(produceSimple(format), Collections.singletonMap(
+        AbstractKafkaSchemaSerDeConfig.VALUE_SUBJECT_NAME_STRATEGY,
+        RecordNameStrategy.class.getName()));
+
+    assertEquals(Collections.singletonList(ORDER_NAME), target.registeredSubjects);
+    assertEquals(ID_VALUE, decodeIdOnTarget(format, restored));
+  }
+
+  private void assertAutoRegisterFalseFindsExistingSchema(Format format) throws Exception {
+    byte[] original = produceSimple(format);
+    target.register(RESTORE_TOPIC + VALUE_SUFFIX, simpleSchema(format));
+    target.resetRecording();
+    target.readOnly = true;
+
+    byte[] restored = backupThenRestore(original,
+        Collections.singletonMap(AbstractKafkaSchemaSerDeConfig.AUTO_REGISTER_SCHEMAS, FALSE));
+
+    assertTrue(target.registeredSubjects.isEmpty());
+    assertPayloadUnchanged(original, restored);
+    assertEquals(ID_VALUE, decodeIdOnTarget(format, restored));
+  }
+
+  private void assertAutoRegisterFalseFailsWhenMissing(Format format) throws Exception {
+    byte[] original = produceSimple(format);
+    target.readOnly = true;
+    try {
+      backupThenRestore(original,
+          Collections.singletonMap(AbstractKafkaSchemaSerDeConfig.AUTO_REGISTER_SCHEMAS, FALSE));
+      fail("Expected restore to fail when the " + format + " schema is not on the target");
+    } catch (ConnectException e) {
+      assertTrue(target.registeredSubjects.isEmpty());
+    }
   }
 
   // ---------------- Settings rejected on restore ----------------
@@ -401,6 +530,81 @@ public class SchemaBackupAwareByteArrayConverterRegistrationTest {
     assertEquals(ID_VALUE, record.get(FIELD_ID).toString());
     GenericRecord shipTo = (GenericRecord) record.get(FIELD_SHIP_TO);
     assertEquals(CITY_VALUE, shipTo.get(FIELD_CITY).toString());
+  }
+
+  private static ParsedSchema simpleSchema(Format format) {
+    switch (format) {
+      case AVRO:
+        return new AvroSchema(SIMPLE_SCHEMA);
+      case PROTOBUF:
+        return new ProtobufSchema(SIMPLE_PROTO);
+      default:
+        return new JsonSchema(SIMPLE_JSON_SCHEMA);
+    }
+  }
+
+  /** Produces the simple Order on the source registry with that format's serializer. */
+  private byte[] produceSimple(Format format) throws Exception {
+    source.register(FILLER_SUBJECT, new AvroSchema(FILLER_SCHEMA));
+    Map<String, Object> serdeCfg = Collections.singletonMap(SR_URL_CONFIG, SR_URL_VALUE);
+    byte[] bytes;
+    switch (format) {
+      case AVRO: {
+        AvroSchema schema = new AvroSchema(SIMPLE_SCHEMA);
+        int id = source.register(SOURCE_TOPIC + VALUE_SUFFIX, schema);
+        GenericRecord record = new GenericData.Record(schema.rawSchema());
+        record.put(FIELD_ID, ID_VALUE);
+        bytes = prefixed(id, encode(schema.rawSchema(), record));
+        break;
+      }
+      case PROTOBUF: {
+        ProtobufSchema schema = new ProtobufSchema(SIMPLE_PROTO);
+        Descriptor descriptor = schema.toDescriptor();
+        DynamicMessage message = DynamicMessage.newBuilder(descriptor)
+            .setField(descriptor.findFieldByName(FIELD_ID), ID_VALUE)
+            .build();
+        KafkaProtobufSerializer<DynamicMessage> serializer = new KafkaProtobufSerializer<>(source);
+        serializer.configure(serdeCfg, false);
+        bytes = serializer.serialize(SOURCE_TOPIC, null, message, schema);
+        break;
+      }
+      default: {
+        JsonSchema schema = new JsonSchema(SIMPLE_JSON_SCHEMA);
+        JsonNode payload = JSON.createObjectNode().put(FIELD_ID, ID_VALUE);
+        KafkaJsonSchemaSerializer<Object> serializer = new KafkaJsonSchemaSerializer<>(source);
+        serializer.configure(serdeCfg, false);
+        bytes = serializer.serialize(SOURCE_TOPIC, JsonSchemaUtils.envelope(schema, payload));
+        break;
+      }
+    }
+    source.resetRecording();
+    return bytes;
+  }
+
+  private String decodeIdOnTarget(Format format, byte[] bytes) {
+    Map<String, Object> serdeCfg = Collections.singletonMap(SR_URL_CONFIG, SR_URL_VALUE);
+    switch (format) {
+      case AVRO:
+        return deserializeOnTarget(bytes).get(FIELD_ID).toString();
+      case PROTOBUF: {
+        KafkaProtobufDeserializer<DynamicMessage> deserializer =
+            new KafkaProtobufDeserializer<>(target);
+        deserializer.configure(serdeCfg, false);
+        DynamicMessage message = deserializer.deserialize(RESTORE_TOPIC, bytes);
+        return (String) message.getField(
+            message.getDescriptorForType().findFieldByName(FIELD_ID));
+      }
+      default: {
+        KafkaJsonSchemaDeserializer<Object> deserializer = new KafkaJsonSchemaDeserializer<>(target);
+        deserializer.configure(serdeCfg, false);
+        JsonNode node = JSON.valueToTree(deserializer.deserialize(RESTORE_TOPIC, bytes));
+        return node.get(FIELD_ID).asText();
+      }
+    }
+  }
+
+  private static int schemaIdOf(byte[] bytes) {
+    return ByteBuffer.wrap(bytes, 1, Integer.BYTES).getInt();
   }
 
   /** Records registration calls and can simulate read-only credentials. */

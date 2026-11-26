@@ -24,6 +24,8 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.DynamicMessage;
 import io.confluent.connect.schema.backup.api.BackupWrapper;
@@ -32,12 +34,16 @@ import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
+import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
+import io.confluent.kafka.schemaregistry.json.JsonSchemaUtils;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
 import io.confluent.kafka.serializers.KafkaAvroSerializer;
+import io.confluent.kafka.serializers.json.KafkaJsonSchemaDeserializer;
+import io.confluent.kafka.serializers.json.KafkaJsonSchemaSerializer;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufDeserializer;
 import io.confluent.kafka.serializers.protobuf.KafkaProtobufSerializer;
 import io.confluent.kafka.serializers.schema.id.HeaderSchemaIdSerializer;
@@ -110,6 +116,14 @@ public class SchemaBackupAwareByteArrayConverterFramingTest {
           + "message " + SECOND_MESSAGE + " {\n"
           + "  string " + FIELD_TEXT + " = 1;\n"
           + "}\n";
+
+  private static final String JSON_SCHEMA =
+      "{\"title\":\"io.confluent.test.Framed\",\"type\":\"object\","
+          + "\"properties\":{"
+          + "\"" + FIELD_LABEL + "\":{\"type\":\"string\"},"
+          + "\"" + FIELD_COUNT + "\":{\"type\":\"integer\"}},"
+          + "\"required\":[\"" + FIELD_LABEL + "\",\"" + FIELD_COUNT + "\"]}";
+  private static final ObjectMapper JSON = new ObjectMapper();
 
   private SchemaRegistryClient schemaRegistry;
   private SchemaBackupAwareByteArrayConverter valueConverter;
@@ -284,10 +298,7 @@ public class SchemaBackupAwareByteArrayConverterFramingTest {
         TOPIC, restoreHeaders, wrapped.schema(), wrapped.value());
 
     assertNull(restoreHeaders.lastHeader(VALUE_HEADER));
-    DynamicMessage message = deserializeProto(restoreHeaders, restored);
-    Descriptor descriptor = message.getDescriptorForType();
-    assertEquals(SECOND_MESSAGE, descriptor.getName());
-    assertEquals(TEXT_VALUE, message.getField(descriptor.findFieldByName(FIELD_TEXT)));
+    assertSecondMessage(deserializeProto(restoreHeaders, restored));
   }
 
   @Test
@@ -311,6 +322,109 @@ public class SchemaBackupAwareByteArrayConverterFramingTest {
 
     assertRestoreFails(valueConverter, restoreHeaders, wrapped, wrapper(wrapped),
         "header cannot be parsed");
+  }
+
+  @Test
+  public void testProtobufHeaderFramedToHeaderTargetKeepsMessageIndexes() {
+    Headers sourceHeaders = new RecordHeaders();
+    byte[] payload = serializeSecondMessage(sourceHeaders, true);
+    SchemaAndValue wrapped = valueConverter.toConnectData(TOPIC, sourceHeaders, payload);
+
+    Headers restoreHeaders = copy(sourceHeaders);
+    byte[] restored = headerTargetValueConverter.fromConnectData(
+        TOPIC, restoreHeaders, wrapped.schema(), wrapped.value());
+
+    assertArrayEquals(payload, restored);
+    assertEquals(1, countHeaders(restoreHeaders, VALUE_HEADER));
+    assertSecondMessage(deserializeProto(restoreHeaders, restored));
+  }
+
+  @Test
+  public void testProtobufPrefixFramedToHeaderTargetMovesMessageIndexesToHeader() {
+    byte[] original = serializeSecondMessage(null, false);
+    SchemaAndValue wrapped = valueConverter.toConnectData(TOPIC, original);
+
+    Headers restoreHeaders = new RecordHeaders();
+    byte[] restored = headerTargetValueConverter.fromConnectData(
+        TOPIC, restoreHeaders, wrapped.schema(), wrapped.value());
+
+    assertEquals(1, countHeaders(restoreHeaders, VALUE_HEADER));
+    assertTrue("message indexes must leave the payload", restored.length < original.length);
+    assertSecondMessage(deserializeProto(restoreHeaders, restored));
+  }
+
+  // ---------------- JSON Schema (same framing cases as Avro) ----------------
+
+  @Test
+  public void testJsonSchemaPrefixFramedBytesExact() {
+    byte[] original = serializeJsonSchema(null, false);
+    SchemaAndValue wrapped = valueConverter.toConnectData(TOPIC, original);
+
+    byte[] restored = valueConverter.fromConnectData(
+        TOPIC, new RecordHeaders(), wrapped.schema(), wrapped.value());
+
+    assertArrayEquals(original, restored);
+  }
+
+  @Test
+  public void testJsonSchemaHeaderFramedToPrefixTargetRemovesSourceHeader() {
+    Headers sourceHeaders = new RecordHeaders();
+    byte[] payload = serializeJsonSchema(sourceHeaders, true);
+    SchemaAndValue wrapped = valueConverter.toConnectData(TOPIC, sourceHeaders, payload);
+    assertNotNull(wrapper(wrapped).getString(BackupWrapper.FIELD_SCHEMA_GUID));
+
+    Headers restoreHeaders = copy(sourceHeaders);
+    byte[] restored = valueConverter.fromConnectData(
+        TOPIC, restoreHeaders, wrapped.schema(), wrapped.value());
+
+    assertNull(restoreHeaders.lastHeader(VALUE_HEADER));
+    assertEquals(SchemaId.MAGIC_BYTE_V0, restored[0]);
+    assertArrayEquals(payload, Arrays.copyOfRange(restored, PREFIX_LENGTH, restored.length));
+    assertJsonRecord(deserializeJsonSchema(restoreHeaders, restored));
+  }
+
+  @Test
+  public void testJsonSchemaHeaderFramedToHeaderTargetLeavesSingleTargetHeader() {
+    Headers sourceHeaders = new RecordHeaders();
+    byte[] payload = serializeJsonSchema(sourceHeaders, true);
+    SchemaAndValue wrapped = valueConverter.toConnectData(TOPIC, sourceHeaders, payload);
+
+    Headers restoreHeaders = new RecordHeaders();
+    restoreHeaders.add(VALUE_HEADER, guidHeader(UNRELATED_GUID));
+    byte[] restored = headerTargetValueConverter.fromConnectData(
+        TOPIC, restoreHeaders, wrapped.schema(), wrapped.value());
+
+    assertArrayEquals(payload, restored);
+    assertEquals(1, countHeaders(restoreHeaders, VALUE_HEADER));
+    assertJsonRecord(deserializeJsonSchema(restoreHeaders, restored));
+  }
+
+  @Test
+  public void testJsonSchemaPrefixFramedToHeaderTarget() {
+    byte[] original = serializeJsonSchema(null, false);
+    SchemaAndValue wrapped = valueConverter.toConnectData(TOPIC, original);
+
+    Headers restoreHeaders = new RecordHeaders();
+    byte[] restored = headerTargetValueConverter.fromConnectData(
+        TOPIC, restoreHeaders, wrapped.schema(), wrapped.value());
+
+    assertArrayEquals(Arrays.copyOfRange(original, PREFIX_LENGTH, original.length), restored);
+    assertEquals(1, countHeaders(restoreHeaders, VALUE_HEADER));
+    assertJsonRecord(deserializeJsonSchema(restoreHeaders, restored));
+  }
+
+  @Test
+  public void testJsonSchemaHeaderFramedRestoresWhenHeaderIsMissing() {
+    Headers sourceHeaders = new RecordHeaders();
+    byte[] payload = serializeJsonSchema(sourceHeaders, true);
+    SchemaAndValue wrapped = valueConverter.toConnectData(TOPIC, sourceHeaders, payload);
+
+    Headers restoreHeaders = new RecordHeaders();
+    byte[] restored = valueConverter.fromConnectData(
+        TOPIC, restoreHeaders, wrapped.schema(), wrapped.value());
+
+    assertArrayEquals(payload, Arrays.copyOfRange(restored, PREFIX_LENGTH, restored.length));
+    assertJsonRecord(deserializeJsonSchema(restoreHeaders, restored));
   }
 
   // ---------------- Key side and older wrappers ----------------
@@ -430,6 +544,34 @@ public class SchemaBackupAwareByteArrayConverterFramingTest {
         new KafkaProtobufDeserializer<>(schemaRegistry);
     deserializer.configure(Collections.singletonMap(SR_URL_CONFIG, SR_URL_VALUE), false);
     return deserializer.deserialize(TOPIC, headers, bytes);
+  }
+
+  private static void assertSecondMessage(DynamicMessage message) {
+    Descriptor descriptor = message.getDescriptorForType();
+    assertEquals(SECOND_MESSAGE, descriptor.getName());
+    assertEquals(TEXT_VALUE, message.getField(descriptor.findFieldByName(FIELD_TEXT)));
+  }
+
+  private byte[] serializeJsonSchema(Headers headers, boolean headerFraming) {
+    JsonNode payload = JSON.createObjectNode()
+        .put(FIELD_LABEL, LABEL_VALUE)
+        .put(FIELD_COUNT, COUNT_VALUE);
+    KafkaJsonSchemaSerializer<Object> serializer = new KafkaJsonSchemaSerializer<>(schemaRegistry);
+    serializer.configure(serdeConfig(headerFraming), false);
+    return serializer.serialize(TOPIC, headers,
+        JsonSchemaUtils.envelope(new JsonSchema(JSON_SCHEMA), payload));
+  }
+
+  private JsonNode deserializeJsonSchema(Headers headers, byte[] bytes) {
+    KafkaJsonSchemaDeserializer<Object> deserializer =
+        new KafkaJsonSchemaDeserializer<>(schemaRegistry);
+    deserializer.configure(Collections.singletonMap(SR_URL_CONFIG, SR_URL_VALUE), false);
+    return JSON.valueToTree(deserializer.deserialize(TOPIC, headers, bytes));
+  }
+
+  private static void assertJsonRecord(JsonNode node) {
+    assertEquals(LABEL_VALUE, node.get(FIELD_LABEL).asText());
+    assertEquals(COUNT_VALUE, node.get(FIELD_COUNT).asInt());
   }
 
   private static byte[] guidHeader(String guid) {

@@ -234,6 +234,20 @@ public class SchemaBackupAwareByteArrayConverterTest {
     assertArrayEquals(original, restored);
   }
 
+  @Test
+  public void testJsonSchemaRoundTripValueSemantics() throws Exception {
+    String json = "{\"name\":\"json-value\",\"age\":44}";
+    byte[] original = serializeJson(json);
+    SchemaAndValue wrapped = backupConverter.toConnectData(TOPIC, original);
+    byte[] restored = backupConverter.fromConnectData(
+        TOPIC, wrapped.schema(), wrapped.value());
+
+    KafkaJsonSchemaDeserializer<Object> deser = new KafkaJsonSchemaDeserializer<>(schemaRegistry);
+    deser.configure(Collections.singletonMap(SR_URL_CONFIG, SR_URL_VALUE), false);
+    ObjectMapper mapper = new ObjectMapper();
+    assertEquals(mapper.readTree(json), mapper.valueToTree(deser.deserialize(TOPIC, restored)));
+  }
+
   // ---------------- Fail-loud paths ----------------
 
   @Test
