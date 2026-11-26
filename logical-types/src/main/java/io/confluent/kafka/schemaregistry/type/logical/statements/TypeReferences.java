@@ -275,9 +275,11 @@ public final class TypeReferences {
       Referred referred = read.get(key);
       // One that refers back to a type being read is left out.
       if (referred == null && within.add(key)) {
+        // A registry that cannot be asked fails the statement; a version that is not
+        // there, or cannot be read as a type, is left out.
+        SchemaMetadata md = lookup.version(subject, ref.getVersion());
         LogicalType type;
         try {
-          SchemaMetadata md = lookup.version(subject, ref.getVersion());
           type = md == null ? null : lookup.logicalType(subject, md);
         } catch (RuntimeException e) {
           type = null;
