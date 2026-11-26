@@ -5298,4 +5298,42 @@ class TypeAlterTest {
     registry.alter("wn", new DropAttribute("w", false));
     assertThat(message("wn").findFieldByNumber(2)).isNull();
   }
+
+  // From draft 2019-09 on, what is beside a $ref is read with it: a second definition of
+  // a name there is told. And a copy of a document's definition that a statement left in
+  // the type, which no $ref of the type is to, is no second one: the type is altered again.
+  @Test
+  void aJsonRefsSiblingsAreReadInALaterDraftAndACopyLeftIsNoSecondDefinition()
+      throws Exception {
+    String p = "{\"type\":\"object\",\"properties\":{\"p\":{\"type\":\"integer\"}},"
+        + "\"required\":[\"p\"],\"additionalProperties\":false}";
+    String q = "{\"type\":\"object\",\"properties\":{\"q\":{\"type\":\"string\"}},"
+        + "\"required\":[\"q\"],\"additionalProperties\":false}";
+    json("slib", "{\"type\":\"object\",\"title\":\"slib\",\"properties\":{\"k\":{\"type\":"
+        + "\"integer\"}},\"additionalProperties\":false,\"$defs\":{\"Loc\":" + p + "}}");
+    json("sib20", "{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\","
+        + String.format(JSON_HEAD, "sib20").substring(1) + "\"x\":{\"$ref\":\"#/$defs/Loc\","
+        + "\"properties\":{\"k\":{\"$ref\":\"slib#/$defs/Loc\"}}}},\"additionalProperties\":"
+        + "false,\"$defs\":{\"Loc\":" + q + "}}", "slib");
+    assertThatThrownBy(() -> registry.alter("sib20", new AddAttribute("z", "INT")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("it has two definitions named Loc, #/$defs/Loc and "
+            + "slib#/$defs/Loc");
+    json("xlib", "{\"type\":\"object\",\"title\":\"xlib\",\"properties\":{\"l\":{\"$ref\":"
+        + "\"#/$defs/Loc\"}},\"additionalProperties\":false,\"$defs\":{\"Loc\":{\"type\":"
+        + "\"object\",\"properties\":{\"in\":{\"$ref\":\"#/$defs/Inner\"}},"
+        + "\"additionalProperties\":false},\"Inner\":" + q + "}}");
+    for (String to : List.of("xlib#/$defs/Loc", "xlib")) {
+      String type = to.contains("#") ? "xa" : "xw";
+      json(type, String.format(JSON_HEAD, type) + "\"x\":{\"$ref\":\"" + to + "\"}},"
+          + "\"additionalProperties\":false}", "xlib");
+      registry.alter(type, new AddAttribute("z", "INT"));
+      registry.alter(type, new AddAttribute("y", "INT"));
+      registry.alter(type, new MoveAttribute("z", Position.first()));
+      assertThat(version(type)).as(type).isEqualTo(4);
+      assertThat(references(type)).as(type).containsExactly("xlib");
+      assertThat(registry.schema(type).canonicalString()).as(type)
+          .contains("{\"$ref\":\"" + to + "\"}");
+    }
+  }
 }

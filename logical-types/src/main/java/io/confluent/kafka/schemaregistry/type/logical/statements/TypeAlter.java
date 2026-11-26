@@ -2192,7 +2192,10 @@ public final class TypeAlter {
       named.computeIfAbsent(name, n -> new LinkedHashSet<>())
           .add(entry(called) ? local(root, called.path("$ref").asText(), references)
             : use.target);
-      if (use.from.isEmpty()) {
+      // By a $ref its attributes come to: a definition none is to is not the schema using
+      // the name, nor is what such a one names, as the copies of a document's definitions
+      // that the writer left in it are not.
+      if (use.from.isEmpty() && use.reached) {
         own.add(name);
       }
     }
@@ -2212,18 +2215,21 @@ public final class TypeAlter {
   // #/..., a document or a part of one by the document's name; and whether it is the $ref
   // of an entry the writer writes for a name, which is read by that name.
   // Or no $ref but a definition of the schema's own that the type as read has, though
-  // none is to it: told as a $ref of the schema to it would be.
+  // none is to it: told as a $ref of the schema to it would be. A use is reached where
+  // the schema's attributes come to it, and not where only such a definition does.
   private static final class Use {
     final String from;
     final String target;
     final boolean entry;
     final boolean unnamed;
+    final boolean reached;
 
-    Use(String from, String target, boolean entry, boolean unnamed) {
+    Use(String from, String target, boolean entry, boolean unnamed, boolean reached) {
       this.from = from;
       this.target = target;
       this.entry = entry;
       this.unnamed = unnamed;
+      this.reached = reached;
     }
   }
 
@@ -2246,6 +2252,9 @@ public final class TypeAlter {
   // as a schema of a later draft is read with each of its $defs.
   private static List<Use> uses(JsonSchema schema, LogicalType read, boolean below) {
     JsonNode root = schema.toJsonNode();
+    // From draft 2019-09 on, what is beside a $ref is read with it; before, it is not.
+    String draft = root.path("$schema").asText("");
+    boolean beside = draft.contains("2019-09") || draft.contains("2020-12");
     Map<String, JsonNode> documents = new HashMap<>();
     documents.put("", root);
     List<Use> uses = new ArrayList<>();
@@ -2258,7 +2267,7 @@ public final class TypeAlter {
         kept = true;
         unreached(root, read, gone).forEach(at -> {
           todo.add(new String[] {"", at});
-          uses.add(new Use("", "#" + at, false, true));
+          uses.add(new Use("", "#" + at, false, true, false));
         });
         continue;
       }
@@ -2278,14 +2287,14 @@ public final class TypeAlter {
       JsonNode node = at[1].isEmpty() ? document : definition(document, "#" + at[1]);
       boolean entry = at[0].isEmpty() && entry(node);
       List<String> refs = new ArrayList<>();
-      collectRefs(node, refs);
+      collectRefs(node, refs, beside);
       for (String ref : refs) {
         String to = local(document, ref, schema.resolvedReferences().keySet());
         int hash = to.indexOf('#');
         String in = hash == 0 ? at[0] : hash < 0 ? to : to.substring(0, hash);
         String part = hash < 0 ? "" : to.substring(hash + 1);
         todo.add(new String[] {in, part});
-        uses.add(new Use(at[0], part.isEmpty() ? in : in + "#" + part, entry, false));
+        uses.add(new Use(at[0], part.isEmpty() ? in : in + "#" + part, entry, false, !kept));
       }
     }
     return uses;
@@ -2373,25 +2382,27 @@ public final class TypeAlter {
 
   // The $refs of a schema and of the schemas in it the reader reads a type through: its
   // properties, whatever their names, and what is under a word for a type's own schemas.
-  // A schema that is a $ref is that alone, and what is under any other word is not read:
-  // not, patternProperties, const, examples, a tool's own. A definition is read where a
-  // $ref is to it.
-  private static void collectRefs(JsonNode schema, List<String> refs) {
+  // What is under any other word is not read: not, patternProperties, const, examples, a
+  // tool's own. A schema that is a $ref is that alone, unless what is beside it is read
+  // too. A definition is read where a $ref is to it.
+  private static void collectRefs(JsonNode schema, List<String> refs, boolean beside) {
     if (schema.isArray()) {
-      schema.forEach(item -> collectRefs(item, refs));
+      schema.forEach(item -> collectRefs(item, refs, beside));
     }
     if (!schema.isObject()) {
       return;
     }
     if (schema.path("$ref").isTextual()) {
       refs.add(schema.path("$ref").asText());
-      return;
+      if (!beside) {
+        return;
+      }
     }
     schema.fields().forEachRemaining(said -> {
       if (said.getKey().equals("properties") && said.getValue().isObject()) {
-        said.getValue().forEach(named -> collectRefs(named, refs));
+        said.getValue().forEach(named -> collectRefs(named, refs, beside));
       } else if (SCHEMAS.contains(said.getKey())) {
-        collectRefs(said.getValue(), refs);
+        collectRefs(said.getValue(), refs, beside);
       }
     });
   }

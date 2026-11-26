@@ -245,11 +245,12 @@ public final class Formats {
   }
 
   /**
-   * A name as a part of a path: one with a dot in it is quoted as the DDL quotes a name, so
-   * that the path of an attribute in it is no other attribute's.
+   * A name as a part of a path: one with a dot or a backtick in it is quoted as the DDL
+   * quotes a name, so that the path of an attribute in it is no other attribute's.
    */
   static String segment(String name) {
-    return name.indexOf('.') < 0 ? name : "`" + name.replace("`", "``") + "`";
+    return name.indexOf('.') < 0 && name.indexOf('`') < 0 ? name
+        : "`" + name.replace("`", "``") + "`";
   }
 
   /** The path of an attribute, or of a member, in the type of the attribute of a path. */

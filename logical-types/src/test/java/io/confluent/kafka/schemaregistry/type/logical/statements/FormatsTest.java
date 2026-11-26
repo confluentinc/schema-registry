@@ -599,4 +599,14 @@ class FormatsTest {
     assertTimeoutPreemptively(Duration.ofSeconds(20),
         () -> Formats.refuseUnwritable(SchemaType.JSON, lt));
   }
+
+  // A name with a dot or a backtick in it is quoted in a path, a backtick in it doubled.
+  @Test
+  void aNameWithADotOrABacktickIsQuotedInAPath() {
+    assertThat(Formats.segment("a")).isEqualTo("a");
+    assertThat(Formats.segment("a.b")).isEqualTo("`a.b`");
+    assertThat(Formats.segment("`w")).isEqualTo("```w`");
+    assertThat(Formats.joined("e", "`w")).isEqualTo("e.```w`");
+    assertThat(Formats.joined("`e.x`", "y")).isEqualTo("`e.x`.y");
+  }
 }
