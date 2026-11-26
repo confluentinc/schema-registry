@@ -1963,13 +1963,14 @@ public final class TypeAlter {
     List<SchemaReference> idle = format != SchemaType.JSON ? List.of() : references.stream()
         .filter(ref -> unnamed.test(ref) && !freed.contains(ref.getName()))
         .collect(Collectors.toList());
-    Set<SchemaReference> pinned = binding(idle, used, unnamed);
+    Set<SchemaReference> pinned = binding(idle, used, definitions, unnamed);
     if (unused.isEmpty() && !renamed && pinned.size() == idle.size()) {
       return;
     }
     externalTypes.removeAll(unused);
     namedTypes.keySet().removeAll(unused);
     externalImports.keySet().removeAll(unused);
+    List<SchemaReference> before = new ArrayList<>(references);
     // A reference whose defined name cannot be told is kept.
     references.removeIf(ref -> {
       Set<String> names = TypeReferences.definedNames(lookup, subject, ref);
@@ -1977,19 +1978,46 @@ public final class TypeAlter {
           && definitionsOf(ref).stream().noneMatch(definitions::contains)
           && !pinned.contains(ref);
     });
+    if (format == SchemaType.JSON) {
+      refuseMovedWithDropped(before, used);
+    }
     resolved.clear();
     resolved.putAll(TypeReferences.resolve(lookup, subject, references));
   }
 
+  // A type an attribute is of may be read through a reference that goes with the statement,
+  // and without it be another version, or none: the attribute, which the statement does
+  // not name, would be of another type. One the statement names is its own to move.
+  private void refuseMovedWithDropped(List<SchemaReference> before, Set<String> used) {
+    if (before.size() == references.size()) {
+      return;
+    }
+    Map<String, SchemaMetadata> versions = new HashMap<>();
+    Map<String, String> was = TypeReferences.firstMet(lookup, subject, before, versions);
+    Map<String, String> now = TypeReferences.firstMet(lookup, subject, references, versions);
+    Set<String> own = new HashSet<>();
+    references.stream().filter(ref -> !original.getReferences().contains(ref))
+        .forEach(ref -> own.add(ref.getName()));
+    for (String name : used) {
+      String old = was.get(name);
+      if (old != null && !own.contains(name) && !old.equals(now.get(name))) {
+        throw new TypeRefusedException(refused() + ": it would no longer refer to version "
+            + old.substring(old.lastIndexOf('@') + 1) + " of type " + name + ", which it has "
+            + "through a type it would refer to no more; name the type again to move it to "
+            + "its latest version");
+      }
+    }
+  }
+
   // Of the references no attribute was of, those that taken away would leave a name
-  // another type or version: a name an attribute is of, or one below a reference the
-  // version edited has and the statement keeps. The first met binds a name, so each is
-  // tried in turn without those before it that go; what the statement adds is its own.
+  // another type or version: a name an attribute is of, the document of a definition one
+  // is of, or a name below a reference the version edited has and the statement keeps.
+  // What the statement adds or moves is its own. The first met binds a name, so each is
+  // tried without those that go, and again once another has gone.
   private Set<SchemaReference> binding(List<SchemaReference> idle, Set<String> used,
-      Predicate<SchemaReference> unnamed) {
-    Set<SchemaReference> pinned = new HashSet<>();
+      Set<String> definitions, Predicate<SchemaReference> unnamed) {
     if (idle.isEmpty()) {
-      return pinned;
+      return new HashSet<>();
     }
     Map<String, SchemaMetadata> versions = new HashMap<>();
     List<SchemaReference> kept = references.stream()
@@ -1997,23 +2025,39 @@ public final class TypeAlter {
     Set<String> stored = new HashSet<>();
     original.getReferences().forEach(ref -> stored.add(ref.getName()));
     Set<String> names = new HashSet<>(used);
+    Set<String> own = new HashSet<>();
     for (SchemaReference ref : kept) {
-      if (!idle.contains(ref) && stored.contains(ref.getName())) {
+      if (idle.contains(ref)) {
+        continue;
+      }
+      if (stored.contains(ref.getName())) {
         names.addAll(TypeReferences.below(lookup, subject, ref, versions));
       }
-    }
-    Map<String, String> bound = TypeReferences.firstMet(lookup, subject, kept, versions);
-    for (SchemaReference ref : idle) {
-      List<SchemaReference> without = new ArrayList<>(kept);
-      without.remove(ref);
-      Map<String, String> now = TypeReferences.firstMet(lookup, subject, without, versions);
-      if (names.stream().allMatch(name -> Objects.equals(bound.get(name), now.get(name)))) {
-        kept = without;
-      } else {
-        pinned.add(ref);
+      if (definitionsOf(ref).stream().anyMatch(definitions::contains)) {
+        names.add(ref.getName());
+      }
+      if (!original.getReferences().contains(ref)) {
+        own.add(ref.getName());
       }
     }
-    return pinned;
+    names.removeAll(own);
+    Map<String, String> bound = TypeReferences.firstMet(lookup, subject, kept, versions);
+    boolean gone = true;
+    while (gone) {
+      gone = false;
+      for (SchemaReference ref : idle) {
+        List<SchemaReference> without = new ArrayList<>(kept);
+        if (!without.remove(ref)) {
+          continue;
+        }
+        Map<String, String> now = TypeReferences.firstMet(lookup, subject, without, versions);
+        if (names.stream().allMatch(name -> Objects.equals(bound.get(name), now.get(name)))) {
+          kept = without;
+          gone = true;
+        }
+      }
+    }
+    return idle.stream().filter(kept::contains).collect(Collectors.toSet());
   }
 
   // The names of the definitions a JSON document a reference is to has at its root: one
@@ -2225,6 +2269,34 @@ public final class TypeAlter {
     }
     refuseDefinitionsOfOneName(schema, uses, later(schema)
         ? ((JsonSchema) stored).resolvedReferences().keySet() : Set.of());
+    refuseNameThatSaysMore(schema);
+  }
+
+  // A name the type has for what it refers to is written as that name alone. In a later
+  // draft what a schema says beside its $ref is read: a statement would write it no more.
+  private void refuseNameThatSaysMore(JsonNode root) {
+    if (!later(root)) {
+      return;
+    }
+    for (String word : List.of("$defs", "definitions")) {
+      for (Iterator<Map.Entry<String, JsonNode>> all = root.path(word).fields();
+          all.hasNext(); ) {
+        Map.Entry<String, JsonNode> definition = all.next();
+        if (!entry(definition.getValue())) {
+          continue;
+        }
+        for (Iterator<String> said = definition.getValue().fieldNames(); said.hasNext(); ) {
+          String more = said.next();
+          if (!SAYS_NOTHING.contains(more) && !more.startsWith("x-")) {
+            throw new TypeRefusedException("Type " + subject + " cannot be altered: its "
+                + "definition " + definition.getKey() + " is a name for "
+                + definition.getValue().path("$ref").asText() + " that says more of a value "
+                + "beside it (" + more + "), which would be written no more. Register its "
+                + "new version as a JSON schema");
+          }
+        }
+      }
+    }
   }
 
   // A definition is read by its name alone, whichever document it is of: two of one name,
@@ -3064,16 +3136,7 @@ public final class TypeAlter {
       Message message = Message.of(targetOf(lt), lt.getNamedTypes());
       versions.add(message);
       if (message != null) {
-        message.members().stream().filter(m -> m.number() > 0)
-            .forEach(m -> usedNumbers.add(m.number()));
-      }
-      // And the number of a field that holds a oneof wrapped in a message, which the
-      // union read of it has: dropped, it is no new attribute's.
-      Schema struct = targetOf(lt);
-      if (struct != null && struct.getType() == Schema.Type.STRUCT) {
-        struct.getFields().stream().filter(f -> f.getSchema().getType() == Schema.Type.UNION
-            && numberIn(f.getParams()) > 0)
-            .forEach(f -> usedNumbers.add(numberIn(f.getParams())));
+        message.numbers().stream().filter(n -> n > 0).forEach(usedNumbers::add);
       }
     }
   }
@@ -3147,14 +3210,29 @@ public final class TypeAlter {
 
     private final List<Member> members;
     private final Map<String, Schema> namedTypes;
+    // The numbers of the fields that hold a oneof wrapped in a message, which the union
+    // read of each has: no member's, and no new attribute's once the field is dropped.
+    private final Set<Integer> wrappers;
 
     Message(List<Member> members, Map<String, Schema> namedTypes) {
+      this(members, namedTypes, Set.of());
+    }
+
+    Message(List<Member> members, Map<String, Schema> namedTypes, Set<Integer> wrappers) {
       this.members = members;
       this.namedTypes = namedTypes;
+      this.wrappers = wrappers;
     }
 
     List<Member> members() {
       return members;
+    }
+
+    // Every number the message has used: its members' and its wrappers'.
+    Set<Integer> numbers() {
+      Set<Integer> numbers = new HashSet<>(wrappers);
+      members.forEach(member -> numbers.add(member.number()));
+      return numbers;
     }
 
     Map<String, Schema> namedTypes() {
@@ -3168,12 +3246,13 @@ public final class TypeAlter {
       }
       Message other = (Message) o;
       return Objects.equals(members, other.members)
-          && Objects.equals(namedTypes, other.namedTypes);
+          && Objects.equals(namedTypes, other.namedTypes)
+          && Objects.equals(wrappers, other.wrappers);
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(members, namedTypes);
+      return Objects.hash(members, namedTypes, wrappers);
     }
 
 
@@ -3184,18 +3263,22 @@ public final class TypeAlter {
       }
       Map<Object, Integer> implied = ProtoToLogicalTypeConverter.impliedFieldNumbers(type);
       List<Member> members = new ArrayList<>();
+      Set<Integer> wrappers = new HashSet<>();
       for (Field f : type.getFields()) {
         if (f.getSchema().getType() == Schema.Type.UNION) {
           for (UnionBranch b : f.getSchema().getBranches()) {
             members.add(new Member(memberName(b),
                 number(b.getFieldNumber(), b, implied), b.getSchema()));
           }
+          if (numberIn(f.getParams()) > 0) {
+            wrappers.add(numberIn(f.getParams()));
+          }
         } else {
           members.add(new Member(f.getName(), number(f.getFieldNumber(), f, implied),
               f.getSchema()));
         }
       }
-      return new Message(members, namedTypes);
+      return new Message(members, namedTypes, wrappers);
     }
 
     Member find(String name) {
@@ -3379,8 +3462,8 @@ public final class TypeAlter {
       int max = 0;
       for (Message m : all) {
         if (m != null) {
-          for (Member member : m.members()) {
-            max = Math.max(max, member.number());
+          for (int number : m.numbers()) {
+            max = Math.max(max, number);
           }
         }
       }
@@ -3393,7 +3476,7 @@ public final class TypeAlter {
       Set<Integer> taken = new HashSet<>();
       for (Message m : all) {
         if (m != null) {
-          m.members().forEach(member -> taken.add(member.number()));
+          taken.addAll(m.numbers());
         }
       }
       return new Counter(maxUsed() + 1, taken);

@@ -248,12 +248,145 @@ class TypeAlterMoreEdgeCasesTest {
     assertThat(version("b4")).isEqualTo(1);
   }
 
+  private static final String CLOSED = "},\"additionalProperties\":false}";
+
+  private static final String NESTED = P3 + "\nmessage T {\n  int32 id = 1;\n  %s r = 2;\n"
+      + "  int32 z = 3;\n  message R {\n    int32 k = 1;\n    WOneofWrapper w = 4 " + WRAPPED
+      + ";\n    message WOneofWrapper {\n      oneof value {\n        int32 a = 2;\n"
+      + "        string b = 3;\n      }\n    }\n  }\n}\n";
+
+  private int numberInRow(String subject, String field) {
+    return message(subject).findFieldByName("r").getMessageType().findFieldByName(field)
+        .getNumber();
+  }
+
+  // The number of a wrapped oneof's field in a nested row is no new attribute's of the
+  // row: where it is dropped, given another kind of type, in a row that is an element,
+  // and in a later statement with its version soft-deleted.
+  @Test
+  void theNumberOfANestedRowsWrappedOneofIsNoNewAttributes() throws Exception {
+    proto("n1", String.format(NESTED, "R"));
+    registry.alter("n1", new AlterAttributeType("r", "STRUCT<k INT, n STRING>"));
+    assertThat(numberInRow("n1", "n")).isEqualTo(5);
+    proto("n2", String.format(NESTED, "R"));
+    registry.alter("n2", new AlterAttributeType("r", "STRUCT<k INT, w STRING>"));
+    assertThat(numberInRow("n2", "w")).isEqualTo(5);
+    proto("n3", String.format(NESTED, "repeated R"));
+    registry.alter("n3", new AlterAttributeType("r",
+        "ARRAY<STRUCT<k INT, n STRING> NOT NULL> NOT NULL"));
+    assertThat(numberInRow("n3", "n")).isEqualTo(5);
+    proto("n4", String.format(NESTED, "R"));
+    registry.alter("n4", new AlterAttributeType("r", "STRUCT<k INT>"));
+    registry.softDelete("n4", 1);
+    registry.alter("n4", new AlterAttributeType("r", "STRUCT<k INT, n STRING>"));
+    assertThat(numberInRow("n4", "n")).isEqualTo(5);
+  }
+
+  // A type created again over its dropped versions gives a new attribute no number a
+  // wrapped oneof's field had in one of them.
+  @Test
+  void aTypeCreatedAgainGivesNoAttributeAWrappedOneofsNumber() throws Exception {
+    proto("ag", P3 + "\nmessage ag {\n  int32 id = 1;\n  int32 z = 2;\n  WOneofWrapper w = 5 "
+        + WRAPPED + ";\n  message WOneofWrapper {\n    oneof value {\n      int32 a = 3;\n"
+        + "      string b = 4;\n    }\n  }\n}\n");
+    registry.alter("ag", new DropAttribute("w", false));
+    registry.drop("ag");
+    create("ag", SchemaType.PROTOBUF, "(id INT, z INT, n STRING)");
+    assertThat(message("ag").findFieldByName("n").getNumber()).isEqualTo(6);
+  }
+
+  // bv at version 1 below abv, and at version 2 below cbv.
+  private void bvBelowTwo() throws Exception {
+    twoVersionsOfBv();
+    json("cbv", String.format(ROW, "cbv", "cin", "{\"$ref\":\"bv\"}", ""), "bv");
+  }
+
+  // A type an attribute is of, read through a reference that goes with the statement, is
+  // not left to another version; named again it has a reference of its own.
+  @Test
+  void aTypeAnAttributeIsOfIsNotLeftToAnotherVersionByAReferenceThatGoes() throws Exception {
+    bvBelowTwo();
+    jsonRefs("m5", head("m5") + "\"a\":{\"$ref\":\"bv\"},\"c\":{\"$ref\":\"cbv\"}" + CLOSED,
+        List.of(new SchemaReference("cbv", "cbv", 1), new SchemaReference("abv", "abv", 1)),
+        "bv=bv@2", "cbv=cbv@1", "abv=abv@1");
+    refused("Type m5 cannot be changed so: it would no longer refer to version 2 of type bv, "
+        + "which it has through a type it would refer to no more; name the type again",
+        "m5", new DropAttribute("c", false));
+    assertThat(version("m5")).isEqualTo(1);
+    registry.alter("m5", new AlterAttributeType("a", "bv"), new DropAttribute("c", false));
+    assertThat(registry.latest("m5").getReferences())
+        .containsExactly(new SchemaReference("bv", "bv", 2));
+  }
+
+  // A reference the statement leaves no attribute of goes though it binds a name below
+  // another that stays: the way out of two versions.
+  @Test
+  void aReferenceTheStatementFreesGoesThoughItBindsANameBelowAnother() throws Exception {
+    bvBelowTwo();
+    jsonRefs("fr", head("fr") + "\"a\":{\"$ref\":\"abv\"},\"c\":{\"$ref\":\"cbv\"}" + CLOSED,
+        List.of(new SchemaReference("abv", "abv", 1), new SchemaReference("cbv", "cbv", 1)),
+        "bv=bv@1", "abv=abv@1", "cbv=cbv@1");
+    registry.alter("fr", new DropAttribute("a", false));
+    assertThat(version("fr")).isEqualTo(2);
+    assertThat(references("fr")).containsExactly("cbv");
+  }
+
+  // The document of a definition an attribute is of is kept at the version a reference of
+  // no use binds it to: the two versions are told.
+  @Test
+  void theDocumentOfADefinitionInUseIsKeptAtItsVersion() throws Exception {
+    String lq = "{\"type\":\"object\",\"title\":\"lq\",\"additionalProperties\":false,"
+        + "\"$defs\":{\"Loc\":%s}}";
+    json("lq", String.format(lq, P));
+    json("alq", String.format(ROW, "alq", "in", "{\"$ref\":\"lq#/$defs/Loc\"}", ""), "lq");
+    json("lq", String.format(lq, Q));
+    jsonAt("d6", head("d6") + "\"a\":{\"$ref\":\"lq#/$defs/Loc\"}" + CLOSED, "alq@1", "lq@2");
+    refused("Type d6 cannot be changed so: it would refer to two versions of type lq", "d6",
+        new AddAttribute("z", "INT"));
+    assertThat(version("d6")).isEqualTo(1);
+  }
+
+  // A type the statement names again is its own to move: a reference of no use that binds
+  // its old version goes.
+  @Test
+  void aTypeTheStatementNamesAgainIsNotKeptByAReferenceOfNoUse() throws Exception {
+    bvBelowTwo();
+    jsonAt("o2", head("o2") + "\"a\":{\"$ref\":\"bv\"}" + CLOSED, "abv@1", "bv@1");
+    registry.alter("o2", new AddAttribute("zx", "bv"));
+    assertThat(registry.latest("o2").getReferences())
+        .containsExactly(new SchemaReference("bv", "bv", 2));
+  }
+
+  // A reference of no use kept for another of no use that then goes is tried again.
+  @Test
+  void aReferenceKeptForAnotherThatGoesIsTriedAgain() throws Exception {
+    bvBelowTwo();
+    jsonAt("g3", head("g3") + "\"c\":{\"$ref\":\"cbv\"}" + CLOSED, "bv@2", "abv@1", "cbv@1");
+    registry.alter("g3", new AddAttribute("z", "INT"));
+    assertThat(references("g3")).containsExactly("cbv");
+  }
+
   private static final String LIBS = "{\"type\":\"object\",\"title\":\"%s\",\"properties\":"
       + "{\"v\":{\"$ref\":\"#/$defs/o5s\"},\"l\":{\"$ref\":\"#/$defs/Loc\"}},"
       + "\"additionalProperties\":false,\"$defs\":{\"o5s\":{\"enum\":[\"X\"]},\"Loc\":%s}}";
 
   private String later(String type) {
     return "{" + LATER + head(type).substring(1);
+  }
+
+  // A name for a document that says more of a value beside its $ref is refused, as a
+  // later draft reads the more; one that says no more is altered.
+  @Test
+  void aNameForADocumentThatSaysMoreIsRefused() throws Exception {
+    json("o5", String.format(ROW, "o5", "o", "{\"type\":\"string\"}", ""));
+    String rest = "\"x\":{\"$ref\":\"#/$defs/Y\"}},\"additionalProperties\":false,\"$defs\":"
+        + "{\"Y\":{\"$ref\":\"o5\",\"logical.ref\":true%s}}}";
+    json("sm", later("sm") + String.format(rest, ",\"minProperties\":2"), "o5");
+    refused("Type sm cannot be altered: its definition Y is a name for o5 that says more of "
+        + "a value beside it (minProperties)", "sm", new AddAttribute("z", "INT"));
+    json("sn", later("sn") + String.format(rest, ",\"title\":\"t\""), "o5");
+    registry.alter("sn", new AddAttribute("z", "INT"));
+    assertThat(version("sn")).isEqualTo(2);
   }
 
   // A definition a document has and uses itself, named as another document the type

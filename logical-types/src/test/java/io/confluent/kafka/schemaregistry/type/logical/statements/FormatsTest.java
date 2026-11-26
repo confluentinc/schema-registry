@@ -582,8 +582,8 @@ class FormatsTest {
     }
   }
 
-  // Two rows that each hold a union of many rows: the rows of the two unions are met all
-  // at once and judged once each, and not one at a turn with all before it asked again.
+  // Two rows that each hold a union of many rows: the rows of the two unions are met as
+  // many at a turn as were told apart, and not one at a turn with all before it asked again.
   @Test
   void rowsThatHoldUnionsOfManyRowsAreJudgedOnce() {
     StringBuilder body = new StringBuilder("(id INT, u UNION(");
@@ -631,5 +631,28 @@ class FormatsTest {
         + ")); TYPE t;");
     assertTimeoutPreemptively(Duration.ofSeconds(20),
         () -> Formats.refuseUnwritable(SchemaType.JSON, lt));
+  }
+
+  // Rows of a union that each require a union of rows of their own, the first two of which
+  // match: every two holders meet one pair of those held, and not every two.
+  @Test
+  void rowsThatRequireUnionsOfTheirOwnRowsMeetOnePairWhereTheFirstMatch() {
+    StringBuilder script = new StringBuilder();
+    StringBuilder holders = new StringBuilder("UNION(");
+    for (int i = 0; i < 20; i++) {
+      StringBuilder held = new StringBuilder("UNION(");
+      for (int j = 0; j < 30; j++) {
+        held.append(j > 0 ? ", " : "").append("r").append(j).append(" STRUCT<v").append(j)
+            .append(" INT NOT NULL>");
+      }
+      script.append("STRUCT S").append(i).append(" (u ").append(held).append(") NOT NULL, k")
+          .append(i).append(" INT NOT NULL); ");
+      holders.append(i > 0 ? ", " : "").append("s").append(i).append(" S").append(i);
+    }
+    LogicalType lt = TypeScripts.parse(script + "STRUCT t (id INT, x " + holders
+        + ")); TYPE t;");
+    Schema union = lt.getRootSchema().getField("x").getSchema();
+    // 190 pairs of holders, and one pair held for each: all held would be 171,000 more.
+    assertThat(Formats.rowsMet(union, lt.getNamedTypes())).isEqualTo(380);
   }
 }

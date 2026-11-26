@@ -390,6 +390,14 @@ public final class Formats {
   private static final String OVERLAPPING =
       ", which are written as one JSON type: a value of either would match both";
 
+  // How many pairs of rows are met in telling a union's overlapping branches: what the
+  // telling costs, for a test to hold it to.
+  static int rowsMet(Schema union, Map<String, Schema> namedTypes) {
+    Pairs comparing = new Pairs();
+    overlappingPairs(union, KnownTypes.of(namedTypes), false, comparing);
+    return comparing.met.size();
+  }
+
   // The first two branches of a union a value of one of which would match the other.
   private static String[] overlappingBranches(Schema union, KnownTypes named) {
     List<String[]> pairs = overlappingPairs(union, named, true);
@@ -401,13 +409,18 @@ public final class Formats {
   // is told by its first two.
   private static List<String[]> overlappingPairs(Schema union, KnownTypes named,
       boolean first) {
+    return overlappingPairs(union, named, first, new Pairs());
+  }
+
+  // comparing: the rows met in telling them.
+  private static List<String[]> overlappingPairs(Schema union, KnownTypes named,
+      boolean first, Pairs comparing) {
     List<UnionBranch> branches = union.getBranches();
     List<List<Written>> written = new ArrayList<>();
     for (UnionBranch b : branches) {
       written.add(written(b.getSchema(), named));
     }
     List<String[]> pairs = new ArrayList<>();
-    Pairs comparing = new Pairs();
     for (int j = 1; j < branches.size(); j++) {
       for (int i = 0; i < j; i++) {
         // Rows met while the two are judged are judged at once, and the two again by what
