@@ -170,7 +170,7 @@ public final class Formats {
   // name may be the type's own.
   private static void refuseUnwritable(SchemaType format, Field f, KnownTypes named,
       String under) {
-    String path = under == null ? f.getName() : under + "." + f.getName();
+    String path = joined(under, f.getName());
     if (format != SchemaType.AVRO && f.hasDefaultValue() && !f.hasDerivedDefault()
         && f.getDefaultValue() != null) {
       throw new TypeRefusedException("Attribute " + path + " has a DEFAULT, which a "
@@ -222,7 +222,7 @@ public final class Formats {
           refuseReservedParams(format, "branch " + b.getName() + of, b.getParams().keySet());
           // What is in a member's type is told with the member before it.
           refuseUnwritable(format, b.getSchema(), named,
-              within == null ? null : within + "." + b.getName());
+              within == null ? null : joined(within, b.getName()));
         }
         break;
       case ENUM:
@@ -245,6 +245,24 @@ public final class Formats {
     }
   }
 
+  /**
+   * A name as a part of a path: one with a dot in it is quoted as the DDL quotes a name, so
+   * that the path of an attribute in it is no other attribute's.
+   */
+  static String segment(String name) {
+    return name.indexOf('.') < 0 ? name : "`" + name.replace("`", "``") + "`";
+  }
+
+  /** The path of an attribute, or of a member, in the type of the attribute of a path. */
+  static String joined(String under, String name) {
+    return under == null ? segment(name) : under + "." + segment(name);
+  }
+
+  /** A value as a statement gives it, quoted as a literal is: a quote in it is doubled. */
+  static String quoted(Object value) {
+    return "'" + String.valueOf(value).replace("'", "''") + "'";
+  }
+
   // A Protobuf message's fields, and the members of the unions among them, have each a
   // number of its own: one said for two of them is told here by their paths, and not by
   // the writer by a message's name no statement gave.
@@ -254,7 +272,7 @@ public final class Formats {
     }
     Map<String, String> said = new HashMap<>();
     for (Field f : row.getFields()) {
-      String path = within == null ? f.getName() : within + "." + f.getName();
+      String path = joined(within, f.getName());
       if (f.getSchema().getType() != Schema.Type.UNION) {
         refuseSharedNumber(said, f.getParams(), "attribute " + path);
         continue;
@@ -304,7 +322,7 @@ public final class Formats {
     }
     if (!name.toString().matches("[A-Za-z_][A-Za-z0-9_]*")) {
       throw new TypeRefusedException("Property " + Schema.PROTOBUF_FIELD_NAME + " of branch "
-          + b.getName() + of + " is not a valid field name: '" + name + "'");
+          + b.getName() + of + " is not a valid field name: " + quoted(name));
     }
   }
 
@@ -321,12 +339,12 @@ public final class Formats {
       given = Integer.parseInt(number.toString());
     } catch (NumberFormatException e) {
       throw new TypeRefusedException("Property " + property + " of " + of
-          + " is not a valid number: '" + number + "'", e);
+          + " is not a valid number: " + quoted(number), e);
     }
     // A field's number is 1 or more; an enum value's may be 0 or less.
     if (given < 1 && property.equals(Schema.PROTOBUF_FIELD_NUMBER)) {
       throw new TypeRefusedException("Property " + property + " of " + of
-          + " is not a field's number, which is 1 or more: '" + number + "'");
+          + " is not a field's number, which is 1 or more: " + quoted(number));
     }
     // Nor is it above the last there is, or one of those Protobuf keeps: told here by the
     // attribute's path, and not by the writer by a message's name no statement gave.
@@ -416,7 +434,7 @@ public final class Formats {
       case STRUCT:
         for (Field f : type.getFields()) {
           String[] found = newlyOverlapping(f.getSchema(), before, after,
-              within == null ? f.getName() : within + "." + f.getName());
+              joined(within, f.getName()));
           if (found != null) {
             return found;
           }
@@ -434,7 +452,7 @@ public final class Formats {
         }
         for (UnionBranch b : type.getBranches()) {
           String[] found = newlyOverlapping(b.getSchema(), before, after,
-              within == null ? null : within + "." + b.getName());
+              within == null ? null : joined(within, b.getName()));
           if (found != null) {
             return found;
           }

@@ -423,6 +423,26 @@ class FormatsTest {
     }
   }
 
+  // A name with a dot in it is quoted in a path, which is then no other attribute's; and a
+  // value a statement gave is told as the literal it is, a quote in it doubled.
+  @Test
+  void aPathQuotesANameWithADotAndAValueIsToldAsALiteral() {
+    assertThatThrownBy(() -> Formats.refuseUnwritable(SchemaType.PROTOBUF,
+        struct("(`e.x` STRUCT<`a.b` INT DEFAULT 1, c INT>)")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageStartingWith("Attribute `e.x`.`a.b` has a DEFAULT");
+    assertThatThrownBy(() -> Formats.refuseUnwritable(SchemaType.PROTOBUF,
+        struct("(e STRUCT<x STRUCT<v INT DEFAULT 1>>)")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageStartingWith("Attribute e.x.v has a DEFAULT");
+    assertThatThrownBy(() -> Formats.refuseUnwritable(SchemaType.PROTOBUF,
+        struct("(e STRUCT<x INT WITH ('protobuf.field.number' = 'it''s')>)")))
+        .isInstanceOf(TypeRefusedException.class).hasMessage("Property protobuf.field.number "
+            + "of attribute e.x is not a valid number: 'it''s'");
+    assertThat(Formats.segment("plain")).isEqualTo("plain");
+    assertThat(Formats.segment("a.`b")).isEqualTo("`a.``b`");
+  }
+
   // Rows, arrays and maps are written as objects and arrays: two branches are refused where
   // a value of one would be a value of the other.
   @Test

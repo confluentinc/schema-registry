@@ -606,7 +606,18 @@ class TypeAlterTest {
     assertThatThrownBy(() -> registry.alter("nd", new AlterAttributeType("s",
         "STRUCT<y INT, x BOOLEAN NOT NULL>")))
         .isInstanceOf(TypeRefusedException.class)
-        .hasMessageStartingWith("Attribute x's default 7 cannot be read as BOOLEAN");
+        .hasMessageStartingWith("The default 7 of attribute s.x cannot be read as BOOLEAN");
+    // One of an attribute in another's type is told by that attribute's path.
+    create("adp", SchemaType.AVRO, "(id INT, e STRUCT<n STRING DEFAULT 'abc', "
+        + "r STRUCT<m STRING DEFAULT 'x'>>)");
+    assertThatThrownBy(() -> registry.alter("adp", new AlterAttributeType("e",
+        "STRUCT<n INT, r STRUCT<m STRING>>")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageStartingWith("The default 'abc' of attribute e.n cannot be read as INT");
+    assertThatThrownBy(() -> registry.alter("adp", new AlterAttributeType("e",
+        "STRUCT<n STRING, r STRUCT<m INT>>")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageStartingWith("The default 'x' of attribute e.r.m cannot be read as INT");
 
     // A type that is no struct keeps a nested default likewise, through SET DATA TYPE.
     registry.create("rd", SchemaType.AVRO, BodyKind.OTHER,
@@ -738,6 +749,19 @@ class TypeAlterTest {
       registry.alter(type, new DropAttribute("w", false));
       assertThat(numbers(message(type))).as(type).isEqualTo("id=5 z=6");
     }
+    // One a member of which has the number of a field of the message, of which no schema
+    // could be written at all, is told as that and not as the numbers.
+    registry.client.register("owc", new ProtobufSchema(String.format(oneof, 7)
+        .replace("int32 id = 5", "int32 id = 1")));
+    for (AlterAction action : List.of(new AddAttribute("n", "INT"),
+        new MoveAttribute("z", Position.first()))) {
+      assertThatThrownBy(() -> registry.alter("owc", action))
+          .isInstanceOf(TypeRefusedException.class)
+          .hasMessageStartingWith("Type owc cannot be altered: field w of message T is a "
+              + "oneof wrapped in a message");
+    }
+    registry.alter("owc", new DropAttribute("w", false));
+    assertThat(numbers(message("owc"))).isEqualTo("id=1 z=6");
     assertThat(version("gw")).isEqualTo(1);
     registry.alter("gw", new DropAttribute("sv", false), new DropAttribute("w", false),
         new AddAttribute("c", "INT"));

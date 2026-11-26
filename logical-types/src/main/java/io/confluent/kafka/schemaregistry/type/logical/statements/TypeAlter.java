@@ -370,7 +370,7 @@ public final class TypeAlter {
     Schema old = targetOf(lookup.logicalType(subject, md));
     root = lt.getRootSchema();
     namedTypes.putAll(lt.getNamedTypes());
-    setTarget(withDefaults(old, target()));
+    setTarget(withDefaults(old, target(), null));
     return new LogicalType(lt.getName(), lt.getNamespace(), root, namedTypes,
         lt.getExternalTypes(), lt.getExternalImports(), lt.getReferences(),
         lt.getResolvedReferences(), lt.getDefaultValues());
@@ -509,6 +509,7 @@ public final class TypeAlter {
       } catch (TypeRefusedException e) {
         // No schema can be made of a name that is two types or two versions: say that.
         TypeReferences.requireOneOfEach(lookup, subject, references, refused());
+        refuseWrappedOneof(stored);
         throw e;
       }
       if (writesWhatIsStored(md, stored, written)) {
@@ -847,6 +848,40 @@ public final class TypeAlter {
       }
     }
     return null;
+  }
+
+  // Where no schema can be made at all, as where a member of a wrapped oneof has the number
+  // of a field of the message: told as the wrapped oneof it is, while the type has its
+  // union, and not as the numbers the writer gives.
+  private void refuseWrappedOneof(ParsedSchema stored) {
+    Descriptor was;
+    try {
+      was = stored instanceof ProtobufSchema ? ((ProtobufSchema) stored).toDescriptor() : null;
+    } catch (RuntimeException e) {
+      return;
+    }
+    Schema target = target();
+    if (was == null || target.getType() != Schema.Type.STRUCT) {
+      return;
+    }
+    for (FieldDescriptor field : was.getFields()) {
+      if (!ProtoToLogicalTypeConverter.wrapsUnion(field)) {
+        continue;
+      }
+      Set<String> members = new HashSet<>();
+      field.getMessageType().getFields().forEach(member -> members.add(member.getName()));
+      for (Field f : target.getFields()) {
+        if (f.getSchema().getType() == Schema.Type.UNION && (f.getName().equals(field.getName())
+            || f.getSchema().getBranches().stream()
+                .anyMatch(b -> members.contains(b.getName())))) {
+          throw new TypeRefusedException("Type " + subject + " cannot be altered: field "
+              + field.getName() + " of message " + was.getName() + " is a oneof wrapped in "
+              + "a message, which would be written as a oneof of the message itself, so its "
+              + "stored values would be read as none. Drop the attribute, or register its "
+              + "new version as a Protobuf schema");
+        }
+      }
+    }
   }
 
   // Whether the message written has, as a oneof of its own, the oneof a field's message
@@ -1209,7 +1244,8 @@ public final class TypeAlter {
       replacing = f.getSchema();
       Schema type = parse(aliases -> TypeScripts.typeScript(a.type(), aliases))
           .getRootSchema();
-      Formats.refuseUnwritable(format, type, knownTypes(type), f.getName());
+      Formats.refuseUnwritable(format, type, knownTypes(type),
+          Formats.segment(f.getName()));
       Map<String, Object> params = f.getParams();
       // A type of the same kind keeps the native names pinned on it; another kind gets new.
       if (keepsNames(f.getSchema(), type)) {
@@ -1219,7 +1255,7 @@ public final class TypeAlter {
         params.keySet().removeIf(Schema::isTypeNameParam);
       }
       if (format == SchemaType.AVRO) {
-        type = withDefaults(f.getSchema(), type);
+        type = withDefaults(f.getSchema(), type, Formats.segment(f.getName()));
       }
       // The type it has already: nothing changes, and no version is made of it. One that
       // names a referenced type is said again to refer to that type's latest version.
@@ -1231,10 +1267,11 @@ public final class TypeAlter {
       if (format == SchemaType.PROTOBUF) {
         Messages root = new Messages(current, versions);
         type = type.getType() == Schema.Type.UNION
-            ? renumbered(type, f.getSchema(), root, counter(fields), f.getName())
+            ? renumbered(type, f.getSchema(), root, counter(fields),
+              Formats.segment(f.getName()))
             : renumbered(type, f.getSchema(), numberIn(f.getParams()) > 0
               ? root.field(numberIn(f.getParams())) : root.field(f.getName()), null,
-              f.getName());
+              Formats.segment(f.getName()));
         // A union has no number of its own, only its branches; what replaces it gets a
         // new one, rather than the lowest free one, a branch's.
         if (type.getType() != Schema.Type.UNION
@@ -1250,7 +1287,8 @@ public final class TypeAlter {
             f.getDoc(), f.getTags(), params, f.getRules()));
       } else if (format == SchemaType.AVRO && f.getDefaultValue() != null) {
         fields.set(i, new Field(f.getName(), type, f.getPosition(),
-            AvroDefaults.converted(f.getName(), f.getSchema(), type, f.getDefaultValue()),
+            AvroDefaults.converted(Formats.segment(f.getName()), f.getSchema(), type,
+              f.getDefaultValue()),
             f.hasDefaultValue(), f.hasDerivedDefault(), f.getDoc(), f.getTags(), params,
             f.getRules()));
       } else {
@@ -1275,7 +1313,7 @@ public final class TypeAlter {
             .setParams(target.getParams());
       }
       if (format == SchemaType.AVRO) {
-        type = withDefaults(target, type);
+        type = withDefaults(target, type, null);
       }
       setTarget(type);
       return true;
@@ -2957,7 +2995,7 @@ public final class TypeAlter {
           Field was = old != null && old.getType() == Schema.Type.STRUCT
               ? old.getField(f.getName()) : null;
           Schema wasType = was != null ? was.getSchema() : null;
-          String member = path == null ? f.getName() : path + "." + f.getName();
+          String member = Formats.joined(path, f.getName());
           // A union attribute is a oneof of this row; others are messages of their own.
           Schema s = f.getSchema().getType() == Schema.Type.UNION
               ? renumbered(f.getSchema(), wasType, at, inner, member)
@@ -2992,7 +3030,7 @@ public final class TypeAlter {
               String.valueOf(n > 0 ? n : counter.take()));
           branches.add(new UnionBranch(b.getName(),
               renumbered(b.getSchema(), was != null ? was.getSchema() : null,
-                at.field(n), null, path == null ? b.getName() : path + "." + b.getName()),
+                at.field(n), null, Formats.joined(path, b.getName())),
               b.getDoc(), params));
         }
         result = Schema.createUnion(branches);
@@ -3183,7 +3221,7 @@ public final class TypeAlter {
    * new type, as an attribute whose type changes does. Fields match by name, union branches
    * by branch name.
    */
-  private static Schema withDefaults(Schema old, Schema type) {
+  private static Schema withDefaults(Schema old, Schema type, String path) {
     if (old == null || old.getType() != type.getType()) {
       return type;
     }
@@ -3194,7 +3232,9 @@ public final class TypeAlter {
         for (Field f : type.getFields()) {
           Field was = old.getField(f.getName());
           if (was != null) {
-            fields.add(defaulted(f, was, withDefaults(was.getSchema(), f.getSchema())));
+            String member = Formats.joined(path, f.getName());
+            fields.add(defaulted(f, was,
+                withDefaults(was.getSchema(), f.getSchema(), member), member));
           } else if (!f.hasDefaultValue() && f.getSchema().isNullable()) {
             fields.add(new Field(f.getName(), f.getSchema(), f.getPosition(), null,
                 true, f.getDoc(), f.getTags(), f.getParams(), f.getRules()));
@@ -3210,7 +3250,8 @@ public final class TypeAlter {
         for (UnionBranch b : type.getBranches()) {
           UnionBranch was = branch(old, b.getName());
           branches.add(was == null ? b : new UnionBranch(b.getName(),
-              withDefaults(was.getSchema(), b.getSchema()), b.getDoc(),
+              withDefaults(was.getSchema(), b.getSchema(),
+                path == null ? null : Formats.joined(path, b.getName())), b.getDoc(),
               b.getParams()));
         }
         result = Schema.createUnion(branches);
@@ -3218,15 +3259,15 @@ public final class TypeAlter {
       }
       case ARRAY:
         result = Schema.createArray(
-            withDefaults(old.getElementType(), type.getElementType()));
+            withDefaults(old.getElementType(), type.getElementType(), path));
         break;
       case MULTISET:
         result = Schema.createMultiset(
-            withDefaults(old.getElementType(), type.getElementType()));
+            withDefaults(old.getElementType(), type.getElementType(), path));
         break;
       case MAP:
-        result = Schema.createMap(withDefaults(old.getKeyType(), type.getKeyType()),
-            withDefaults(old.getValueType(), type.getValueType()));
+        result = Schema.createMap(withDefaults(old.getKeyType(), type.getKeyType(), path),
+            withDefaults(old.getValueType(), type.getValueType(), path));
         break;
       default:
         return type;
@@ -3427,7 +3468,7 @@ public final class TypeAlter {
 
   // A field of a struct given anew, of the type given, with the default the field it
   // continues had, read as Avro reads it under the new type, unless it is given one of its own.
-  private static Field defaulted(Field f, Field was, Schema type) {
+  private static Field defaulted(Field f, Field was, Schema type, String path) {
     if (f.hasDefaultValue() || !was.hasDefaultValue()) {
       return copy(f, f.getName(), type, f.getParams());
     }
@@ -3438,7 +3479,7 @@ public final class TypeAlter {
           : copy(f, f.getName(), type, f.getParams());
     }
     return new Field(f.getName(), type, f.getPosition(),
-        AvroDefaults.converted(f.getName(), was.getSchema(), type, was.getDefaultValue()),
+        AvroDefaults.converted(path, was.getSchema(), type, was.getDefaultValue()),
         true, was.hasDerivedDefault(), f.getDoc(), f.getTags(), f.getParams(), f.getRules());
   }
 
