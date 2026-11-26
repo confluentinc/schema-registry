@@ -51,11 +51,14 @@ import java.util.List;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import org.apache.avro.*;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.avro.io.DatumReader;
 import org.apache.avro.reflect.ReflectData;
 import org.apache.avro.util.Utf8;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
@@ -2044,6 +2047,25 @@ public class KafkaAvroSerializerTest {
 
   private static int schemaIdOf(byte[] bytes) {
     return ByteBuffer.wrap(bytes, 1, 4).getInt();
+  }
+
+  @Test
+  public void testGetDatumReaderOverrideIsUsed() throws Exception {
+    // A subclass overriding the protected getDatumReader supplies the reader for a read
+    AtomicInteger calls = new AtomicInteger();
+    KafkaAvroDeserializer deserializer =
+        new KafkaAvroDeserializer(schemaRegistry, new HashMap(createDeserializerConfig())) {
+          @Override
+          protected DatumReader<?> getDatumReader(String subject, SchemaId writerSchemaId,
+              Schema writerSchema, Schema readerSchema) throws ExecutionException {
+            calls.incrementAndGet();
+            return super.getDatumReader(subject, writerSchemaId, writerSchema, readerSchema);
+          }
+        };
+    IndexedRecord avroRecord = createUserRecord();
+    byte[] bytes = avroSerializer.serialize(topic, avroRecord);
+    assertEquals(avroRecord, deserializer.deserialize(topic, bytes));
+    assertEquals(1, calls.get());
   }
 
   @Test
