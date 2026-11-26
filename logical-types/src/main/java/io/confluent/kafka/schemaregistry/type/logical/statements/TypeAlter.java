@@ -52,8 +52,11 @@ import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTyp
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceReport;
 import java.io.IOException;
+import java.net.URI;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -754,7 +757,7 @@ public final class TypeAlter {
             Field kept = now.getField(f.getName());
             if (found == null && kept != null) {
               found = find(f.getSchema(), kept.getSchema(),
-                  in != null ? in : "attribute " + f.getName());
+                  in != null ? in : "attribute " + Formats.segment(f.getName()));
             }
           }
           return found;
@@ -825,7 +828,9 @@ public final class TypeAlter {
       // A message that wraps a value is read as the value and written as it: the writer
       // wraps a collection, a union, and an element that may be null, and no other value.
       if (wrapsValue(field)) {
-        return of + " is a message that wraps a value, which would be written as the value "
+        OneofDescriptor in = field.getRealContainingOneof();
+        return of + (in != null ? ", a member of its oneof " + in.getName() + "," : "")
+            + " is a message that wraps a value, which would be written as the value "
             + "itself and not as that message, so its stored values would be read wrongly";
       }
       // A message of the name of one of the format's own that is not that one is read as
@@ -1097,7 +1102,8 @@ public final class TypeAlter {
             .getRootSchema();
       if (one == null || one.getFields().size() != 1 || !one.getParams().isEmpty()
           || one.getDoc() != null || !one.getTags().isEmpty() || !one.getRules().isEmpty()) {
-        throw new TypeRefusedException("Attribute " + a.name() + " is given more than one "
+        throw new TypeRefusedException("Attribute " + Formats.segment(a.name())
+            + " is given more than one "
             + "type and its clauses, or clauses out of their order (the type, DEFAULT, "
             + "CHECK, COMMENT, TAGS, WITH): " + a.field());
       }
@@ -1108,7 +1114,7 @@ public final class TypeAlter {
       int same = named(fields, a.name());
       if (same >= 0) {
         throw new TypeRefusedException("Type " + subject + " already has attribute "
-            + fields.get(same).getName());
+            + Formats.segment(fields.get(same).getName()));
       }
       refuseDroppedName(a.name());
       if (format == SchemaType.PROTOBUF) {
@@ -1155,11 +1161,13 @@ public final class TypeAlter {
         if (a.ifExists()) {
           return false;
         }
-        throw new TypeRefusedException("Type " + subject + " has no attribute " + a.name());
+        throw new TypeRefusedException("Type " + subject + " has no attribute "
+            + Formats.segment(a.name()));
       }
       for (Rule r : struct().getRules()) {
         if (Constraints.columns(r.getSql()).contains(fields.get(i).getName())) {
-          throw new TypeRefusedException("Attribute " + a.name() + " is used by constraint "
+          throw new TypeRefusedException("Attribute " + Formats.segment(a.name())
+              + " is used by constraint "
               + (r.getName() != null ? r.getName() : "CHECK (" + r.getSql() + ")")
               + "; drop the constraint first");
         }
@@ -1180,12 +1188,13 @@ public final class TypeAlter {
       List<Field> fields = new ArrayList<>(struct().getFields());
       int i = named(fields, a.name());
       if (i < 0) {
-        throw new TypeRefusedException("Type " + subject + " has no attribute " + a.name());
+        throw new TypeRefusedException("Type " + subject + " has no attribute "
+            + Formats.segment(a.name()));
       }
       Field moved = fields.remove(i);
       String after = a.position().after();
       if (after != null && named(List.of(moved), after) >= 0) {
-        throw new TypeRefusedException("Attribute " + moved.getName()
+        throw new TypeRefusedException("Attribute " + Formats.segment(moved.getName())
             + " cannot go after itself");
       }
       int at = place(fields, a.position());
@@ -1211,7 +1220,8 @@ public final class TypeAlter {
       List<Field> fields = new ArrayList<>(struct().getFields());
       int i = named(fields, a.from());
       if (i < 0) {
-        throw new TypeRefusedException("Type " + subject + " has no attribute " + a.from());
+        throw new TypeRefusedException("Type " + subject + " has no attribute "
+            + Formats.segment(a.from()));
       }
       // Renamed to the name it has, an attribute is as it was.
       if (fields.get(i).getName().equals(a.to())) {
@@ -1221,7 +1231,7 @@ public final class TypeAlter {
       int taken = named(fields, a.to());
       if (taken >= 0 && taken != i) {
         throw new TypeRefusedException("Type " + subject + " already has attribute "
-            + fields.get(taken).getName());
+            + Formats.segment(fields.get(taken).getName()));
       }
       refuseDroppedName(a.to());
       Field f = fields.get(i);
@@ -1231,8 +1241,9 @@ public final class TypeAlter {
       for (Rule r : using) {
         if (Constraints.columns(r.getSql()).contains(f.getName())
             && Constraints.variables(r.getSql()).contains(a.to())) {
-          throw new TypeRefusedException("Attribute " + a.from() + " cannot be renamed to "
-              + a.to() + ": constraint " + (r.getName() != null ? r.getName()
+          throw new TypeRefusedException("Attribute " + Formats.segment(a.from())
+              + " cannot be renamed to " + Formats.segment(a.to()) + ": constraint "
+              + (r.getName() != null ? r.getName()
               : "CHECK (" + r.getSql() + ")") + " uses " + a.to()
               + " as an iteration variable");
         }
@@ -1283,7 +1294,8 @@ public final class TypeAlter {
       List<Field> fields = new ArrayList<>(struct().getFields());
       int i = named(fields, a.name());
       if (i < 0) {
-        throw new TypeRefusedException("Type " + subject + " has no attribute " + a.name());
+        throw new TypeRefusedException("Type " + subject + " has no attribute "
+            + Formats.segment(a.name()));
       }
       Field f = fields.get(i);
       replacing = f.getSchema();
@@ -1427,8 +1439,9 @@ public final class TypeAlter {
       AlterAction.SetAttributeWith a = (AlterAction.SetAttributeWith) action;
       Field f = field(a.name());
       Map<String, Object> params = new LinkedHashMap<>(f.getParams());
-      refuseNativeParams(a.with(), params, "attribute", f.getName());
-      Formats.refuseReservedParams(format, "attribute " + f.getName(), a.with().keySet());
+      refuseNativeParams(a.with(), params, "attribute", Formats.segment(f.getName()));
+      Formats.refuseReservedParams(format, "attribute " + Formats.segment(f.getName()),
+          a.with().keySet());
       params.putAll(a.with());
       setField(copy(f, f.getName(), f.getSchema(), params));
       return true;
@@ -1587,11 +1600,14 @@ public final class TypeAlter {
         for (int n = 2; find(struct().getFields(), temp) >= 0 || dropped.contains(temp); n++) {
           temp = name + "_tmp" + n;
         }
-        throw new TypeRefusedException("Attribute " + name + " " + why + ": the aliases of "
-            + name + " and " + other + " already swap their names, so they cannot be "
+        String one = Formats.segment(name);
+        String two = Formats.segment(other);
+        String third = Formats.segment(temp);
+        throw new TypeRefusedException("Attribute " + one + " " + why + ": the aliases of "
+            + one + " and " + two + " already swap their names, so they cannot be "
             + "swapped back in one statement; swap them in three: RENAME ATTRIBUTE "
-            + name + " TO " + temp + ", then RENAME ATTRIBUTE " + other + " TO " + name
-            + ", then RENAME ATTRIBUTE " + temp + " TO " + other);
+            + one + " TO " + third + ", then RENAME ATTRIBUTE " + two + " TO " + one
+            + ", then RENAME ATTRIBUTE " + third + " TO " + two);
       }
       throw new TypeRefusedException("Attribute " + name + " " + why);
     }
@@ -1710,7 +1726,8 @@ public final class TypeAlter {
   // so its data would carry over (Avro, JSON) or the version could not read it (Avro aliases).
   private void refuseDroppedName(String name) {
     if (dropped.contains(name)) {
-      throw new TypeRefusedException("Attribute " + name + " is dropped by this statement, so its "
+      throw new TypeRefusedException("Attribute " + Formats.segment(name)
+          + " is dropped by this statement, so its "
           + "name cannot be given to another attribute in it; use two statements");
     }
   }
@@ -2091,26 +2108,132 @@ public final class TypeAlter {
           + "definition would be written as that type. Register its new version as a JSON "
           + "schema");
     }
-    refuseDefinitionsOfOneName(schema);
+    refuseDefinitionsOfOneName((JsonSchema) stored);
   }
 
   // A definition is read by its name alone, whichever document it is of: two of one name,
   // the type's own and a document's or those of two documents, are read as one, and the
-  // next statement would write every attribute of the one as the other's.
-  private void refuseDefinitionsOfOneName(JsonNode schema) {
-    // The schema's own, named by its $id, is the one named by none.
-    String id = schema.path("$id").asText("");
-    Map<String, String> named = new HashMap<>();
-    for (String ref : refsReadByName(schema)) {
-      String to = !id.isEmpty() && ref.startsWith(id + "#") ? ref.substring(id.length()) : ref;
-      String name = JsonToLogicalTypeConverter.extractCanonicalDefsKey(to);
-      String other = name == null ? null : named.putIfAbsent(name, to);
-      if (other != null && !other.equals(to)) {
-        throw new TypeRefusedException("Type " + subject + " cannot be altered: it has two "
-            + "definitions named " + name + ", " + other + " and " + to + ". The two are "
-            + "read as one, and the one would be written as the other. Register its new "
-            + "version as a JSON schema");
+  // next statement would write every attribute of the one as the other's. Told through
+  // the documents the schema refers to, as far as its $refs reach: a name the schema itself
+  // uses, that is, as what two documents have between them is not this type's to write.
+  private void refuseDefinitionsOfOneName(JsonSchema stored) {
+    JsonNode root = stored.toJsonNode();
+    Map<String, JsonNode> documents = new HashMap<>();
+    documents.put("", root);
+    Map<String, Set<String>> named = new LinkedHashMap<>();
+    Set<String> own = new HashSet<>();
+    Set<String> gone = new HashSet<>();
+    Deque<String[]> todo = new ArrayDeque<>();
+    todo.add(new String[] {"", ""});
+    boolean kept = false;
+    while (!todo.isEmpty() || !kept) {
+      if (todo.isEmpty()) {
+        // And through the definitions of its own the type as read has, reached or not.
+        kept = true;
+        unreached(stored, root, gone).forEach(at -> todo.add(new String[] {"", at}));
+        continue;
       }
+      String[] at = todo.pop();
+      if (!gone.add(at[0] + " " + at[1])) {
+        continue;
+      }
+      JsonNode document = documents.computeIfAbsent(at[0], name -> {
+        try {
+          String text = stored.resolvedReferences().get(name);
+          return text == null ? MissingNode.getInstance()
+              : JacksonMapper.INSTANCE.readTree(text);
+        } catch (IOException e) {
+          return MissingNode.getInstance();
+        }
+      });
+      JsonNode node = at[1].isEmpty() ? withoutDefinitions(document)
+          : definition(document, "#" + at[1]);
+      // The entry the writer writes for a name is read by that name: its $ref is gone
+      // through, and is no use of a definition.
+      boolean entry = at[0].isEmpty() && node.path("logical.ref").asBoolean();
+      List<String> refs = new ArrayList<>();
+      collectRefs(node, refs);
+      for (String ref : refs) {
+        String to = local(document, ref);
+        int hash = to.indexOf('#');
+        String in = hash == 0 ? at[0] : hash < 0 ? to : to.substring(0, hash);
+        String part = hash < 0 ? "" : to.substring(hash + 1);
+        String target = part.isEmpty() ? in : in + "#" + part;
+        todo.add(new String[] {in, part});
+        String name = JsonToLogicalTypeConverter.extractCanonicalDefsKey(target);
+        if (name == null || entry) {
+          continue;
+        }
+        // A name the type has for what it refers to is that, and no definition of its own.
+        JsonNode called = in.isEmpty() ? definition(root, "#" + part) : MissingNode.getInstance();
+        if (called.path("logical.ref").asBoolean() && called.path("$ref").isTextual()) {
+          target = local(root, called.path("$ref").asText());
+        }
+        named.computeIfAbsent(name, n -> new LinkedHashSet<>()).add(target);
+        if (at[0].isEmpty()) {
+          own.add(name);
+        }
+      }
+    }
+    named.forEach((name, targets) -> {
+      if (targets.size() > 1 && own.contains(name)) {
+        Iterator<String> two = targets.iterator();
+        throw new TypeRefusedException("Type " + subject + " cannot be altered: it has two "
+            + "definitions named " + name + ", " + two.next() + " and " + two.next()
+            + ". The two are read as one, and the one would be written as the other. "
+            + "Register its new version as a JSON schema");
+      }
+    });
+  }
+
+  // A document without its definitions, which are gone through as its $refs reach them.
+  private static JsonNode withoutDefinitions(JsonNode document) {
+    if (!document.isObject()) {
+      return document;
+    }
+    ObjectNode copy = document.deepCopy();
+    copy.remove(List.of("$defs", "definitions"));
+    return copy;
+  }
+
+  // The definitions of the schema's own that no $ref reached and the type as read has all
+  // the same, as one of a later draft is read with each of its $defs: by their places.
+  private static List<String> unreached(JsonSchema stored, JsonNode root, Set<String> gone) {
+    List<String> places = new ArrayList<>();
+    for (String word : List.of("$defs", "definitions")) {
+      root.path(word).fieldNames().forEachRemaining(name -> {
+        if (!gone.contains(" /" + word + "/" + name)) {
+          places.add("/" + word + "/" + name);
+        }
+      });
+    }
+    if (places.isEmpty()) {
+      return places;
+    }
+    Set<String> read;
+    try {
+      read = LogicalTypeConversion.toLogicalType(stored).getNamedTypes().keySet();
+    } catch (RuntimeException e) {
+      // A schema that cannot be read is refused as that.
+      return List.of();
+    }
+    places.removeIf(place -> !read.contains(place.substring(place.lastIndexOf('/') + 1)));
+    return places;
+  }
+
+  // A $ref as it is to the document it is in: one that names the document by its $id, or
+  // relative to it, is to a part of the document itself.
+  private static String local(JsonNode document, String ref) {
+    String id = document.path("$id").asText("");
+    if (id.isEmpty() || ref.startsWith("#")) {
+      return ref;
+    }
+    String own = id.indexOf('#') < 0 ? id : id.substring(0, id.indexOf('#'));
+    try {
+      String to = URI.create(own).resolve(ref).toString();
+      return to.equals(own) ? "#" : to.startsWith(own + "#") ? to.substring(own.length()) : ref;
+    } catch (IllegalArgumentException e) {
+      return ref;
     }
   }
 
@@ -2312,7 +2435,8 @@ public final class TypeAlter {
     List<Field> fields = struct().getFields();
     int i = named(fields, name);
     if (i < 0) {
-      throw new TypeRefusedException("Type " + subject + " has no attribute " + name);
+      throw new TypeRefusedException("Type " + subject + " has no attribute "
+          + Formats.segment(name));
     }
     return fields.get(i);
   }
@@ -2521,8 +2645,9 @@ public final class TypeAlter {
     if (format != SchemaType.PROTOBUF || plainThenUnions(fields).equals(fields)) {
       return;
     }
-    throw new TypeRefusedException("Attribute " + name + " cannot be placed "
-        + (position.after() == null ? "first" : "after " + position.after()) + " in PROTOBUF "
+    throw new TypeRefusedException("Attribute " + Formats.segment(name) + " cannot be placed "
+        + (position.after() == null ? "first" : "after " + Formats.segment(position.after()))
+        + " in PROTOBUF "
         + "type " + subject + ": a Protobuf message declares its unions after its other "
         + "fields, so a union follows every attribute that is not a union");
   }
@@ -3431,12 +3556,13 @@ public final class TypeAlter {
     for (Field f : fields) {
       // A union is no field: its members are.
       if (f.getSchema().getType() != Schema.Type.UNION && numberIn(f.getParams()) == given) {
-        has = "attribute " + f.getName() + " has it";
+        has = "attribute " + Formats.segment(f.getName()) + " has it";
       }
       if (f.getSchema().getType() == Schema.Type.UNION) {
         for (UnionBranch b : f.getSchema().getBranches()) {
           if (numberIn(b.getParams()) == given) {
-            has = "branch " + b.getName() + " of attribute " + f.getName() + " has it";
+            has = "branch " + b.getName() + " of attribute " + Formats.segment(f.getName())
+                + " has it";
           }
         }
       }
@@ -3446,7 +3572,8 @@ public final class TypeAlter {
           : "Protobuf keeps it for itself";
     }
     if (has != null) {
-      throw new TypeRefusedException("Attribute " + field.getName() + " cannot have the "
+      throw new TypeRefusedException("Attribute " + Formats.segment(field.getName())
+          + " cannot have the "
           + "Protobuf field number " + given + ": " + has + "; give it another, or none");
     }
     return given;
@@ -3475,7 +3602,8 @@ public final class TypeAlter {
     for (UnionBranch b : field.getSchema().getBranches()) {
       if (b.getParams().containsKey(Schema.PROTOBUF_FIELD_NUMBER)) {
         throw new TypeRefusedException("Branch " + b.getName() + " of attribute "
-            + field.getName() + " cannot be given a Protobuf field number: the members of "
+            + Formats.segment(field.getName())
+            + " cannot be given a Protobuf field number: the members of "
             + "a new UNION are numbered as the type's new fields are; give it none");
       }
     }
@@ -3557,7 +3685,7 @@ public final class TypeAlter {
     int i = named(others, position.after());
     if (i < 0) {
       throw new TypeRefusedException("Type " + subject + " has no attribute "
-          + position.after());
+          + Formats.segment(position.after()));
     }
     return i + 1;
   }

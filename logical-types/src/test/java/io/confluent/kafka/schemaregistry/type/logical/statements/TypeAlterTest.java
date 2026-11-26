@@ -4840,7 +4840,10 @@ class TypeAlterTest {
           new MoveAttribute("z", Position.first()))) {
         assertThatThrownBy(() -> registry.alter(type.getKey(), action)).as(type.getKey())
             .isInstanceOf(TypeRefusedException.class).hasMessage("Type " + type.getKey()
-                + " cannot be altered: field w of message T is a message that wraps a value, "
+                + " cannot be altered: field w of message T"
+                // A member is told with its oneof, which is the attribute to drop.
+                + (type.getKey().equals("wm") ? ", a member of its oneof o," : "")
+                + " is a message that wraps a value, "
                 + "which would be written as the value itself and not as that message, so "
                 + "its stored values would be read wrongly. Drop the attribute, or register "
                 + "its new version as a Protobuf schema");
@@ -4967,5 +4970,84 @@ class TypeAlterTest {
         .hasMessageNotContaining("wrapped in a message");
     assertThat(version("fo4")).isEqualTo(1);
     assertThat(version("fo5")).isEqualTo(1);
+  }
+
+  // A document referred to whole has definitions of its own, which are read by their
+  // names with the type's: one of a name the type itself uses for another is refused, in
+  // either draft. A definition of the type's own that is not read tells nothing.
+  @Test
+  void aJsonNameIsToldThroughTheDocumentsReferredTo() throws Exception {
+    String p = "{\"type\":\"object\",\"properties\":{\"p\":{\"type\":\"integer\"}},"
+        + "\"required\":[\"p\"],\"additionalProperties\":false}";
+    String q = "{\"type\":\"object\",\"properties\":{\"q\":{\"type\":\"string\"}},"
+        + "\"required\":[\"q\"],\"additionalProperties\":false}";
+    String later = "\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",";
+    json("libw", "{\"type\":\"object\",\"title\":\"libw\",\"properties\":{\"l\":{\"$ref\":"
+        + "\"#/$defs/Loc\"}},\"additionalProperties\":false,\"$defs\":{\"Loc\":" + p + "}}");
+    for (String draft : List.of("", later)) {
+      String n = draft.isEmpty() ? "7" : "20";
+      String head = "{" + draft + String.format(JSON_HEAD, "c" + n).substring(1);
+      // The type's own Loc, and the one the document's attribute is of.
+      json("c3" + n, head + "\"x\":{\"$ref\":\"#/$defs/Loc\"},\"w\":{\"$ref\":\"libw\"}},"
+          + "\"additionalProperties\":false,\"$defs\":{\"Loc\":" + q + "}}", "libw");
+      assertThatThrownBy(() -> registry.alter("c3" + n, new AddAttribute("z", "INT")))
+          .isInstanceOf(TypeRefusedException.class).hasMessage("Type c3" + n + " cannot be "
+              + "altered: it has two definitions named Loc, #/$defs/Loc and libw#/$defs/Loc. "
+              + "The two are read as one, and the one would be written as the other. "
+              + "Register its new version as a JSON schema");
+      // The document's own, named by the type too, is one.
+      json("c1" + n, head + "\"w\":{\"$ref\":\"libw\"},\"v\":{\"$ref\":\"libw#/$defs/Loc\"}},"
+          + "\"additionalProperties\":false}", "libw");
+      registry.alter("c1" + n, new AddAttribute("z", "INT"));
+      assertThat(version("c1" + n)).isEqualTo(2);
+    }
+    // A definition no attribute is of is not read in the older draft, and is in the later.
+    String unused = "\"x\":{\"$ref\":\"#/$defs/Loc\"}},\"additionalProperties\":false,"
+        + "\"$defs\":{\"Loc\":" + q + ",\"Foo\":{\"type\":\"object\",\"properties\":{\"in\":"
+        + "{\"$ref\":\"libw#/$defs/Loc\"}}}}}";
+    json("c27", String.format(JSON_HEAD, "c27") + unused, "libw");
+    registry.alter("c27", new AddAttribute("z", "INT"));
+    assertThat(version("c27")).isEqualTo(2);
+    json("c220", "{" + later + String.format(JSON_HEAD, "c220").substring(1) + unused, "libw");
+    assertThatThrownBy(() -> registry.alter("c220", new AddAttribute("z", "INT")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("it has two definitions named Loc, ");
+    // What two documents have between them, and the type names by neither, is theirs.
+    json("libv", "{\"type\":\"object\",\"title\":\"libv\",\"properties\":{\"m\":{\"$ref\":"
+        + "\"#/$defs/Loc\"}},\"additionalProperties\":false,\"$defs\":{\"Loc\":" + q + "}}");
+    json("c4", String.format(JSON_HEAD, "c4") + "\"a\":{\"$ref\":\"libw\"},\"b\":{\"$ref\":"
+        + "\"libv\"}},\"additionalProperties\":false}", "libw", "libv");
+    registry.alter("c4", new AddAttribute("z", "INT"));
+    assertThat(version("c4")).isEqualTo(2);
+    assertThat(references("c4")).containsExactly("libv", "libw");
+    // A definition named by the schema's $id is the schema's own.
+    json("c6", "{\"$id\":\"x-test://c6/c6.json\","
+        + String.format(JSON_HEAD, "c6").substring(1) + "\"x\":{\"$ref\":\"#/$defs/Loc\"},"
+        + "\"y\":{\"$ref\":\"c6.json#/$defs/Loc\"}},\"additionalProperties\":false,"
+        + "\"$defs\":{\"Loc\":" + q + "}}");
+    registry.alter("c6", new AddAttribute("z", "INT"));
+    assertThat(version("c6")).isEqualTo(2);
+  }
+
+  // A name with a dot is quoted in what a statement is refused for, as it is in a path:
+  // attribute `e.x` is not attribute x of e.
+  @Test
+  void aNameWithADotIsQuotedInARefusal() {
+    create("dn", SchemaType.JSON, "(id INT NOT NULL, e STRUCT<x INT>, `e.x` INT)");
+    assertThatThrownBy(() -> registry.alter("dn", new DropAttribute("n.x", false)))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessage("Type dn has no attribute `n.x`");
+    assertThatThrownBy(() -> registry.alter("dn", new AddAttribute("e.x", "INT")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessage("Type dn already has attribute `e.x`");
+    assertThatThrownBy(() -> registry.alter("dn", new MoveAttribute("e.x",
+        Position.after("e.x")))).isInstanceOf(TypeRefusedException.class)
+        .hasMessage("Attribute `e.x` cannot go after itself");
+    assertThatThrownBy(() -> registry.alter("dn", new MoveAttribute("id",
+        Position.after("n.x")))).isInstanceOf(TypeRefusedException.class)
+        .hasMessage("Type dn has no attribute `n.x`");
+    assertThatThrownBy(() -> registry.alter("dn", new DropAttribute("e.x", false),
+        new AddAttribute("e.x", "STRING"))).isInstanceOf(TypeRefusedException.class)
+        .hasMessageStartingWith("Attribute `e.x` is dropped by this statement");
   }
 }
