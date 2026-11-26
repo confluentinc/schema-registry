@@ -64,6 +64,13 @@ public class SchemaBackupAwareByteArrayConverterTest {
   private static final String TOPIC = "test-topic";
   private static final String SR_URL_CONFIG = "schema.registry.url";
   private static final String SR_URL_VALUE = "http://fake-url";
+  private static final String USER_AVRO_SCHEMA =
+      "{\"type\":\"record\",\"name\":\"User\","
+          + "\"namespace\":\"io.confluent.test\","
+          + "\"fields\":["
+          + "{\"name\":\"name\",\"type\":\"string\"},"
+          + "{\"name\":\"age\",\"type\":\"int\"}"
+          + "]}";
   private static final String BACKUP_ENABLED_CONFIG =
       SchemaBackupConfig.SCHEMA_BACKUP_ENABLED_CONFIG;
 
@@ -272,6 +279,51 @@ public class SchemaBackupAwareByteArrayConverterTest {
   }
 
   @Test
+  public void testRestoreNullDataBytesThrows() throws Exception {
+    SchemaAndValue wrapped = backupConverter.toConnectData(TOPIC, serializeAvro("Nil", 1));
+    Struct noBytes = new Struct(wrapped.schema());
+    for (org.apache.kafka.connect.data.Field field : wrapped.schema().fields()) {
+      noBytes.put(field, ((Struct) wrapped.value()).get(field));
+    }
+    noBytes.put(BackupWrapper.FIELD_DATA, null);
+    try {
+      backupConverter.fromConnectData(TOPIC, wrapped.schema(), noBytes);
+      fail("Expected DataException for null data bytes");
+    } catch (DataException e) {
+      assertTrue(e.getMessage(), e.getMessage().contains(BackupWrapper.FIELD_DATA));
+    }
+  }
+
+  @Test
+  public void testDefaultConstructorBuildsRegistryClientFromConfig() {
+    // The no-arg constructor is what Connect uses; it must build its own client.
+    String scope = "bytearray-default-ctor";
+    String mockUrl = "mock://" + scope;
+    try {
+      SchemaBackupAwareByteArrayConverter fromConfig = new SchemaBackupAwareByteArrayConverter();
+      Map<String, Object> cfg = new HashMap<>();
+      cfg.put(SR_URL_CONFIG, mockUrl);
+      cfg.put(BACKUP_ENABLED_CONFIG, "true");
+      fromConfig.configure(cfg, false);
+
+      KafkaAvroSerializer ser = new KafkaAvroSerializer();
+      ser.configure(Collections.singletonMap(SR_URL_CONFIG, mockUrl), false);
+      GenericRecord record = new GenericData.Record(
+          new org.apache.avro.Schema.Parser().parse(USER_AVRO_SCHEMA));
+      record.put("name", "Dee");
+      record.put("age", 7);
+      byte[] original = ser.serialize(TOPIC, record);
+
+      SchemaAndValue wrapped = fromConfig.toConnectData(TOPIC, original);
+      assertEquals(BackupWrapper.NAME, wrapped.schema().name());
+      assertArrayEquals(original,
+          fromConfig.fromConnectData(TOPIC, wrapped.schema(), wrapped.value()));
+    } finally {
+      io.confluent.kafka.schemaregistry.testutil.MockSchemaRegistry.dropScope(scope);
+    }
+  }
+
+  @Test
   public void testRestoreUnknownSchemaTypeThrows() throws Exception {
     byte[] wireBytes = serializeAvro("bad-type", 1);
     SchemaAndValue wrapped = backupConverter.toConnectData(TOPIC, wireBytes);
@@ -363,15 +415,8 @@ public class SchemaBackupAwareByteArrayConverterTest {
   // ---------------- Helpers to build wire-format bytes ----------------
 
   private byte[] serializeAvro(String name, int age) {
-    String schemaStr =
-        "{\"type\":\"record\",\"name\":\"User\","
-            + "\"namespace\":\"io.confluent.test\","
-            + "\"fields\":["
-            + "{\"name\":\"name\",\"type\":\"string\"},"
-            + "{\"name\":\"age\",\"type\":\"int\"}"
-            + "]}";
     org.apache.avro.Schema avroSchema =
-        new org.apache.avro.Schema.Parser().parse(schemaStr);
+        new org.apache.avro.Schema.Parser().parse(USER_AVRO_SCHEMA);
     GenericRecord record = new GenericData.Record(avroSchema);
     record.put("name", name);
     record.put("age", age);
