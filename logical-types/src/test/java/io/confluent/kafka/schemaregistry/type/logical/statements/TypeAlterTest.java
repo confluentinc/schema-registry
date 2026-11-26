@@ -4812,4 +4812,120 @@ class TypeAlterTest {
     assertThat(message("w4").getRealOneofs()).extracting(o -> o.getName())
         .containsExactly("o");
   }
+
+  private static final String WRAPPED = "[(confluent.field_meta) = {\n    params: [{\n      "
+      + "key: \"flink.wrapped\",\n      value: \"true\"\n    }]\n  }]";
+
+  // A message written by hand that wraps a value is read as the value, and would be
+  // written as it: a field of another kind. The writer wraps a collection, a union and an
+  // element that may be null, which are altered as they are.
+  @Test
+  void aProtobufMessageThatWrapsAValueIsNotWrittenAsTheValue() throws Exception {
+    String head = "syntax = \"proto3\";\n\nimport \"confluent/meta.proto\";\n\nmessage T {\n"
+        + "  int32 id = 5;\n";
+    Map<String, String> wrappers = new LinkedHashMap<>();
+    wrappers.put("wv", "  WWrapper w = 2 " + WRAPPED + ";\n  int32 z = 6;\n\n"
+        + "  message WWrapper {\n    int32 value = 1;\n  }\n}\n");
+    wrappers.put("wr", "  WWrapper w = 2 " + WRAPPED + ";\n  int32 z = 6;\n\n"
+        + "  message WWrapper {\n    R value = 1;\n    message R {\n      int32 k = 1;\n    }\n"
+        + "  }\n}\n");
+    // An element that is never null, and a member of a oneof.
+    wrappers.put("we", "  repeated WWrapper w = 2 " + WRAPPED + ";\n  int32 z = 6;\n\n"
+        + "  message WWrapper {\n    int32 value = 1;\n  }\n}\n");
+    wrappers.put("wm", "  oneof o {\n    WWrapper w = 2 " + WRAPPED + ";\n    string s = 3;\n"
+        + "  }\n  int32 z = 6;\n\n  message WWrapper {\n    int32 value = 1;\n  }\n}\n");
+    for (Map.Entry<String, String> type : wrappers.entrySet()) {
+      registry.client.register(type.getKey(), new ProtobufSchema(head + type.getValue()));
+      for (AlterAction action : List.of(new AddAttribute("n", "INT"),
+          new MoveAttribute("z", Position.first()))) {
+        assertThatThrownBy(() -> registry.alter(type.getKey(), action)).as(type.getKey())
+            .isInstanceOf(TypeRefusedException.class).hasMessage("Type " + type.getKey()
+                + " cannot be altered: field w of message T is a message that wraps a value, "
+                + "which would be written as the value itself and not as that message, so "
+                + "its stored values would be read wrongly. Drop the attribute, or register "
+                + "its new version as a Protobuf schema");
+      }
+      assertThat(version(type.getKey())).as(type.getKey()).isEqualTo(1);
+    }
+    // Dropped, it is no more.
+    registry.alter("wv", new DropAttribute("w", false));
+    assertThat(message("wv").findFieldByNumber(2)).isNull();
+    // An element that may be null is wrapped by the writer too, and stays so.
+    registry.client.register("wo", new ProtobufSchema(head + "  repeated WWrapper w = 2 "
+        + WRAPPED + ";\n  int32 z = 6;\n\n  message WWrapper {\n    optional int32 value = 1;\n"
+        + "  }\n}\n"));
+    registry.alter("wo", new AddAttribute("n", "INT"));
+    assertThat(message("wo").findFieldByNumber(2).getMessageType().getName())
+        .isEqualTo("WWrapper");
+    create("ww", SchemaType.PROTOBUF, "(id INT, w ARRAY<INT>, e ARRAY<INT NULL> NOT NULL, "
+        + "m MAP<STRING, INT>, u UNION(a ARRAY<INT>, b INT, c UNION(x INT, y STRING)), z INT)");
+    String before = numbers(message("ww"));
+    registry.alter("ww", new AddAttribute("n", "INT"));
+    registry.alter("ww", new MoveAttribute("z", Position.first()));
+    assertThat(version("ww")).isEqualTo(3);
+    assertThat(numbers(message("ww"))).startsWith(before);
+  }
+
+  // A definition is read by its name alone: a type with one of its own and one of a
+  // document it refers to of the same name has the two read as one, and is refused.
+  @Test
+  void aJsonTypeWithTwoDefinitionsOfOneNameIsRefused() throws Exception {
+    json("lib", "{\"type\":\"object\",\"title\":\"lib\",\"properties\":{\"q\":{\"type\":"
+        + "\"integer\"}},\"additionalProperties\":false,\"$defs\":{\"Loc\":{\"type\":"
+        + "\"object\",\"properties\":{\"p\":{\"type\":\"integer\"}},\"required\":[\"p\"],"
+        + "\"additionalProperties\":false}}}");
+    String own = "\"$defs\":{\"Loc\":{\"type\":\"object\",\"properties\":{\"q\":{\"type\":"
+        + "\"string\"}},\"required\":[\"q\"],\"additionalProperties\":false}}}";
+    json("t2", String.format(JSON_HEAD, "t2") + "\"x\":{\"$ref\":\"#/$defs/Loc\"},\"y\":"
+        + "{\"$ref\":\"lib#/$defs/Loc\"}},\"additionalProperties\":false," + own, "lib");
+    // In a union's branch, and with the document's read first.
+    json("t2u", String.format(JSON_HEAD, "t2u") + "\"y\":{\"$ref\":\"lib#/$defs/Loc\"},\"u\":"
+        + "{\"oneOf\":[{\"type\":\"integer\"},{\"$ref\":\"#/$defs/Loc\"}]}},"
+        + "\"additionalProperties\":false," + own, "lib");
+    for (String type : List.of("t2", "t2u")) {
+      assertThatThrownBy(() -> registry.alter(type, new AddAttribute("z", "INT"))).as(type)
+          .isInstanceOf(TypeRefusedException.class)
+          .hasMessageStartingWith("Type " + type + " cannot be altered: it has two "
+              + "definitions named Loc, ")
+          .hasMessageContaining("#/$defs/Loc and ")
+          .hasMessageEndingWith(". The two are read as one, and the one would be written "
+              + "as the other. Register its new version as a JSON schema");
+      assertThat(version(type)).as(type).isEqualTo(1);
+    }
+    // One of them alone, said more than once, is one.
+    json("t1", String.format(JSON_HEAD, "t1") + "\"x\":{\"$ref\":\"lib#/$defs/Loc\"},\"y\":"
+        + "{\"$ref\":\"lib#/$defs/Loc\"}},\"additionalProperties\":false}", "lib");
+    json("t0", String.format(JSON_HEAD, "t0") + "\"x\":{\"$ref\":\"#/$defs/Loc\"},\"y\":"
+        + "{\"$ref\":\"#/$defs/Loc\"}},\"additionalProperties\":false," + own);
+    for (String type : List.of("t1", "t0")) {
+      registry.alter(type, new AddAttribute("z", "INT"));
+      assertThat(version(type)).as(type).isEqualTo(2);
+    }
+  }
+
+  // A subject named as the type as read calls a part of a document it refers to: the
+  // reference would be written as that part, and is refused. Read first, the subject has
+  // the name and the part another.
+  @Test
+  void aJsonReferenceNamedAsAPartIsCalledIsRefused() throws Exception {
+    create("o5s", SchemaType.JSON, "(o STRING NOT NULL)");
+    create("Ref1", SchemaType.JSON, "(k1 INT NOT NULL)");
+    String part = "{\"$ref\":\"o5s#/properties/o\"}";
+    String whole = "{\"$ref\":\"Ref1\"}";
+    json("s2", String.format(JSON_HEAD, "s2") + "\"a\":" + part + ",\"b\":" + whole + "},"
+        + "\"additionalProperties\":false}", "o5s", "Ref1");
+    assertThatThrownBy(() -> registry.alter("s2", new AddAttribute("z", "INT")))
+        .isInstanceOf(TypeRefusedException.class).hasMessage("Type s2 cannot be altered: it "
+            + "refers to a type named Ref1, which is what a part of a schema is called that "
+            + "it refers to: o5s#/properties/o. The two are read as one, and the one would "
+            + "be written as the other. Register its new version as a JSON schema");
+    assertThat(version("s2")).isEqualTo(1);
+    json("s1", String.format(JSON_HEAD, "s1") + "\"a\":" + whole + ",\"b\":" + part + "},"
+        + "\"additionalProperties\":false}", "o5s", "Ref1");
+    registry.alter("s1", new AddAttribute("z", "INT"));
+    assertThat(version("s1")).isEqualTo(2);
+    assertThat(registry.schema("s1").canonicalString()).contains(whole)
+        .contains("{\"$ref\":\"o5s#/properties/o\",\"logical.ref\":true}");
+    assertThat(references("s1")).containsExactly("Ref1", "o5s");
+  }
 }

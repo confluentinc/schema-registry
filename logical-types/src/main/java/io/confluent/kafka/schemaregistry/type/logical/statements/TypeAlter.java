@@ -45,6 +45,7 @@ import io.confluent.kafka.schemaregistry.type.logical.Schema.Field;
 import io.confluent.kafka.schemaregistry.type.logical.Schema.UnionBranch;
 import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
 import io.confluent.kafka.schemaregistry.type.logical.json.JsonToLogicalTypeConverter;
+import io.confluent.kafka.schemaregistry.type.logical.protobuf.CommonConstants;
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.LogicalTypeToProtoConverter;
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTypeConverter;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
@@ -820,6 +821,12 @@ public final class TypeAlter {
       if (field.getJavaType() != FieldDescriptor.JavaType.MESSAGE) {
         continue;
       }
+      // A message that wraps a value is read as the value and written as it: the writer
+      // wraps a collection, a union, and an element that may be null, and no other value.
+      if (wrapsValue(field)) {
+        return of + " is a message that wraps a value, which would be written as the value "
+            + "itself and not as that message, so its stored values would be read wrongly";
+      }
       // A message of the name of one of the format's own that is not that one is read as
       // that one, and written as it.
       String own = LogicalTypeToProtoConverter.readAsAnother(field.getMessageType());
@@ -890,6 +897,20 @@ public final class TypeAlter {
   private static boolean wrapsUnion(FieldDescriptor field) {
     return field.getRealContainingOneof() == null
         && ProtoToLogicalTypeConverter.wrapsUnion(field);
+  }
+
+  // A field of a message that wraps one value, as none the writer writes: a value that is
+  // no collection in a field that is none, or an element that is never null.
+  private static boolean wrapsValue(FieldDescriptor field) {
+    if (!ProtoToLogicalTypeConverter.isFlinkWrapped(field)) {
+      return false;
+    }
+    FieldDescriptor value = field.getMessageType().findFieldByName(
+        CommonConstants.FLINK_WRAPPER_FIELD_NAME);
+    if (value == null || value.isRepeated() || value.getRealContainingOneof() != null) {
+      return false;
+    }
+    return !field.isRepeated() || !value.hasPresence();
   }
 
   // Whether the message written has, as a oneof of its own, the oneof a field's message
@@ -1696,6 +1717,20 @@ public final class TypeAlter {
     if (renames.isEmpty()) {
       return;
     }
+    // A reference named as the type as read calls another it refers to, which stays so
+    // called: the two would be one, and written as one.
+    for (String name : renames.values()) {
+      String called = externalImports.get(name);
+      if (called == null || renames.containsKey(name)) {
+        continue;
+      }
+      throw new TypeRefusedException("Type " + subject + " cannot be altered: it refers to "
+          + "a type named " + name + ", which is what " + (called.contains("#")
+            ? "a part of a schema is called that it refers to: "
+            : "a type is called that it refers to whole: ") + called
+          + ". The two are read as one, and the one would be written as the other. Register "
+          + "its new version as a JSON schema");
+    }
     root = renameRefs(root, renames);
     Map<String, Schema> renamed = new LinkedHashMap<>();
     namedTypes.forEach((name, body) ->
@@ -2011,12 +2046,11 @@ public final class TypeAlter {
     }
     // A part of the schema itself is called so too, which takes no reference.
     refuseDefinitionNamedAsCalled(stored, "altered");
-    if (md.getReferences() == null) {
-      return;
-    }
-    Set<String> documents = new HashSet<>();
-    md.getReferences().forEach(r -> documents.add(r.getName()));
     JsonNode schema = ((JsonSchema) stored).toJsonNode();
+    Set<String> documents = new HashSet<>();
+    if (md.getReferences() != null) {
+      md.getReferences().forEach(r -> documents.add(r.getName()));
+    }
     for (String to : refsReadByName(schema)) {
       // The name a definition is read by, wherever in a document it is.
       String name = JsonToLogicalTypeConverter.extractCanonicalDefsKey(to);
@@ -2040,6 +2074,27 @@ public final class TypeAlter {
           + ", and refers to a type by that name. The two are read as one, and the "
           + "definition would be written as that type. Register its new version as a JSON "
           + "schema");
+    }
+    refuseDefinitionsOfOneName(schema);
+  }
+
+  // A definition is read by its name alone, whichever document it is of: two of one name,
+  // the type's own and a document's or those of two documents, are read as one, and the
+  // next statement would write every attribute of the one as the other's.
+  private void refuseDefinitionsOfOneName(JsonNode schema) {
+    // The schema's own, named by its $id, is the one named by none.
+    String id = schema.path("$id").asText("");
+    Map<String, String> named = new HashMap<>();
+    for (String ref : refsReadByName(schema)) {
+      String to = !id.isEmpty() && ref.startsWith(id + "#") ? ref.substring(id.length()) : ref;
+      String name = JsonToLogicalTypeConverter.extractCanonicalDefsKey(to);
+      String other = name == null ? null : named.putIfAbsent(name, to);
+      if (other != null && !other.equals(to)) {
+        throw new TypeRefusedException("Type " + subject + " cannot be altered: it has two "
+            + "definitions named " + name + ", " + other + " and " + to + ". The two are "
+            + "read as one, and the one would be written as the other. Register its new "
+            + "version as a JSON schema");
+      }
     }
   }
 
