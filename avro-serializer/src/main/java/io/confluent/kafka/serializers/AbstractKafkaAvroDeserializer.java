@@ -297,10 +297,21 @@ public abstract class AbstractKafkaAvroDeserializer extends AbstractKafkaSchemaS
   protected DatumReader<?> getDatumReader(
       String subject, SchemaId writerSchemaId, Schema writerSchema, Schema readerSchema)
       throws ExecutionException {
-    return getDatumReader(subject, writerSchemaId, writerSchema, readerSchema, false);
+    return getCachedDatumReader(subject, writerSchemaId, writerSchema, readerSchema, false);
   }
 
+  // A reader that decodes variants raw has its own cache entries. Any other read goes through
+  // the protected getDatumReader, so a subclass overriding it still supplies the reader.
   private DatumReader<?> getDatumReader(
+      String subject, SchemaId writerSchemaId, Schema writerSchema, Schema readerSchema,
+      boolean rawVariants)
+      throws ExecutionException {
+    return rawVariants
+        ? getCachedDatumReader(subject, writerSchemaId, writerSchema, readerSchema, true)
+        : getDatumReader(subject, writerSchemaId, writerSchema, readerSchema);
+  }
+
+  private DatumReader<?> getCachedDatumReader(
       String subject, SchemaId writerSchemaId, Schema writerSchema, Schema readerSchema,
       boolean rawVariants)
       throws ExecutionException {
