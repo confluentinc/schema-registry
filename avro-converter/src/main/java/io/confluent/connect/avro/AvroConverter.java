@@ -175,6 +175,8 @@ public class AvroConverter implements Converter {
           BackupWrapper.FIELD_DATA,
           BackupWrapper.FIELD_SCHEMA_TYPE,
           BackupWrapper.FIELD_RAW_SCHEMA);
+      BackupWrapper.requireDataEncoding(wrapperSchema, wrapper,
+          BackupWrapper.DATA_ENCODING_CONNECT, getClass().getSimpleName());
       String schemaType = wrapper.getString(BackupWrapper.FIELD_SCHEMA_TYPE);
       if (!SchemaBackupConfig.TYPE_AVRO.equals(schemaType)) {
         throw new DataException(

@@ -187,4 +187,141 @@ public class BackupWrapperTest {
     assertEquals("directRefs", BackupWrapper.FIELD_DIRECT_REFS);
     assertEquals("schemaGuid", BackupWrapper.FIELD_SCHEMA_GUID);
   }
+
+  // ---------------- dataEncoding ----------------
+
+  private static final String DATA_VALUE = "hello";
+  private static final String CONVERTER_NAME = "TestConverter";
+  private static final String UNKNOWN_ENCODING = "SOMETHING_ELSE";
+  private static final String SAME_CONVERTER_HINT =
+      "Restore with the same converter class that was used for the backup";
+
+  private static Struct wrapperWithEncoding(String dataEncoding) {
+    Schema wrapperSchema = BackupWrapper.buildSchema(Schema.STRING_SCHEMA);
+    BackupWrapper.WrapperFields fields = new BackupWrapper.WrapperFields(
+        null, null, SCHEMA_TYPE_AVRO, TEST_SUBJECT, null, null, null, null, dataEncoding);
+    return BackupWrapper.buildWrapper(wrapperSchema, DATA_VALUE, fields);
+  }
+
+  @Test
+  public void testBuildSchemaHasOptionalDataEncodingField() {
+    Schema wrapperSchema = BackupWrapper.buildSchema(Schema.STRING_SCHEMA);
+    assertEquals(Schema.OPTIONAL_STRING_SCHEMA,
+        wrapperSchema.field(BackupWrapper.FIELD_DATA_ENCODING).schema());
+  }
+
+  @Test
+  public void testExistingConstructorsLeaveDataEncodingNull() {
+    Schema wrapperSchema = BackupWrapper.buildSchema(Schema.STRING_SCHEMA);
+    Struct sevenArg = BackupWrapper.buildWrapper(wrapperSchema, DATA_VALUE,
+        new BackupWrapper.WrapperFields(null, null, SCHEMA_TYPE_AVRO, TEST_SUBJECT,
+            null, null, null));
+    Struct eightArg = BackupWrapper.buildWrapper(wrapperSchema, DATA_VALUE,
+        new BackupWrapper.WrapperFields(null, null, SCHEMA_TYPE_AVRO, TEST_SUBJECT,
+            null, null, null, null));
+    assertNull(sevenArg.getString(BackupWrapper.FIELD_DATA_ENCODING));
+    assertNull(eightArg.getString(BackupWrapper.FIELD_DATA_ENCODING));
+  }
+
+  @Test
+  public void testBuildWrapperSetsDataEncoding() {
+    Struct wrapper = wrapperWithEncoding(BackupWrapper.DATA_ENCODING_WIRE_BYTES);
+    assertEquals(BackupWrapper.DATA_ENCODING_WIRE_BYTES,
+        wrapper.getString(BackupWrapper.FIELD_DATA_ENCODING));
+  }
+
+  @Test
+  public void testBuildWrapperSkipsDataEncodingWhenSchemaLacksField() {
+    Schema olderShape = SchemaBuilder.struct()
+        .name(BackupWrapper.NAME)
+        .field(BackupWrapper.FIELD_DATA, Schema.OPTIONAL_STRING_SCHEMA)
+        .field(BackupWrapper.FIELD_SCHEMA_ID, Schema.OPTIONAL_INT32_SCHEMA)
+        .field(BackupWrapper.FIELD_SCHEMA_VERSION, Schema.OPTIONAL_INT32_SCHEMA)
+        .field(BackupWrapper.FIELD_SCHEMA_GUID, Schema.OPTIONAL_STRING_SCHEMA)
+        .field(BackupWrapper.FIELD_SCHEMA_TYPE, Schema.STRING_SCHEMA)
+        .field(BackupWrapper.FIELD_SCHEMA_SUBJECT, Schema.STRING_SCHEMA)
+        .field(BackupWrapper.FIELD_RAW_SCHEMA, Schema.OPTIONAL_STRING_SCHEMA)
+        .field(BackupWrapper.FIELD_REFERENCE_TREE, Schema.OPTIONAL_STRING_SCHEMA)
+        .field(BackupWrapper.FIELD_DIRECT_REFS, Schema.OPTIONAL_STRING_SCHEMA)
+        .build();
+    Struct wrapper = BackupWrapper.buildWrapper(olderShape, DATA_VALUE,
+        new BackupWrapper.WrapperFields(null, null, SCHEMA_TYPE_AVRO, TEST_SUBJECT,
+            null, null, null, null, BackupWrapper.DATA_ENCODING_CONNECT));
+    assertNull(olderShape.field(BackupWrapper.FIELD_DATA_ENCODING));
+    assertEquals(DATA_VALUE, wrapper.getString(BackupWrapper.FIELD_DATA));
+    BackupWrapper.requireDataEncoding(olderShape, wrapper,
+        BackupWrapper.DATA_ENCODING_WIRE_BYTES, CONVERTER_NAME);
+  }
+
+  @Test
+  public void testRequireDataEncodingAcceptsMatch() {
+    Struct wrapper = wrapperWithEncoding(BackupWrapper.DATA_ENCODING_CONNECT);
+    BackupWrapper.requireDataEncoding(wrapper.schema(), wrapper,
+        BackupWrapper.DATA_ENCODING_CONNECT, CONVERTER_NAME);
+  }
+
+  @Test
+  public void testRequireDataEncodingAcceptsNull() {
+    Struct wrapper = wrapperWithEncoding(null);
+    BackupWrapper.requireDataEncoding(wrapper.schema(), wrapper,
+        BackupWrapper.DATA_ENCODING_WIRE_BYTES, CONVERTER_NAME);
+  }
+
+  @Test
+  public void testRequireDataEncodingAcceptsSchemaWithoutField() {
+    // Wrapper shape written by releases before dataEncoding existed.
+    Schema olderShape = SchemaBuilder.struct().name(BackupWrapper.NAME)
+        .field(BackupWrapper.FIELD_DATA, Schema.OPTIONAL_BYTES_SCHEMA)
+        .build();
+    BackupWrapper.requireDataEncoding(olderShape, new Struct(olderShape),
+        BackupWrapper.DATA_ENCODING_WIRE_BYTES, CONVERTER_NAME);
+    BackupWrapper.requireDataEncoding(olderShape, new Struct(olderShape),
+        BackupWrapper.DATA_ENCODING_CONNECT, CONVERTER_NAME);
+  }
+
+  @Test
+  public void testRequireDataEncodingRejectsWireBytesForConnectConverter() {
+    Struct wrapper = wrapperWithEncoding(BackupWrapper.DATA_ENCODING_WIRE_BYTES);
+    try {
+      BackupWrapper.requireDataEncoding(wrapper.schema(), wrapper,
+          BackupWrapper.DATA_ENCODING_CONNECT, CONVERTER_NAME);
+      fail("Expected DataException for mismatched data encoding");
+    } catch (DataException e) {
+      assertTrue(e.getMessage(), e.getMessage().contains("SchemaBackupAwareByteArrayConverter"));
+      assertTrue(e.getMessage(), e.getMessage().contains(CONVERTER_NAME));
+      assertTrue(e.getMessage(), e.getMessage().contains(SAME_CONVERTER_HINT));
+    }
+  }
+
+  @Test
+  public void testRequireDataEncodingRejectsConnectForWireBytesConverter() {
+    Struct wrapper = wrapperWithEncoding(BackupWrapper.DATA_ENCODING_CONNECT);
+    try {
+      BackupWrapper.requireDataEncoding(wrapper.schema(), wrapper,
+          BackupWrapper.DATA_ENCODING_WIRE_BYTES, CONVERTER_NAME);
+      fail("Expected DataException for mismatched data encoding");
+    } catch (DataException e) {
+      assertTrue(e.getMessage(), e.getMessage().contains("AvroConverter"));
+      assertTrue(e.getMessage(), e.getMessage().contains(SAME_CONVERTER_HINT));
+    }
+  }
+
+  @Test
+  public void testRequireDataEncodingRejectsUnknownValue() {
+    Struct wrapper = wrapperWithEncoding(UNKNOWN_ENCODING);
+    try {
+      BackupWrapper.requireDataEncoding(wrapper.schema(), wrapper,
+          BackupWrapper.DATA_ENCODING_CONNECT, CONVERTER_NAME);
+      fail("Expected DataException for unknown data encoding");
+    } catch (DataException e) {
+      assertTrue(e.getMessage(), e.getMessage().contains(UNKNOWN_ENCODING));
+    }
+  }
+
+  @Test
+  public void testDataEncodingConstants() {
+    assertEquals("dataEncoding", BackupWrapper.FIELD_DATA_ENCODING);
+    assertEquals("CONNECT", BackupWrapper.DATA_ENCODING_CONNECT);
+    assertEquals("WIRE_BYTES", BackupWrapper.DATA_ENCODING_WIRE_BYTES);
+  }
 }
