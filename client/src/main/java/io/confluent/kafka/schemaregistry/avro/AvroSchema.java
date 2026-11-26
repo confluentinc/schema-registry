@@ -41,6 +41,7 @@ import io.confluent.kafka.schemaregistry.rules.RuleException;
 import io.confluent.kafka.schemaregistry.rules.ValidationRule;
 import io.confluent.kafka.schemaregistry.rules.ValidationRuleError;
 import io.confluent.kafka.schemaregistry.rules.ValidationRuleExecutor;
+import io.confluent.kafka.schemaregistry.type.Variant;
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -67,6 +68,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.SchemaCompatibility;
 import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.specific.SpecificRecord;
 import org.apache.avro.util.Utf8;
 import org.apache.kafka.common.errors.SerializationException;
@@ -96,6 +98,11 @@ public class AvroSchema implements ParsedSchema {
   private static final int NO_HASHCODE = Integer.MIN_VALUE;
 
   private static final ObjectMapper jsonMapper = JacksonMapper.INSTANCE;
+
+  static {
+    // A schema parsed before its logical type is registered does not carry it
+    AvroLogicalTypes.ensureRegistered();
+  }
 
   public AvroSchema(String schemaString) {
     this(schemaString, Collections.emptyList(), Collections.emptyMap(), null);
@@ -836,6 +843,10 @@ public class AvroSchema implements ParsedSchema {
         if (message == null) {
           return null;
         }
+        if (message instanceof Variant && fieldCtx != null
+            && fieldCtx.getContainingMessage() instanceof GenericRecord) {
+          return toTransformedVariant(ctx, schema, (Variant) message, transform);
+        }
         Schema recordSchema = schema;
         if (message instanceof GenericContainer) {
           // Use the schema from the message if it exists, so schema evolution works properly
@@ -884,6 +895,20 @@ public class AvroSchema implements ParsedSchema {
         }
         return message;
     }
+  }
+
+  // Avro reads a Variant object by reflection and would write the transformed bytes into the
+  // caller's object, so in a generic record its record form is walked instead, and an unchanged
+  // Variant is kept. A field declared as Variant can hold nothing else, so there it is not used.
+  private Object toTransformedVariant(
+      RuleContext ctx, Schema schema, Variant variant, FieldTransform transform) {
+    ByteBuffer metadata = variant.getMetadataBuffer().duplicate();
+    ByteBuffer value = variant.getValueBuffer().duplicate();
+    GenericData.Record record = new GenericData.Record(schema);
+    record.put("metadata", metadata);
+    record.put("value", value);
+    toTransformedMessage(ctx, schema, record, transform);
+    return record.get("metadata") == metadata && record.get("value") == value ? variant : record;
   }
 
   private static Object fieldTransform(RuleContext ctx, Object message, FieldTransform transform,

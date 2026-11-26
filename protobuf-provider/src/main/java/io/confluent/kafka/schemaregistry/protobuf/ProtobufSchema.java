@@ -3126,6 +3126,16 @@ public class ProtobufSchema implements ParsedSchema {
     return fd.getContainingType().getOptions().getMapEntry() && fd.getNumber() == 1;
   }
 
+  private static final String VARIANT_TYPE_NAME = "confluent.type.Variant";
+
+  // Whether a field is the value of a map entry and holds a confluent.type.Variant.
+  private static boolean isMapVariantValue(FieldDescriptor fd) {
+    return fd.getContainingType().getOptions().getMapEntry()
+        && fd.getNumber() == 2
+        && fd.getJavaType() == FieldDescriptor.JavaType.MESSAGE
+        && VARIANT_TYPE_NAME.equals(fd.getMessageType().getFullName());
+  }
+
   private Object toTransformedMessage(
       RuleContext ctx, Descriptor desc, Object message, FieldTransform transform) {
     FieldContext fieldCtx = ctx.currentField();
@@ -3156,11 +3166,18 @@ public class ProtobufSchema implements ParsedSchema {
           // transform applies to it. Reading options off it would throw.
           continue;
         }
+        Set<String> tags = getInlineTags(schemaFd);
+        if (fieldCtx != null && isMapVariantValue(fd)) {
+          // A variant map value takes the map field's tags, as an element of a repeated
+          // variant field does, so the map's tag reaches its metadata and value.
+          tags = new HashSet<>(tags);
+          tags.addAll(fieldCtx.getTags());
+        }
         try (FieldContext fc = ctx.enterField(
             message, schemaFd.getFullName(), schemaFd.getName(), getType(fd),
             // The producer's own field: the value below is read through it, so it is what
             // says how the value should be presented to a rule.
-            getInlineTags(schemaFd), fd)
+            tags, fd)
         ) {
           // Skip-on-null, as in the validation walk: a field with explicit presence that
           // is unset has no value to transform, and writing one back would materialize

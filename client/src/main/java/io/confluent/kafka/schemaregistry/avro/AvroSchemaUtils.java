@@ -27,9 +27,8 @@ import com.fasterxml.jackson.databind.util.TokenBuffer;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import io.confluent.avro.type.LogicalMapConversion;
-import io.confluent.avro.type.LogicalMapFactory;
 import io.confluent.avro.type.VariantConversion;
-import io.confluent.avro.type.VariantLogicalTypeFactory;
+import io.confluent.avro.type.VariantLogicalType;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -84,7 +83,9 @@ import java.lang.ref.WeakReference;
 import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.IdentityHashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
@@ -94,32 +95,28 @@ import static io.confluent.kafka.schemaregistry.avro.AvroSchema.NAME_FIELD;
 
 public class AvroSchemaUtils {
 
+  private static final VariantConversion VARIANT_CONVERSION = new VariantConversion();
   private static final GenericData GENERIC_DATA_INSTANCE =
       new NameAwareGenericData(GenericData.get());
   private static final GenericData GENERIC_DATA_INSTANCE_WITH_LOGICAL = new NameAwareGenericData();
+  // Every logical type conversion but the variant one, so a variant decodes as its raw record
+  private static final GenericData GENERIC_DATA_INSTANCE_WITH_RAW_VARIANTS =
+      new NameAwareGenericData();
   private static final ReflectData REFLECT_DATA_INSTANCE_WITH_LOGICAL = new ReflectData();
   private static final ReflectData REFLECT_DATA_ALLOW_NULL_INSTANCE_WITH_LOGICAL = new AllowNull();
   private static final SpecificData SPECIFIC_DATA_INSTANCE_WITH_LOGICAL = new SpecificData();
 
   static {
-    registerLogicalTypeIfAbsent(new LogicalMapFactory());
-    registerLogicalTypeIfAbsent(new VariantLogicalTypeFactory());
+    AvroLogicalTypes.ensureRegistered();
     addLogicalTypeConversion(GENERIC_DATA_INSTANCE_WITH_LOGICAL);
+    addLogicalTypeConversion(GENERIC_DATA_INSTANCE_WITH_RAW_VARIANTS, false);
     addLogicalTypeConversion(REFLECT_DATA_INSTANCE_WITH_LOGICAL);
     addLogicalTypeConversion(REFLECT_DATA_ALLOW_NULL_INSTANCE_WITH_LOGICAL);
     addLogicalTypeConversion(SPECIFIC_DATA_INSTANCE_WITH_LOGICAL);
   }
 
-  // Avro's LogicalTypes registry is a single JVM-global map keyed by name, so an
-  // unconditional register() would clobber another library's factory for the same name
-  // (e.g. Apache Iceberg also registers "map" and "variant"). Iceberg's own registration is
-  // unconditional, so leaving ours conditional lets whichever library claimed the name first
-  // keep owning it, while still registering when no other library has.
-  private static void registerLogicalTypeIfAbsent(LogicalTypes.LogicalTypeFactory factory) {
-    if (!LogicalTypes.getCustomRegisteredTypes().containsKey(factory.getTypeName())) {
-      LogicalTypes.register(factory);
-    }
-  }
+  private static final Cache<Schema, Boolean> variantSchemas =
+      CacheBuilder.newBuilder().weakKeys().build();
 
   private static final ThreadLocal<GenericData> genericData = new ThreadLocal<>();
   private static final ThreadLocal<ReflectData> reflectData = new ThreadLocal<>();
@@ -210,6 +207,168 @@ public class AvroSchemaUtils {
 
   public static GenericData getGenericData() {
     return GENERIC_DATA_INSTANCE_WITH_LOGICAL;
+  }
+
+  /**
+   * A GenericData with every logical type conversion but the variant one. A reader that uses
+   * it decodes a variant as its raw record, to be converted with {@link #toVariants} later.
+   */
+  public static GenericData getGenericDataWithRawVariants() {
+    return GENERIC_DATA_INSTANCE_WITH_RAW_VARIANTS;
+  }
+
+  private static boolean isVariant(Schema schema) {
+    return schema.getType() == Schema.Type.RECORD
+        && schema.getLogicalType() != null
+        && VariantLogicalType.NAME.equals(schema.getLogicalType().getName());
+  }
+
+  /**
+   * Whether the schema is, or contains, a variant.
+   */
+  public static boolean hasVariant(Schema schema) {
+    Boolean cached = variantSchemas.getIfPresent(schema);
+    if (cached == null) {
+      cached = hasVariant(schema, new HashSet<>());
+      variantSchemas.put(schema, cached);
+    }
+    return cached;
+  }
+
+  private static boolean hasVariant(Schema schema, Set<String> seen) {
+    switch (schema.getType()) {
+      case RECORD:
+        if (isVariant(schema)) {
+          return true;
+        }
+        if (!seen.add(schema.getFullName())) {
+          return false;
+        }
+        return schema.getFields().stream().anyMatch(f -> hasVariant(f.schema(), seen));
+      case ARRAY:
+        return hasVariant(schema.getElementType(), seen);
+      case MAP:
+        return hasVariant(schema.getValueType(), seen);
+      case UNION:
+        return schema.getTypes().stream().anyMatch(t -> hasVariant(t, seen));
+      default:
+        return false;
+    }
+  }
+
+  /**
+   * Converts each raw variant record in a value decoded with
+   * {@link #getGenericDataWithRawVariants} into a Variant, in place where it can. The Variant
+   * is validated as the variant conversion validates it.
+   */
+  @SuppressWarnings("unchecked")
+  public static Object toVariants(Schema schema, Object value) {
+    if (value == null || !hasVariant(schema)) {
+      return value;
+    }
+    switch (schema.getType()) {
+      case RECORD:
+        if (!(value instanceof IndexedRecord)) {
+          return value;
+        }
+        IndexedRecord record = (IndexedRecord) value;
+        if (isVariant(schema)) {
+          return VARIANT_CONVERSION.fromRecord(record, record.getSchema(), null);
+        }
+        for (Schema.Field f : record.getSchema().getFields()) {
+          Object old = record.get(f.pos());
+          Object converted = toVariants(f.schema(), old);
+          if (converted != old) {
+            record.put(f.pos(), converted);
+          }
+        }
+        return record;
+      case ARRAY:
+        if (value instanceof List) {
+          List<Object> list = (List<Object>) value;
+          for (int i = 0; i < list.size(); i++) {
+            Object old = list.get(i);
+            Object converted = toVariants(schema.getElementType(), old);
+            if (converted != old) {
+              list.set(i, converted);
+            }
+          }
+        } else if (value instanceof Map && isKeyValue(schema.getElementType())) {
+          // A logical-type map, decoded to a java Map of its entries' keys and values
+          return logicalMapToVariants(schema.getElementType(), (Map<Object, Object>) value);
+        }
+        return value;
+      case MAP:
+        if (value instanceof Map) {
+          for (Map.Entry<Object, Object> entry : ((Map<Object, Object>) value).entrySet()) {
+            Object old = entry.getValue();
+            Object converted = toVariants(schema.getValueType(), old);
+            if (converted != old) {
+              entry.setValue(converted);
+            }
+          }
+        }
+        return value;
+      case UNION:
+        Schema branch = unionBranch(schema, value);
+        return branch != null ? toVariants(branch, value) : value;
+      default:
+        return value;
+    }
+  }
+
+  private static boolean isKeyValue(Schema schema) {
+    return schema.getType() == Schema.Type.RECORD && schema.getFields().size() == 2;
+  }
+
+  private static Map<Object, Object> logicalMapToVariants(
+      Schema entrySchema, Map<Object, Object> map) {
+    Schema keySchema = entrySchema.getFields().get(0).schema();
+    Schema valueSchema = entrySchema.getFields().get(1).schema();
+    if (!hasVariant(keySchema)) {
+      for (Map.Entry<Object, Object> entry : map.entrySet()) {
+        Object old = entry.getValue();
+        Object converted = toVariants(valueSchema, old);
+        if (converted != old) {
+          entry.setValue(converted);
+        }
+      }
+      return map;
+    }
+    // A converted key hashes differently, so the map is rebuilt
+    Map<Object, Object> converted = new LinkedHashMap<>(map.size());
+    for (Map.Entry<Object, Object> entry : map.entrySet()) {
+      converted.put(
+          toVariants(keySchema, entry.getKey()), toVariants(valueSchema, entry.getValue()));
+    }
+    return converted;
+  }
+
+  // The union branch a decoded value belongs to, by its shape; null when there is nothing to
+  // convert in it. A value that is not a raw record, list or map, such as a Variant that a
+  // rule produced, has no branch to walk.
+  private static Schema unionBranch(Schema union, Object value) {
+    if (value instanceof IndexedRecord) {
+      Integer index = union.getIndexNamed(((IndexedRecord) value).getSchema().getFullName());
+      return index != null ? union.getTypes().get(index) : null;
+    }
+    Schema.Type first = null;
+    Schema.Type second = null;
+    if (value instanceof List) {
+      first = Schema.Type.ARRAY;
+    } else if (value instanceof Map) {
+      // An Avro map, or else a logical-type map, which is an array
+      first = Schema.Type.MAP;
+      second = Schema.Type.ARRAY;
+    }
+    for (Schema.Type type : new Schema.Type[] {first, second}) {
+      for (Schema branch : union.getTypes()) {
+        if (type != null && branch.getType() == type) {
+          return branch;
+        }
+      }
+    }
+    return null;
   }
 
   public static ReflectData getReflectData(boolean useLogicalTypes, boolean allowNull) {
@@ -445,8 +604,14 @@ public class AvroSchemaUtils {
   }
 
   public static void addLogicalTypeConversion(GenericData avroData) {
+    addLogicalTypeConversion(avroData, true);
+  }
+
+  private static void addLogicalTypeConversion(GenericData avroData, boolean variant) {
     avroData.addLogicalTypeConversion(new LogicalMapConversion());
-    avroData.addLogicalTypeConversion(new VariantConversion());
+    if (variant) {
+      avroData.addLogicalTypeConversion(VARIANT_CONVERSION);
+    }
     avroData.addLogicalTypeConversion(new Conversions.BigDecimalConversion());
     avroData.addLogicalTypeConversion(new Conversions.DecimalConversion());
     avroData.addLogicalTypeConversion(new Conversions.DurationConversion());
