@@ -104,6 +104,21 @@ public class AvroSchemaUtilsVariantTest {
   }
 
   @Test
+  public void testUnionOfAvroMapAndLogicalMap() {
+    // Both decode to a java Map, so a variant in the logical map is converted either way
+    Schema schema = docSchema("[\"null\", {\"type\": \"map\", \"values\": \"string\"}, "
+        + LOGICAL_MAP + "]");
+    Map<Object, Object> logical = new LinkedHashMap<>();
+    logical.put("k", rawVariant(schema));
+    assertSame(logical, convert(schema, logical));
+    assertEquals(newVariant(), logical.get("k"));
+    Map<Object, Object> plain = new LinkedHashMap<>();
+    plain.put("k", "text");
+    assertSame(plain, convert(schema, plain));
+    assertEquals("text", plain.get("k"));
+  }
+
+  @Test
   public void testUnionOfRawVariant() {
     Schema schema = docSchema("[\"null\", \"string\", " + VARIANT_SCHEMA + "]");
     assertEquals(newVariant(), convert(schema, rawVariant(schema)));

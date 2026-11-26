@@ -33,6 +33,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaEntity;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Iterator;
@@ -273,7 +274,11 @@ public class AvroSchemaUtils {
         }
         IndexedRecord record = (IndexedRecord) value;
         if (isVariant(schema)) {
-          return VARIANT_CONVERSION.fromRecord(record, record.getSchema(), null);
+          // Only a variant's own record is converted, so walking a union branch that the
+          // value does not belong to leaves it as it is
+          return isVariant(record.getSchema())
+              ? VARIANT_CONVERSION.fromRecord(record, record.getSchema(), null)
+              : record;
         }
         for (Schema.Field f : record.getSchema().getFields()) {
           Object old = record.get(f.pos());
@@ -310,8 +315,10 @@ public class AvroSchemaUtils {
         }
         return value;
       case UNION:
-        Schema branch = unionBranch(schema, value);
-        return branch != null ? toVariants(branch, value) : value;
+        for (Schema branch : unionBranches(schema, value)) {
+          value = toVariants(branch, value);
+        }
+        return value;
       default:
         return value;
     }
@@ -344,31 +351,31 @@ public class AvroSchemaUtils {
     return converted;
   }
 
-  // The union branch a decoded value belongs to, by its shape; null when there is nothing to
-  // convert in it. A value that is not a raw record, list or map, such as a Variant that a
-  // rule produced, has no branch to walk.
-  private static Schema unionBranch(Schema union, Object value) {
+  // The union branches a decoded value may belong to, by its shape. A Map may be an Avro map or
+  // a logical-type map, so both kinds are walked. A value that is not a raw record, list or
+  // map, such as a Variant that a rule produced, has no branch to walk.
+  private static List<Schema> unionBranches(Schema union, Object value) {
     if (value instanceof IndexedRecord) {
       Integer index = union.getIndexNamed(((IndexedRecord) value).getSchema().getFullName());
-      return index != null ? union.getTypes().get(index) : null;
+      return index != null
+          ? Collections.singletonList(union.getTypes().get(index))
+          : Collections.emptyList();
     }
-    Schema.Type first = null;
-    Schema.Type second = null;
+    List<Schema.Type> types;
     if (value instanceof List) {
-      first = Schema.Type.ARRAY;
+      types = Collections.singletonList(Schema.Type.ARRAY);
     } else if (value instanceof Map) {
-      // An Avro map, or else a logical-type map, which is an array
-      first = Schema.Type.MAP;
-      second = Schema.Type.ARRAY;
+      types = Arrays.asList(Schema.Type.MAP, Schema.Type.ARRAY);
+    } else {
+      return Collections.emptyList();
     }
-    for (Schema.Type type : new Schema.Type[] {first, second}) {
-      for (Schema branch : union.getTypes()) {
-        if (type != null && branch.getType() == type) {
-          return branch;
-        }
+    List<Schema> branches = new ArrayList<>();
+    for (Schema branch : union.getTypes()) {
+      if (types.contains(branch.getType())) {
+        branches.add(branch);
       }
     }
-    return null;
+    return branches;
   }
 
   public static ReflectData getReflectData(boolean useLogicalTypes, boolean allowNull) {

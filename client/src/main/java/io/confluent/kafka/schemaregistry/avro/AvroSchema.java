@@ -844,7 +844,7 @@ public class AvroSchema implements ParsedSchema {
           return null;
         }
         if (message instanceof Variant && fieldCtx != null
-            && fieldCtx.getContainingMessage() instanceof GenericRecord) {
+            && isGenericRecord(fieldCtx.getContainingMessage())) {
           return toTransformedVariant(ctx, schema, (Variant) message, transform);
         }
         Schema recordSchema = schema;
@@ -900,6 +900,11 @@ public class AvroSchema implements ParsedSchema {
   // Avro reads a Variant object by reflection and would write the transformed bytes into the
   // caller's object, so in a generic record its record form is walked instead, and an unchanged
   // Variant is kept. A field declared as Variant can hold nothing else, so there it is not used.
+  // A generated record also implements GenericRecord, but its fields are typed
+  private static boolean isGenericRecord(Object message) {
+    return message instanceof GenericRecord && !(message instanceof SpecificRecord);
+  }
+
   private Object toTransformedVariant(
       RuleContext ctx, Schema schema, Variant variant, FieldTransform transform) {
     ByteBuffer metadata = variant.getMetadataBuffer().duplicate();

@@ -96,10 +96,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
+import io.confluent.avro.type.VariantConversion;
+import org.apache.avro.Conversion;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.avro.specific.SpecificRecordBase;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.junit.After;
@@ -1749,6 +1752,32 @@ public abstract class FieldEncryptionExecutorTest {
   }
 
   @Test
+  public void testKafkaAvroSerializerSpecificVariantWithConverters() throws Exception {
+    AvroSchema avroSchema = new AvroSchema(SpecificVariantHolder.SCHEMA$);
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
+    avroSchema = avroSchema.copy(getMetadata("kek1"), ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+    KafkaAvroSerializer serializer = new KafkaAvroSerializer(schemaRegistry, convertersProps());
+    KafkaAvroDeserializer deserializer =
+        new KafkaAvroDeserializer(schemaRegistry, convertersProps());
+    // A field declared as Variant can hold nothing else, so the Variant itself is encrypted
+    SpecificVariantHolder holder = new SpecificVariantHolder();
+    holder.put(0, newVariant());
+
+    int expectedEncryptions = 2;
+    RecordHeaders headers = new RecordHeaders();
+    Cryptor cryptor = addSpyToCryptor(serializer);
+    byte[] bytes = serializer.serialize(topic, headers, holder);
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
+    cryptor = addSpyToCryptor(deserializer);
+    GenericRecord record = (GenericRecord) deserializer.deserialize(topic, headers, bytes);
+    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
+    assertEquals(newVariant(), record.get("payload"));
+  }
+
+  @Test
   public void testKafkaJsonSchemaSerializer() throws Exception {
     OldWidget widget = new OldWidget("alice");
     widget.setSize(123);
@@ -2811,6 +2840,38 @@ public abstract class FieldEncryptionExecutorTest {
 
   public static class VariantHolder {
     public Variant payload;
+  }
+
+  // A minimal generated-style record, as the Avro compiler would emit with a variant conversion
+  public static class SpecificVariantHolder extends SpecificRecordBase {
+    public static final Schema SCHEMA$ = new AvroSchema("{\"type\": \"record\", "
+        + "\"name\": \"SpecificVariantHolder\", \"namespace\": \"io.confluent.kafka."
+        + "schemaregistry.encryption.FieldEncryptionExecutorTest\", \"fields\": ["
+        + "{\"name\": \"payload\", \"confluent:tags\": [\"PII\"], \"type\": "
+        + VARIANT_SCHEMA + "}]}").rawSchema();
+    private static final Conversion<?>[] CONVERSIONS =
+        new Conversion<?>[] {new VariantConversion()};
+    private Variant payload;
+
+    @Override
+    public Schema getSchema() {
+      return SCHEMA$;
+    }
+
+    @Override
+    public Conversion<?> getConversion(int field) {
+      return CONVERSIONS[field];
+    }
+
+    @Override
+    public Object get(int field) {
+      return payload;
+    }
+
+    @Override
+    public void put(int field, Object value) {
+      payload = (Variant) value;
+    }
   }
 
   public static class OldWidget {
