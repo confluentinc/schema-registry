@@ -85,6 +85,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 import io.confluent.kafka.schemaregistry.utils.JacksonMapper;
@@ -292,6 +293,9 @@ public class AvroSchemaUtils {
               list.set(i, converted);
             }
           }
+        } else if (value instanceof Map && isKeyValue(schema.getElementType())) {
+          // A logical-type map, decoded to a java Map of its entries' keys and values
+          return logicalMapToVariants(schema.getElementType(), (Map<Object, Object>) value);
         }
         return value;
       case MAP:
@@ -306,11 +310,65 @@ public class AvroSchemaUtils {
         }
         return value;
       case UNION:
-        int index = GENERIC_DATA_INSTANCE_WITH_RAW_VARIANTS.resolveUnion(schema, value);
-        return toVariants(schema.getTypes().get(index), value);
+        Schema branch = unionBranch(schema, value);
+        return branch != null ? toVariants(branch, value) : value;
       default:
         return value;
     }
+  }
+
+  private static boolean isKeyValue(Schema schema) {
+    return schema.getType() == Schema.Type.RECORD && schema.getFields().size() == 2;
+  }
+
+  private static Map<Object, Object> logicalMapToVariants(
+      Schema entrySchema, Map<Object, Object> map) {
+    Schema keySchema = entrySchema.getFields().get(0).schema();
+    Schema valueSchema = entrySchema.getFields().get(1).schema();
+    if (!hasVariant(keySchema)) {
+      for (Map.Entry<Object, Object> entry : map.entrySet()) {
+        Object old = entry.getValue();
+        Object converted = toVariants(valueSchema, old);
+        if (converted != old) {
+          entry.setValue(converted);
+        }
+      }
+      return map;
+    }
+    // A converted key hashes differently, so the map is rebuilt
+    Map<Object, Object> converted = new LinkedHashMap<>(map.size());
+    for (Map.Entry<Object, Object> entry : map.entrySet()) {
+      converted.put(
+          toVariants(keySchema, entry.getKey()), toVariants(valueSchema, entry.getValue()));
+    }
+    return converted;
+  }
+
+  // The union branch a decoded value belongs to, by its shape; null when there is nothing to
+  // convert in it. A value that is not a raw record, list or map, such as a Variant that a
+  // rule produced, has no branch to walk.
+  private static Schema unionBranch(Schema union, Object value) {
+    if (value instanceof IndexedRecord) {
+      Integer index = union.getIndexNamed(((IndexedRecord) value).getSchema().getFullName());
+      return index != null ? union.getTypes().get(index) : null;
+    }
+    Schema.Type first = null;
+    Schema.Type second = null;
+    if (value instanceof List) {
+      first = Schema.Type.ARRAY;
+    } else if (value instanceof Map) {
+      // An Avro map, or else a logical-type map, which is an array
+      first = Schema.Type.MAP;
+      second = Schema.Type.ARRAY;
+    }
+    for (Schema.Type type : new Schema.Type[] {first, second}) {
+      for (Schema branch : union.getTypes()) {
+        if (type != null && branch.getType() == type) {
+          return branch;
+        }
+      }
+    }
+    return null;
   }
 
   public static ReflectData getReflectData(boolean useLogicalTypes, boolean allowNull) {

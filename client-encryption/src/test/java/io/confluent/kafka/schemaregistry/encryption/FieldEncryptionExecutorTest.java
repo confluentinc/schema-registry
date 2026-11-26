@@ -1718,6 +1718,37 @@ public abstract class FieldEncryptionExecutorTest {
   }
 
   @Test
+  public void testKafkaAvroSerializerReflectionVariantWithConverters() throws Exception {
+    AvroSchema avroSchema = new AvroSchema("{\"type\": \"record\", \"name\": \"VariantHolder\", "
+        + "\"namespace\": \"io.confluent.kafka.schemaregistry.encryption."
+        + "FieldEncryptionExecutorTest\", \"fields\": [{\"name\": \"payload\", "
+        + "\"confluent:tags\": [\"PII\"], \"type\": " + VARIANT_SCHEMA + "}]}");
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), ImmutableList.of(rule));
+    avroSchema = avroSchema.copy(getMetadata("kek1"), ruleSet);
+    schemaRegistry.register(topic + "-value", avroSchema);
+    Map<String, Object> reflectionProps = convertersProps();
+    reflectionProps.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REFLECTION_CONFIG, "true");
+    KafkaAvroSerializer serializer = new KafkaAvroSerializer(schemaRegistry, reflectionProps);
+    KafkaAvroDeserializer deserializer =
+        new KafkaAvroDeserializer(schemaRegistry, convertersProps());
+    // A field declared as Variant can hold nothing else, so the Variant itself is encrypted
+    VariantHolder holder = new VariantHolder();
+    holder.payload = newVariant();
+
+    int expectedEncryptions = 2;
+    RecordHeaders headers = new RecordHeaders();
+    Cryptor cryptor = addSpyToCryptor(serializer);
+    byte[] bytes = serializer.serialize(topic, headers, holder);
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
+    cryptor = addSpyToCryptor(deserializer);
+    GenericRecord record = (GenericRecord) deserializer.deserialize(topic, headers, bytes);
+    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
+    assertEquals(newVariant(), record.get("payload"));
+  }
+
+  @Test
   public void testKafkaJsonSchemaSerializer() throws Exception {
     OldWidget widget = new OldWidget("alice");
     widget.setSize(123);
@@ -2776,6 +2807,10 @@ public abstract class FieldEncryptionExecutorTest {
 
   protected Metadata getMetadata(Map<String, String> properties) {
     return new Metadata(Collections.emptyMap(), properties, Collections.emptySet());
+  }
+
+  public static class VariantHolder {
+    public Variant payload;
   }
 
   public static class OldWidget {

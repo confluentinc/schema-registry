@@ -68,6 +68,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.SchemaCompatibility;
 import org.apache.avro.generic.GenericContainer;
 import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.specific.SpecificRecord;
 import org.apache.avro.util.Utf8;
 import org.apache.kafka.common.errors.SerializationException;
@@ -842,7 +843,8 @@ public class AvroSchema implements ParsedSchema {
         if (message == null) {
           return null;
         }
-        if (message instanceof Variant) {
+        if (message instanceof Variant && fieldCtx != null
+            && fieldCtx.getContainingMessage() instanceof GenericRecord) {
           return toTransformedVariant(ctx, schema, (Variant) message, transform);
         }
         Schema recordSchema = schema;
@@ -896,7 +898,8 @@ public class AvroSchema implements ParsedSchema {
   }
 
   // Avro reads a Variant object by reflection and would write the transformed bytes into the
-  // caller's object, so its record form is walked instead. An unchanged Variant is kept.
+  // caller's object, so in a generic record its record form is walked instead, and an unchanged
+  // Variant is kept. A field declared as Variant can hold nothing else, so there it is not used.
   private Object toTransformedVariant(
       RuleContext ctx, Schema schema, Variant variant, FieldTransform transform) {
     ByteBuffer metadata = variant.getMetadataBuffer().duplicate();
