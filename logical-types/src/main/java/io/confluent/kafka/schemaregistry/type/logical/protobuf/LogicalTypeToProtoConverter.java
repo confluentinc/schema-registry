@@ -70,6 +70,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -154,6 +155,12 @@ public class LogicalTypeToProtoConverter {
    */
   private static final Map<Schema.Type, Descriptor> ROOT_WRAPPER_DESCRIPTORS =
       buildRootWrapperDescriptors();
+
+  // The types a DECIMAL, a TIMESTAMP, a DATE, a TIME and a VARIANT are written as, which a
+  // field of is read by its type's name, whichever file declares that.
+  private static final List<Descriptor> READ_BY_NAME = List.of(Date.getDescriptor(),
+      TimeOfDay.getDescriptor(), Timestamp.getDescriptor(), Decimal.getDescriptor(),
+      io.confluent.protobuf.type.Variant.getDescriptor());
 
   private static Map<Schema.Type, Descriptor> buildRootWrapperDescriptors() {
     Map<Schema.Type, Descriptor> m = new EnumMap<>(Schema.Type.class);
@@ -316,7 +323,7 @@ public class LogicalTypeToProtoConverter {
     // V1 must stay byte-equivalent to Flink's writer output, which does not
     // normalize. Normalize would expand type-name references to fully-qualified
     // form and reorder fields/imports — both visible deviations from Flink's
-    // raw descriptor emission.
+    // raw descriptor emission. The order of a type's attributes is told apart (indexFields).
     if (version != LogicalTypeVersion.V1) {
       result = result.normalize();
     }
@@ -765,6 +772,19 @@ public class LogicalTypeToProtoConverter {
             Meta.newBuilder().putParams(ProtobufSchema.ROOT_KEY, root).build()));
       }
 
+      if (!ctx.isV1()) {
+        fileBuilder.getMessageTypeBuilderList().forEach(LogicalTypeToProtoConverter::indexFields);
+        // The options the metadata is written in are declared by its file: one that has them
+        // imports it, as protoc does not know them otherwise.
+        if (usesMeta(fileBuilder.getMessageTypeList(), fileBuilder.getEnumTypeList())) {
+          dependencies.add(MetaProto.getDescriptor().getName());
+        }
+      }
+      // V1 is written as Flink writes it, whatever the names.
+      if (!ctx.isV1()) {
+        refuseBuiltInNames(packageName, fileBuilder, dependencies,
+            ctx.getExternalDependencies());
+      }
       fileBuilder.addAllDependency(dependencies);
       if (packageName != null && !packageName.isEmpty()) {
         fileBuilder.setPackage(packageName);
@@ -789,6 +809,248 @@ public class LogicalTypeToProtoConverter {
       throw new ValidationException(
           "Failed to translate the provided schema to a Protobuf descriptor", e);
     }
+  }
+
+  // Whether a message, a field, an enum or an enum's value has metadata, at any depth: one
+  // that says something, which an empty comment does not, and is not written.
+  private static boolean usesMeta(List<DescriptorProto> messages,
+      List<EnumDescriptorProto> enums) {
+    for (EnumDescriptorProto enumType : enums) {
+      if (says(enumType.getOptions().getExtension(MetaProto.enumMeta))
+          || enumType.getValueList().stream()
+              .anyMatch(v -> says(v.getOptions().getExtension(MetaProto.enumValueMeta)))) {
+        return true;
+      }
+    }
+    for (DescriptorProto message : messages) {
+      if (says(message.getOptions().getExtension(MetaProto.messageMeta))
+          || message.getFieldList().stream()
+              .anyMatch(f -> says(f.getOptions().getExtension(MetaProto.fieldMeta)))
+          || usesMeta(message.getNestedTypeList(), message.getEnumTypeList())) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private static boolean says(Meta meta) {
+    return !meta.equals(Meta.getDefaultInstance());
+  }
+
+  // A comment of no words is none to the reader, and is not written.
+  private static boolean isBlank(String comment) {
+    return comment == null || comment.trim().isEmpty();
+  }
+
+  // The format's own files declare names of their own: the metadata's, the types a DECIMAL,
+  // a TIMESTAMP, a DATE, a TIME or a VARIANT is written as, and the wrappers a scalar root
+  // is read by. A type of one of those names, this file's or one's it refers to, however
+  // far, is defined twice where the file is imported, and read as the other where it is
+  // read by name.
+  private static void refuseBuiltInNames(String packageName, FileDescriptorProto.Builder file,
+      Set<String> dependencies, List<FileDescriptor> external) {
+    final Map<String, String> declared = new HashMap<>();
+    final Set<String> builtIn = new HashSet<>();
+    // A wrapper and a VARIANT are read by their names as a root too, imported or not: those
+    // a scalar root is written as, and the unsigned ones, which none is and which are read.
+    final List<Descriptor> wrappers = new ArrayList<>(ROOT_WRAPPER_DESCRIPTORS.values());
+    wrappers.add(com.google.protobuf.UInt32Value.getDescriptor());
+    wrappers.add(com.google.protobuf.UInt64Value.getDescriptor());
+    for (Descriptor type : wrappers) {
+      declared.putIfAbsent(type.getFullName(), type.getFile().getName());
+    }
+    // The others are read so as a field's type: a file may have a message of such a name
+    // that no field is of, and none it refers to may.
+    final Map<String, String> asField = new HashMap<>();
+    for (Descriptor type : READ_BY_NAME) {
+      asField.putIfAbsent(type.getFullName(), type.getFile().getName());
+    }
+    final List<FileDescriptor> own = new ArrayList<>();
+    own.add(Meta.getDescriptor().getFile());
+    ROOT_WRAPPER_DESCRIPTORS.values().forEach(type -> own.add(type.getFile()));
+    READ_BY_NAME.forEach(type -> own.add(type.getFile()));
+    for (FileDescriptor f : own) {
+      builtIn.add(f.getName());
+      f.getDependencies().forEach(imported -> builtIn.add(imported.getName()));
+      // Every name of one this file imports, and of those that one imports in turn, which
+      // a file that imports it may not define either.
+      if (dependencies.contains(f.getName())) {
+        namesOf(f).forEach(name -> declared.putIfAbsent(name, f.getName()));
+        for (FileDescriptor imported : f.getDependencies()) {
+          namesOf(imported).forEach(name -> declared.putIfAbsent(name, imported.getName()));
+        }
+      }
+    }
+    final String prefix = packageName == null || packageName.isEmpty() ? "" : packageName + ".";
+    final List<String> names = new ArrayList<>();
+    file.getMessageTypeList().forEach(message -> names.add(prefix + message.getName()));
+    file.getEnumTypeList().forEach(enumType -> names.add(prefix + enumType.getName()));
+    for (String name : names) {
+      if (asField.containsKey(name) && fieldOf(file.getMessageTypeList(), "." + name)) {
+        declared.putIfAbsent(name, asField.get(name));
+      }
+    }
+    // And the names of the files this one refers to, and of those they import in turn.
+    final List<String> referred = new ArrayList<>();
+    final List<FileDescriptor> todo = new ArrayList<>();
+    external.stream().filter(f -> dependencies.contains(f.getName())).forEach(todo::add);
+    final Set<String> seen = new HashSet<>(builtIn);
+    while (!todo.isEmpty()) {
+      final FileDescriptor f = todo.remove(todo.size() - 1);
+      if (!seen.add(f.getName())) {
+        continue;
+      }
+      // One of the format's own files under a reference's name declares what that file
+      // does, and is that file: unless that file is imported too, and its names twice.
+      final FileDescriptor copied = own.stream().filter(o -> declaresTheSame(o, f))
+          .findFirst().orElse(null);
+      if (copied != null && dependencies.contains(copied.getName())) {
+        // The file the metadata is written in is imported for no attribute's type.
+        final boolean meta = copied == Meta.getDescriptor().getFile();
+        throw new ValidationException("Protobuf file '" + f.getName() + "', which the type "
+            + "refers to, is a copy of " + copied.getName() + ", a file of the Protobuf "
+            + "format's own that the type imports as well for "
+            + (meta ? "its metadata" : "an attribute of its own")
+            + ": their names would be defined twice."
+            + (meta ? "" : " Give the attribute that refers to the copy the format's type "
+              + "instead"));
+      }
+      if (copied == null) {
+        referred.addAll(namesOf(f));
+        todo.addAll(f.getDependencies());
+      }
+    }
+    names.addAll(referred);
+    referred.stream().filter(asField::containsKey)
+        .forEach(name -> declared.putIfAbsent(name, asField.get(name)));
+    for (String name : names) {
+      if (declared.containsKey(name)) {
+        throw new ValidationException("Protobuf name '" + name + "' is defined by "
+            + declared.get(name) + ", a file of the Protobuf format's own; give the type "
+            + "another name or namespace");
+      }
+    }
+  }
+
+  // Whether a field of the messages, at any depth, is of the type named.
+  private static boolean fieldOf(List<DescriptorProto> messages, String typeName) {
+    return messages.stream().anyMatch(message -> message.getFieldList().stream()
+        .anyMatch(f -> f.getTypeName().equals(typeName))
+        || fieldOf(message.getNestedTypeList(), typeName));
+  }
+
+  /**
+   * The file of the format's own that declares a message of this one's name, as which a
+   * field of it is read, where this one is not that message; null where it is, or where it
+   * has no such name.
+   */
+  public static String readAsAnother(Descriptor message) {
+    for (Descriptor own : READ_BY_NAME) {
+      if (own.getFullName().equals(message.getFullName())) {
+        return shapeOf(List.of(own.toProto()), List.of())
+            .equals(shapeOf(List.of(message.toProto()), List.of()))
+            ? null : own.getFile().getName();
+      }
+    }
+    return null;
+  }
+
+  // The same messages and enums, of the same fields and values, in the same syntax: what a
+  // file is to a reader of its types, whatever its options and the names its fields have
+  // in JSON.
+  private static boolean declaresTheSame(FileDescriptor one, FileDescriptor other) {
+    return one.getPackage().equals(other.getPackage())
+        && syntaxOf(one).equals(syntaxOf(other))
+        && shapeOf(one.toProto().getMessageTypeList(), one.toProto().getEnumTypeList())
+            .equals(shapeOf(other.toProto().getMessageTypeList(),
+                other.toProto().getEnumTypeList()));
+  }
+
+  // A file that says no syntax is proto2.
+  private static String syntaxOf(FileDescriptor file) {
+    final String syntax = file.toProto().getSyntax();
+    return syntax.isEmpty() ? "proto2" : syntax;
+  }
+
+  private static List<String> shapeOf(List<DescriptorProto> messages,
+      List<EnumDescriptorProto> enums) {
+    final List<String> shape = new ArrayList<>();
+    for (DescriptorProto message : messages) {
+      shape.add("message " + message.getName());
+      // With the oneof a field is a member of, and whether it tells that it is set.
+      message.getFieldList().forEach(f -> shape.add(f.getName() + " " + f.getNumber() + " "
+          + f.getLabel() + " " + f.getType() + " " + f.getTypeName() + " "
+          + (f.hasOneofIndex() ? message.getOneofDecl(f.getOneofIndex()).getName() : "") + " "
+          + f.getProto3Optional() + " " + f.getDefaultValue()));
+      shape.addAll(shapeOf(message.getNestedTypeList(), message.getEnumTypeList()));
+      shape.add("end " + message.getName());
+    }
+    for (EnumDescriptorProto enumType : enums) {
+      shape.add("enum " + enumType.getName());
+      enumType.getValueList().forEach(v -> shape.add(v.getName() + " " + v.getNumber()));
+    }
+    return shape;
+  }
+
+  private static List<String> namesOf(FileDescriptor f) {
+    final String prefix = f.getPackage().isEmpty() ? "" : f.getPackage() + ".";
+    final List<String> names = new ArrayList<>();
+    f.getMessageTypes().forEach(m -> names.add(prefix + m.getName()));
+    f.getEnumTypes().forEach(e -> names.add(prefix + e.getName()));
+    f.getExtensions().forEach(e -> names.add(prefix + e.getName()));
+    return names;
+  }
+
+  private static String article(String kind) {
+    return (kind.equals("enum") ? "an " : "a ") + kind;
+  }
+
+  /**
+   * Tells the order of a message's attributes where normalizing loses it. Normalized, a message
+   * declares its fields, its oneofs and their members by number; where the type has them
+   * otherwise, each field says its place in {@link CommonConstants#CONNECT_INDEX_PROP}.
+   */
+  private static void indexFields(DescriptorProto.Builder message) {
+    message.getNestedTypeBuilderList().forEach(LogicalTypeToProtoConverter::indexFields);
+    // As the reader takes them: the fields in no oneof, then each oneof's members.
+    final List<FieldDescriptorProto.Builder> plain = new ArrayList<>();
+    final Map<Integer, List<FieldDescriptorProto.Builder>> members = new TreeMap<>();
+    for (FieldDescriptorProto.Builder field : message.getFieldBuilderList()) {
+      if (field.hasOneofIndex() && !field.getProto3Optional()) {
+        members.computeIfAbsent(field.getOneofIndex(), k -> new ArrayList<>()).add(field);
+      } else {
+        plain.add(field);
+      }
+    }
+    final List<FieldDescriptorProto.Builder> first = new ArrayList<>();
+    members.values().forEach(oneof -> first.add(oneof.get(0)));
+    if (inNumberOrder(plain) && inNumberOrder(first)
+        && members.values().stream().allMatch(LogicalTypeToProtoConverter::inNumberOrder)) {
+      return;
+    }
+    final List<FieldDescriptorProto.Builder> fields = new ArrayList<>(plain);
+    members.values().forEach(fields::addAll);
+    for (int i = 0; i < fields.size(); i++) {
+      final FieldDescriptorProto.Builder field = fields.get(i);
+      final Meta.Builder meta = field.getOptions().getExtension(MetaProto.fieldMeta).toBuilder();
+      // Never a field's one param: normalized, a list of one is printed as its element, which
+      // a schema made of the descriptor, as a serializer looks one up, does not match.
+      if (meta.getParamsCount() == 0) {
+        meta.putParams(CommonConstants.FLINK_PROPERTY_VERSION,
+            CommonConstants.FLINK_PROPERTY_CURRENT_VERSION);
+      }
+      field.getOptionsBuilder().setExtension(MetaProto.fieldMeta,
+          meta.putParams(CommonConstants.CONNECT_INDEX_PROP, String.valueOf(i)).build());
+    }
+  }
+
+  private static boolean inNumberOrder(List<FieldDescriptorProto.Builder> fields) {
+    for (int i = 1; i < fields.size(); i++) {
+      if (fields.get(i - 1).getNumber() > fields.get(i).getNumber()) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /**
@@ -838,10 +1100,17 @@ public class LogicalTypeToProtoConverter {
         .filter(f -> f.getTypeName().equals(name) || f.getTypeName().endsWith("." + name))
         .map(FieldDescriptorProto::getName)
         .collect(Collectors.toList());
+    // A generated type may keep a name given it, which renaming its field does not change:
+    // beside a field or oneof of that name, that one is the one to name otherwise.
+    final boolean priorIsType = prior.equals("message") || prior.equals("enum");
+    final boolean kindIsType = kind.equals("message") || kind.equals("enum");
     throw new ValidationException("Protobuf name '" + name + "' is defined twice in " + scope
-        + (prior.equals(kind) ? "" : ", as a " + prior + " and a " + kind)
+        + (prior.equals(kind) ? "" : ", as " + article(prior) + " and " + article(kind))
         + (users.isEmpty() ? "" : " (used by fields " + String.join(", ", users) + ")")
-        + "; rename one of the fields it is generated from");
+        + (priorIsType != kindIsType
+            ? "; give the " + (priorIsType ? kind : prior) + " another name"
+            : "; rename one of the fields it is generated from, or where they share the "
+              + "message, give them its new type in one statement"));
   }
 
   // A oneof member's field, whose type is named by the member's pin.
@@ -870,7 +1139,7 @@ public class LogicalTypeToProtoConverter {
             dependencies,
             ctx);
       }
-      return fromField(
+      return withoutNotNull(fromField(
           branch.getSchema(),
           qualifiedName,
           branch.getDoc(),
@@ -878,9 +1147,55 @@ public class LogicalTypeToProtoConverter {
           nestedRows,
           nestedEnums,
           dependencies,
-          ctx);
+          ctx));
     } finally {
       names.exitBranch();
+    }
+  }
+
+  // A union's member may be null whatever is said of it, and is read so: it is not marked
+  // otherwise, which the next version written of the type would only take away.
+  private static FieldDescriptorProto.Builder withoutNotNull(FieldDescriptorProto.Builder member) {
+    final Meta meta = member.getOptions().getExtension(MetaProto.fieldMeta);
+    if (!meta.containsParams(CommonConstants.FLINK_NOT_NULL)) {
+      return member;
+    }
+    final Meta.Builder without = meta.toBuilder().removeParams(CommonConstants.FLINK_NOT_NULL);
+    if (without.getParamsCount() == 1) {
+      // The marker of the writer's params, with none left to mark.
+      without.removeParams(CommonConstants.FLINK_PROPERTY_VERSION);
+    }
+    if (without.build().equals(Meta.getDefaultInstance())) {
+      member.getOptionsBuilder().clearExtension(MetaProto.fieldMeta);
+      if (member.getOptions().equals(FieldOptions.getDefaultInstance())) {
+        member.clearOptions();
+      }
+    } else {
+      member.getOptionsBuilder().setExtension(MetaProto.fieldMeta, without.build());
+    }
+    return member;
+  }
+
+  // A member whose field name is given keeps it, before any other is named around it.
+  private static void keepGivenMemberNames(List<Field> fields, Set<String> takenNames,
+      Map<List<String>, String> memberNames, String rowName) {
+    for (Field field : fields) {
+      if (field.getSchema().getType() != Schema.Type.UNION) {
+        continue;
+      }
+      for (UnionBranch branch : field.getSchema().getBranches()) {
+        final Object given = branch.getParams().get(Schema.PROTOBUF_FIELD_NAME);
+        if (given == null) {
+          continue;
+        }
+        if (!takenNames.add(given.toString())) {
+          throw new ValidationException("Union branch '" + branch.getName() + "' of '"
+              + field.getName() + "' in " + rowName + " keeps its field name '" + given
+              + "', which is " + (given.toString().equals(field.getName())
+                  ? "its union's name" : "another field's name"));
+        }
+        memberNames.put(Arrays.asList(field.getName(), branch.getName()), given.toString());
+      }
     }
   }
 
@@ -1014,12 +1329,15 @@ public class LogicalTypeToProtoConverter {
       takenNames.add(field.getName());
     }
     final Map<List<String>, String> memberNames = new HashMap<>();
+    keepGivenMemberNames(fields, takenNames, memberNames, rowName);
     for (Field field : fields) {
       if (field.getSchema().getType() == Schema.Type.UNION) {
         for (UnionBranch branch : field.getSchema().getBranches()) {
           reserveFieldNumber(branch.getFieldNumber(), reservedNumbers, rowName);
-          memberNames.put(Arrays.asList(field.getName(), branch.getName()),
-              memberName(field, branch, takenNames, rowName));
+          final List<String> member = Arrays.asList(field.getName(), branch.getName());
+          if (!memberNames.containsKey(member)) {
+            memberNames.put(member, memberName(field, branch, takenNames, rowName));
+          }
         }
       } else {
         reserveFieldNumber(field.getFieldNumber(), reservedNumbers, rowName);
@@ -1055,7 +1373,7 @@ public class LogicalTypeToProtoConverter {
               field, branch, branchNumber, nestedRows, nestedEnums, dependencies, ctx);
           fieldProtoBuilder.setName(memberName);
           // Strip the format-native number (emitted via the native slot) from the branch meta.
-          Map<String, Object> branchParams = Schema.stripFormatNativeParams(branch.getParams());
+          Map<String, Object> branchParams = userParams(branch.getParams());
           Map<String, String> stringParams = new LinkedHashMap<>();
           branchParams.forEach((k, v) -> stringParams.put(k, String.valueOf(v)));
           if (!memberName.equals(branch.getName())) {
@@ -1762,7 +2080,7 @@ public class LogicalTypeToProtoConverter {
   }
 
   private static void addComment(FieldDescriptorProto.Builder builder, String fieldComment) {
-    if (fieldComment != null) {
+    if (!isBlank(fieldComment)) {
       builder.mergeOptions(createMetaForComment(fieldComment));
     }
   }
@@ -1912,12 +2230,23 @@ public class LogicalTypeToProtoConverter {
     }
   }
 
+  // The params written as a type's own: not the format-native ones, and none under a name the
+  // reader keeps for itself, which it would take for how the type is encoded or where it is.
+  private static Map<String, Object> userParams(Map<String, Object> params) {
+    Map<String, Object> userParams = Schema.stripFormatNativeParams(params);
+    if (userParams.keySet().stream().anyMatch(ProtoToLogicalTypeConverter::isReservedParam)) {
+      userParams = new LinkedHashMap<>(userParams);
+      userParams.keySet().removeIf(ProtoToLogicalTypeConverter::isReservedParam);
+    }
+    return userParams;
+  }
+
   private static void addFieldTagsAndParams(
       FieldDescriptorProto.Builder builder, Field field) {
     // Format-native params are carried through native slots (the field number via
     // FieldDescriptorProto.number), never through the field meta params, so strip them here:
     // protobuf.* because it is emitted natively, avro.* because it is foreign to proto.
-    Map<String, Object> userParams = Schema.stripFormatNativeParams(field.getParams());
+    Map<String, Object> userParams = userParams(field.getParams());
     if (field.getTags().isEmpty() && userParams.isEmpty()
         && field.getRules().isEmpty()) {
       return;
@@ -1964,13 +2293,13 @@ public class LogicalTypeToProtoConverter {
   private static Meta.Builder buildEnumValueMeta(EnumValue ev) {
     boolean hasMeta = false;
     Meta.Builder metaBuilder = Meta.newBuilder();
-    if (ev.getDoc() != null) {
+    if (!isBlank(ev.getDoc())) {
       metaBuilder.setDoc(ev.getDoc());
       hasMeta = true;
     }
     // Format-native params ride their own native slots (the enum number via
     // EnumValueDescriptorProto.number), never the generic meta params, so strip them here.
-    Map<String, Object> userParams = Schema.stripFormatNativeParams(ev.getParams());
+    Map<String, Object> userParams = userParams(ev.getParams());
     if (!userParams.isEmpty()) {
       Map<String, String> stringParams = new LinkedHashMap<>();
       userParams.forEach((k, v) -> stringParams.put(k, String.valueOf(v)));
@@ -1983,7 +2312,7 @@ public class LogicalTypeToProtoConverter {
   private static Meta.Builder buildSchemaMeta(Schema schema) {
     boolean hasMeta = false;
     Meta.Builder metaBuilder = Meta.newBuilder();
-    if (schema.getDoc() != null) {
+    if (!isBlank(schema.getDoc())) {
       metaBuilder.setDoc(schema.getDoc());
       hasMeta = true;
     }
@@ -1992,7 +2321,7 @@ public class LogicalTypeToProtoConverter {
       hasMeta = true;
     }
     // Strip first: a format-native param alone must not manufacture a Meta block.
-    Map<String, Object> userParams = Schema.stripFormatNativeParams(schema.getParams());
+    Map<String, Object> userParams = userParams(schema.getParams());
     if (!userParams.isEmpty()) {
       Map<String, String> stringParams = new LinkedHashMap<>();
       userParams.forEach((k, v) -> stringParams.put(k, String.valueOf(v)));
