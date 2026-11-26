@@ -1439,4 +1439,34 @@ public class AvroConverterBackupTest {
     Struct older = withDataEncoding((Struct) wrapped.value(), null);
     assertNotNull(targetConverter.fromConnectData(TOPIC, wrapped.schema(), older));
   }
+
+  /**
+   * Rebuilds the wrapper without the dataEncoding field, the exact shape written by
+   * releases before the field existed (and rebuilt by older restore connectors).
+   */
+  private static SchemaAndValue withoutDataEncodingField(SchemaAndValue wrapped) {
+    SchemaBuilder builder = SchemaBuilder.struct().name(wrapped.schema().name());
+    for (org.apache.kafka.connect.data.Field field : wrapped.schema().fields()) {
+      if (!BackupWrapper.FIELD_DATA_ENCODING.equals(field.name())) {
+        builder.field(field.name(), field.schema());
+      }
+    }
+    Schema olderShape = builder.build();
+    Struct source = (Struct) wrapped.value();
+    Struct older = new Struct(olderShape);
+    for (org.apache.kafka.connect.data.Field field : olderShape.fields()) {
+      older.put(field, source.get(field.name()));
+    }
+    return new SchemaAndValue(olderShape, older);
+  }
+
+  @Test
+  public void testRestoreOfBackupWrittenBeforeDataEncodingMatchesCurrentRestore() {
+    SchemaAndValue wrapped = wrappedSample();
+    SchemaAndValue older = withoutDataEncodingField(wrapped);
+    assertNull(older.schema().field(BackupWrapper.FIELD_DATA_ENCODING));
+    byte[] current = targetConverter.fromConnectData(TOPIC, wrapped.schema(), wrapped.value());
+    byte[] restored = targetConverter.fromConnectData(TOPIC, older.schema(), older.value());
+    assertArrayEquals(current, restored);
+  }
 }

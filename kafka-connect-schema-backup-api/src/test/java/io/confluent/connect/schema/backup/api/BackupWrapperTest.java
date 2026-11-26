@@ -268,6 +268,18 @@ public class BackupWrapperTest {
   }
 
   @Test
+  public void testRequireDataEncodingAcceptsSchemaWithoutField() {
+    // Wrapper shape written by releases before dataEncoding existed.
+    Schema olderShape = SchemaBuilder.struct().name(BackupWrapper.NAME)
+        .field(BackupWrapper.FIELD_DATA, Schema.OPTIONAL_BYTES_SCHEMA)
+        .build();
+    BackupWrapper.requireDataEncoding(olderShape, new Struct(olderShape),
+        BackupWrapper.DATA_ENCODING_WIRE_BYTES, CONVERTER_NAME);
+    BackupWrapper.requireDataEncoding(olderShape, new Struct(olderShape),
+        BackupWrapper.DATA_ENCODING_CONNECT, CONVERTER_NAME);
+  }
+
+  @Test
   public void testRequireDataEncodingRejectsWireBytesForConnectConverter() {
     Struct wrapper = wrapperWithEncoding(BackupWrapper.DATA_ENCODING_WIRE_BYTES);
     try {
