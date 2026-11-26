@@ -835,18 +835,25 @@ public final class TypeAlter {
       }
       // A message that wraps a value is read as the value and written as it: the writer
       // wraps a collection, a union, and an element that may be null, and no other value.
+      // A member of a oneof is told with its oneof, which is the attribute.
+      OneofDescriptor in = field.getRealContainingOneof();
+      String told = of + (in != null ? ", a member of its oneof " + in.getName() + "," : "");
       if (wrapsValue(field)) {
-        OneofDescriptor in = field.getRealContainingOneof();
-        return of + (in != null ? ", a member of its oneof " + in.getName() + "," : "")
+        return told
             + " is a message that wraps a value, which would be written as the value "
             + "itself and not as that message, so its stored values would be read wrongly";
       }
       // As is a wrapper whose value is not its field 1, or not its only field: the writer
       // writes the value as field 1 of a message of nothing else.
       if (wrapsOtherwise(field)) {
-        return of + " is a message that wraps a value otherwise than as its field 1 and its "
-            + "only field, which it would be written as, so its stored values would be read "
-            + "wrongly";
+        return told + " is a message that wraps a value otherwise than as its field 1 and "
+            + "its only field, which it would be written as, so its stored values would be "
+            + "read wrongly";
+      }
+      // And one that wraps a oneof with more beside it, which is written as the oneof alone.
+      if (wrapsMore(field)) {
+        return told + " is a message that wraps a oneof and has more beside it, which it "
+            + "would be written without, so what is stored there would be read no more";
       }
       // A message of the name of one of the format's own that is not that one is read as
       // that one, and written as it.
@@ -883,6 +890,10 @@ public final class TypeAlter {
   // of a field of the message: told as the wrapped oneof it is, while the type has its
   // union, and not as the numbers the writer gives.
   private void refuseWrappedOneof(ParsedSchema stored) {
+    refuseWrappedOneof(stored, "Drop the attribute");
+  }
+
+  private void refuseWrappedOneof(ParsedSchema stored, String advice) {
     Descriptor was;
     try {
       was = stored instanceof ProtobufSchema ? ((ProtobufSchema) stored).toDescriptor() : null;
@@ -898,16 +909,19 @@ public final class TypeAlter {
         throw new TypeRefusedException("Type " + subject + " cannot be altered: field "
             + field.getName() + " of message " + was.getName() + " is a oneof wrapped in "
             + "a message, which would be written as a oneof of the message itself, so its "
-            + "stored values would be read as none. Drop the attribute, or register its "
+            + "stored values would be read as none. " + advice + ", or register its "
             + "new version as a Protobuf schema");
       }
     }
   }
 
-  // As an action that writes the type before the statement is done is refused.
+  // As an action that writes the type before the statement is done is refused: what the
+  // statement does to the attribute after it is not yet done.
   private void refuseWrappedOneof() {
     if (format == SchemaType.PROTOBUF && editing != null) {
-      refuseWrappedOneof(lookup.parse(editing));
+      refuseWrappedOneof(lookup.parse(editing), "Drop the attribute, or give it another "
+          + "kind of type, before an attribute is renamed: in this statement or one before "
+          + "it");
     }
   }
 
@@ -945,6 +959,17 @@ public final class TypeAlter {
       return false;
     }
     return !field.isRepeated() || !value.hasPresence();
+  }
+
+  private static boolean wrapsMore(FieldDescriptor field) {
+    if (!ProtoToLogicalTypeConverter.isFlinkWrapped(field)) {
+      return false;
+    }
+    Descriptor wrapper = field.getMessageType();
+    return wrapper.findFieldByName(CommonConstants.FLINK_WRAPPER_FIELD_NAME) == null
+        && wrapper.getRealOneofs().stream().anyMatch(oneof -> oneof.getName().equals(
+            CommonConstants.FLINK_WRAPPER_FIELD_NAME)
+            && oneof.getFieldCount() != wrapper.getFields().size());
   }
 
   private static boolean wrapsOtherwise(FieldDescriptor field) {
@@ -1924,9 +1949,8 @@ public final class TypeAlter {
     definitions.removeAll(externalImports.keySet());
     // A JSON reference may be of no use though no name is: one only a definition was of
     // that no attribute was of, which the type as read has not and is written no more.
-    // Not one the statement leaves no attribute of, which is dropped with it; but one no
-    // attribute was of may give a name below another reference its type or version, and
-    // taken away would leave that reference what it is of: it is kept, and told as two.
+    // One the statement leaves no attribute of is dropped with it. One no attribute was
+    // of is dropped too, unless taken away it would leave a name another type or version.
     Set<String> freed = new HashSet<>(unused);
     unused.forEach(name -> {
       String uri = externalImports.get(name);
@@ -1934,18 +1958,17 @@ public final class TypeAlter {
         freed.add(uri.contains("#") ? uri.substring(0, uri.indexOf('#')) : uri);
       }
     });
-    // The first met binds a name: it is those listed after it, and of use still, that
-    // it may bind a name below.
-    List<SchemaReference> all = new ArrayList<>(references);
+    // As is the document of a definition the statement leaves no attribute of.
+    references.stream().filter(ref -> format == SchemaType.JSON
+        && definitionsOf(ref).stream().anyMatch(unused::contains))
+        .forEach(ref -> freed.add(ref.getName()));
     Predicate<SchemaReference> unnamed = ref -> !used.contains(ref.getName())
         && definitionsOf(ref).stream().noneMatch(definitions::contains);
-    Predicate<SchemaReference> binds = ref -> format == SchemaType.JSON
-        && !freed.contains(ref.getName())
-        && TypeReferences.bindsBelow(lookup, subject, ref, all.subList(all.indexOf(ref) + 1,
-            all.size()).stream().filter(unnamed.negate()).collect(Collectors.toList()));
-    boolean idle = format == SchemaType.JSON && references.stream().anyMatch(ref ->
-        unnamed.test(ref) && !binds.test(ref));
-    if (unused.isEmpty() && !renamed && !idle) {
+    List<SchemaReference> idle = format != SchemaType.JSON ? List.of() : references.stream()
+        .filter(ref -> unnamed.test(ref) && !freed.contains(ref.getName()))
+        .collect(Collectors.toList());
+    Set<SchemaReference> pinned = binding(idle, used, unnamed);
+    if (unused.isEmpty() && !renamed && pinned.size() == idle.size()) {
       return;
     }
     externalTypes.removeAll(unused);
@@ -1956,10 +1979,45 @@ public final class TypeAlter {
       Set<String> names = TypeReferences.definedNames(lookup, subject, ref);
       return names != null && names.stream().noneMatch(used::contains)
           && definitionsOf(ref).stream().noneMatch(definitions::contains)
-          && !binds.test(ref);
+          && !pinned.contains(ref);
     });
     resolved.clear();
     resolved.putAll(TypeReferences.resolve(lookup, subject, references));
+  }
+
+  // Of the references no attribute was of, those that taken away would leave a name
+  // another type or version: a name an attribute is of, or one below a reference the
+  // version edited has and the statement keeps. The first met binds a name, so each is
+  // tried in turn without those before it that go; what the statement adds is its own.
+  private Set<SchemaReference> binding(List<SchemaReference> idle, Set<String> used,
+      Predicate<SchemaReference> unnamed) {
+    Set<SchemaReference> pinned = new HashSet<>();
+    if (idle.isEmpty()) {
+      return pinned;
+    }
+    Map<String, SchemaMetadata> versions = new HashMap<>();
+    List<SchemaReference> kept = references.stream()
+        .filter(ref -> idle.contains(ref) || !unnamed.test(ref)).collect(Collectors.toList());
+    Set<String> stored = new HashSet<>();
+    original.getReferences().forEach(ref -> stored.add(ref.getName()));
+    Set<String> names = new HashSet<>(used);
+    for (SchemaReference ref : kept) {
+      if (!idle.contains(ref) && stored.contains(ref.getName())) {
+        names.addAll(TypeReferences.below(lookup, subject, ref, versions));
+      }
+    }
+    Map<String, String> bound = TypeReferences.firstMet(lookup, subject, kept, versions);
+    for (SchemaReference ref : idle) {
+      List<SchemaReference> without = new ArrayList<>(kept);
+      without.remove(ref);
+      Map<String, String> now = TypeReferences.firstMet(lookup, subject, without, versions);
+      if (names.stream().allMatch(name -> Objects.equals(bound.get(name), now.get(name)))) {
+        kept = without;
+      } else {
+        pinned.add(ref);
+      }
+    }
+    return pinned;
   }
 
   // The names of the definitions a JSON document a reference is to has at its root: one
@@ -2169,7 +2227,8 @@ public final class TypeAlter {
           + "definition would be written as that type. Register its new version as a JSON "
           + "schema");
     }
-    refuseDefinitionsOfOneName(schema, uses, ((JsonSchema) stored).resolvedReferences().keySet());
+    refuseDefinitionsOfOneName(schema, uses, later(schema)
+        ? ((JsonSchema) stored).resolvedReferences().keySet() : Set.of());
   }
 
   // A definition is read by its name alone, whichever document it is of: two of one name,
@@ -2194,8 +2253,9 @@ public final class TypeAlter {
             : use.target);
       // By a $ref its attributes come to: a definition none is to is not the schema using
       // the name, nor is what such a one names, as the copies of a document's definitions
-      // that the writer left in it are not.
-      if (use.from.isEmpty() && use.reached) {
+      // that the writer left in it are not. Nor is a name the type has for what it refers
+      // to, which is written as that whatever else is so named.
+      if (use.from.isEmpty() && use.reached && !entry(called)) {
         own.add(name);
       }
     }
@@ -2252,9 +2312,10 @@ public final class TypeAlter {
   // as a schema of a later draft is read with each of its $defs.
   private static List<Use> uses(JsonSchema schema, LogicalType read, boolean below) {
     JsonNode root = schema.toJsonNode();
-    // From draft 2019-09 on, what is beside a $ref is read with it; before, it is not.
-    String draft = root.path("$schema").asText("");
-    boolean beside = draft.contains("2019-09") || draft.contains("2020-12");
+    // From draft 2019-09 on, what is beside a $ref is read with it, each of the root's
+    // $defs is read whether a $ref is to it or not, and a reference's name is that
+    // reference whatever the schema's $id; before, none of the three.
+    boolean beside = later(root);
     Map<String, JsonNode> documents = new HashMap<>();
     documents.put("", root);
     List<Use> uses = new ArrayList<>();
@@ -2265,7 +2326,7 @@ public final class TypeAlter {
     while (!todo.isEmpty() || !kept) {
       if (todo.isEmpty()) {
         kept = true;
-        unreached(root, read, gone).forEach(at -> {
+        unreached(root, beside ? read : null, gone).forEach(at -> {
           todo.add(new String[] {"", at});
           uses.add(new Use("", "#" + at, false, true, false));
         });
@@ -2289,10 +2350,12 @@ public final class TypeAlter {
       List<String> refs = new ArrayList<>();
       collectRefs(node, refs, beside);
       for (String ref : refs) {
-        String to = local(document, ref, schema.resolvedReferences().keySet());
+        String to = local(document, ref,
+            beside ? schema.resolvedReferences().keySet() : Set.of());
         int hash = to.indexOf('#');
         String in = hash == 0 ? at[0] : hash < 0 ? to : to.substring(0, hash);
-        String part = hash < 0 ? "" : to.substring(hash + 1);
+        String part = defined(hash == 0 ? document : documents.get(in),
+            hash < 0 ? "" : to.substring(hash + 1));
         todo.add(new String[] {in, part});
         uses.add(new Use(at[0], part.isEmpty() ? in : in + "#" + part, entry, false, !kept));
       }
@@ -2300,8 +2363,29 @@ public final class TypeAlter {
     return uses;
   }
 
+  private static boolean later(JsonNode root) {
+    String draft = root.path("$schema").asText("");
+    return draft.contains("2019-09") || draft.contains("2020-12");
+  }
+
+  // A place under $defs as it is in a document that has it under definitions, and the
+  // other way: the loader reads the one word for the other.
+  private static String defined(JsonNode document, String part) {
+    for (String[] words : new String[][] {{"/$defs/", "/definitions/"},
+        {"/definitions/", "/$defs/"}}) {
+      if (document != null && part.startsWith(words[0])
+          && definition(document, "#" + part).isMissingNode()
+          && !definition(document, "#" + words[1] + part.substring(words[0].length()))
+              .isMissingNode()) {
+        return words[1] + part.substring(words[0].length());
+      }
+    }
+    return part;
+  }
+
   // The definitions of the schema's own that no $ref reached and the type as read has all
-  // the same, by their places.
+  // the same, by their places: a later draft reads each of them, but for one under
+  // definitions of the name of one under $defs, which that one stands for.
   private static List<String> unreached(JsonNode root, LogicalType read, Set<String> gone) {
     List<String> places = new ArrayList<>();
     if (read == null) {
@@ -2311,7 +2395,8 @@ public final class TypeAlter {
       root.path(word).fieldNames().forEachRemaining(name -> {
         // Not a name the type as read has for a document's definition alone.
         if (!gone.contains(" /" + word + "/" + name) && read.getNamedTypes().containsKey(name)
-            && !read.getExternalTypes().contains(name)) {
+            && !read.getExternalTypes().contains(name)
+            && !(word.equals("definitions") && root.path("$defs").has(name))) {
           places.add("/" + word + "/" + name);
         }
       });
@@ -2376,6 +2461,9 @@ public final class TypeAlter {
   // whole, with or without a # after its name, or a part of one.
   private static String toldAs(String to) {
     int hash = to.indexOf('#');
+    if (to.equals("#")) {
+      return "the schema is called where it refers to itself whole: #";
+    }
     return (hash < 0 || hash == to.length() - 1 ? "a type is called that it refers to whole: "
         : "a part of a schema is called that it refers to: ") + to;
   }
@@ -2981,6 +3069,14 @@ public final class TypeAlter {
       if (message != null) {
         message.members().stream().filter(m -> m.number() > 0)
             .forEach(m -> usedNumbers.add(m.number()));
+      }
+      // And the number of a field that holds a oneof wrapped in a message, which the
+      // union read of it has: dropped, it is no new attribute's.
+      Schema struct = targetOf(lt);
+      if (struct != null && struct.getType() == Schema.Type.STRUCT) {
+        struct.getFields().stream().filter(f -> f.getSchema().getType() == Schema.Type.UNION
+            && numberIn(f.getParams()) > 0)
+            .forEach(f -> usedNumbers.add(numberIn(f.getParams())));
       }
     }
   }

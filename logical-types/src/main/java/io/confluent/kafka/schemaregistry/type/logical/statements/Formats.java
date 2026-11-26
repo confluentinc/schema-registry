@@ -596,6 +596,21 @@ public final class Formats {
       return known;
     }
 
+    // Whether two met already are taken to match, which the pair judged now is then
+    // judged by.
+    boolean taken(Written one, Written other) {
+      Pair pair = new Pair(one, other);
+      boolean known = Boolean.TRUE.equals(match.get(pair));
+      if (known && judging != null) {
+        judgedBy.computeIfAbsent(pair, p -> new HashSet<>()).add(judging);
+      }
+      return known;
+    }
+
+    boolean unmet(Written one, Written other) {
+      return !match.containsKey(new Pair(one, other));
+    }
+
     void settle() {
       Set<Pair> again = new LinkedHashSet<>();
       // Those met on the way are judged in their turn, and before any is judged again: one
@@ -631,12 +646,31 @@ public final class Formats {
         || other.stream().anyMatch(t -> "any".equals(jsonKind(t.type)))) {
       return true;
     }
-    // Every two are asked, and so met at once: asked until one matches, as many are met
-    // in as many turns, each of which asks again all that came before.
+    // Two that match by what they are, or are taken to match already, answer for all.
+    int told = 0;
+    for (Written a : one) {
+      for (Written b : other) {
+        if (!byRows(a.type, b.type)) {
+          if (matchAlone(a.type, b.type)) {
+            return true;
+          }
+        } else if (comparing.taken(a, b)) {
+          return true;
+        } else if (!comparing.unmet(a, b)) {
+          told++;
+        }
+      }
+    }
+    // Else as many more are met as were told apart, and one at least: few where the first
+    // match, and all in a few turns where none do. Met one at a turn, each turn would ask
+    // again all before it; met all at once, every two holders would keep every two held.
+    int meet = Math.max(1, told);
     boolean any = false;
     for (Written a : one) {
       for (Written b : other) {
-        if (matchBoth(a, b, comparing)) {
+        if (meet > 0 && byRows(a.type, b.type) && comparing.unmet(a, b)) {
+          comparing.of(a, b);
+          meet--;
           any = true;
         }
       }
@@ -644,9 +678,21 @@ public final class Formats {
     return any;
   }
 
-  private static boolean matchBoth(Written one, Written other, Pairs comparing) {
-    Schema a = one.type;
-    Schema b = other.type;
+  // Whether two are told by what the rows they name are taken to be: two rows, or a row
+  // and a map written as an object.
+  private static boolean byRows(Schema a, Schema b) {
+    boolean row = a.getType() == Schema.Type.STRUCT || b.getType() == Schema.Type.STRUCT;
+    return row && objectAlone(a) && objectAlone(b);
+  }
+
+  // Written as a JSON object and as nothing else: a row, or a map of string keys.
+  private static boolean objectAlone(Schema type) {
+    return type.getType() != Schema.Type.ENUM && jsonKind(type) == null
+        && !isJsonArray(type) && isJsonObject(type);
+  }
+
+  // Whether two that are not told by rows match by what they are themselves.
+  private static boolean matchAlone(Schema a, Schema b) {
     if (a.getType() == Schema.Type.ENUM && b.getType() == Schema.Type.ENUM) {
       // Each is one of its symbols: a value of both is a symbol of both.
       Set<String> symbols = new HashSet<>();
@@ -663,12 +709,8 @@ public final class Formats {
     if (!isJsonObject(a) || !isJsonObject(b)) {
       return false;
     }
-    boolean rowA = a.getType() == Schema.Type.STRUCT;
-    boolean rowB = b.getType() == Schema.Type.STRUCT;
-    if (!rowA && !rowB) {
-      return true;
-    }
-    return comparing.of(one, other);
+    // Two maps written as objects: an empty object is a value of either.
+    return true;
   }
 
   // Whether a value of one of two rows, or of a row and a map written as an object, would

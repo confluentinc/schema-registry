@@ -444,29 +444,60 @@ public final class TypeReferences {
   }
 
   /**
-   * Whether a reference's name is one that references listed after it have below them for
-   * another type or version: the first met binds a name, so taken away the reference would
-   * leave what those are of another type.
+   * The type and version each name is bound to, as the registry resolves a list of
+   * references: the first met binds a name, a referred type's own references before the
+   * type, and one whose name is bound already is not gone into.
    */
-  static boolean bindsBelow(TypeLookup lookup, String referrer, SchemaReference ref,
-      List<SchemaReference> after) {
-    String subject = referenced(referrer, ref.getSubject());
-    Map<String, SchemaMetadata> versions = new HashMap<>();
-    for (SchemaReference other : after) {
-      Map<String, String[]> alone = new LinkedHashMap<>();
-      try {
-        bind(lookup, referrer, null, List.of(other), alone, versions, "");
-      } catch (TypeRefusedException e) {
-        // Two of a name below it already: told as that.
-        return true;
+  static Map<String, String> firstMet(TypeLookup lookup, String referrer,
+      List<SchemaReference> references, Map<String, SchemaMetadata> versions) {
+    Map<String, String> bound = new LinkedHashMap<>();
+    firstMet(lookup, referrer, references, bound, versions);
+    return bound;
+  }
+
+  private static void firstMet(TypeLookup lookup, String referrer,
+      List<SchemaReference> references, Map<String, String> bound,
+      Map<String, SchemaMetadata> versions) {
+    if (references == null) {
+      return;
+    }
+    for (SchemaReference ref : references) {
+      if (bound.containsKey(ref.getName())) {
+        continue;
       }
-      String[] below = alone.get(ref.getName());
-      if (below != null && below[2] != null && !(below[0].equals(subject)
-          && below[1].equals(String.valueOf(ref.getVersion())))) {
-        return true;
+      String subject = referenced(referrer, ref.getSubject());
+      SchemaMetadata md = version(lookup, subject, ref.getVersion(), versions);
+      if (md != null) {
+        firstMet(lookup, subject, md.getReferences(), bound, versions);
+      }
+      bound.putIfAbsent(ref.getName(), subject + "@" + ref.getVersion());
+    }
+  }
+
+  /** The names met below a reference, read alone. */
+  static Set<String> below(TypeLookup lookup, String referrer, SchemaReference ref,
+      Map<String, SchemaMetadata> versions) {
+    String subject = referenced(referrer, ref.getSubject());
+    SchemaMetadata md = version(lookup, subject, ref.getVersion(), versions);
+    Map<String, String> bound = new LinkedHashMap<>();
+    if (md != null) {
+      firstMet(lookup, subject, md.getReferences(), bound, versions);
+    }
+    return bound.keySet();
+  }
+
+  // A version, looked up once.
+  private static SchemaMetadata version(TypeLookup lookup, String subject, int version,
+      Map<String, SchemaMetadata> versions) {
+    String key = subject + "@" + version;
+    SchemaMetadata md = versions.get(key);
+    if (md == null) {
+      md = lookup.version(subject, version);
+      if (md != null) {
+        versions.put(key, md);
       }
     }
-    return false;
+    return md;
   }
 
   // Each name at the type and version, and through the type, it is first met, which is the

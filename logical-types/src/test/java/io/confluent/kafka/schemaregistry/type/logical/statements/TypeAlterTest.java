@@ -5336,4 +5336,184 @@ class TypeAlterTest {
           .contains("{\"$ref\":\"" + to + "\"}");
     }
   }
+
+  // A definition is one though the schema says definitions and a $ref says $defs, as the
+  // loader reads the one word for the other; one under definitions beside one of its name
+  // under $defs is not read, nor is a definition no $ref is to in an older draft; and in an
+  // older draft a $ref by the schema's $id is to the schema, though a reference has the name.
+  @Test
+  void aJsonDefinitionIsCountedOnlyWhereItIsRead() throws Exception {
+    String p = "{\"type\":\"object\",\"properties\":{\"p\":{\"type\":\"integer\"}},"
+        + "\"required\":[\"p\"],\"additionalProperties\":false}";
+    String q = "{\"type\":\"object\",\"properties\":{\"q\":{\"type\":\"string\"}},"
+        + "\"required\":[\"q\"],\"additionalProperties\":false}";
+    String later = "\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",";
+    json("lib", "{\"type\":\"object\",\"title\":\"lib\",\"properties\":{\"k\":{\"type\":"
+        + "\"integer\"}},\"additionalProperties\":false,\"$defs\":{\"Loc\":" + p + ",\"B\":"
+        + "{\"type\":\"object\",\"properties\":{\"in\":{\"$ref\":\"#/$defs/Loc\"}}}}}");
+    Map<String, String> read = new LinkedHashMap<>();
+    // Named by the other word, in either draft.
+    read.put("r1", "\"x\":{\"$ref\":\"#/$defs/Loc\"}},\"additionalProperties\":false,"
+        + "\"definitions\":{\"Loc\":" + q + "}}");
+    // Under both words, the one a $ref is to.
+    read.put("r2", "\"x\":{\"$ref\":\"#/$defs/Loc\"}},\"additionalProperties\":false,"
+        + "\"$defs\":{\"Loc\":" + q + "},\"definitions\":{\"Loc\":" + p + "}}");
+    for (Map.Entry<String, String> type : read.entrySet()) {
+      for (String draft : List.of("", later)) {
+        String name = type.getKey() + (draft.isEmpty() ? "o" : "n");
+        json(name, "{" + draft + String.format(JSON_HEAD, name).substring(1) + type.getValue());
+        registry.alter(name, new AddAttribute("z", "INT"));
+        assertThat(version(name)).as(name).isEqualTo(2);
+      }
+    }
+    // An older draft: a definition none is to, beside a document's one that names its own.
+    json("r3", String.format(JSON_HEAD, "r3") + "\"y\":{\"$ref\":\"lib#/$defs/B\"}},"
+        + "\"additionalProperties\":false,\"$defs\":{\"Loc\":" + q + "}}", "lib");
+    registry.alter("r3", new AddAttribute("z", "INT"));
+    assertThat(version("r3")).isEqualTo(2);
+    json("r4", "{\"$id\":\"lib\"," + String.format(JSON_HEAD, "r4").substring(1)
+        + "\"x\":{\"$ref\":\"#/$defs/Loc\"},\"y\":{\"$ref\":\"lib#/$defs/Loc\"}},"
+        + "\"additionalProperties\":false,\"$defs\":{\"Loc\":" + q + "}}", "lib");
+    registry.alter("r4", new AddAttribute("z", "INT"));
+    assertThat(version("r4")).isEqualTo(2);
+  }
+
+  // A name the type has for a document is written as that whatever else is so named: a
+  // definition of that name in a document referred to is no second one of the type's. And
+  // the schema's reference to itself is told as that.
+  @Test
+  void aJsonNameForADocumentIsNoDefinitionOfTheTypes() throws Exception {
+    create("o5s", SchemaType.JSON, "(o STRING NOT NULL)");
+    json("b2", "{\"type\":\"object\",\"title\":\"b2\",\"properties\":{\"k\":{\"type\":"
+        + "\"integer\"}},\"additionalProperties\":false,\"$defs\":{\"Y\":{\"enum\":[\"A\"]}}}");
+    json("via", "{\"type\":\"object\",\"title\":\"via\",\"properties\":{\"v\":{\"$ref\":"
+        + "\"b2#/$defs/Y\"}},\"additionalProperties\":false}", "b2");
+    Map<String, String> resolved = new LinkedHashMap<>();
+    for (String name : List.of("o5s", "b2", "via")) {
+      resolved.put(name, registry.latest(name).getSchema());
+    }
+    registry.client.register("ny", new JsonSchema("{\"$schema\":"
+        + "\"https://json-schema.org/draft/2020-12/schema\","
+        + String.format(JSON_HEAD, "ny").substring(1) + "\"a\":{\"$ref\":\"#/$defs/Y\"},"
+        + "\"b\":{\"$ref\":\"via\"}},\"additionalProperties\":false,\"$defs\":{\"Y\":"
+        + "{\"$ref\":\"o5s\",\"logical.ref\":true}}}", List.of(
+            new SchemaReference("o5s", "o5s", 1), new SchemaReference("via", "via", 1)),
+        resolved, null));
+    registry.alter("ny", new AddAttribute("z", "INT"));
+    assertThat(version("ny")).isEqualTo(2);
+    assertThat(registry.schema("ny").canonicalString()).contains("{\"$ref\":\"o5s\"}")
+        .contains("{\"$ref\":\"via\"}");
+    json("self", String.format(JSON_HEAD, "self") + "\"a\":{\"$ref\":\"#\"},\"b\":{\"$ref\":"
+        + "\"#/$defs/Ref1\"}},\"additionalProperties\":false,\"$defs\":{\"Ref1\":{\"type\":"
+        + "\"object\",\"properties\":{\"k\":{\"type\":\"integer\"}}}}}");
+    assertThatThrownBy(() -> registry.alter("self", new AddAttribute("z", "INT")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("which is what the schema is called where it refers to itself "
+            + "whole: #.");
+  }
+
+  // A reference no attribute is of is dropped unless taken away it would leave a name
+  // another version: one the type's attribute is of, or one below a reference that stays.
+  // What an earlier reference binds already, and what only a reference the statement adds
+  // has below it, keep none.
+  @Test
+  void aJsonReferenceOfNoUseIsKeptOnlyForANameItBinds() throws Exception {
+    String row = "{\"type\":\"object\",\"title\":\"%s\",\"properties\":{\"%s\":%s},"
+        + "\"required\":[\"%2$s\"],\"additionalProperties\":false}";
+    String integer = "{\"type\":\"integer\"}";
+    json("o5s", String.format(row, "o5s", "o", "{\"type\":\"string\"}"));
+    json("xv", String.format(row, "xv", "k", integer));
+    json("ax", String.format(row, "ax", "in", "{\"$ref\":\"xv\"}"), "xv");
+    json("xv", String.format(row, "xv", "p", integer));
+    json("bx", String.format(row, "bx", "in", "{\"$ref\":\"xv\"}"), "xv");
+    json("dx", String.format(row, "dx", "din", "{\"$ref\":\"xv\"}"), "xv");
+    Map<String, String> resolved = new LinkedHashMap<>();
+    for (String name : List.of("o5s", "ax", "bx", "dx")) {
+      resolved.put(name, registry.latest(name).getSchema());
+    }
+    SchemaReference ax = new SchemaReference("ax", "ax", 1);
+    SchemaReference bx = new SchemaReference("bx", "bx", 1);
+    SchemaReference dx = new SchemaReference("dx", "dx", 1);
+    SchemaReference first = new SchemaReference("xv", "xv", 1);
+    SchemaReference plain = new SchemaReference("o5s", "o5s", 1);
+    // ax, of no use, binds xv at its version 1 for bx, which names version 2.
+    Map<String, String> one = new LinkedHashMap<>(resolved);
+    one.put("xv", registry.version("xv", 1).getSchema());
+    registry.client.register("k1", new JsonSchema(String.format(JSON_HEAD, "k1")
+        + "\"b\":{\"$ref\":\"bx\"}},\"additionalProperties\":false}", List.of(ax, bx), one,
+        null));
+    assertThatThrownBy(() -> registry.alter("k1", new AddAttribute("z", "INT")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("it would refer to two versions of type xv");
+    // And for the type's own attribute, where a statement adds bx.
+    registry.client.register("k2", new JsonSchema(String.format(JSON_HEAD, "k2")
+        + "\"a\":{\"$ref\":\"xv\"}},\"additionalProperties\":false}", List.of(ax), one, null));
+    assertThatThrownBy(() -> registry.alter("k2", new AddAttribute("zb", "bx")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("it would refer to two versions of type xv");
+    // bx, listed first, binds xv at version 2 already: xv at version 1 after it binds none.
+    Map<String, String> two = new LinkedHashMap<>(resolved);
+    two.put("xv", registry.version("xv", 2).getSchema());
+    registry.client.register("k3", new JsonSchema(String.format(JSON_HEAD, "k3")
+        + "\"b\":{\"$ref\":\"bx\"},\"d\":{\"$ref\":\"dx\"}},\"additionalProperties\":false}",
+        List.of(bx, first, dx), two, null));
+    registry.alter("k3", new AddAttribute("z", "INT"));
+    assertThat(references("k3")).containsExactly("bx", "dx");
+    // xv at version 1, of no use, is nothing to bx that the statement adds.
+    registry.client.register("k4", new JsonSchema(String.format(JSON_HEAD, "k4")
+        + "\"a\":{\"$ref\":\"o5s\"}},\"additionalProperties\":false}", List.of(first, plain),
+        one, null));
+    registry.alter("k4", new AddAttribute("zb", "bx"));
+    assertThat(references("k4")).containsExactly("bx", "o5s");
+    assertThat(version("k1")).isEqualTo(1);
+    assertThat(version("k2")).isEqualTo(1);
+  }
+
+  // A wrapper of a oneof with more beside it is written as the oneof alone; a wrapper of
+  // another shape that is a member of a oneof is told with its oneof; a rename before the
+  // wrapped oneof is dropped says to drop it first; and a dropped one's number is no new
+  // attribute's.
+  @Test
+  void aProtobufWrapperWithMoreBesideItsOneofAndTheNumberOfOneDropped() throws Exception {
+    String head = "syntax = \"proto3\";\n\nimport \"confluent/meta.proto\";\n\nmessage T {\n";
+    String more = "\n  message W {\n    oneof value {\n      int32 a = 1;\n      string b = 3;\n"
+        + "    }\n    int32 extra = 9;\n  }\n}\n";
+    registry.client.register("me", new ProtobufSchema(head + "  int32 id = 5;\n  repeated W w "
+        + "= 2 " + WRAPPED + ";\n  int32 z = 6;\n" + more));
+    registry.client.register("mm", new ProtobufSchema(head + "  int32 id = 5;\n  int32 z = 6;\n"
+        + "  oneof u {\n    W w = 2 " + WRAPPED + ";\n    int32 k = 7;\n  }\n" + more));
+    assertThatThrownBy(() -> registry.alter("me", new AddAttribute("n", "INT")))
+        .isInstanceOf(TypeRefusedException.class).hasMessage("Type me cannot be altered: field "
+            + "w of message T is a message that wraps a oneof and has more beside it, which "
+            + "it would be written without, so what is stored there would be read no more. "
+            + "Drop the attribute, or register its new version as a Protobuf schema");
+    assertThatThrownBy(() -> registry.alter("mm", new AddAttribute("n", "INT")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("field w of message T, a member of its oneof u, is a message "
+            + "that wraps a oneof and has more beside it");
+    registry.client.register("mo", new ProtobufSchema(head + "  int32 id = 5;\n  int32 z = 6;\n"
+        + "  oneof u {\n    WL w = 2 " + WRAPPED + ";\n    int32 k = 7;\n  }\n\n  message WL {\n"
+        + "    repeated int32 value = 5;\n  }\n}\n"));
+    assertThatThrownBy(() -> registry.alter("mo", new AddAttribute("n", "INT")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("field w of message T, a member of its oneof u, is a message "
+            + "that wraps a value otherwise than as its field 1");
+    // A oneof wrapped in a message whose members' numbers are fields' of the message.
+    String wrapped = head + "  int32 id = 1;\n  int32 z = 2;\n  WOneofWrapper w = 3 " + WRAPPED
+        + ";\n\n  message WOneofWrapper {\n    oneof value {\n      int32 a = 1;\n      string b "
+        + "= 2;\n    }\n  }\n}\n";
+    registry.client.register("mr", new ProtobufSchema(wrapped));
+    assertThatThrownBy(() -> registry.alter("mr", new RenameAttribute("z", "z2"),
+        new DropAttribute("w", false))).isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("Drop the attribute, or give it another kind of type, before "
+            + "an attribute is renamed: in this statement or one before it, or register");
+    registry.alter("mr", new DropAttribute("w", false), new RenameAttribute("z", "z2"));
+    // The wrapper's number 3 is no new attribute's, in a later statement or the same one.
+    registry.alter("mr", new AddAttribute("n", "STRUCT<k INT>"));
+    assertThat(message("mr").findFieldByNumber(3)).isNull();
+    assertThat(message("mr").findFieldByName("n").getNumber()).isEqualTo(4);
+    registry.client.register("ms", new ProtobufSchema(wrapped));
+    registry.alter("ms", new DropAttribute("w", false), new AddAttribute("n", "STRING"));
+    assertThat(message("ms").findFieldByName("n").getNumber()).isEqualTo(4);
+  }
 }

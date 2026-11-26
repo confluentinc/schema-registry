@@ -609,4 +609,26 @@ class FormatsTest {
     assertThat(Formats.joined("e", "`w")).isEqualTo("e.```w`");
     assertThat(Formats.joined("`e.x`", "y")).isEqualTo("`e.x`.y");
   }
+
+  // Rows of a union that each require one union of rows: the rows held are met a few at a
+  // turn, and not all for every two holders, which keeps every two held for each.
+  @Test
+  void rowsThatRequireASharedUnionOfRowsAreNotAllMetForEveryTwo() {
+    StringBuilder script = new StringBuilder();
+    StringBuilder held = new StringBuilder("UNION(");
+    StringBuilder holders = new StringBuilder("UNION(");
+    for (int i = 0; i < 120; i++) {
+      script.append("STRUCT R").append(i).append(" (v").append(i).append(" INT NOT NULL); ");
+      held.append(i > 0 ? ", " : "").append("r").append(i).append(" R").append(i);
+      holders.append(i > 0 ? ", " : "").append("s").append(i).append(" S").append(i);
+    }
+    for (int i = 0; i < 120; i++) {
+      script.append("STRUCT S").append(i).append(" (u ").append(held).append(") NOT NULL, k")
+          .append(i).append(" INT NOT NULL); ");
+    }
+    LogicalType lt = TypeScripts.parse(script + "STRUCT t (id INT, x " + holders
+        + ")); TYPE t;");
+    assertTimeoutPreemptively(Duration.ofSeconds(20),
+        () -> Formats.refuseUnwritable(SchemaType.JSON, lt));
+  }
 }
