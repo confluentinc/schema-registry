@@ -19,6 +19,9 @@ package io.confluent.kafka.schemaregistry.type.logical.protobuf;
 /** Common constants used for converting Protobuf schema. */
 public class CommonConstants {
 
+  // A field's place among its message's attributes, where that is not the order of the numbers:
+  // a normalized message declares its fields by number.
+  static final String CONNECT_INDEX_PROP = "connect.index";
   static final String CONNECT_TYPE_PROP = "connect.type";
   static final String CONNECT_TYPE_INT8 = "int8";
   static final String CONNECT_TYPE_INT16 = "int16";
