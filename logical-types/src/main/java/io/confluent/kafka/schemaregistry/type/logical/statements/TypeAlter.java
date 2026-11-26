@@ -87,11 +87,13 @@ public final class TypeAlter {
   private static final int RESERVED_FIRST = 19_000;
   private static final int RESERVED_LAST = 19_999;
   private static final int MAX_NUMBER = 536_870_911;
-  // The words of a JSON schema whose values are data, those whose values are schemas by
+  // The words of a JSON schema whose values are schemas, those whose values are schemas by
   // name, and those that say nothing of what a value is.
-  private static final Set<String> DATA = Set.of("const", "enum", "examples", "default");
+  private static final Set<String> SCHEMAS = Set.of("items", "prefixItems", "additionalItems",
+      "additionalProperties", "unevaluatedItems", "unevaluatedProperties", "contains",
+      "propertyNames", "not", "if", "then", "else", "allOf", "anyOf", "oneOf");
   private static final Set<String> BY_NAME = Set.of("properties", "$defs", "definitions",
-      "patternProperties", "dependentSchemas");
+      "patternProperties", "dependentSchemas", "dependencies");
   private static final Set<String> SAYS_NOTHING = Set.of("$ref", "title", "description",
       "$comment", "default", "examples", "deprecated", "readOnly", "writeOnly",
       "contentMediaType", "contentEncoding", "connect.index", "logical.ref");
@@ -799,8 +801,7 @@ public final class TypeAlter {
     for (FieldDescriptor field : was.getFields()) {
       // A oneof wrapped in a message is read as a union, which is written as a oneof of
       // the message itself: the field is no more, and its stored values with it.
-      if (ProtoToLogicalTypeConverter.wrapsUnion(field) && now.getRealOneofs().stream()
-          .anyMatch(oneof -> oneof.getName().equals(field.getName()))) {
+      if (ProtoToLogicalTypeConverter.wrapsUnion(field) && writtenAsOneof(field, now)) {
         return field.getName() + " of message " + was.getName() + " is a oneof wrapped in a "
             + "message, which would be written as a oneof of the message itself, so its "
             + "stored values would be read as none";
@@ -846,6 +847,18 @@ public final class TypeAlter {
       }
     }
     return null;
+  }
+
+  // Whether the message written has, as a oneof of its own, the oneof a field's message
+  // wraps: one of the field's name, or one a member of which is a member of that one, by
+  // its name and number, as the attribute may be given another name.
+  private static boolean writtenAsOneof(FieldDescriptor field, Descriptor now) {
+    List<FieldDescriptor> wrapped = field.getMessageType().getFields();
+    return now.getRealOneofs().stream().anyMatch(oneof -> oneof.getName().equals(
+        field.getName()) || oneof.getFields().stream().anyMatch(member -> wrapped.stream()
+        .anyMatch(w -> w.getNumber() == member.getNumber()
+            && (member.getName().equals(w.getName())
+              || member.getName().endsWith("_" + w.getName())))));
   }
 
   // The first field whose integer encoding the logical type does not carry, or null.
@@ -2002,9 +2015,9 @@ public final class TypeAlter {
     }
   }
 
-  // The $refs of a schema and of the schemas in it. What is under a word for a value, as
-  // const or enum, is data and no schema; what is under a word for schemas by name, as
-  // properties, is a schema whatever its name.
+  // The $refs of a schema and of the schemas in it: what is under a word whose value is a
+  // schema or several, and under a word for schemas by name, as properties, whatever the
+  // names. What is under any other word, as const, examples or one of a tool's own, is data.
   private static void collectRefs(JsonNode schema, List<String> refs) {
     if (schema.isArray()) {
       schema.forEach(item -> collectRefs(item, refs));
@@ -2019,7 +2032,7 @@ public final class TypeAlter {
         }
       } else if (BY_NAME.contains(said.getKey()) && said.getValue().isObject()) {
         said.getValue().forEach(named -> collectRefs(named, refs));
-      } else if (!DATA.contains(said.getKey())) {
+      } else if (SCHEMAS.contains(said.getKey())) {
         collectRefs(said.getValue(), refs);
       }
     });

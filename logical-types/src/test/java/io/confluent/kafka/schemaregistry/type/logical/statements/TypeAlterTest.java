@@ -724,8 +724,9 @@ class TypeAlterTest {
       registry.client.register(type, new ProtobufSchema(String.format(oneof, number)));
       assertThat(registry.struct(type).getField("w").getSchema().getType()).as(type)
           .isEqualTo(Schema.Type.UNION);
+      // As by one that gives the attribute another name: the oneof is told by its members.
       for (AlterAction action : List.of(new AddAttribute("n", "INT"),
-          new MoveAttribute("z", Position.first()))) {
+          new MoveAttribute("z", Position.first()), new RenameAttribute("w", "renamed"))) {
         assertThatThrownBy(() -> registry.alter(type, action)).as(type)
             .isInstanceOf(TypeRefusedException.class)
             .hasMessage("Type " + type + " cannot be altered: field w of message T is a "
@@ -3172,7 +3173,11 @@ class TypeAlterTest {
     registry.client.register("dex", new JsonSchema(String.format(head
         + "\"c\":{\"type\":\"integer\",\"examples\":[{\"$ref\":\"lib#/$defs/o5s\"}]}},"
         + "\"additionalProperties\":false}", "dex"), refs, resolved, null));
-    for (String type : List.of("dx7", "dxp", "dex")) {
+    // As one in what a word of a tool's own says, where the schema has no such definition.
+    registry.client.register("dxa", new JsonSchema(String.format(head
+        + "\"c\":{\"type\":\"integer\",\"x-example\":{\"$ref\":\"#/$defs/o5s\"}}},"
+        + "\"additionalProperties\":false}", "dxa"), refs, resolved, null));
+    for (String type : List.of("dx7", "dxp", "dex", "dxa")) {
       registry.alter(type, new AddAttribute("z", "INT"));
       assertThat(version(type)).as(type).isEqualTo(2);
     }
