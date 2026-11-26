@@ -270,7 +270,7 @@ public final class Formats {
     if (format != SchemaType.PROTOBUF) {
       return;
     }
-    Map<String, String> said = new HashMap<>();
+    Map<Integer, String> said = new HashMap<>();
     for (Field f : row.getFields()) {
       String path = joined(within, f.getName());
       if (f.getSchema().getType() != Schema.Type.UNION) {
@@ -284,14 +284,24 @@ public final class Formats {
     }
   }
 
-  private static void refuseSharedNumber(Map<String, String> said,
+  private static void refuseSharedNumber(Map<Integer, String> said,
       Map<String, Object> params, String of) {
     Object number = params.get(Schema.PROTOBUF_FIELD_NUMBER);
-    // One that is no number is refused as that.
-    String has = number == null ? null : said.putIfAbsent(number.toString().trim(), of);
+    int given;
+    try {
+      given = number == null ? 0 : Integer.parseInt(number.toString());
+    } catch (NumberFormatException e) {
+      given = 0;
+    }
+    // One that is no number, or none a field can have, is refused as that: by its value,
+    // however it is spelt.
+    if (given < 1 || given > MAX_FIELD_NUMBER || given >= KEPT_FIRST && given <= KEPT_LAST) {
+      return;
+    }
+    String has = said.putIfAbsent(given, of);
     if (has != null) {
       throw new TypeRefusedException(Character.toUpperCase(of.charAt(0)) + of.substring(1)
-          + " cannot have the Protobuf field number " + number + ": " + has
+          + " cannot have the Protobuf field number " + given + ": " + has
           + " has it; give it another, or none");
     }
   }
@@ -397,29 +407,26 @@ public final class Formats {
     }
     List<String[]> pairs = new ArrayList<>();
     Pairs comparing = new Pairs();
-    int met;
-    // Rows met while the branches are judged are judged themselves, and the branches again
-    // by what those are found to be, until no more are met.
-    do {
-      met = comparing.met.size();
-      comparing.settle();
-      pairs.clear();
-      for (int j = 1; j < branches.size() && !told(first, pairs, comparing, met); j++) {
-        for (int i = 0; i < j && !told(first, pairs, comparing, met); i++) {
-          if (matchBoth(written.get(i), written.get(j), comparing)) {
-            pairs.add(new String[] {branches.get(i).getName(), branches.get(j).getName()});
+    for (int j = 1; j < branches.size(); j++) {
+      for (int i = 0; i < j; i++) {
+        // Rows met while the two are judged are judged at once, and the two again by what
+        // those are found to be, until no more are met: what the two are is then told.
+        boolean both;
+        int met;
+        do {
+          met = comparing.met.size();
+          both = matchBoth(written.get(i), written.get(j), comparing);
+          comparing.settle();
+        } while (comparing.met.size() > met);
+        if (both) {
+          pairs.add(new String[] {branches.get(i).getName(), branches.get(j).getName()});
+          if (first) {
+            return pairs;
           }
         }
       }
-    } while (comparing.met.size() > met);
+    }
     return pairs;
-  }
-
-  // Whether the first two are told and no more is asked: not while rows are met for the
-  // first time, which are taken to match until they are judged. Two found then may be none,
-  // and a union of rows would be gone through again for each two of them.
-  private static boolean told(boolean first, List<String[]> pairs, Pairs comparing, int met) {
-    return first && !pairs.isEmpty() && comparing.met.size() == met;
   }
 
   /**

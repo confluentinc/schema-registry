@@ -19,6 +19,7 @@ package io.confluent.kafka.schemaregistry.type.logical.statements;
 import com.fasterxml.jackson.core.JsonPointer;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.MissingNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.protobuf.DescriptorProtos.DescriptorProto;
 import com.google.protobuf.DescriptorProtos.EnumDescriptorProto;
 import com.google.protobuf.DescriptorProtos.FieldDescriptorProto;
@@ -802,7 +803,7 @@ public final class TypeAlter {
     for (FieldDescriptor field : was.getFields()) {
       // A oneof wrapped in a message is read as a union, which is written as a oneof of
       // the message itself: the field is no more, and its stored values with it.
-      if (ProtoToLogicalTypeConverter.wrapsUnion(field) && writtenAsOneof(field, now)) {
+      if (wrapsUnion(field) && writtenAsOneof(field, now)) {
         return field.getName() + " of message " + was.getName() + " is a oneof wrapped in a "
             + "message, which would be written as a oneof of the message itself, so its "
             + "stored values would be read as none";
@@ -865,7 +866,7 @@ public final class TypeAlter {
       return;
     }
     for (FieldDescriptor field : was.getFields()) {
-      if (!ProtoToLogicalTypeConverter.wrapsUnion(field)) {
+      if (!wrapsUnion(field)) {
         continue;
       }
       Set<String> members = new HashSet<>();
@@ -882,6 +883,13 @@ public final class TypeAlter {
         }
       }
     }
+  }
+
+  // A field that holds a oneof wrapped in a message: not a member of a oneof, which is how
+  // the writer itself writes a union that is a member of a union.
+  private static boolean wrapsUnion(FieldDescriptor field) {
+    return field.getRealContainingOneof() == null
+        && ProtoToLogicalTypeConverter.wrapsUnion(field);
   }
 
   // Whether the message written has, as a oneof of its own, the oneof a field's message
@@ -1919,10 +1927,15 @@ public final class TypeAlter {
     KnownTypes before = KnownTypes.of(original.getNamedTypes());
     before.adopt(referred(original.getReferences(), original.getExternalImports()),
         original.getExternalTypes()::contains);
-    withDefinitions(before, stored);
+    withDefinitions(before, definitionsRead(stored));
+    Map<String, Schema> after = definitionsRead(written);
     for (Schema type : types) {
+      // What a type with no union, or no name, is told by is the same before and after.
+      if (!Formats.namesInAUnion(type)) {
+        continue;
+      }
       String[] found = Formats.newlyOverlapping(type, before,
-          withDefinitions(knownTypes(type), written), null);
+          withDefinitions(knownTypes(type), after), null);
       if (found != null) {
         throw Formats.newlyOverlapping(refused(), "its reference would move, " + moved,
             found);
@@ -1933,21 +1946,24 @@ public final class TypeAlter {
   // A definition of a document referred to is no type of that document as it is read by
   // itself, nor of this type as the registry gives it: it is what the schema read with its
   // references has under the definition's name. Known so where it is not known otherwise.
-  private static KnownTypes withDefinitions(KnownTypes known, ParsedSchema schema) {
-    if (schema == null) {
-      return known;
-    }
+  private static KnownTypes withDefinitions(KnownTypes known, Map<String, Schema> read) {
+    read.forEach((name, type) -> {
+      if (known.get(name) == null) {
+        known.put(name, type);
+      }
+    });
+    return known;
+  }
+
+  // The named types of a schema as it is read with its references; none of none.
+  private static Map<String, Schema> definitionsRead(ParsedSchema schema) {
     try {
-      LogicalTypeConversion.toLogicalType(schema).getNamedTypes().forEach((name, type) -> {
-        if (known.get(name) == null) {
-          known.put(name, type);
-        }
-      });
+      return schema == null ? Map.of() : LogicalTypeConversion.toLogicalType(schema)
+          .getNamedTypes();
     } catch (RuntimeException e) {
       // A schema that cannot be read is refused as that.
-      return known;
+      return Map.of();
     }
-    return known;
   }
 
   // The names the type's attributes are of, and those of the named types they are of in
@@ -1990,16 +2006,18 @@ public final class TypeAlter {
   // would be written with every attribute of the definition as one of the document.
   private void refuseDefinitionNamedAsReference(SchemaMetadata md) {
     ParsedSchema stored = lookup.parse(md);
-    if (!(stored instanceof JsonSchema) || md.getReferences() == null) {
+    if (!(stored instanceof JsonSchema)) {
+      return;
+    }
+    // A part of the schema itself is called so too, which takes no reference.
+    refuseDefinitionNamedAsCalled(stored, "altered");
+    if (md.getReferences() == null) {
       return;
     }
     Set<String> documents = new HashSet<>();
     md.getReferences().forEach(r -> documents.add(r.getName()));
     JsonNode schema = ((JsonSchema) stored).toJsonNode();
-    refuseDefinitionNamedAsCalled(stored, "altered");
-    List<String> refs = new ArrayList<>();
-    collectRefs(schema, refs);
-    for (String to : refs) {
+    for (String to : refsReadByName(schema)) {
       // The name a definition is read by, wherever in a document it is.
       String name = JsonToLogicalTypeConverter.extractCanonicalDefsKey(to);
       String of = to.contains("#") ? to.substring(0, to.indexOf('#')) : to;
@@ -2040,22 +2058,44 @@ public final class TypeAlter {
       return;
     }
     JsonNode json = ((JsonSchema) schema).toJsonNode();
-    List<String> refs = new ArrayList<>();
-    collectRefs(json, refs);
-    for (String to : refs) {
+    for (String to : refsReadByName(json)) {
       String name = JsonToLogicalTypeConverter.extractCanonicalDefsKey(to);
       // A definition of the schema's own that names what is so called is how the name is
       // written, and no other type.
       if (name != null && called.containsKey(name) && !to.equals(called.get(name))
           && !(to.startsWith("#") && called.get(name).equals(
               definition(json, to).path("$ref").asText(null)))) {
+        boolean whole = !called.get(name).contains("#");
         throw new TypeRefusedException("Type " + subject + " cannot be " + done + ": it "
-            + "has a definition named " + name + ", which is what a type is called that it "
-            + "refers to whole: " + called.get(name) + ". The two are read as one, and the "
-            + "one would be written as the other. Register its new version as a JSON "
-            + "schema");
+            + "has a definition named " + name + ", which is what "
+            + (whole ? "a type is called that it refers to whole: "
+              : "a part of a schema is called that it refers to: ") + called.get(name)
+            + ". The two are read as one, and the one would be written as the other. "
+            + "Register its new version as a JSON schema");
       }
     }
+  }
+
+  // The $refs a schema is read by a definition's name through: not that of an entry the
+  // writer writes for a name the type has for what it refers to, which is read by that name.
+  private static List<String> refsReadByName(JsonNode schema) {
+    List<String> refs = new ArrayList<>();
+    JsonNode defs = schema.path("$defs");
+    if (!defs.isObject()) {
+      collectRefs(schema, refs);
+      return refs;
+    }
+    List<String> written = new ArrayList<>();
+    defs.fields().forEachRemaining(entry -> {
+      JsonNode said = entry.getValue();
+      if (said.isObject() && said.path("logical.ref").asBoolean() && said.has("$ref")) {
+        written.add(entry.getKey());
+      }
+    });
+    ObjectNode copy = schema.deepCopy();
+    ((ObjectNode) copy.get("$defs")).remove(written);
+    collectRefs(copy, refs);
+    return refs;
   }
 
   // The $refs of a schema and of the schemas in it: what is under a word whose value is a

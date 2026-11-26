@@ -4532,4 +4532,284 @@ class TypeAlterTest {
           .contains("\"name\":\"Kept\"");
     }
   }
+
+  private static final String JSON_HEAD = "{\"type\":\"object\",\"title\":\"%s\","
+      + "\"properties\":{\"id\":{\"type\":\"integer\"},";
+
+  // A JSON schema written by hand, with the subjects it refers to, each by its name at
+  // its latest version.
+  private void json(String subject, String text, String... refs) throws Exception {
+    List<SchemaReference> references = new ArrayList<>();
+    Map<String, String> resolved = new LinkedHashMap<>();
+    for (String ref : refs) {
+      references.add(new SchemaReference(ref, ref, registry.latest(ref).getVersion()));
+      resolved.put(ref, registry.latest(ref).getSchema());
+    }
+    registry.client.register(subject, new JsonSchema(text, references, resolved, null));
+  }
+
+  private List<String> references(String subject) {
+    List<SchemaReference> refs = registry.latest(subject).getReferences();
+    return refs == null ? List.of()
+        : refs.stream().map(SchemaReference::getName).sorted().collect(Collectors.toList());
+  }
+
+  // The entry the writer writes for a name the type has for what it refers to is read by
+  // that name, and is no use of the definition its $ref is to: a type with such a name
+  // beside one of the definition's name, or a reference of it, is altered as written.
+  @Test
+  void aJsonNameForADefinitionIsNoUseOfTheDefinition() throws Exception {
+    create("o5s", SchemaType.JSON, "(o STRING NOT NULL)");
+    create("E", SchemaType.JSON, "(k INT NOT NULL)");
+    json("lib", "{\"type\":\"object\",\"title\":\"lib\",\"properties\":{\"q\":{\"type\":"
+        + "\"integer\"}},\"additionalProperties\":false,\"$defs\":{\"E\":{\"enum\":[\"X\","
+        + "\"Y\"]},\"Loc\":{\"type\":\"object\",\"properties\":{\"p\":{\"type\":\"integer\"}},"
+        + "\"required\":[\"p\"],\"additionalProperties\":false}}}");
+    nativeJson("f1", "USING TYPE Loc FOR REF 'o5s'; USING TYPE L2 FOR REF 'lib#/$defs/Loc'; "
+        + "STRUCT f1 (id INT, x Loc, y L2); TYPE f1;", "o5s", "lib");
+    registry.alter("f1", new AddAttribute("z", "INT"));
+    assertThat(version("f1")).isEqualTo(2);
+    assertThat(registry.schema("f1").canonicalString()).contains("{\"$ref\":\"o5s\"}")
+        .contains("\"L2\":{\"$ref\":\"lib#/$defs/Loc\",\"logical.ref\":true}")
+        .contains("{\"$ref\":\"#/$defs/L2\"}");
+    assertThat(references("f1")).containsExactly("lib", "o5s");
+    // One that stays a name beside a name for a definition of its name.
+    nativeJson("f1b", "USING TYPE E FOR REF 'lib#/properties/q'; USING TYPE X FOR REF "
+        + "'lib#/$defs/E'; STRUCT f1b (id INT, x E, y X); TYPE f1b;", "lib");
+    registry.alter("f1b", new AddAttribute("z", "INT"));
+    assertThat(version("f1b")).isEqualTo(2);
+    // And a reference of the definition's name, given by a statement, with the next one.
+    nativeJson("f3", "USING TYPE X FOR REF 'lib#/$defs/E'; STRUCT f3 (id INT, x X); "
+        + "TYPE f3;", "lib");
+    registry.alter("f3", new AddAttribute("w", "E"));
+    registry.alter("f3", new AddAttribute("y", "INT"));
+    assertThat(version("f3")).isEqualTo(3);
+    assertThat(registry.schema("f3").canonicalString()).contains("{\"$ref\":\"E\"}")
+        .contains("\"X\":{\"$ref\":\"lib#/$defs/E\",\"logical.ref\":true}");
+    assertThat(references("f3")).containsExactly("E", "lib");
+  }
+
+  // A union's member that is a union is written by the writer as a field of a wrapper: it
+  // is no oneof wrapped by hand, and a union attribute of its name is added as any other.
+  @Test
+  void aProtobufMemberThatIsAUnionIsNoWrappedOneof() throws Exception {
+    String body = "(id INT, l UNION(w UNION(x INT, y STRING), b INT), z INT)";
+    String union = "UNION(p INT, q STRING)";
+    create("m1", SchemaType.PROTOBUF, body);
+    registry.alter("m1", new DropAttribute("l", false), new AddAttribute("w", union));
+    assertThat(version("m1")).isEqualTo(2);
+    assertThat(message("m1").getRealOneofs()).extracting(o -> o.getName())
+        .containsExactly("w");
+    create("m2", SchemaType.PROTOBUF, body);
+    registry.alter("m2", new AlterAttributeType("l", "UNION(b INT, c INT)"),
+        new AddAttribute("w", union));
+    assertThat(version("m2")).isEqualTo(2);
+    // In a row, by one retype; and the type created again over its dropped version.
+    create("m3", SchemaType.PROTOBUF,
+        "(id INT, r STRUCT<l UNION(w UNION(x INT, y STRING), b INT), k INT>)");
+    registry.alter("m3", new AlterAttributeType("r", "STRUCT<w " + union + ", k INT>"));
+    assertThat(version("m3")).isEqualTo(2);
+    create("m4", SchemaType.PROTOBUF, body);
+    registry.client.updateCompatibility("m4", "NONE");
+    registry.drop("m4");
+    create("m4", SchemaType.PROTOBUF, "(id INT, z INT, w " + union + ")");
+    assertThat(version("m4")).isEqualTo(2);
+  }
+
+  // What the type as read calls a part of the schema itself takes no reference: a
+  // definition of that name is refused though the lookup gives no list of references, and
+  // is told as a part's name and not a whole type's.
+  @Test
+  void aJsonDefinitionNamedAsAPartIsCalledIsRefusedWithNoReferences() throws Exception {
+    json("n1", String.format(JSON_HEAD, "n1") + "\"a\":{\"$ref\":\"#/properties/id\"},\"b\":"
+        + "{\"$ref\":\"#/definitions/Ref1\"}},\"additionalProperties\":false,\"definitions\":"
+        + "{\"Ref1\":{\"type\":\"object\",\"properties\":{\"p\":{\"type\":\"integer\"}},"
+        + "\"required\":[\"p\"],\"additionalProperties\":false}}}");
+    TypeLookup nulls = new TypeLookup() {
+      private SchemaMetadata nulled(SchemaMetadata md) {
+        return md == null ? null : new SchemaMetadata(md.getId(), md.getVersion(),
+            md.getSchemaType(), null, md.getSchema());
+      }
+
+      @Override
+      public SchemaMetadata latest(String subject) {
+        return nulled(registry.latest(subject));
+      }
+
+      @Override
+      public SchemaMetadata version(String subject, int version) {
+        return nulled(registry.version(subject, version));
+      }
+
+      @Override
+      public ParsedSchema parse(SchemaMetadata version) {
+        return registry.parse(version);
+      }
+
+      @Override
+      public List<Integer> versions(String subject, boolean deleted) {
+        return registry.versions(subject, deleted);
+      }
+
+      @Override
+      public LogicalType logicalType(String subject, SchemaMetadata version) {
+        return registry.logicalType(subject, version);
+      }
+
+      @Override
+      public Config config(String subject) {
+        return registry.config(subject);
+      }
+    };
+    for (TypeLookup lookup : List.of(registry, nulls)) {
+      assertThatThrownBy(() -> TypeAlter.alter(lookup, "n1",
+          List.of(new AddAttribute("z", "INT")), new TypeAlter.Options()))
+          .isInstanceOf(TypeRefusedException.class).hasMessage("Type n1 cannot be altered: "
+              + "it has a definition named Ref1, which is what a part of a schema is called "
+              + "that it refers to: #/properties/id. The two are read as one, and the one "
+              + "would be written as the other. Register its new version as a JSON schema");
+    }
+  }
+
+  // A definition that names the document of its name and says no more of a value by these
+  // words is that document; a word beginning x that is no x- word says something.
+  @Test
+  void aJsonDefinitionThatNamesItsDocumentSaysNothingByTheseWords() throws Exception {
+    create("o5s", SchemaType.JSON, "(q STRING NOT NULL)");
+    Map<String, String> nothing = new LinkedHashMap<>();
+    nothing.put("kwo", "\"writeOnly\":true");
+    nothing.put("kcm", "\"contentMediaType\":\"application/json\"");
+    nothing.put("kce", "\"contentEncoding\":\"base64\"");
+    nothing.put("kdf", "\"default\":{\"q\":\"x\"}");
+    nothing.put("kex", "\"examples\":[{\"q\":\"y\"}]");
+    nothing.put("kdp", "\"deprecated\":true");
+    nothing.put("kro", "\"readOnly\":true");
+    nothing.put("kci", "\"connect.index\":0");
+    nothing.put("kxo", "\"x-owner\":\"them\"");
+    for (Map.Entry<String, String> type : nothing.entrySet()) {
+      json(type.getKey(), String.format(JSON_HEAD, type.getKey()) + "\"r\":{\"$ref\":\"o5s\"},"
+          + "\"x\":{\"$ref\":\"#/$defs/o5s\"}},\"additionalProperties\":false,\"$defs\":"
+          + "{\"o5s\":{\"$ref\":\"o5s\"," + type.getValue() + "}}}", "o5s");
+      registry.alter(type.getKey(), new AddAttribute("z", "INT"));
+      assertThat(version(type.getKey())).as(type.getKey()).isEqualTo(2);
+      assertThat(references(type.getKey())).as(type.getKey()).containsExactly("o5s");
+    }
+    for (String word : List.of("xowner", "x", "x_owner")) {
+      String type = "k" + word;
+      json(type, String.format(JSON_HEAD, type) + "\"r\":{\"$ref\":\"o5s\"},"
+          + "\"x\":{\"$ref\":\"#/$defs/o5s\"}},\"additionalProperties\":false,\"$defs\":"
+          + "{\"o5s\":{\"$ref\":\"o5s\",\"" + word + "\":\"them\"}}}", "o5s");
+      assertThatThrownBy(() -> registry.alter(type, new AddAttribute("z", "INT"))).as(type)
+          .isInstanceOf(TypeRefusedException.class)
+          .hasMessageContaining("it has a definition named o5s of its own");
+      assertThat(version(type)).as(type).isEqualTo(1);
+    }
+  }
+
+  // A definition of the type's own named as the type as read calls a document, that is no
+  // name for that document, is refused: one that says a type, and one that names another
+  // document. A part of a document that is no definition is no definition's name.
+  @Test
+  void aJsonDefinitionNamedAsADocumentIsCalledIsRefused() throws Exception {
+    create("plain", SchemaType.JSON, "(o STRING NOT NULL)");
+    create("other", SchemaType.JSON, "(p INT NOT NULL)");
+    json("c05", String.format(JSON_HEAD, "c05") + "\"a\":{\"$ref\":\"plain\"},\"r\":"
+        + "{\"$ref\":\"#/$defs/Ref1\"}},\"additionalProperties\":false,\"$defs\":{\"Ref1\":"
+        + "{\"type\":\"object\",\"properties\":{\"k\":{\"type\":\"integer\"}},"
+        + "\"additionalProperties\":false}}}", "plain");
+    json("c05b", String.format(JSON_HEAD, "c05b") + "\"a\":{\"$ref\":\"plain\"},\"r\":"
+        + "{\"$ref\":\"#/$defs/Ref1\"}},\"additionalProperties\":false,\"$defs\":{\"Ref1\":"
+        + "{\"$ref\":\"other\",\"logical.ref\":true}}}", "plain", "other");
+    for (String type : List.of("c05", "c05b")) {
+      assertThatThrownBy(() -> registry.alter(type, new AddAttribute("z", "INT"))).as(type)
+          .isInstanceOf(TypeRefusedException.class).hasMessage("Type " + type + " cannot be "
+              + "altered: it has a definition named Ref1, which is what a type is called "
+              + "that it refers to whole: plain. The two are read as one, and the one would "
+              + "be written as the other. Register its new version as a JSON schema");
+      assertThat(version(type)).as(type).isEqualTo(1);
+    }
+    json("lib7", "{\"type\":\"object\",\"title\":\"lib7\",\"properties\":{\"Ref1\":{\"type\":"
+        + "\"object\",\"properties\":{\"k\":{\"type\":\"integer\"}},\"additionalProperties\":"
+        + "false}},\"additionalProperties\":false}");
+    json("c13", String.format(JSON_HEAD, "c13") + "\"a\":{\"$ref\":\"plain\"},\"b\":"
+        + "{\"$ref\":\"lib7#/properties/Ref1\"}},\"additionalProperties\":false}", "plain",
+        "lib7");
+    registry.alter("c13", new AddAttribute("z", "INT"));
+    assertThat(version("c13")).isEqualTo(2);
+    assertThat(registry.schema("c13").canonicalString()).contains("{\"$ref\":\"plain\"}")
+        .contains("\"$ref\":\"lib7#/properties/Ref1\"");
+    assertThat(references("c13")).containsExactly("lib7", "plain");
+  }
+
+  // A union that had two such branches already, through a definition of a document
+  // referred to, is left when the reference moves; and a name the type has for a type is
+  // that type's, whatever the schema as read by itself calls by it.
+  @Test
+  void aJsonUnionIsJudgedByWhatItsNamesAreOfWhenAReferenceMoves() throws Exception {
+    String lib = "{\"type\":\"object\",\"title\":\"dl\",\"properties\":{\"q\":{\"type\":"
+        + "\"integer\"}%s},\"additionalProperties\":false,\"$defs\":{\"D\":{\"enum\":"
+        + "[\"A\",\"B\"]}}}";
+    json("dl", String.format(lib, ""));
+    json("ud", String.format(JSON_HEAD, "ud") + "\"u\":{\"oneOf\":[{\"$ref\":\"dl#/$defs/D\"},"
+        + "{\"enum\":[\"B\"]}]}},\"additionalProperties\":false}", "dl");
+    json("dl", String.format(lib, ",\"q2\":{\"type\":\"integer\"}"));
+    registry.alter("ud", new AddAttribute("z", "dl"));
+    assertThat(version("ud")).isEqualTo(2);
+    assertThat(registry.latest("ud").getReferences())
+        .containsExactly(new SchemaReference("dl", "dl", 2));
+    // The type come to first, called Ref1 by the schema as read, comes to be as branch y:
+    // branch x is of the subject Ref1, and not of it.
+    String row = "{\"type\":\"object\",\"title\":\"aaa\",\"properties\":{\"%1$s\":{\"type\":"
+        + "\"integer\"}},\"required\":[\"%1$s\"],\"additionalProperties\":false}";
+    json("aaa", String.format(row, "p"));
+    create("Ref1", SchemaType.JSON, "(k INT NOT NULL)");
+    create("d7", SchemaType.JSON, "(id INT, a aaa, u UNION(x Ref1, y STRUCT<q INT NOT NULL>))");
+    json("aaa", String.format(row, "q"));
+    registry.alter("d7", new AddAttribute("z", "aaa"));
+    assertThat(version("d7")).isEqualTo(2);
+    assertThat(registry.latest("d7").getReferences()).contains(
+        new SchemaReference("aaa", "aaa", 2), new SchemaReference("Ref1", "Ref1", 1));
+  }
+
+  // A version written that cannot be read back is refused by the statement, and is not
+  // thrown out of the checks that read it: with a reference that moves and without.
+  @Test
+  void aJsonVersionWrittenThatCannotBeReadIsRefusedAndNotThrown() throws Exception {
+    create("doc", SchemaType.JSON, "(o STRING NOT NULL)");
+    String deep = "\"x\":{\"$ref\":\"#/$defs/A/$defs/In\"}%s},\"additionalProperties\":false,"
+        + "\"$defs\":{\"A\":{\"type\":\"object\",\"$defs\":{\"In\":{\"type\":\"object\","
+        + "\"properties\":{\"p\":{\"type\":\"integer\"}},\"additionalProperties\":false}}}}}";
+    json("deep", String.format(JSON_HEAD, "deep") + String.format(deep, ""));
+    json("deepu", String.format(JSON_HEAD, "deepu") + String.format(deep, ",\"u\":{\"oneOf\":["
+        + "{\"$ref\":\"doc\"},{\"type\":\"integer\"}]}"), "doc");
+    registry.alter("doc", new AddAttribute("o2", "STRING"));
+    assertThatThrownBy(() -> registry.alter("deep", new AddAttribute("z", "INT")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageStartingWith("Type deep cannot be changed so");
+    assertThatThrownBy(() -> registry.alter("deepu", new AddAttribute("z", "doc")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageStartingWith("Type deepu cannot be changed so");
+    assertThat(version("deep")).isEqualTo(1);
+    assertThat(version("deepu")).isEqualTo(1);
+  }
+
+  // A oneof wrapped in a message that the statement drops is no more, whatever other
+  // oneof the message has.
+  @Test
+  void aWrappedOneofDroppedBesideAOneofOfTheMessageIsDropped() throws Exception {
+    registry.client.register("w4", new ProtobufSchema("syntax = \"proto3\";\n\n"
+        + "import \"confluent/meta.proto\";\n\nmessage T {\n  int32 id = 5;\n  WOneofWrapper "
+        + "w = 2 [(confluent.field_meta) = {\n    params: [{\n      key: \"flink.wrapped\",\n"
+        + "      value: \"true\"\n    }]\n  }];\n  int32 z = 6;\n  oneof o {\n    int32 c = 7;\n"
+        + "    string d = 8;\n  }\n\n  message WOneofWrapper {\n    oneof value {\n      int32 "
+        + "a = 1;\n      string b = 3;\n    }\n  }\n}\n"));
+    assertThatThrownBy(() -> registry.alter("w4", new AddAttribute("n", "INT")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("field w of message T is a oneof wrapped in a message");
+    registry.alter("w4", new DropAttribute("w", false));
+    assertThat(message("w4").getFields().stream().map(f -> f.getName() + "=" + f.getNumber())
+        .sorted().collect(Collectors.joining(" "))).isEqualTo("c=7 d=8 id=5 z=6");
+    assertThat(message("w4").getRealOneofs()).extracting(o -> o.getName())
+        .containsExactly("o");
+  }
 }

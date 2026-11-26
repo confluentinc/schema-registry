@@ -23,9 +23,12 @@ import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
 import io.confluent.kafka.schemaregistry.type.logical.Schema;
+import io.confluent.kafka.schemaregistry.type.logical.Schema.Field;
+import io.confluent.kafka.schemaregistry.type.logical.Schema.UnionBranch;
 import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
 import io.confluent.kafka.schemaregistry.type.logical.statements.TypeScripts.BodyKind;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -502,6 +505,80 @@ class FormatsTest {
         "UNION(r1 MAP<STRING, INT>, r2 ARRAY<INT>)",
         "UNION(r1 MAP<STRING, INT>, r2 MAP<INT, STRING>)"}) {
       Formats.refuseUnwritable(SchemaType.JSON, struct("(u " + union + ")"));
+    }
+  }
+
+  private static final String FIVE = " WITH ('protobuf.field.number' = '5')";
+
+  // A number two attributes share is a Protobuf type's matter alone; there it is one by
+  // its value, however it is spelt, and what is no number a field can have is told as that.
+  @Test
+  void aSharedNumberIsToldByItsValueAndWhatIsNoNumberAsThat() {
+    for (SchemaType format : List.of(SchemaType.AVRO, SchemaType.JSON)) {
+      Formats.refuseUnwritable(format, struct("(a INT" + FIVE + ", b INT" + FIVE + ", u "
+          + "UNION(p INT" + FIVE + ", q STRING))"));
+    }
+    for (String spelt : List.of("05", "+5")) {
+      assertThatThrownBy(() -> Formats.refuseUnwritable(SchemaType.PROTOBUF, struct("(r "
+          + "STRUCT<x INT" + FIVE + ", y INT WITH ('protobuf.field.number' = '" + spelt
+          + "')>)"))).as(spelt).isInstanceOf(TypeRefusedException.class)
+          .hasMessage("Attribute r.y cannot have the Protobuf field number 5: attribute r.x "
+              + "has it; give it another, or none");
+    }
+    String[][] none = {{"x", "is not a valid number: 'x'"}, {"", "is not a valid number: ''"},
+        {" 5", "is not a valid number: ' 5'"}, {"0", "is not a field's number"},
+        {"19000", "Protobuf keeps it for itself"},
+        {"536870912", "a field's number is 536870911 at most"}};
+    for (String[] number : none) {
+      String with = " WITH ('protobuf.field.number' = '" + number[0] + "')";
+      assertThatThrownBy(() -> Formats.refuseUnwritable(SchemaType.PROTOBUF,
+          struct("(a INT" + with + ", b INT" + with + ")"))).as(number[0])
+          .isInstanceOf(TypeRefusedException.class).hasMessageContaining(number[1])
+          .hasMessageNotContaining("has it");
+    }
+  }
+
+  // A number a union's member has is no other member's, of that union or of another of
+  // the row, and no field's after it; a union's members in a row of their own are another
+  // message's.
+  @Test
+  void aNumberOfAUnionsMemberIsNoLaterHoldersOfTheRow() {
+    String[][] shared = {
+        {"(u UNION(p INT" + FIVE + ", q STRING), x INT" + FIVE + ")", "Attribute x cannot "
+            + "have the Protobuf field number 5: branch p of attribute u has it; give it "
+            + "another, or none"},
+        {"(u UNION(p INT" + FIVE + ", q STRING" + FIVE + "))", "Branch q of attribute u "
+            + "cannot have the Protobuf field number 5: branch p of attribute u has it; give "
+            + "it another, or none"},
+        {"(u UNION(p INT" + FIVE + ", q STRING), v UNION(c INT" + FIVE + ", d STRING))",
+            "Branch c of attribute v cannot have the Protobuf field number 5: branch p of "
+            + "attribute u has it; give it another, or none"}};
+    for (String[] row : shared) {
+      assertThatThrownBy(() -> Formats.refuseUnwritable(SchemaType.PROTOBUF, struct(row[0])))
+          .as(row[0]).isInstanceOf(TypeRefusedException.class).hasMessage(row[1]);
+    }
+    Formats.refuseUnwritable(SchemaType.PROTOBUF, struct("(x INT" + FIVE + ", r STRUCT<u "
+        + "UNION(p INT" + FIVE + ", q STRING)>)"));
+  }
+
+  // A union of thousands of branches whose first two a value would be of both is told by
+  // those two, and is not gone through for every two of them: scalars and rows alike.
+  @Test
+  void aJsonUnionOfThousandsIsToldByItsFirstTwo() {
+    List<UnionBranch> scalars = new ArrayList<>();
+    List<UnionBranch> rows = new ArrayList<>();
+    for (int i = 0; i < 30000; i++) {
+      scalars.add(new UnionBranch("b" + i, Schema.create(Schema.Type.INT)));
+      rows.add(new UnionBranch("b" + i, Schema.createStruct(List.of(
+          new Field("t", Schema.create(Schema.Type.BOOLEAN).setNullable(false), 0),
+          new Field("v", Schema.create(Schema.Type.INT), 1)))));
+    }
+    for (List<UnionBranch> branches : List.of(scalars, rows)) {
+      Schema union = Schema.createUnion(branches);
+      assertTimeoutPreemptively(Duration.ofSeconds(20), () ->
+          assertThatThrownBy(() -> Formats.refuseUnwritable(SchemaType.JSON, union))
+              .isInstanceOf(TypeRefusedException.class)
+              .hasMessageContaining("cannot have branches b0 and b1"));
     }
   }
 }
