@@ -2069,8 +2069,9 @@ public class KafkaAvroSerializerTest {
           }
         };
     IndexedRecord avroRecord = createUserRecord();
-    byte[] bytes = avroSerializer.serialize(topic, avroRecord);
-    assertEquals(avroRecord, deserializer.deserialize(topic, bytes));
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
+    assertEquals(avroRecord, deserializer.deserialize(topic, headers, bytes));
     assertEquals(1, calls.get());
   }
 
@@ -2107,10 +2108,11 @@ public class KafkaAvroSerializerTest {
     variant.put("value", ByteBuffer.wrap(new byte[] {0}));
     GenericRecord avroRecord = new GenericData.Record(schema.rawSchema());
     avroRecord.put("payload", variant);
-    byte[] bytes = avroSerializer.serialize(topic, avroRecord);
+    RecordHeaders headers = new RecordHeaders();
+    byte[] bytes = avroSerializer.serialize(topic, headers, avroRecord);
     // The reader uses the latest version, which has the rule
     schemaRegistry.register(topic + "-value", withRule);
-    GenericRecord result = (GenericRecord) deserializer.deserialize(topic, bytes);
+    GenericRecord result = (GenericRecord) deserializer.deserialize(topic, headers, bytes);
     assertEquals(Collections.singletonList(true), rawFlags);
     assertEquals(Variant.class, result.get("payload").getClass());
   }
