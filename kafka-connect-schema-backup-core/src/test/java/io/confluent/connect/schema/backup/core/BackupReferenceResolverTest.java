@@ -18,7 +18,10 @@ package io.confluent.connect.schema.backup.core;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNotSame;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -677,5 +680,169 @@ public class BackupReferenceResolverTest {
           expected.isInstance(e));
       assertTrue(e.getMessage(), e.getMessage().contains("register reference"));
     }
+  }
+
+  // ---------------- resolveRestoreSchema (cached restore schema) ----------------
+
+  private static Struct restoreWrapper(String raw, String treeJson, String directRefsJson) {
+    Schema wrapperSchema = BackupWrapper.buildSchema(Schema.STRING_SCHEMA);
+    BackupWrapper.WrapperFields fields = new BackupWrapper.WrapperFields(
+        1, 1, SCHEMA_TYPE_AVRO, USER_VALUE_SUBJECT, raw, treeJson, directRefsJson);
+    return BackupWrapper.buildWrapper(wrapperSchema, TEST_DATA, fields);
+  }
+
+  private static String addressTreeJson() {
+    return addressTreeJson(1, ADDRESS_SCHEMA);
+  }
+
+  private static String addressTreeJson(int version, String addressSchema) {
+    return "{\"" + ADDRESS_FQCN + "\":{"
+        + "\"subject\":\"" + ADDRESS_VALUE_SUBJECT + "\","
+        + "\"version\":" + version + ","
+        + "\"schema\":" + quote(addressSchema) + ","
+        + "\"references\":[],"
+        + "\"globalId\":42,"
+        + "\"schemaType\":\"AVRO\"}}";
+  }
+
+  private static String addressDirectRefsJson() {
+    return addressDirectRefsJson(1);
+  }
+
+  private static String addressDirectRefsJson(int version) {
+    return "[{\"name\":\"" + ADDRESS_FQCN + "\","
+        + "\"subject\":\"" + ADDRESS_VALUE_SUBJECT + "\","
+        + "\"version\":" + version + "}]";
+  }
+
+  /** Address v2: adds an optional zip, so the referencing schema text stays the same. */
+  private static final String ADDRESS_V2_SCHEMA =
+      "{\"type\":\"record\",\"name\":\"Address\","
+      + "\"namespace\":\"com.example\","
+      + "\"fields\":["
+      + "{\"name\":\"street\",\"type\":\"string\"},"
+      + "{\"name\":\"city\",\"type\":\"string\"},"
+      + "{\"name\":\"zip\",\"type\":[\"null\",\"string\"],\"default\":null}"
+      + "]}";
+
+  private static final String USER_WITH_ADDRESS_SCHEMA =
+      "{\"type\":\"record\",\"name\":\"User\",\"namespace\":\"com.example\","
+      + "\"fields\":[{\"name\":\"address\",\"type\":\"" + ADDRESS_FQCN + "\"}]}";
+
+  /** The restore path the converters ran per record before resolveRestoreSchema. */
+  private ParsedSchema previousRestorePath(
+      BackupReferenceResolver r, Struct wrapper, String raw) {
+    BackupReferenceResolver.ResolutionResult resolved =
+        r.resolveFromWrapper(wrapper.schema(), wrapper, avroFactory);
+    return resolved.hasReferences()
+        ? new AvroSchema(raw, resolved.getTargetRefs(), resolved.getResolvedSchemas(), null)
+        : new AvroSchema(raw);
+  }
+
+  @Test
+  public void testResolveRestoreSchemaWithoutRefsMatchesPreviousPath() {
+    Struct wrapper = restoreWrapper(ADDRESS_SCHEMA, null, null);
+    ParsedSchema cached = resolver.resolveRestoreSchema(
+        wrapper.schema(), wrapper, ADDRESS_SCHEMA, avroFactory);
+    assertEquals(previousRestorePath(
+        new BackupReferenceResolver(targetRegistry), wrapper, ADDRESS_SCHEMA), cached);
+    assertTrue(cached.references().isEmpty());
+  }
+
+  @Test
+  public void testResolveRestoreSchemaWithRefsMatchesPreviousPath() throws Exception {
+    Struct wrapper = restoreWrapper(
+        USER_WITH_ADDRESS_SCHEMA, addressTreeJson(), addressDirectRefsJson());
+    ParsedSchema cached = resolver.resolveRestoreSchema(
+        wrapper.schema(), wrapper, USER_WITH_ADDRESS_SCHEMA, avroFactory);
+    ParsedSchema previous = previousRestorePath(
+        new BackupReferenceResolver(targetRegistry), wrapper, USER_WITH_ADDRESS_SCHEMA);
+    assertEquals(previous, cached);
+    assertEquals(previous.references(), cached.references());
+    assertEquals(Collections.singletonList(1), targetRegistry.getAllVersions(ADDRESS_VALUE_SUBJECT));
+  }
+
+  @Test
+  public void testResolveRestoreSchemaReusesResultForSameWrapperContent() throws Exception {
+    Struct first = restoreWrapper(
+        USER_WITH_ADDRESS_SCHEMA, addressTreeJson(), addressDirectRefsJson());
+    Struct second = restoreWrapper(
+        USER_WITH_ADDRESS_SCHEMA, addressTreeJson(), addressDirectRefsJson());
+    ParsedSchema a = resolver.resolveRestoreSchema(
+        first.schema(), first, USER_WITH_ADDRESS_SCHEMA, avroFactory);
+    ParsedSchema b = resolver.resolveRestoreSchema(
+        second.schema(), second, USER_WITH_ADDRESS_SCHEMA, avroFactory);
+    assertSame(a, b);
+    assertEquals(Collections.singletonList(1), targetRegistry.getAllVersions(ADDRESS_VALUE_SUBJECT));
+  }
+
+  @Test
+  public void testResolveRestoreSchemaKeepsDifferentSchemasApart() {
+    Struct address = restoreWrapper(ADDRESS_SCHEMA, null, null);
+    Struct country = restoreWrapper(COUNTRY_SCHEMA, null, null);
+    ParsedSchema a = resolver.resolveRestoreSchema(
+        address.schema(), address, ADDRESS_SCHEMA, avroFactory);
+    ParsedSchema c = resolver.resolveRestoreSchema(
+        country.schema(), country, COUNTRY_SCHEMA, avroFactory);
+    assertNotEquals(a, c);
+    assertEquals(new AvroSchema(ADDRESS_SCHEMA), a);
+    assertEquals(new AvroSchema(COUNTRY_SCHEMA), c);
+  }
+
+  @Test
+  public void testResolveRestoreSchemaKeepsFactoriesApart() {
+    Struct wrapper = restoreWrapper(ADDRESS_SCHEMA, null, null);
+    BackupReferenceResolver.ParsedSchemaFactory other =
+        (raw, refs, resolved) -> new AvroSchema(raw);
+    ParsedSchema a = resolver.resolveRestoreSchema(
+        wrapper.schema(), wrapper, ADDRESS_SCHEMA, avroFactory);
+    ParsedSchema b = resolver.resolveRestoreSchema(
+        wrapper.schema(), wrapper, ADDRESS_SCHEMA, other);
+    assertNotSame(a, b);
+  }
+
+  @Test
+  public void testResolveRestoreSchemaFailureIsNotCached() {
+    Struct partial = restoreWrapper(USER_WITH_ADDRESS_SCHEMA, addressTreeJson(), null);
+    for (int attempt = 0; attempt < 2; attempt++) {
+      try {
+        resolver.resolveRestoreSchema(
+            partial.schema(), partial, USER_WITH_ADDRESS_SCHEMA, avroFactory);
+        fail(EXPECTED_DATA_EXCEPTION);
+      } catch (DataException e) {
+        assertTrue(e.getMessage().contains("partial reference metadata"));
+      }
+    }
+  }
+
+  @Test
+  public void testResolveRestoreSchemaReferenceEvolutionWithSameMainTextIsNotShared()
+      throws Exception {
+    Struct withV1 = restoreWrapper(USER_WITH_ADDRESS_SCHEMA,
+        addressTreeJson(1, ADDRESS_SCHEMA), addressDirectRefsJson(1));
+    Struct withV2 = restoreWrapper(USER_WITH_ADDRESS_SCHEMA,
+        addressTreeJson(2, ADDRESS_V2_SCHEMA), addressDirectRefsJson(2));
+
+    ParsedSchema first = resolver.resolveRestoreSchema(
+        withV1.schema(), withV1, USER_WITH_ADDRESS_SCHEMA, avroFactory);
+    ParsedSchema second = resolver.resolveRestoreSchema(
+        withV2.schema(), withV2, USER_WITH_ADDRESS_SCHEMA, avroFactory);
+    ParsedSchema firstAgain = resolver.resolveRestoreSchema(
+        withV1.schema(), withV1, USER_WITH_ADDRESS_SCHEMA, avroFactory);
+
+    // Both Address versions are registered on the target, in source order.
+    assertEquals(java.util.Arrays.asList(1, 2),
+        targetRegistry.getAllVersions(ADDRESS_VALUE_SUBJECT));
+    assertEquals(Collections.singletonList(
+        new SchemaReference(ADDRESS_FQCN, ADDRESS_VALUE_SUBJECT, 1)), first.references());
+    assertEquals(Collections.singletonList(
+        new SchemaReference(ADDRESS_FQCN, ADDRESS_VALUE_SUBJECT, 2)), second.references());
+    assertNotEquals(first, second);
+    assertSame(first, firstAgain);
+    // Each result is exactly what the previous per-record path produced.
+    assertEquals(previousRestorePath(new BackupReferenceResolver(targetRegistry),
+        withV2, USER_WITH_ADDRESS_SCHEMA), second);
+    assertEquals(previousRestorePath(new BackupReferenceResolver(targetRegistry),
+        withV1, USER_WITH_ADDRESS_SCHEMA), first);
   }
 }

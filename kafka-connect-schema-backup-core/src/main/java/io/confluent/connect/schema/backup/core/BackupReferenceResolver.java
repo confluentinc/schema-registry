@@ -36,7 +36,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.Objects;
 
 /**
  * Resolves and registers schema references in the target Schema Registry during restore.
@@ -48,10 +48,23 @@ public class BackupReferenceResolver {
   private static final int MAX_DEPTH = SchemaBackupConfig.MAX_REFERENCE_DEPTH;
 
   private final SchemaRegistryClient schemaRegistry;
-  private final Map<String, Integer> registrationCache = new ConcurrentHashMap<>();
+  private final boolean autoRegister;
+  private final Map<String, Integer> registrationCache = BackupCaches.newBoundedMap();
+  private final Map<RestoreSchemaKey, ParsedSchema> restoreSchemaCache =
+      BackupCaches.newBoundedMap();
 
   public BackupReferenceResolver(SchemaRegistryClient schemaRegistry) {
+    this(schemaRegistry, true);
+  }
+
+  /**
+   * @param autoRegister when false, referenced schemas are not registered; they must
+   *     already exist on the target registry and are only looked up (mirrors the
+   *     serializer's {@code auto.register.schemas=false}).
+   */
+  public BackupReferenceResolver(SchemaRegistryClient schemaRegistry, boolean autoRegister) {
     this.schemaRegistry = schemaRegistry;
+    this.autoRegister = autoRegister;
   }
 
   public static class ResolutionResult {
@@ -119,6 +132,77 @@ public class BackupReferenceResolver {
     registerRefsRecursive(
         directRefs, refTree, factory, targetRefs, resolvedSchemas);
     return ResolutionResult.of(targetRefs, resolvedSchemas);
+  }
+
+  /**
+   * Returns the schema to serialize a restored record with: {@code rawSchema} parsed by
+   * {@code factory} with the references re-registered on the target, exactly as
+   * {@link #resolveFromWrapper} followed by {@code factory.create(...)}.
+   *
+   * <p>The result is cached per (factory, schema text, reference tree, direct refs), all
+   * taken from the wrapper, so records with the same backed-up schema skip the JSON
+   * parsing and schema parsing. It does not cache the target schema ID: the caller still
+   * registers or looks up the schema on the target registry for every record (served by
+   * the registry client's own cache), so subjects, IDs and versions are unchanged.
+   * Failures are not cached.
+   */
+  public ParsedSchema resolveRestoreSchema(
+      Schema wrapperSchema, Struct wrapper, String rawSchema, ParsedSchemaFactory factory) {
+    RestoreSchemaKey key = new RestoreSchemaKey(factory, rawSchema,
+        optionalString(wrapperSchema, wrapper, BackupWrapper.FIELD_REFERENCE_TREE),
+        optionalString(wrapperSchema, wrapper, BackupWrapper.FIELD_DIRECT_REFS));
+    ParsedSchema cached = restoreSchemaCache.get(key);
+    if (cached != null) {
+      return cached;
+    }
+    ResolutionResult resolved = resolveFromWrapper(wrapperSchema, wrapper, factory);
+    ParsedSchema schema = factory.create(rawSchema,
+        resolved.hasReferences() ? resolved.getTargetRefs() : Collections.emptyList(),
+        resolved.hasReferences() ? resolved.getResolvedSchemas() : Collections.emptyMap());
+    restoreSchemaCache.put(key, schema);
+    return schema;
+  }
+
+  private static String optionalString(Schema schema, Struct struct, String field) {
+    return schema.field(field) != null ? struct.getString(field) : null;
+  }
+
+  private static final class RestoreSchemaKey {
+    private final ParsedSchemaFactory factory;
+    private final String rawSchema;
+    private final String treeJson;
+    private final String directRefsJson;
+    private final int hash;
+
+    private RestoreSchemaKey(ParsedSchemaFactory factory, String rawSchema,
+        String treeJson, String directRefsJson) {
+      this.factory = factory;
+      this.rawSchema = rawSchema;
+      this.treeJson = treeJson;
+      this.directRefsJson = directRefsJson;
+      this.hash = Objects.hash(System.identityHashCode(factory), rawSchema, treeJson,
+          directRefsJson);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (!(o instanceof RestoreSchemaKey)) {
+        return false;
+      }
+      RestoreSchemaKey k = (RestoreSchemaKey) o;
+      return factory == k.factory
+          && Objects.equals(rawSchema, k.rawSchema)
+          && Objects.equals(treeJson, k.treeJson)
+          && Objects.equals(directRefsJson, k.directRefsJson);
+    }
+
+    @Override
+    public int hashCode() {
+      return hash;
+    }
   }
 
   @SuppressWarnings("unchecked")
@@ -255,7 +339,9 @@ public class BackupReferenceResolver {
     try {
       ParsedSchema refSchema = factory.create(
           entry.getSchema(), childTargetRefs, childResolvedSchemas);
-      schemaRegistry.register(ref.getSubject(), refSchema);
+      if (autoRegister) {
+        schemaRegistry.register(ref.getSubject(), refSchema);
+      }
       targetVersion = schemaRegistry.getVersion(
           ref.getSubject(), refSchema);
       registrationCache.put(cacheKey, targetVersion);

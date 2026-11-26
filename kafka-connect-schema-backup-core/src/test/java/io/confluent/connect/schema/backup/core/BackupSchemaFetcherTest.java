@@ -18,6 +18,7 @@ package io.confluent.connect.schema.backup.core;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
@@ -34,6 +35,7 @@ import java.io.UncheckedIOException;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import org.junit.Before;
 import org.junit.Test;
@@ -316,5 +318,134 @@ public class BackupSchemaFetcherTest {
     } catch (UncheckedIOException expected) {
       assertTrue(expected.getCause() instanceof IOException);
     }
+  }
+
+  // ---------------- schemaType (used by SchemaBackupAwareByteArrayConverter) ----------------
+
+  private static final String SCHEMA_TYPE_SUBJECT = "typed-value";
+
+  @Test
+  public void testFetchSchemaInfoRecordsRegistrySchemaType() throws Exception {
+    int schemaId = schemaRegistry.register(SCHEMA_TYPE_SUBJECT, new AvroSchema(USER_SCHEMA));
+    assertEquals(AvroSchema.TYPE, fetcher.fetchSchemaInfo(schemaId).getSchemaType());
+  }
+
+  @Test
+  public void testFetchSchemaInfoByGuidRecordsRegistrySchemaType() throws Exception {
+    String guid = schemaRegistry.registerWithResponse(
+        SCHEMA_TYPE_SUBJECT, new AvroSchema(USER_SCHEMA), false).getGuid();
+    BackupSchemaFetcher.BackupSchemaInfo info = fetcher.fetchSchemaInfoByGuid(guid);
+    assertEquals(AvroSchema.TYPE, info.getSchemaType());
+    assertNull(info.getVersionForSubject(SCHEMA_TYPE_SUBJECT));
+  }
+
+  @Test
+  public void testExistingBackupSchemaInfoConstructorLeavesSchemaTypeNull() {
+    BackupSchemaFetcher.BackupSchemaInfo info = new BackupSchemaFetcher.BackupSchemaInfo(
+        USER_SCHEMA, Collections.emptyList(), Collections.emptyMap(), null, null,
+        Collections.emptyMap());
+    assertNull(info.getSchemaType());
+  }
+
+  // ---------------- Parsed-schema memo and bounded caches ----------------
+
+  private static final String EVICTION_SUBJECT_PREFIX = "evict-";
+  private static final String PARSE_FAILURE = "parse failure";
+
+  private static final BackupReferenceResolver.ParsedSchemaFactory AVRO_FACTORY =
+      (raw, refs, resolved) -> !refs.isEmpty()
+          ? new AvroSchema(raw, refs, resolved, null)
+          : new AvroSchema(raw);
+
+  /** The parse the backup path ran per record before parse() existed, kept verbatim. */
+  private static ParsedSchema previousInlineParse(
+      BackupSchemaFetcher.BackupSchemaInfo info,
+      BackupReferenceResolver.ParsedSchemaFactory factory) {
+    Map<String, String> resolved = new LinkedHashMap<>();
+    if (!info.getDirectReferences().isEmpty()) {
+      for (Map.Entry<String, BackupSchemaFetcher.RefTreeEntry> e
+          : info.getReferenceTree().entrySet()) {
+        resolved.put(e.getKey(), e.getValue().getSchema());
+      }
+    }
+    return factory.create(info.getRawSchema(), info.getDirectReferences(), resolved);
+  }
+
+  private int registerUserWithAddressRef() throws Exception {
+    schemaRegistry.register(ADDRESS_VALUE_SUBJECT, new AvroSchema(ADDRESS_SCHEMA));
+    AvroSchema main = new AvroSchema(USER_WITH_REF_SCHEMA,
+        Collections.singletonList(new SchemaReference(ADDRESS_FQCN, ADDRESS_VALUE_SUBJECT, 1)),
+        Collections.singletonMap(ADDRESS_FQCN, ADDRESS_SCHEMA), null);
+    return schemaRegistry.register(USER_VALUE_SUBJECT, main);
+  }
+
+  @Test
+  public void testParseWithoutReferencesMatchesPreviousInlineParse() throws Exception {
+    int id = schemaRegistry.register(USERS_VALUE_SUBJECT, new AvroSchema(USER_SCHEMA));
+    BackupSchemaFetcher.BackupSchemaInfo info = fetcher.fetchSchemaInfo(id);
+    ParsedSchema parsed = info.parse(AVRO_FACTORY);
+    assertEquals(previousInlineParse(info, AVRO_FACTORY), parsed);
+    assertEquals(schemaRegistry.getSchemaById(id).canonicalString(), parsed.canonicalString());
+  }
+
+  @Test
+  public void testParseWithReferencesMatchesPreviousInlineParse() throws Exception {
+    int id = registerUserWithAddressRef();
+    BackupSchemaFetcher.BackupSchemaInfo info = fetcher.fetchSchemaInfo(id);
+    ParsedSchema parsed = info.parse(AVRO_FACTORY);
+    assertEquals(previousInlineParse(info, AVRO_FACTORY), parsed);
+    assertEquals(info.getDirectReferences(), parsed.references());
+    assertEquals(schemaRegistry.getSchemaById(id), parsed);
+  }
+
+  @Test
+  public void testParseReturnsSameInstanceForSameFactory() throws Exception {
+    int id = registerUserWithAddressRef();
+    BackupSchemaFetcher.BackupSchemaInfo info = fetcher.fetchSchemaInfo(id);
+    assertSame(info.parse(AVRO_FACTORY), info.parse(AVRO_FACTORY));
+  }
+
+  @Test
+  public void testParseWithAnotherFactoryParsesAgain() throws Exception {
+    int id = schemaRegistry.register(USERS_VALUE_SUBJECT, new AvroSchema(USER_SCHEMA));
+    BackupSchemaFetcher.BackupSchemaInfo info = fetcher.fetchSchemaInfo(id);
+    BackupReferenceResolver.ParsedSchemaFactory other =
+        (raw, refs, resolved) -> new AvroSchema(raw);
+    ParsedSchema first = info.parse(AVRO_FACTORY);
+    ParsedSchema second = info.parse(other);
+    assertNotSame(first, second);
+    assertEquals(first, second);
+  }
+
+  @Test
+  public void testParseFailureIsNotRemembered() throws Exception {
+    int id = schemaRegistry.register(USERS_VALUE_SUBJECT, new AvroSchema(USER_SCHEMA));
+    BackupSchemaFetcher.BackupSchemaInfo info = fetcher.fetchSchemaInfo(id);
+    BackupReferenceResolver.ParsedSchemaFactory failing = (raw, refs, resolved) -> {
+      throw new IllegalStateException(PARSE_FAILURE);
+    };
+    try {
+      info.parse(failing);
+      fail("expected the factory failure to propagate");
+    } catch (IllegalStateException e) {
+      assertEquals(PARSE_FAILURE, e.getMessage());
+    }
+    assertEquals(new AvroSchema(USER_SCHEMA), info.parse(AVRO_FACTORY));
+  }
+
+  @Test
+  public void testEvictedSchemaInfoIsRefetchedWithSameContent() throws Exception {
+    int firstId = schemaRegistry.register(USERS_VALUE_SUBJECT, new AvroSchema(USER_SCHEMA));
+    BackupSchemaFetcher.BackupSchemaInfo first = fetcher.fetchSchemaInfo(firstId);
+    for (int i = 0; i <= BackupCaches.MAX_ENTRIES; i++) {
+      String schema = "{\"type\":\"record\",\"name\":\"R" + i + "\",\"fields\":[]}";
+      int id = schemaRegistry.register(EVICTION_SUBJECT_PREFIX + i, new AvroSchema(schema));
+      fetcher.fetchSchemaInfo(id);
+    }
+    BackupSchemaFetcher.BackupSchemaInfo again = fetcher.fetchSchemaInfo(firstId);
+    assertEquals(first.getRawSchema(), again.getRawSchema());
+    assertEquals(first.getVersionForSubject(USERS_VALUE_SUBJECT),
+        again.getVersionForSubject(USERS_VALUE_SUBJECT));
+    assertEquals(first.getSchemaType(), again.getSchemaType());
   }
 }
