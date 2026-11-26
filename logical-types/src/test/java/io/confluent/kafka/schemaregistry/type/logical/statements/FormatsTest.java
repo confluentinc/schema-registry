@@ -606,6 +606,7 @@ class FormatsTest {
     assertThat(Formats.segment("a")).isEqualTo("a");
     assertThat(Formats.segment("a.b")).isEqualTo("`a.b`");
     assertThat(Formats.segment("`w")).isEqualTo("```w`");
+    assertThat(Formats.segment("'q")).isEqualTo("`'q`");
     assertThat(Formats.joined("e", "`w")).isEqualTo("e.```w`");
     assertThat(Formats.joined("`e.x`", "y")).isEqualTo("`e.x`.y");
   }

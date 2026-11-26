@@ -392,12 +392,19 @@ public class JsonToLogicalTypeConverter {
             if (referredSchema != null) {
               ctx.putNamedType(entry.getKey(),
                   Schema.createStruct(new ArrayList<>()));
-              // A named type's body, its defaults kept relative to it: each $ref to it places
-              // them under its own path.
-              Schema body = ctx.convertNamedType(entry.getKey(), Collections.emptyList(),
-                  () -> convertWithCycleDetection(
-                      referredSchema, false, ctx, Collections.emptyList()));
-              ctx.putNamedType(entry.getKey(), body);
+              // What the name is for is another document's, unless it is a part of this one.
+              boolean outer = ctx.setForeign(
+                  !rawEntry.get("$ref").asText().startsWith("#"));
+              try {
+                // A named type's body, its defaults kept relative to it: each $ref to it
+                // places them under its own path.
+                Schema body = ctx.convertNamedType(entry.getKey(), Collections.emptyList(),
+                    () -> convertWithCycleDetection(
+                        referredSchema, false, ctx, Collections.emptyList()));
+                ctx.putNamedType(entry.getKey(), body);
+              } finally {
+                ctx.setForeign(outer);
+              }
             }
           }
           continue;
@@ -505,14 +512,22 @@ public class JsonToLogicalTypeConverter {
         // placeholder first to short-circuit recursion if the body refers back
         // to its own name.
         boolean wasKnown = ctx.hasNamedType(typeName);
+        // What a $ref to another document is to is that document's, and so is what a $ref
+        // in it is to, a part of that document itself ("#/...") as much as another's.
+        boolean foreign = ctx.isForeign() || !refValue.startsWith("#");
         if (!wasKnown && refSchema.getReferredSchema() != null) {
           ctx.putNamedType(typeName, Schema.createStruct(new ArrayList<>()));
-          // A named type's body, its defaults kept relative to it: each $ref to it places them
-          // under its own path, below.
-          Schema body = ctx.convertNamedType(typeName, Collections.emptyList(),
-              () -> convertWithCycleDetection(
-                  refSchema.getReferredSchema(), false, ctx, Collections.emptyList()));
-          ctx.putNamedType(typeName, body);
+          boolean outer = ctx.setForeign(foreign);
+          try {
+            // A named type's body, its defaults kept relative to it: each $ref to it places
+            // them under its own path, below.
+            Schema body = ctx.convertNamedType(typeName, Collections.emptyList(),
+                () -> convertWithCycleDetection(
+                    refSchema.getReferredSchema(), false, ctx, Collections.emptyList()));
+            ctx.putNamedType(typeName, body);
+          } finally {
+            ctx.setForeign(outer);
+          }
         }
         ctx.putTypeDefaults(typeName, indexPath);
         // Mark as external only on first-time-seen canonical cross-doc refs.
@@ -522,7 +537,10 @@ public class JsonToLogicalTypeConverter {
         // The everit parser may rewrite local "#/..." refs to "<base>#/..."
         // (often "UNKNOWN" when the active schema has no $id), so a prefix
         // check on refValue isn't reliable — rely on first-time-seen instead.
-        if (!synthetic && !wasKnown && !refValue.startsWith("#")) {
+        // Nor is it one of the schema's own where the $ref is in a document referred to:
+        // written as the schema's, it would be a copy that the document's later versions
+        // leave behind.
+        if (!synthetic && !wasKnown && foreign) {
           ctx.addExternalType(typeName);
         }
         return Schema.createNamedTypeRef(typeName).setNullable(isNullable);

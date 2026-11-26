@@ -83,6 +83,8 @@ import static io.confluent.kafka.schemaregistry.type.logical.json.CommonConstant
 public class LogicalTypeToJsonConverter {
 
   private static final int MAX_LENGTH = Integer.MAX_VALUE;
+  // In the place of a document, for a name two documents referred to each define.
+  private static final String TWO_DOCUMENTS = "";
 
   public static JsonSchema fromLogicalType(LogicalType logicalType, String rowName) {
     return fromLogicalType(logicalType, rowName, LogicalTypeVersion.V2);
@@ -252,11 +254,27 @@ public class LogicalTypeToJsonConverter {
     Iterator<String> names = container.fieldNames();
     while (names.hasNext()) {
       String name = names.next();
-      if (!localNamedTypes.containsKey(name)
-          && (name.equals(docUri) || !documents.contains(name))) {
+      if (localNamedTypes.containsKey(name)
+          || !name.equals(docUri) && documents.contains(name)) {
+        continue;
+      }
+      // Two documents may each have a definition of one name for their own use: it is
+      // neither's for this type, and a fault only where the type itself is of it.
+      if (!ctx.isAlreadyConverted(name)) {
         ctx.putConverted(name, docUri);
+      } else if (!docUri.equals(ctx.getConverted(name))) {
+        ctx.getConvertedNamedTypes().put(name, TWO_DOCUMENTS);
       }
     }
+  }
+
+  // The document that defines a name the type is of: one, or the type cannot say which.
+  private static String documentOf(String name, FromLogicalContext<String> ctx) {
+    String docUri = ctx.getConverted(name);
+    if (TWO_DOCUMENTS.equals(docUri)) {
+      throw new ValidationException("Duplicate named type: " + name);
+    }
+    return docUri;
   }
 
   private static org.everit.json.schema.Schema fromLogicalTypeRaw(
@@ -492,7 +510,7 @@ public class LogicalTypeToJsonConverter {
           if (ctx.isAlreadyConverted(name)) {
             // Canonical external: typeName is a $defs key registered by
             // collectExternalNames, with its source docUri as the value.
-            String docUri = ctx.getConverted(name);
+            String docUri = documentOf(name, ctx);
             return ReferenceSchema.builder().refValue(docUri + "#/$defs/" + name);
           }
           // Defensive fallback: external typeName not discovered via
@@ -508,7 +526,7 @@ public class LogicalTypeToJsonConverter {
         // External type — JSON Pointer into the external doc's $defs (or
         // definitions, which JsonSchema bridges to $defs at load time).
         if (ctx.isAlreadyConverted(name)) {
-          String docUri = ctx.getConverted(name);
+          String docUri = documentOf(name, ctx);
           return ReferenceSchema.builder().refValue(docUri + "#/$defs/" + name);
         }
         throw new ValidationException(

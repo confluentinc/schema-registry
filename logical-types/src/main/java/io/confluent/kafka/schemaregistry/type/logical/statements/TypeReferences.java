@@ -465,12 +465,14 @@ public final class TypeReferences {
       if (bound.containsKey(ref.getName())) {
         continue;
       }
+      // The reference's own name before those of its references, as the registry binds:
+      // one of them of that name is read as the reference.
       String subject = referenced(referrer, ref.getSubject());
+      bound.put(ref.getName(), subject + "@" + ref.getVersion());
       SchemaMetadata md = version(lookup, subject, ref.getVersion(), versions);
       if (md != null) {
         firstMet(lookup, subject, md.getReferences(), bound, versions);
       }
-      bound.putIfAbsent(ref.getName(), subject + "@" + ref.getVersion());
     }
   }
 

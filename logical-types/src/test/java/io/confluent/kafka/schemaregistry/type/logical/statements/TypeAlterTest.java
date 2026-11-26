@@ -5516,4 +5516,110 @@ class TypeAlterTest {
     registry.alter("ms", new DropAttribute("w", false), new AddAttribute("n", "STRING"));
     assertThat(message("ms").findFieldByName("n").getNumber()).isEqualTo(4);
   }
+
+  // What a $ref in a document referred to is to is that document's, in every draft: no
+  // copy of it is written into the type, which reads it as the document has it at the
+  // version the type refers to. A copy an earlier statement left stays, and refuses none.
+  @Test
+  void aJsonDefinitionOfADocumentReferredToIsNotCopiedIntoTheType() throws Exception {
+    String lib = "{\"type\":\"object\",\"title\":\"s2lib\",\"properties\":{\"k\":{\"type\":"
+        + "\"integer\"}},\"additionalProperties\":false,\"$defs\":{\"Loc\":{\"type\":\"object\","
+        + "\"properties\":{\"in\":{\"$ref\":\"#/$defs/Inner\"}},\"additionalProperties\":false},"
+        + "\"Inner\":{\"type\":\"object\",\"properties\":{\"q\":{\"type\":\"string\"}%s},"
+        + "\"required\":[\"q\"],\"additionalProperties\":false}}}";
+    json("s2lib", String.format(lib, ""));
+    json("s2", String.format(JSON_HEAD, "s2") + "\"x\":{\"$ref\":\"s2lib#/$defs/Loc\"}},"
+        + "\"additionalProperties\":false}", "s2lib");
+    registry.alter("s2", new AddAttribute("z", "INT"));
+    assertThat(registry.schema("s2").canonicalString()).doesNotContain("$defs\":{")
+        .contains("{\"$ref\":\"s2lib#/$defs/Loc\"}");
+    // The document's next version gives Inner an attribute, which the type then has.
+    json("s2lib", String.format(lib, ",\"r\":{\"type\":\"integer\"}"));
+    registry.alter("s2", new AddAttribute("y", "s2lib"));
+    assertThat(registry.latest("s2").getReferences())
+        .containsExactly(new SchemaReference("s2lib", "s2lib", 2));
+    LogicalType read = LogicalTypeConversion.toLogicalType(registry.schema("s2"));
+    assertThat(read.getNamedTypes().get("Inner").getField("r")).isNotNull();
+    assertThat(read.getExternalTypes()).contains("Loc", "Inner");
+    assertThat(registry.schema("s2").canonicalString()).doesNotContain("$defs\":{");
+    // A copy left by an earlier statement, which no $ref of the type is to.
+    json("s3", "{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\","
+        + String.format(JSON_HEAD, "s3").substring(1) + "\"x\":{\"$ref\":\"s2lib#/$defs/Loc\"}"
+        + "},\"additionalProperties\":false,\"$defs\":{\"Inner\":{\"type\":\"object\","
+        + "\"properties\":{\"q\":{\"type\":\"string\"}},\"required\":[\"q\"],"
+        + "\"additionalProperties\":false}}}", "s2lib");
+    registry.alter("s3", new AddAttribute("z", "INT"));
+    registry.alter("s3", new MoveAttribute("z", Position.first()));
+    assertThat(version("s3")).isEqualTo(3);
+  }
+
+  // A name the type has for a document is read before all else in a later draft, and is
+  // written as that. In an older draft it is read as any definition, by its name: with a
+  // document's definition of that name it is one, and the type is refused.
+  @Test
+  void aJsonNameForADocumentIsADefinitionOfItsNameInAnOlderDraft() throws Exception {
+    json("lone", "{\"type\":\"object\",\"title\":\"lone\",\"properties\":{\"q\":{\"type\":"
+        + "\"string\"}},\"required\":[\"q\"],\"additionalProperties\":false}");
+    json("lfoo", "{\"type\":\"object\",\"title\":\"lfoo\",\"properties\":{\"l\":{\"$ref\":"
+        + "\"#/$defs/Foo\"}},\"additionalProperties\":false,\"$defs\":{\"Foo\":{\"type\":"
+        + "\"object\",\"properties\":{\"p\":{\"type\":\"integer\"}},\"required\":[\"p\"],"
+        + "\"additionalProperties\":false}}}");
+    String body = "\"x\":{\"$ref\":\"#/$defs/Foo\"},\"w\":{\"$ref\":\"lfoo\"}},"
+        + "\"additionalProperties\":false,\"$defs\":{\"Foo\":{\"$ref\":\"lone\","
+        + "\"logical.ref\":true}}}";
+    json("e7", String.format(JSON_HEAD, "e7") + body, "lone", "lfoo");
+    assertThatThrownBy(() -> registry.alter("e7", new AddAttribute("z", "INT")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("it has two definitions named Foo, lone and lfoo#/$defs/Foo");
+    assertThat(version("e7")).isEqualTo(1);
+    json("e20", "{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\","
+        + String.format(JSON_HEAD, "e20").substring(1) + body, "lone", "lfoo");
+    registry.alter("e20", new AddAttribute("z", "INT"));
+    assertThat(registry.schema("e20").canonicalString()).contains("{\"$ref\":\"lone\"}")
+        .contains("{\"$ref\":\"lfoo\"}");
+    assertThat(references("e20")).containsExactly("lfoo", "lone");
+  }
+
+  // The document of a definition the statement leaves no attribute of is no other
+  // document that has a definition of that name: one of those that binds a name below a
+  // reference that stays is kept, and the type told as the two versions it has.
+  @Test
+  void aJsonReferenceIsNotFreedByAnotherDocumentsDefinitionOfItsName() throws Exception {
+    String row = "{\"type\":\"object\",\"title\":\"%s\",\"properties\":{\"p\":{\"type\":"
+        + "\"integer\"},\"%s\":{\"type\":\"string\"}},\"additionalProperties\":false,"
+        + "\"$defs\":{\"Loc\":{\"type\":\"object\",\"properties\":{\"k\":{\"type\":\"integer\"}}}}}";
+    json("bx", String.format(row, "bx", "s"));
+    json("lib", String.format(row, "lib", "t"));
+    json("bx", String.format(row, "bx", "r"));
+    json("bl", "{\"type\":\"object\",\"title\":\"bl\",\"properties\":{\"l\":{\"$ref\":\"bx\"}},"
+        + "\"additionalProperties\":false}", "bx");
+    Map<String, String> resolved = new LinkedHashMap<>();
+    resolved.put("bx", registry.version("bx", 1).getSchema());
+    resolved.put("bl", registry.latest("bl").getSchema());
+    resolved.put("lib", registry.latest("lib").getSchema());
+    registry.client.register("fb", new JsonSchema(String.format(JSON_HEAD, "fb")
+        + "\"x\":{\"$ref\":\"lib#/$defs/Loc\"},\"w\":{\"$ref\":\"bl\"}},"
+        + "\"additionalProperties\":false}", List.of(new SchemaReference("bx", "bx", 1),
+            new SchemaReference("bl", "bl", 1), new SchemaReference("lib", "lib", 1)),
+        resolved, null));
+    assertThatThrownBy(() -> registry.alter("fb", new DropAttribute("x", false)))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("it would refer to two versions of type bx");
+    assertThat(version("fb")).isEqualTo(1);
+  }
+
+  // Two documents may each have a definition of one name for their own use: a type that
+  // refers to both, and is of neither definition itself, is made and altered.
+  @Test
+  void aJsonTypeRefersToTwoDocumentsWithADefinitionOfOneName() throws Exception {
+    String doc = "{\"type\":\"object\",\"title\":\"%s\",\"properties\":{\"m\":{\"$ref\":"
+        + "\"#/$defs/Loc\"}},\"additionalProperties\":false,\"$defs\":{\"Loc\":{\"type\":"
+        + "\"object\",\"properties\":{\"%s\":{\"type\":\"integer\"}}}}}";
+    json("da", String.format(doc, "da", "p"));
+    json("db", String.format(doc, "db", "q"));
+    create("two", SchemaType.JSON, "(id INT, a da, b db)");
+    registry.alter("two", new AddAttribute("z", "INT"));
+    assertThat(version("two")).isEqualTo(2);
+    assertThat(references("two")).containsExactly("da", "db");
+  }
 }

@@ -1958,10 +1958,6 @@ public final class TypeAlter {
         freed.add(uri.contains("#") ? uri.substring(0, uri.indexOf('#')) : uri);
       }
     });
-    // As is the document of a definition the statement leaves no attribute of.
-    references.stream().filter(ref -> format == SchemaType.JSON
-        && definitionsOf(ref).stream().anyMatch(unused::contains))
-        .forEach(ref -> freed.add(ref.getName()));
     Predicate<SchemaReference> unnamed = ref -> !used.contains(ref.getName())
         && definitionsOf(ref).stream().noneMatch(definitions::contains);
     List<SchemaReference> idle = format != SchemaType.JSON ? List.of() : references.stream()
@@ -2253,9 +2249,10 @@ public final class TypeAlter {
             : use.target);
       // By a $ref its attributes come to: a definition none is to is not the schema using
       // the name, nor is what such a one names, as the copies of a document's definitions
-      // that the writer left in it are not. Nor is a name the type has for what it refers
-      // to, which is written as that whatever else is so named.
-      if (use.from.isEmpty() && use.reached && !entry(called)) {
+      // that a statement left in it are not. Nor, in a later draft, is a name the type has
+      // for what it refers to: read before all else there, it is written as that whatever
+      // else is so named. In an older draft it is read as any definition is, by its name.
+      if (use.from.isEmpty() && use.reached && !(entry(called) && later(root))) {
         own.add(name);
       }
     }

@@ -88,6 +88,8 @@ public final class ToLogicalContext<T> extends CycleContext<T> {
   // very name. Unset, a name either version's writer derives is taken as derived.
   private boolean namesAsWritten;
 
+  private boolean foreign;
+
   public ToLogicalContext(ParsedSchema parsedSchema) {
     this(parsedSchema, Map.of(), LogicalTypeVersion.V2);
   }
@@ -183,6 +185,23 @@ public final class ToLogicalContext<T> extends CycleContext<T> {
 
   public boolean isExternalType(String name) {
     return externalTypes.contains(name);
+  }
+
+  /**
+   * Whether what is being converted is a part of a schema referred to, and not of the
+   * schema itself: a name met there is that schema's, however it is referred to.
+   */
+  public boolean isForeign() {
+    return foreign;
+  }
+
+  /**
+   * Sets {@link #isForeign()}, and returns what it was.
+   */
+  public boolean setForeign(boolean foreign) {
+    boolean was = this.foreign;
+    this.foreign = foreign;
+    return was;
   }
 
   public Set<String> getExternalTypes() {
