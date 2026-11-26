@@ -35,7 +35,11 @@ public interface TypeLookup {
   /** A version of a subject, soft-deleted or not, or null if there is none. */
   SchemaMetadata version(String subject, int version);
 
-  /** A stored version's schema, parsed in its subject's context with its references. */
+  /**
+   * A stored version's schema, parsed in its subject's context with its references and with
+   * the version's metadata and rule set: what a schema's text does not hold is read from them,
+   * as the names of an Avro root union's branches.
+   */
   ParsedSchema parse(SchemaMetadata version);
 
   /** A subject's version numbers, the soft-deleted ones too if asked; none if it has none. */
