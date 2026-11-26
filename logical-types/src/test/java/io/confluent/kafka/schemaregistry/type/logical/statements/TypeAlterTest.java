@@ -5086,6 +5086,15 @@ class TypeAlterTest {
         .hasMessageContaining("it would refer to two versions of type bv");
     assertThat(version("b1")).isEqualTo(1);
     assertThat(version("b2")).isEqualTo(1);
+    // Listed after the reference that has the name below it, it binds nothing, and is
+    // dropped as one of no use; as it is where that reference is dropped with it.
+    registry.client.register("b3", new JsonSchema(String.format(JSON_HEAD, "b3")
+        + "\"a\":{\"$ref\":\"abv\"}},\"additionalProperties\":false}",
+        List.of(two.get(1), two.get(0)), resolved, null));
+    registry.alter("b3", new AddAttribute("z", "INT"));
+    assertThat(references("b3")).containsExactly("abv");
+    registry.alter("b1", new DropAttribute("a", false));
+    assertThat(references("b1")).isEmpty();
   }
 
   // A definition is read wherever a $ref is to it, under a word of a tool's own too: one
@@ -5224,5 +5233,69 @@ class TypeAlterTest {
       assertThatThrownBy(() -> registry.alter("s5", rename))
           .isInstanceOf(TypeRefusedException.class).hasMessageContaining(told);
     }
+  }
+
+  // A definition of the type's own that no $ref is to is read all the same by a schema of
+  // a later draft: with a document's definition of its name it is one, and refused. And a
+  // reference's name is that reference, though the schema's $id is the same name.
+  @Test
+  void aJsonDefinitionReadThoughNoRefIsToItIsOneOfItsName() throws Exception {
+    String p = "{\"type\":\"object\",\"properties\":{\"p\":{\"type\":\"integer\"}},"
+        + "\"required\":[\"p\"],\"additionalProperties\":false}";
+    String q = "{\"type\":\"object\",\"properties\":{\"q\":{\"type\":\"string\"}},"
+        + "\"required\":[\"q\"],\"additionalProperties\":false}";
+    String later = "\"$schema\":\"https://json-schema.org/draft/2020-12/schema\",";
+    json("lib", "{\"type\":\"object\",\"title\":\"lib\",\"properties\":{\"k\":{\"type\":"
+        + "\"integer\"}},\"additionalProperties\":false,\"$defs\":{\"Loc\":" + p + "}}");
+    String unnamed = "\"y\":{\"$ref\":\"lib#/$defs/Loc\"}},\"additionalProperties\":false,"
+        + "\"$defs\":{\"Loc\":" + q + "}}";
+    json("u20", "{" + later + String.format(JSON_HEAD, "u20").substring(1) + unnamed, "lib");
+    assertThatThrownBy(() -> registry.alter("u20", new AddAttribute("z", "INT")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("it has two definitions named Loc, lib#/$defs/Loc and "
+            + "#/$defs/Loc");
+    // In an older draft it is not read, and is no second one.
+    json("u7", String.format(JSON_HEAD, "u7") + unnamed, "lib");
+    registry.alter("u7", new AddAttribute("z", "INT"));
+    assertThat(version("u7")).isEqualTo(2);
+    json("ui", "{\"$id\":\"lib\"," + later + String.format(JSON_HEAD, "ui").substring(1)
+        + "\"x\":{\"$ref\":\"#/$defs/Loc\"},\"y\":{\"$ref\":\"lib#/$defs/Loc\"}},"
+        + "\"additionalProperties\":false,\"$defs\":{\"Loc\":" + q + "}}", "lib");
+    assertThatThrownBy(() -> registry.alter("ui", new AddAttribute("z", "INT")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("it has two definitions named Loc, #/$defs/Loc and "
+            + "lib#/$defs/Loc");
+    assertThat(version("u20")).isEqualTo(1);
+    assertThat(version("ui")).isEqualTo(1);
+  }
+
+  // The writer writes what it wraps as field 1 of a message of nothing else. A wrapper
+  // written by hand with its value under another number, or beside another field, would
+  // be written so, and what is stored in it not read.
+  @Test
+  void aProtobufWrapperOfAnotherShapeThanTheWritersIsNotWrittenAsTheWriters()
+      throws Exception {
+    String head = "syntax = \"proto3\";\n\nimport \"confluent/meta.proto\";\n\nmessage T {\n"
+        + "  int32 id = 5;\n";
+    Map<String, String> wrappers = new LinkedHashMap<>();
+    wrappers.put("wn", "  WL w = 2 " + WRAPPED + ";\n  int32 z = 6;\n\n  message WL {\n"
+        + "    repeated int32 value = 5;\n  }\n}\n");
+    wrappers.put("wx", "  WL w = 2 " + WRAPPED + ";\n  int32 z = 6;\n\n  message WL {\n"
+        + "    repeated int32 value = 1;\n    int32 more = 2;\n  }\n}\n");
+    wrappers.put("wp", "  repeated WE w = 2 " + WRAPPED + ";\n  int32 z = 6;\n\n"
+        + "  message WE {\n    optional int32 value = 5;\n  }\n}\n");
+    for (Map.Entry<String, String> type : wrappers.entrySet()) {
+      registry.client.register(type.getKey(), new ProtobufSchema(head + type.getValue()));
+      assertThatThrownBy(() -> registry.alter(type.getKey(), new AddAttribute("n", "INT")))
+          .as(type.getKey()).isInstanceOf(TypeRefusedException.class)
+          .hasMessage("Type " + type.getKey() + " cannot be altered: field w of message T is "
+              + "a message that wraps a value otherwise than as its field 1 and its only "
+              + "field, which it would be written as, so its stored values would be read "
+              + "wrongly. Drop the attribute, or register its new version as a Protobuf "
+              + "schema");
+      assertThat(version(type.getKey())).as(type.getKey()).isEqualTo(1);
+    }
+    registry.alter("wn", new DropAttribute("w", false));
+    assertThat(message("wn").findFieldByNumber(2)).isNull();
   }
 }

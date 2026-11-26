@@ -841,6 +841,13 @@ public final class TypeAlter {
             + " is a message that wraps a value, which would be written as the value "
             + "itself and not as that message, so its stored values would be read wrongly";
       }
+      // As is a wrapper whose value is not its field 1, or not its only field: the writer
+      // writes the value as field 1 of a message of nothing else.
+      if (wrapsOtherwise(field)) {
+        return of + " is a message that wraps a value otherwise than as its field 1 and its "
+            + "only field, which it would be written as, so its stored values would be read "
+            + "wrongly";
+      }
       // A message of the name of one of the format's own that is not that one is read as
       // that one, and written as it.
       String own = LogicalTypeToProtoConverter.readAsAnother(field.getMessageType());
@@ -938,6 +945,16 @@ public final class TypeAlter {
       return false;
     }
     return !field.isRepeated() || !value.hasPresence();
+  }
+
+  private static boolean wrapsOtherwise(FieldDescriptor field) {
+    if (!ProtoToLogicalTypeConverter.isFlinkWrapped(field)) {
+      return false;
+    }
+    Descriptor wrapper = field.getMessageType();
+    FieldDescriptor value = wrapper.findFieldByName(CommonConstants.FLINK_WRAPPER_FIELD_NAME);
+    return value != null && value.getRealContainingOneof() == null
+        && (value.getNumber() != 1 || wrapper.getFields().size() != 1);
   }
 
   // Whether the message written has, as a oneof of its own, the oneof a field's message
@@ -1917,14 +1934,17 @@ public final class TypeAlter {
         freed.add(uri.contains("#") ? uri.substring(0, uri.indexOf('#')) : uri);
       }
     });
+    // The first met binds a name: it is those listed after it, and of use still, that
+    // it may bind a name below.
     List<SchemaReference> all = new ArrayList<>(references);
+    Predicate<SchemaReference> unnamed = ref -> !used.contains(ref.getName())
+        && definitionsOf(ref).stream().noneMatch(definitions::contains);
     Predicate<SchemaReference> binds = ref -> format == SchemaType.JSON
         && !freed.contains(ref.getName())
-        && TypeReferences.bindsBelow(lookup, subject, ref, all);
+        && TypeReferences.bindsBelow(lookup, subject, ref, all.subList(all.indexOf(ref) + 1,
+            all.size()).stream().filter(unnamed.negate()).collect(Collectors.toList()));
     boolean idle = format == SchemaType.JSON && references.stream().anyMatch(ref ->
-        !used.contains(ref.getName())
-            && definitionsOf(ref).stream().noneMatch(definitions::contains)
-            && !binds.test(ref));
+        unnamed.test(ref) && !binds.test(ref));
     if (unused.isEmpty() && !renamed && !idle) {
       return;
     }
@@ -2128,8 +2148,8 @@ public final class TypeAlter {
       String to = use.target;
       String name = JsonToLogicalTypeConverter.extractCanonicalDefsKey(to);
       String of = to.contains("#") ? to.substring(0, to.indexOf('#')) : to;
-      if (!use.from.isEmpty() || use.entry || name == null || !documents.contains(name)
-          || name.equals(of)) {
+      if (!use.from.isEmpty() || use.entry || use.unnamed || name == null
+          || !documents.contains(name) || name.equals(of)) {
         continue;
       }
       // A definition that only names the document is that document: one that says no more
@@ -2149,7 +2169,7 @@ public final class TypeAlter {
           + "definition would be written as that type. Register its new version as a JSON "
           + "schema");
     }
-    refuseDefinitionsOfOneName(schema, uses);
+    refuseDefinitionsOfOneName(schema, uses, ((JsonSchema) stored).resolvedReferences().keySet());
   }
 
   // A definition is read by its name alone, whichever document it is of: two of one name,
@@ -2157,7 +2177,8 @@ public final class TypeAlter {
   // next statement would write every attribute of the one as the other's. Told through
   // the documents the schema refers to, as far as its $refs reach: a name the schema itself
   // uses, that is, as what two documents have between them is not this type's to write.
-  private void refuseDefinitionsOfOneName(JsonNode root, List<Use> uses) {
+  private void refuseDefinitionsOfOneName(JsonNode root, List<Use> uses,
+      Set<String> references) {
     Map<String, Set<String>> named = new LinkedHashMap<>();
     Set<String> own = new HashSet<>();
     for (Use use : uses) {
@@ -2169,7 +2190,8 @@ public final class TypeAlter {
       JsonNode called = use.target.startsWith("#") ? definition(root, use.target)
           : MissingNode.getInstance();
       named.computeIfAbsent(name, n -> new LinkedHashSet<>())
-          .add(entry(called) ? local(root, called.path("$ref").asText()) : use.target);
+          .add(entry(called) ? local(root, called.path("$ref").asText(), references)
+            : use.target);
       if (use.from.isEmpty()) {
         own.add(name);
       }
@@ -2189,15 +2211,19 @@ public final class TypeAlter {
   // to it by and none for the schema itself; what it is to, a part of the schema itself as
   // #/..., a document or a part of one by the document's name; and whether it is the $ref
   // of an entry the writer writes for a name, which is read by that name.
+  // Or no $ref but a definition of the schema's own that the type as read has, though
+  // none is to it: told as a $ref of the schema to it would be.
   private static final class Use {
     final String from;
     final String target;
     final boolean entry;
+    final boolean unnamed;
 
-    Use(String from, String target, boolean entry) {
+    Use(String from, String target, boolean entry, boolean unnamed) {
       this.from = from;
       this.target = target;
       this.entry = entry;
+      this.unnamed = unnamed;
     }
   }
 
@@ -2230,7 +2256,10 @@ public final class TypeAlter {
     while (!todo.isEmpty() || !kept) {
       if (todo.isEmpty()) {
         kept = true;
-        unreached(root, read, gone).forEach(at -> todo.add(new String[] {"", at}));
+        unreached(root, read, gone).forEach(at -> {
+          todo.add(new String[] {"", at});
+          uses.add(new Use("", "#" + at, false, true));
+        });
         continue;
       }
       String[] at = todo.pop();
@@ -2251,12 +2280,12 @@ public final class TypeAlter {
       List<String> refs = new ArrayList<>();
       collectRefs(node, refs);
       for (String ref : refs) {
-        String to = local(document, ref);
+        String to = local(document, ref, schema.resolvedReferences().keySet());
         int hash = to.indexOf('#');
         String in = hash == 0 ? at[0] : hash < 0 ? to : to.substring(0, hash);
         String part = hash < 0 ? "" : to.substring(hash + 1);
         todo.add(new String[] {in, part});
-        uses.add(new Use(at[0], part.isEmpty() ? in : in + "#" + part, entry));
+        uses.add(new Use(at[0], part.isEmpty() ? in : in + "#" + part, entry, false));
       }
     }
     return uses;
@@ -2271,7 +2300,9 @@ public final class TypeAlter {
     }
     for (String word : List.of("$defs", "definitions")) {
       root.path(word).fieldNames().forEachRemaining(name -> {
-        if (!gone.contains(" /" + word + "/" + name) && read.getNamedTypes().containsKey(name)) {
+        // Not a name the type as read has for a document's definition alone.
+        if (!gone.contains(" /" + word + "/" + name) && read.getNamedTypes().containsKey(name)
+            && !read.getExternalTypes().contains(name)) {
           places.add("/" + word + "/" + name);
         }
       });
@@ -2281,9 +2312,11 @@ public final class TypeAlter {
 
   // A $ref as it is to the document it is in: one that names the document by its $id (or
   // id, as an older draft has it), or relative to it, is to a part of the document itself.
-  private static String local(JsonNode document, String ref) {
+  private static String local(JsonNode document, String ref, Set<String> references) {
     String id = document.path("$id").asText(document.path("id").asText(""));
-    if (id.isEmpty() || ref.startsWith("#")) {
+    // A reference's name is that reference, whatever $id the document has.
+    String named = ref.indexOf('#') < 0 ? ref : ref.substring(0, ref.indexOf('#'));
+    if (id.isEmpty() || ref.startsWith("#") || references.contains(named)) {
       return ref;
     }
     String own = id.indexOf('#') < 0 ? id : id.substring(0, id.indexOf('#'));
@@ -2318,7 +2351,8 @@ public final class TypeAlter {
       String name = JsonToLogicalTypeConverter.extractCanonicalDefsKey(to);
       // A definition of the schema's own that names what is so called is how the name is
       // written, and no other type.
-      if (use.from.isEmpty() && !use.entry && name != null && called.containsKey(name)
+      if (use.from.isEmpty() && !use.entry && !use.unnamed && name != null
+          && called.containsKey(name)
           && !to.equals(called.get(name)) && !(to.startsWith("#") && called.get(name).equals(
               definition(json, to).path("$ref").asText(null)))) {
         throw new TypeRefusedException("Type " + subject + " cannot be " + done + ": it "

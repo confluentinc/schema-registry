@@ -444,18 +444,15 @@ public final class TypeReferences {
   }
 
   /**
-   * Whether a reference's name is one another of the references has below it for another
-   * type or version: the first met binds a name, so taken away the reference may leave what
-   * the other is of another type.
+   * Whether a reference's name is one that references listed after it have below them for
+   * another type or version: the first met binds a name, so taken away the reference would
+   * leave what those are of another type.
    */
   static boolean bindsBelow(TypeLookup lookup, String referrer, SchemaReference ref,
-      List<SchemaReference> references) {
+      List<SchemaReference> after) {
     String subject = referenced(referrer, ref.getSubject());
     Map<String, SchemaMetadata> versions = new HashMap<>();
-    for (SchemaReference other : references) {
-      if (other == ref) {
-        continue;
-      }
+    for (SchemaReference other : after) {
       Map<String, String[]> alone = new LinkedHashMap<>();
       try {
         bind(lookup, referrer, null, List.of(other), alone, versions, "");

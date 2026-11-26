@@ -30,14 +30,13 @@ import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTyp
 import io.confluent.kafka.schemaregistry.type.logical.avro.LogicalTypeToAvroConverter;
 import io.confluent.kafka.schemaregistry.type.logical.json.LogicalTypeToJsonConverter;
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.LogicalTypeToProtoConverter;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Deque;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -597,10 +596,17 @@ public final class Formats {
     }
 
     void settle() {
-      Deque<Pair> again = new ArrayDeque<>();
-      // Those met on the way are judged in their turn.
+      Set<Pair> again = new LinkedHashSet<>();
+      // Those met on the way are judged in their turn, and before any is judged again: one
+      // judged by many is then judged again once for them all.
       while (!again.isEmpty() || settled < met.size()) {
-        Pair pair = again.isEmpty() ? met.get(settled++) : again.pop();
+        Pair pair;
+        if (settled < met.size()) {
+          pair = met.get(settled++);
+        } else {
+          pair = again.iterator().next();
+          again.remove(pair);
+        }
         if (!match.get(pair)) {
           continue;
         }
@@ -609,7 +615,7 @@ public final class Formats {
         judging = null;
         if (!both) {
           match.put(pair, false);
-          judgedBy.getOrDefault(pair, Set.of()).forEach(again::push);
+          again.addAll(judgedBy.getOrDefault(pair, Set.of()));
         }
       }
     }
@@ -624,8 +630,17 @@ public final class Formats {
         || other.stream().anyMatch(t -> "any".equals(jsonKind(t.type)))) {
       return true;
     }
-    return one.stream().anyMatch(a -> other.stream()
-        .anyMatch(b -> matchBoth(a, b, comparing)));
+    // Every two are asked, and so met at once: asked until one matches, as many are met
+    // in as many turns, each of which asks again all that came before.
+    boolean any = false;
+    for (Written a : one) {
+      for (Written b : other) {
+        if (matchBoth(a, b, comparing)) {
+          any = true;
+        }
+      }
+    }
+    return any;
   }
 
   private static boolean matchBoth(Written one, Written other, Pairs comparing) {

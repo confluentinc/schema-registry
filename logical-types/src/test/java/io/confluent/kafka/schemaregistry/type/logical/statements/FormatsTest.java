@@ -581,4 +581,22 @@ class FormatsTest {
               .hasMessageContaining("cannot have branches b0 and b1"));
     }
   }
+
+  // Two rows that each hold a union of many rows: the rows of the two unions are met all
+  // at once and judged once each, and not one at a turn with all before it asked again.
+  @Test
+  void rowsThatHoldUnionsOfManyRowsAreJudgedOnce() {
+    StringBuilder body = new StringBuilder("(id INT, u UNION(");
+    for (String[] holder : new String[][] {{"x", "m", "a"}, {"y", "n", "b"}}) {
+      body.append(holder[0]).append(" STRUCT<a UNION(");
+      for (int i = 0; i < 250; i++) {
+        body.append(i > 0 ? ", " : "").append(holder[1]).append(i).append(" STRUCT<")
+            .append(holder[2]).append(i).append(" INT NOT NULL>");
+      }
+      body.append(") NOT NULL>").append(holder[0].equals("x") ? ", " : "");
+    }
+    LogicalType lt = struct(body + "))");
+    assertTimeoutPreemptively(Duration.ofSeconds(20),
+        () -> Formats.refuseUnwritable(SchemaType.JSON, lt));
+  }
 }
