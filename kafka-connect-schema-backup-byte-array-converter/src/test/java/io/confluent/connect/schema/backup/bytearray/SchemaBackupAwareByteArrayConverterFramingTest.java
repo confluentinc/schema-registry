@@ -68,9 +68,8 @@ import org.junit.Test;
 /**
  * Restore-side wire framing for {@link SchemaBackupAwareByteArrayConverter}.
  *
- * <p>The converter must decide prefix vs header (GUID) framing from the backup
- * wrapper, not from the headers of the record being restored, and must leave only
- * the target framing on the restored record.
+ * <p>The source framing is taken from the backup wrapper, and only the target framing is
+ * left on the restored record.
  */
 public class SchemaBackupAwareByteArrayConverterFramingTest {
 
@@ -156,8 +155,7 @@ public class SchemaBackupAwareByteArrayConverterFramingTest {
     assertNull(wrapper(wrapped).getInt32(BackupWrapper.FIELD_SCHEMA_ID));
     assertNotNull(wrapper(wrapped).getString(BackupWrapper.FIELD_SCHEMA_GUID));
 
-    // The header was lost between backup and restore. Before the fix the payload's
-    // leading 0x00 was taken for a prefix and real payload bytes were stripped.
+    // No header on the restored record: the payload's leading 0x00 is not a prefix.
     Headers restoreHeaders = new RecordHeaders();
     byte[] restored = valueConverter.fromConnectData(
         TOPIC, restoreHeaders, wrapped.schema(), wrapped.value());
@@ -224,8 +222,7 @@ public class SchemaBackupAwareByteArrayConverterFramingTest {
     SchemaAndValue wrapped = valueConverter.toConnectData(TOPIC, original);
     assertNotNull(wrapper(wrapped).getInt32(BackupWrapper.FIELD_SCHEMA_ID));
 
-    // Before the fix the header won, the whole byte array (old prefix included) was
-    // treated as payload, and a second prefix was added.
+    // A stale header must not override the prefix framing recorded in the wrapper.
     Headers restoreHeaders = new RecordHeaders();
     restoreHeaders.add(VALUE_HEADER, guidHeader(UNRELATED_GUID));
     byte[] restored = valueConverter.fromConnectData(

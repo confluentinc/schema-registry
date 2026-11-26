@@ -42,17 +42,17 @@ public final class BackupWrapper {
   public static final String FIELD_DIRECT_REFS = "directRefs";
   public static final String FIELD_SCHEMA_GUID = "schemaGuid";
   /**
-   * How {@link #FIELD_DATA} is encoded. Optional: wrappers written before this field
-   * existed leave it null, and restore then skips the encoding check.
+   * How {@link #FIELD_DATA} is encoded. Optional; null in wrappers written before this
+   * field was added.
    */
   public static final String FIELD_DATA_ENCODING = "dataEncoding";
 
   /**
-   * {@link #FIELD_DATA} holds the decoded Connect value (AvroConverter and friends).
+   * {@link #FIELD_DATA} holds a Connect value.
    */
   public static final String DATA_ENCODING_CONNECT = "CONNECT";
   /**
-   * {@link #FIELD_DATA} holds the original SR wire bytes (byte-array converter).
+   * {@link #FIELD_DATA} holds Schema Registry wire-format bytes.
    */
   public static final String DATA_ENCODING_WIRE_BYTES = "WIRE_BYTES";
 
@@ -181,9 +181,8 @@ public final class BackupWrapper {
   }
 
   /**
-   * Fails when the wrapper records a data encoding other than {@code expected}, i.e. the
-   * backup was taken with a different converter family than the one restoring it. Wrappers
-   * without the field (older backups) are accepted unchanged.
+   * Throws when the data encoding is set and differs from {@code expected}. A missing
+   * encoding is accepted.
    */
   public static void requireDataEncoding(
       Schema wrapperSchema, Struct wrapper, String expected, String converterName) {

@@ -21,19 +21,12 @@ import com.google.common.cache.CacheBuilder;
 import java.util.Map;
 
 /**
- * Bounded in-memory caches for the backup and restore paths, built the same way as the
- * Schema Registry client and the Connect data converters (Guava, size-bounded, evicting
- * least recently used entries first).
- *
- * <p>Every cached value is derived from immutable inputs (a schema ID, a GUID, or the
- * schema text and reference metadata carried in a backup wrapper), so an evicted entry
- * is rebuilt on the next use with the same result. Caches live only in memory, per
- * converter instance, so a task restart starts empty, as before.
+ * Size-bounded caches for the backup and restore paths.
  */
 public final class BackupCaches {
 
   /**
-   * Same default size as {@code schemas.cache.config} in the Connect data converters.
+   * Default size, the same as {@code schemas.cache.config}.
    */
   public static final int MAX_ENTRIES = 1000;
 

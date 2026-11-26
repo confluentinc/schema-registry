@@ -320,7 +320,7 @@ public class BackupSchemaFetcherTest {
     }
   }
 
-  // ---------------- schemaType (used by SchemaBackupAwareByteArrayConverter) ----------------
+  // ---------------- schemaType ----------------
 
   private static final String SCHEMA_TYPE_SUBJECT = "typed-value";
 
@@ -357,7 +357,7 @@ public class BackupSchemaFetcherTest {
           ? new AvroSchema(raw, refs, resolved, null)
           : new AvroSchema(raw);
 
-  /** The parse the backup path ran per record before parse() existed, kept verbatim. */
+  /** Reference implementation of parse(), uncached. */
   private static ParsedSchema previousInlineParse(
       BackupSchemaFetcher.BackupSchemaInfo info,
       BackupReferenceResolver.ParsedSchemaFactory factory) {

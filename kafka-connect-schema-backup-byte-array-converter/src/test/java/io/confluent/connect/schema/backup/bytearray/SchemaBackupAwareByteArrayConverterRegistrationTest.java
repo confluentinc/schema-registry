@@ -339,7 +339,7 @@ public class SchemaBackupAwareByteArrayConverterRegistrationTest {
     assertAutoRegisterFalseFailsWhenMissing(Format.JSON_SCHEMA);
   }
 
-  // ---------------- Restore schema cache: IDs, versions and restarts unchanged ----------------
+  // ---------------- Restore schema cache ----------------
 
   @Test
   public void testAvroRepeatedRestoreAsksTargetForEveryRecordAndSurvivesRestart()
@@ -416,9 +416,8 @@ public class SchemaBackupAwareByteArrayConverterRegistrationTest {
   }
 
   /**
-   * Restores the same backed-up record three times on one converter, then once on a new
-   * converter (a task restart). Every record must still go to the target registry, so the
-   * target ID always comes from the target, and all four restored records are identical.
+   * Restores the same record three times on one converter, then once on a new converter.
+   * All restored records carry the same target ID and are identical.
    */
   private void assertRepeatedRestoreStable(Format format) throws Exception {
     SchemaAndValue wrapped = wrap(produceSimple(format));

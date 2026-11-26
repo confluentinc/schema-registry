@@ -729,7 +729,7 @@ public class BackupReferenceResolverTest {
       "{\"type\":\"record\",\"name\":\"User\",\"namespace\":\"com.example\","
       + "\"fields\":[{\"name\":\"address\",\"type\":\"" + ADDRESS_FQCN + "\"}]}";
 
-  /** The restore path the converters ran per record before resolveRestoreSchema. */
+  /** Reference implementation: resolveFromWrapper followed by factory.create, uncached. */
   private ParsedSchema previousRestorePath(
       BackupReferenceResolver r, Struct wrapper, String raw) {
     BackupReferenceResolver.ResolutionResult resolved =
@@ -839,7 +839,7 @@ public class BackupReferenceResolverTest {
         new SchemaReference(ADDRESS_FQCN, ADDRESS_VALUE_SUBJECT, 2)), second.references());
     assertNotEquals(first, second);
     assertSame(first, firstAgain);
-    // Each result is exactly what the previous per-record path produced.
+    // Each result equals the reference implementation.
     assertEquals(previousRestorePath(new BackupReferenceResolver(targetRegistry),
         withV2, USER_WITH_ADDRESS_SCHEMA), second);
     assertEquals(previousRestorePath(new BackupReferenceResolver(targetRegistry),

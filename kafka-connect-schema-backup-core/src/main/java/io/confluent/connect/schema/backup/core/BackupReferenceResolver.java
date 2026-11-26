@@ -58,9 +58,8 @@ public class BackupReferenceResolver {
   }
 
   /**
-   * @param autoRegister when false, referenced schemas are not registered; they must
-   *     already exist on the target registry and are only looked up (mirrors the
-   *     serializer's {@code auto.register.schemas=false}).
+   * @param autoRegister when false, referenced schemas are looked up instead of
+   *     registered.
    */
   public BackupReferenceResolver(SchemaRegistryClient schemaRegistry, boolean autoRegister) {
     this.schemaRegistry = schemaRegistry;
@@ -135,16 +134,9 @@ public class BackupReferenceResolver {
   }
 
   /**
-   * Returns the schema to serialize a restored record with: {@code rawSchema} parsed by
-   * {@code factory} with the references re-registered on the target, exactly as
-   * {@link #resolveFromWrapper} followed by {@code factory.create(...)}.
-   *
-   * <p>The result is cached per (factory, schema text, reference tree, direct refs), all
-   * taken from the wrapper, so records with the same backed-up schema skip the JSON
-   * parsing and schema parsing. It does not cache the target schema ID: the caller still
-   * registers or looks up the schema on the target registry for every record (served by
-   * the registry client's own cache), so subjects, IDs and versions are unchanged.
-   * Failures are not cached.
+   * Parses {@code rawSchema} with {@code factory}, after resolving its references on the
+   * target registry with {@link #resolveFromWrapper}. The result is cached by factory,
+   * schema text and reference metadata.
    */
   public ParsedSchema resolveRestoreSchema(
       Schema wrapperSchema, Struct wrapper, String rawSchema, ParsedSchemaFactory factory) {

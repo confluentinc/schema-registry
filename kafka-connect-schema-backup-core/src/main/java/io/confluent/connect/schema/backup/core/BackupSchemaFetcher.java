@@ -139,7 +139,7 @@ public class BackupSchemaFetcher {
     private final String directRefsJson;
     private final Map<String, Integer> versionsBySubject;
     private final String schemaType;
-    // Parsed form of rawSchema, filled on first parse(); not part of the value.
+    // Result of parse(), cached per factory.
     private volatile ParsedMemo parsed;
 
     public BackupSchemaInfo(
@@ -202,9 +202,7 @@ public class BackupSchemaFetcher {
     }
 
     /**
-     * Parses this schema with {@code factory}, the same way the backup path did per
-     * record, and keeps the result so repeated records with this schema reuse it.
-     * The parsed schema depends only on this immutable info and the factory.
+     * Parses this schema and its references with {@code factory}. The result is cached.
      */
     public ParsedSchema parse(BackupReferenceResolver.ParsedSchemaFactory factory) {
       ParsedMemo memo = parsed;

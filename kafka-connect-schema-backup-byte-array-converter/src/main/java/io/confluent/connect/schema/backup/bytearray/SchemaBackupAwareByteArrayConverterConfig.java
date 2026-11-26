@@ -20,13 +20,8 @@ import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
 import java.util.Map;
 
 /**
- * Config for {@link SchemaBackupAwareByteArrayConverter}. Inherits all standard Confluent SR knobs
- * from {@link AbstractKafkaSchemaSerDeConfig}, including {@code schema.registry.url},
- * {@code key.subject.name.strategy} / {@code value.subject.name.strategy},
- * {@code key.schema.id.serializer} / {@code value.schema.id.serializer}, etc.
- *
- * <p>Backup mode is toggled via {@code schema.backup.enabled} (see
- * {@code io.confluent.connect.schema.backup.api.SchemaBackupConfig}).
+ * Configuration for {@link SchemaBackupAwareByteArrayConverter}: the serializer settings of
+ * {@link AbstractKafkaSchemaSerDeConfig}, plus {@code schema.backup.enabled}.
  */
 public class SchemaBackupAwareByteArrayConverterConfig extends AbstractKafkaSchemaSerDeConfig {
 

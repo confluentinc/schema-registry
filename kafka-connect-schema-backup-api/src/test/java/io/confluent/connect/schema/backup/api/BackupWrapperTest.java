@@ -269,7 +269,7 @@ public class BackupWrapperTest {
 
   @Test
   public void testRequireDataEncodingAcceptsSchemaWithoutField() {
-    // Wrapper shape written by releases before dataEncoding existed.
+    // Wrapper as written by earlier versions, without dataEncoding.
     Schema olderShape = SchemaBuilder.struct().name(BackupWrapper.NAME)
         .field(BackupWrapper.FIELD_DATA, Schema.OPTIONAL_BYTES_SCHEMA)
         .build();

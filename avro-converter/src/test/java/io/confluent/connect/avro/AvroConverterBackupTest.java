@@ -1441,8 +1441,7 @@ public class AvroConverterBackupTest {
   }
 
   /**
-   * Rebuilds the wrapper without the dataEncoding field, the exact shape written by
-   * releases before the field existed (and rebuilt by older restore connectors).
+   * Rebuilds the wrapper without the dataEncoding field, as written by earlier versions.
    */
   private static SchemaAndValue withoutDataEncodingField(SchemaAndValue wrapped) {
     SchemaBuilder builder = SchemaBuilder.struct().name(wrapped.schema().name());

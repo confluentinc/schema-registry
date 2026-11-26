@@ -111,9 +111,7 @@ public class SchemaBackupAwareByteArrayConverterTest {
 
   @Test
   public void testPassthroughNullValueReturnsBytesSchemaWithNullValue() {
-    // Match plain ByteArrayConverter: schema=OPTIONAL_BYTES, value=null.
-    // Ensures downstream sinks (e.g. S3SinkConnector in BACKUP_FULL_RECORD mode)
-    // can wrap tombstones instead of dropping them.
+    // Same as ByteArrayConverter: schema=OPTIONAL_BYTES, value=null.
     SchemaAndValue sv = passthroughConverter.toConnectData(TOPIC, null);
     assertEquals(Schema.OPTIONAL_BYTES_SCHEMA, sv.schema());
     assertNull(sv.value());
@@ -191,7 +189,7 @@ public class SchemaBackupAwareByteArrayConverterTest {
     SchemaAndValue wrapped = backupConverter.toConnectData(TOPIC, original);
     byte[] restored = backupConverter.fromConnectData(
         TOPIC, wrapped.schema(), wrapped.value());
-    // Because target SR is same as source SR, ids match → bytes are identical.
+    // Source and target registry are the same, so the bytes are identical.
     assertArrayEquals(original, restored);
   }
 
@@ -377,10 +375,8 @@ public class SchemaBackupAwareByteArrayConverterTest {
 
   @Test
   public void testBackupNullValueReturnsSchemaAndValueNull() {
-    // In backup mode, null values return SchemaAndValue.NULL (schema=null, value=null)
-    // to match the SR converter family (AvroConverter/ProtobufConverter/JsonSchemaConverter).
-    // This routes tombstones to BackupWrapperExtractor's canonical tombstone() branch
-    // so the envelope schemaType is tagged TYPE_NONE instead of UNKNOWN/BYTES.
+    // Backup mode returns SchemaAndValue.NULL for null values, as the Schema Registry
+    // converters do.
     SchemaAndValue sv = backupConverter.toConnectData(TOPIC, null);
     assertEquals(SchemaAndValue.NULL, sv);
     assertNull(sv.schema());

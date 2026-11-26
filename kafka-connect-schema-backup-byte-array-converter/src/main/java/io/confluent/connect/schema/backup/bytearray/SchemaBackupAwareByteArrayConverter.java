@@ -59,23 +59,17 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Byte-array Kafka Connect Converter with optional SR-aware backup/restore mode.
+ * Byte-array converter that backs up and restores Schema Registry data (Avro, Protobuf,
+ * JSON Schema) without re-encoding the payload.
  *
- * <p>When {@code schema.backup.enabled=false} (default), behaves as a pure passthrough:
- * {@code toConnectData} emits {@code SchemaAndValue(OPTIONAL_BYTES, bytes)} and
- * {@code fromConnectData} accepts {@code byte[]} or {@code ByteBuffer}.
+ * <p>With {@code schema.backup.enabled=false} (default) it behaves like
+ * {@code ByteArrayConverter}.
  *
- * <p>When {@code schema.backup.enabled=true}, unifies the backup/restore path for all
- * three SR-aware wire formats (Avro, Protobuf, JSON Schema). The payload bytes are stored
- * verbatim in the wrapper's {@code data} field; only the wire-format header (magic byte +
- * schema ID/GUID + Protobuf message indexes) is parsed and rewritten. Reference
- * pre-registration on the target SR uses the existing {@link BackupReferenceResolver}
- * unchanged.
- *
- * <p>Wire-header handling is delegated to {@link SchemaId} / {@link SchemaIdDeserializer}
- * / {@link SchemaIdSerializer} from {@code kafka-schema-serializer}. Format choice on
- * restore (prefix ID vs header GUID) follows the standard
- * {@code key.schema.id.serializer} / {@code value.schema.id.serializer} configs.
+ * <p>With {@code schema.backup.enabled=true}, backup stores the payload bytes unchanged
+ * in a backup wrapper together with the writer schema and its references. Restore
+ * registers the schema on the target registry and rewrites only the schema ID framing
+ * (prefix or header, per {@code key.schema.id.serializer} /
+ * {@code value.schema.id.serializer}).
  */
 public class SchemaBackupAwareByteArrayConverter implements Converter {
 
@@ -83,10 +77,8 @@ public class SchemaBackupAwareByteArrayConverter implements Converter {
       LoggerFactory.getLogger(SchemaBackupAwareByteArrayConverter.class);
 
   /**
-   * Factories keyed by the wrapper's {@code schemaType} field.
-   * Note: JSON Schema uses {@code "JSON_SCHEMA"} in the wrapper (matches
-   * existing {@code JsonSchemaConverter}) even though {@code JsonSchema.schemaType()}
-   * returns {@code "JSON"} at the SR level.
+   * Schema factories keyed by the wrapper's {@code schemaType}. JSON Schema is
+   * {@code "JSON_SCHEMA"} in the wrapper and {@code "JSON"} in the registry.
    */
   private static final Map<String, BackupReferenceResolver.ParsedSchemaFactory> FACTORIES;
 
@@ -117,8 +109,7 @@ public class SchemaBackupAwareByteArrayConverter implements Converter {
   private boolean autoRegisterSchema;
   private boolean normalizeSchema;
   private boolean propagateSchemaTags;
-  // Restore-time rejection: set when a serializer setting would label the original
-  // payload bytes with a schema other than the backed-up writer schema.
+  // Configured setting that would replace the writer schema on restore, or null.
   private String writerSchemaOverride;
   private boolean backupEnabled;
   private boolean isKey;
@@ -127,7 +118,7 @@ public class SchemaBackupAwareByteArrayConverter implements Converter {
   public SchemaBackupAwareByteArrayConverter() {
   }
 
-  // Public for testing: injects a preconfigured SR client.
+  // Visible for testing.
   public SchemaBackupAwareByteArrayConverter(SchemaRegistryClient client) {
     this.schemaRegistry = client;
   }
@@ -169,8 +160,7 @@ public class SchemaBackupAwareByteArrayConverter implements Converter {
         ? cfg.keySchemaIdSerializer() : cfg.valueSchemaIdSerializer();
     this.subjectNameStrategy = isKey
         ? cfg.keySubjectNameStrategy() : cfg.valueSubjectNameStrategy();
-    // Same as AbstractKafkaSchemaSerDe: strategies such as the default
-    // AssociatedNameStrategy need the client, otherwise they fall back to <topic>-value.
+    // As in AbstractKafkaSchemaSerDe: some subject name strategies need the client.
     this.subjectNameStrategy.setSchemaRegistryClient(schemaRegistry);
     this.wrapperSchema = BackupWrapper.buildSchema(Schema.OPTIONAL_BYTES_SCHEMA);
   }
@@ -184,14 +174,10 @@ public class SchemaBackupAwareByteArrayConverter implements Converter {
   public SchemaAndValue toConnectData(String topic, Headers headers, byte[] value) {
     if (value == null) {
       if (backupEnabled) {
-        // Match SR converter family (AvroConverter/ProtobufConverter/JsonSchemaConverter):
-        // return SchemaAndValue.NULL so BackupWrapperExtractor hits the tombstone()
-        // branch and tags the envelope schemaType as TYPE_NONE (canonical tombstone
-        // marker). BackupS3SinkTask wraps records before behavior.on.null.values
-        // applies, so IGNORE semantics don't drop these.
+        // Tombstone: return SchemaAndValue.NULL, as the Schema Registry converters do.
         return SchemaAndValue.NULL;
       }
-      // Passthrough mode: match plain ByteArrayConverter for drop-in parity.
+      // Passthrough mode: same as ByteArrayConverter.
       return new SchemaAndValue(Schema.OPTIONAL_BYTES_SCHEMA, null);
     }
     if (!backupEnabled) {
@@ -234,8 +220,7 @@ public class SchemaBackupAwareByteArrayConverter implements Converter {
 
   private SchemaAndValue wrapForBackup(String topic, Headers headers, byte[] bytes) {
     try {
-      // Placeholder type: SchemaId only needs a non-PROTOBUF value to skip MI parsing.
-      // Bytes are stored verbatim in FIELD_DATA, so buffer position doesn't matter here.
+      // Any non-Protobuf type: only the schema ID is read here, not message indexes.
       SchemaId probe = new SchemaId(SchemaBackupConfig.TYPE_AVRO);
       schemaIdDeserializer.deserialize(topic, isKey, headers, bytes, probe);
       if (probe.getId() == null && probe.getGuid() == null) {
@@ -312,10 +297,8 @@ public class SchemaBackupAwareByteArrayConverter implements Converter {
             + "' bytes for topic " + topic);
       }
 
-      // The wrapper records how the stored bytes were framed at backup time:
-      // a schema ID means prefix framing, a GUID alone means header framing.
-      // Use that instead of the restore record's headers, which may be missing,
-      // damaged, or unrelated to the stored bytes.
+      // Framing of the stored bytes, from the wrapper: a schema ID means prefix framing,
+      // a GUID alone means header framing.
       SchemaId src = new SchemaId(schemaType);
       Integer srcId = optionalInt32(wrapper, wschema, BackupWrapper.FIELD_SCHEMA_ID);
       String srcGuid = optionalString(wrapper, wschema, BackupWrapper.FIELD_SCHEMA_GUID);
@@ -329,7 +312,7 @@ public class SchemaBackupAwareByteArrayConverter implements Converter {
           copyMessageIndexesFromHeader(topic, headers, src);
         }
       } else {
-        // Wrapper without ID or GUID: keep the original header-driven parsing.
+        // Wrapper without ID or GUID: read the framing from the bytes and headers.
         ByteBuffer payloadBuf =
             schemaIdDeserializer.deserialize(topic, isKey, headers, originalBytes, src);
         payloadBytes = new byte[payloadBuf.remaining()];
@@ -339,13 +322,8 @@ public class SchemaBackupAwareByteArrayConverter implements Converter {
       ParsedSchema parsedSchema =
           referenceResolver.resolveRestoreSchema(wschema, wrapper, rawSchema, factory);
 
-      // Derive the target subject from the RESTORE topic via the configured strategy,
-      // matching what AvroConverter's serializer.serialize(topic, ...) does internally.
-      // The wrapper's FIELD_SCHEMA_SUBJECT records the SOURCE subject and is not used
-      // here on purpose: after a topic rename during restore (e.g. restore.topic.prefix),
-      // the target subject follows the target topic.
-      // Same choice as AbstractKafkaAvroSerializer.serializeImpl: register when
-      // auto.register.schemas=true, otherwise look up the existing ID.
+      // Subject from the restore topic and the configured strategy, as the serializers
+      // do. Register when auto.register.schemas=true, otherwise look up.
       String subject = subjectName(topic, parsedSchema);
       RegisterSchemaResponse response = autoRegisterSchema
           ? schemaRegistry.registerWithResponse(
@@ -356,9 +334,7 @@ public class SchemaBackupAwareByteArrayConverter implements Converter {
       if (!src.getMessageIndexes().isEmpty()) {
         tgt.setMessageIndexes(src.getMessageIndexes());
       }
-      // Drop the source schema ID header so the target framing is the only one on
-      // the record. Consumers read this header before the prefix, so a stale source
-      // GUID would make them look up the wrong schema on the target registry.
+      // Remove the source schema ID header; deserializers read it before the prefix.
       if (headers != null) {
         headers.remove(schemaIdHeaderName());
       }
@@ -395,9 +371,8 @@ public class SchemaBackupAwareByteArrayConverter implements Converter {
   }
 
   /**
-   * For Protobuf with header (GUID) framing, the message indexes live in the schema ID
-   * header, not in the stored bytes, so they are read from the restored record's header.
-   * Fails loudly when the header is missing or unreadable instead of guessing.
+   * Reads the Protobuf message indexes from the schema ID header (header framing).
+   * Fails when the header is missing or unreadable.
    */
   private void copyMessageIndexesFromHeader(String topic, Headers headers, SchemaId src) {
     String headerName = schemaIdHeaderName();
@@ -470,10 +445,8 @@ public class SchemaBackupAwareByteArrayConverter implements Converter {
   }
 
   /**
-   * Map SR's schemaType string to the wrapper convention.
-   * {@link JsonSchema#schemaType()} returns {@code "JSON"} but the existing
-   * {@code JsonSchemaConverter} writes {@code "JSON_SCHEMA"} in the wrapper; we match
-   * that so wrappers are interchangeable.
+   * Maps the registry schemaType to the wrapper value: {@code "JSON"} becomes
+   * {@code "JSON_SCHEMA"}, as written by {@code JsonSchemaConverter}.
    */
   private static String toWrapperSchemaType(String srSchemaType) {
     if (JsonSchema.TYPE.equals(srSchemaType)) {
