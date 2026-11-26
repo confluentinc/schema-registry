@@ -1789,12 +1789,6 @@ public final class TypeAlter {
     }
     Set<String> unused = new LinkedHashSet<>(externalTypes);
     unused.removeAll(reachable);
-    if (unused.isEmpty() && !renamed) {
-      return;
-    }
-    externalTypes.removeAll(unused);
-    namedTypes.keySet().removeAll(unused);
-    externalImports.keySet().removeAll(unused);
     // A JSON type read back names a referenced type Ref<n>, imported by the reference's name.
     Set<String> used = new LinkedHashSet<>(reachable);
     for (String name : reachable) {
@@ -1814,6 +1808,17 @@ public final class TypeAlter {
     // Nor is it what the type as read calls a type or a part of one, which is no name of
     // a definition.
     definitions.removeAll(externalImports.keySet());
+    // A JSON reference may be of no use though no name is: one only a definition was of
+    // that no attribute was of, which the type as read has not and is written no more.
+    boolean idle = format == SchemaType.JSON && references.stream().anyMatch(ref ->
+        !used.contains(ref.getName())
+            && definitionsOf(ref).stream().noneMatch(definitions::contains));
+    if (unused.isEmpty() && !renamed && !idle) {
+      return;
+    }
+    externalTypes.removeAll(unused);
+    namedTypes.keySet().removeAll(unused);
+    externalImports.keySet().removeAll(unused);
     // A reference whose defined name cannot be told is kept.
     references.removeIf(ref -> {
       Set<String> names = TypeReferences.definedNames(lookup, subject, ref);

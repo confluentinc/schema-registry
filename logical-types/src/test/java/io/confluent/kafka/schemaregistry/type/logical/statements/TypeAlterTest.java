@@ -3076,6 +3076,21 @@ class TypeAlterTest {
     registry.alter("arr", new SetDataType("ARRAY<E>"));
     assertThat(registry.schema("arr").canonicalString()).contains("{\"$ref\":\"E\"}")
         .doesNotContain("lib#/$defs/E");
+    // A definition of the type's own that no attribute was ever of is not read, and is
+    // written no more: the type it alone named is referred to no more, and no statement
+    // after is refused for the version of it that was.
+    registry.client.register("ou1", new JsonSchema("{\"type\":\"object\",\"title\":\"ou1\","
+        + "\"properties\":{\"id\":{\"type\":\"integer\"}},\"additionalProperties\":false,"
+        + "\"$defs\":{\"Foo\":{\"type\":\"object\",\"properties\":{\"in\":{\"$ref\":\"E\"}},"
+        + "\"additionalProperties\":false}}}", List.of(new SchemaReference("E", "E", 1)),
+        Map.of("E", registry.version("E", 1).getSchema()), null));
+    registry.alter("ou1", new AddAttribute("z", "INT"));
+    assertThat(registry.latest("ou1").getReferences()).isNullOrEmpty();
+    registry.alter("E", new AddAttribute("m", "INT"));
+    create("olib", SchemaType.JSON, "(k E)");
+    registry.alter("ou1", new AddAttribute("w", "olib"));
+    assertThat(registry.latest("ou1").getReferences()).extracting(SchemaReference::getName)
+        .containsExactly("olib");
   }
 
   // A JSON name is one type's. A schema written by hand with a definition, its own or one
