@@ -2381,6 +2381,63 @@ public abstract class FieldEncryptionExecutorTest {
   }
 
   @Test
+  public void testKafkaProtobufSerializerVariantInContainers() throws Exception {
+    String schemaString = "syntax = \"proto3\";\n"
+        + "package test;\n"
+        + "import \"confluent/meta.proto\";\n"
+        + "import \"confluent/type/variant.proto\";\n"
+        + "message Doc {\n"
+        + "  repeated confluent.type.Variant items = 1"
+        + " [(confluent.field_meta) = { tags: [\"PII\"] }];\n"
+        + "  map<string, confluent.type.Variant> by_key = 2"
+        + " [(confluent.field_meta) = { tags: [\"PII\"] }];\n"
+        + "}\n";
+    ProtobufSchema protobufSchema = new ProtobufSchema(schemaString);
+    Descriptor docDesc = protobufSchema.toDescriptor();
+    Descriptor variantDesc = docDesc.findFieldByName("items").getMessageType();
+    DynamicMessage variant = DynamicMessage.newBuilder(variantDesc)
+        .setField(variantDesc.findFieldByName("metadata"), ByteString.copyFrom(new byte[] {1, 0, 0}))
+        .setField(variantDesc.findFieldByName("value"), ByteString.copyFrom(new byte[] {0}))
+        .build();
+    Descriptor entryDesc = docDesc.findFieldByName("by_key").getMessageType();
+    DynamicMessage entry = DynamicMessage.newBuilder(entryDesc)
+        .setField(entryDesc.findFieldByName("key"), "k")
+        .setField(entryDesc.findFieldByName("value"), variant)
+        .build();
+    DynamicMessage doc = DynamicMessage.newBuilder(docDesc)
+        .addRepeatedField(docDesc.findFieldByName("items"), variant)
+        .addRepeatedField(docDesc.findFieldByName("by_key"), entry)
+        .build();
+    Rule rule = new Rule("rule1", null, null, null,
+        FieldEncryptionExecutor.TYPE, ImmutableSortedSet.of("PII"), null, null, null, null, false);
+    RuleSet ruleSet = new RuleSet(Collections.emptyList(), Collections.singletonList(rule));
+    protobufSchema = protobufSchema.copy(getMetadata("kek1"), ruleSet);
+    schemaRegistry.register(topic + "-value", protobufSchema);
+
+    // metadata and value of the list element and of the map value
+    int expectedEncryptions = 4;
+    RecordHeaders headers = new RecordHeaders();
+    Cryptor cryptor = addSpyToCryptor(protobufSerializerDynamic);
+    byte[] bytes = protobufSerializerDynamic.serialize(topic, headers, doc);
+    verify(cryptor, times(expectedEncryptions)).encrypt(any(), any(), any());
+    cryptor = addSpyToCryptor(protobufDeserializer);
+    DynamicMessage obj = protobufDeserializer.deserialize(topic, headers, bytes);
+    verify(cryptor, times(expectedEncryptions)).decrypt(any(), any(), any());
+    Descriptor dynamicDesc = obj.getDescriptorForType();
+    DynamicMessage item = (DynamicMessage)
+        ((List<?>) obj.getField(dynamicDesc.findFieldByName("items"))).get(0);
+    DynamicMessage mapEntry = (DynamicMessage)
+        ((List<?>) obj.getField(dynamicDesc.findFieldByName("by_key"))).get(0);
+    DynamicMessage mapValue = (DynamicMessage)
+        mapEntry.getField(mapEntry.getDescriptorForType().findFieldByName("value"));
+    for (DynamicMessage v : ImmutableList.of(item, mapValue)) {
+      Descriptor d = v.getDescriptorForType();
+      assertEquals(ByteString.copyFrom(new byte[] {1, 0, 0}), v.getField(d.findFieldByName("metadata")));
+      assertEquals(ByteString.copyFrom(new byte[] {0}), v.getField(d.findFieldByName("value")));
+    }
+  }
+
+  @Test
   public void testNoEncryptionsDueToData() throws Exception {
     IndexedRecord avroRecord = createUserRecord();
     AvroSchema avroSchema = new AvroSchema(createUserSchema());
