@@ -268,7 +268,8 @@ public class SchemaBackupAwareByteArrayConverter implements Converter {
           info.getRawSchema(),
           info.getReferenceTreeJson(),
           info.getDirectRefsJson(),
-          probe.getGuid() != null ? probe.getGuid().toString() : null);
+          probe.getGuid() != null ? probe.getGuid().toString() : null,
+          BackupWrapper.DATA_ENCODING_WIRE_BYTES);
       Struct wrapper = BackupWrapper.buildWrapper(wrapperSchema, bytes, fields);
       return new SchemaAndValue(wrapperSchema, wrapper);
     } catch (Exception e) {
@@ -291,6 +292,8 @@ public class SchemaBackupAwareByteArrayConverter implements Converter {
             "Malformed backup wrapper: missing '" + BackupWrapper.FIELD_DATA
             + "' field for topic " + topic);
       }
+      BackupWrapper.requireDataEncoding(wschema, wrapper,
+          BackupWrapper.DATA_ENCODING_WIRE_BYTES, getClass().getSimpleName());
       String schemaType = wrapper.getString(BackupWrapper.FIELD_SCHEMA_TYPE);
       BackupReferenceResolver.ParsedSchemaFactory factory = FACTORIES.get(schemaType);
       if (factory == null) {

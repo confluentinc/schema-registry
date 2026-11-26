@@ -421,4 +421,48 @@ public class SchemaBackupAwareByteArrayConverterTest {
     ser.configure(cfg, false);
     return ser.serialize(TOPIC, node);
   }
+
+  // ---------------- dataEncoding ----------------
+
+  private static final String SAME_CONVERTER_HINT =
+      "Restore with the same converter class that was used for the backup";
+  private static final String ENCODING_USER = "encoding-user";
+
+  private static Struct withDataEncoding(Struct source, String dataEncoding) {
+    Struct copy = new Struct(source.schema());
+    for (org.apache.kafka.connect.data.Field field : source.schema().fields()) {
+      copy.put(field, source.get(field));
+    }
+    copy.put(BackupWrapper.FIELD_DATA_ENCODING, dataEncoding);
+    return copy;
+  }
+
+  @Test
+  public void testBackupWrapperRecordsWireBytesDataEncoding() throws Exception {
+    SchemaAndValue wrapped = backupConverter.toConnectData(TOPIC, serializeAvro(ENCODING_USER, 1));
+    assertEquals(BackupWrapper.DATA_ENCODING_WIRE_BYTES,
+        ((Struct) wrapped.value()).getString(BackupWrapper.FIELD_DATA_ENCODING));
+  }
+
+  @Test
+  public void testRestoreRejectsConnectBackup() throws Exception {
+    SchemaAndValue wrapped = backupConverter.toConnectData(TOPIC, serializeAvro(ENCODING_USER, 2));
+    Struct connect = withDataEncoding(
+        (Struct) wrapped.value(), BackupWrapper.DATA_ENCODING_CONNECT);
+    try {
+      backupConverter.fromConnectData(TOPIC, wrapped.schema(), connect);
+      fail("Expected restore to reject a wrapper written by an SR converter");
+    } catch (DataException e) {
+      assertTrue(e.getMessage(), e.getMessage().contains(SAME_CONVERTER_HINT));
+    }
+  }
+
+  @Test
+  public void testRestoreAcceptsBackupWithoutDataEncoding() throws Exception {
+    byte[] original = serializeAvro(ENCODING_USER, 3);
+    SchemaAndValue wrapped = backupConverter.toConnectData(TOPIC, original);
+    Struct older = withDataEncoding((Struct) wrapped.value(), null);
+    assertArrayEquals(original,
+        backupConverter.fromConnectData(TOPIC, wrapped.schema(), older));
+  }
 }

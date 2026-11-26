@@ -107,7 +107,7 @@ public class BackupConverterHelper {
     BackupWrapper.WrapperFields fields = new BackupWrapper.WrapperFields(
         schemaId, schemaVersion, schemaType, subject,
         rawSchema, info.getReferenceTreeJson(), info.getDirectRefsJson(),
-        schemaGuid);
+        schemaGuid, BackupWrapper.DATA_ENCODING_CONNECT);
     Struct wrapper = BackupWrapper.buildWrapper(
         wrapperSchema, original.value(), fields);
 
