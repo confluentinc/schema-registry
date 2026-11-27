@@ -16,12 +16,15 @@
 
 package io.confluent.kafka.schemaregistry.type.logical.statements;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.Schema;
+import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaRequest;
 import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
@@ -34,12 +37,37 @@ import io.confluent.kafka.schemaregistry.type.logical.provenance.ProvenanceMockS
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 /**
  * A mock registry that takes logical types DDL in all three formats, as the registry does, and
  * answers this package's lookups as a client of one would.
  */
 final class TestRegistry implements TypeLookup {
+
+  // Adds an attribute to a type and tells that the schema written has each of these.
+  void alteredTo(String subject, String... has) {
+    int was = latest(subject).getVersion();
+    alter(subject, new AlterAction.AddAttribute("z", "INT"));
+    assertThat(latest(subject).getVersion()).as(subject).isEqualTo(was + 1);
+    assertThat(schema(subject).canonicalString()).as(subject).contains(has);
+  }
+
+  // A name a JSON type has for what it refers to, as the writer writes it.
+  static String alias(String name, String to) {
+    return "\"" + name + "\":{\"$ref\":\"" + to + "\",\"logical.ref\":true}";
+  }
+
+  // The refusal of a schema two places of which are read by one name, as a pattern: the
+  // two are told in the order the reader comes to them.
+  static String readAsOne(String done, String name, String one, String other) {
+    String both = Pattern.quote(one) + " and to " + Pattern.quote(other);
+    String turned = Pattern.quote(other) + " and to " + Pattern.quote(one);
+    return "(?s)Type \\S+ cannot be " + done + ": it refers to (" + both + "|" + turned
+        + "), which are both read by the name " + Pattern.quote(name) + "\\. The two are read "
+        + "as one, and the one would be written as the other\\. Register its new version as "
+        + "a JSON schema";
+  }
 
   final SchemaRegistryClient client = new ProvenanceMockSchemaRegistryClient(List.of(
       new LogicalSchemaProvider(new AvroSchemaProvider()),
@@ -101,8 +129,18 @@ final class TestRegistry implements TypeLookup {
         config.setCompatibilityPolicy(result.policy());
         client.updateConfig(subject, config);
       }
-      if (result.request() != null) {
-        client.registerWithRequestResponse(subject, result.request(), false);
+      RegisterSchemaRequest request = result.request();
+      if (request != null) {
+        // As the registry does: a request with no metadata or rule set of its own takes the
+        // latest version's.
+        SchemaMetadata latest = latest(subject);
+        if (latest != null && request.getMetadata() == null) {
+          request.setMetadata(latest.getMetadata());
+        }
+        if (latest != null && request.getRuleSet() == null) {
+          request.setRuleSet(latest.getRuleSet());
+        }
+        client.registerWithRequestResponse(subject, request, false);
       }
     } catch (IOException | RestClientException e) {
       throw new IllegalStateException(e);
@@ -211,7 +249,7 @@ final class TestRegistry implements TypeLookup {
   public ParsedSchema parse(SchemaMetadata md) {
     return client.parseSchema(new Schema(md.getSubject(), md.getVersion(), md.getId(),
         md.getSchemaType() == null ? "AVRO" : md.getSchemaType(), md.getReferences(),
-        md.getSchema())).orElseThrow(() -> new IllegalStateException(
+        md.getMetadata(), md.getRuleSet(), md.getSchema())).orElseThrow(() -> new IllegalStateException(
             "Could not parse schema " + md.getId()));
   }
 }

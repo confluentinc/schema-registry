@@ -84,6 +84,18 @@ public final class ToLogicalContext<T> extends CycleContext<T> {
   // walk runs) so a synthesized name never silently shadows an authored one.
   private int nextRefIndex = 1;
 
+  // Whether a type's native name is recorded unless this version's writer would derive that
+  // very name. Unset, a name either version's writer derives is taken as derived.
+  private boolean namesAsWritten;
+
+  private boolean foreign;
+
+  // Where each name is first read from and where the $refs of the schema itself are to, by
+  // the names they are read by.
+  private final Map<String, Set<String>> placesReferredTo = new LinkedHashMap<>();
+  // The names the schema has for the documents it refers to, by what its loader calls them.
+  private final Map<String, String> documentNames = new LinkedHashMap<>();
+
   public ToLogicalContext(ParsedSchema parsedSchema) {
     this(parsedSchema, Map.of(), LogicalTypeVersion.V2);
   }
@@ -129,6 +141,14 @@ public final class ToLogicalContext<T> extends CycleContext<T> {
     return version;
   }
 
+  public boolean namesAsWritten() {
+    return namesAsWritten;
+  }
+
+  public void setNamesAsWritten(boolean namesAsWritten) {
+    this.namesAsWritten = namesAsWritten;
+  }
+
   public boolean isV1() {
     return version == LogicalTypeVersion.V1;
   }
@@ -169,8 +189,68 @@ public final class ToLogicalContext<T> extends CycleContext<T> {
     externalTypes.add(name);
   }
 
+  /**
+   * Records where a name is first read from, or where a {@code $ref} of the schema itself is
+   * to, by the name it is read by. A name is one type: one of two places is two read as one.
+   */
+  public void addPlaceReferredTo(String name, String place) {
+    placesReferredTo.computeIfAbsent(name, n -> new LinkedHashSet<>()).add(place);
+  }
+
+  public Map<String, Set<String>> getPlacesReferredTo() {
+    return placesReferredTo;
+  }
+
+  /**
+   * Records the name the schema has for a document it refers to, by what its loader calls
+   * the document: under a root id that is the name resolved against the id.
+   */
+  public void putDocumentName(String document, String name) {
+    documentNames.putIfAbsent(document, name);
+  }
+
+  /**
+   * The name the schema has for a document, or the document as the loader calls it.
+   */
+  public String documentName(String document) {
+    return documentNames.getOrDefault(document, document);
+  }
+
+  /**
+   * Where a name was first read from, or null for one not read yet.
+   */
+  public String firstPlaceOf(String name) {
+    Set<String> places = placesReferredTo.get(name);
+    return places == null || places.isEmpty() ? null : places.iterator().next();
+  }
+
+  /**
+   * Whether {@code name} is one the schema has for a schema it refers to.
+   */
+  public boolean isReferenceName(String name) {
+    return parsedSchema != null && parsedSchema.references() != null
+        && parsedSchema.references().stream().anyMatch(ref -> ref.getName().equals(name));
+  }
+
   public boolean isExternalType(String name) {
     return externalTypes.contains(name);
+  }
+
+  /**
+   * Whether what is being converted is a part of a schema referred to, and not of the
+   * schema itself: a name met there is that schema's, however it is referred to.
+   */
+  public boolean isForeign() {
+    return foreign;
+  }
+
+  /**
+   * Sets {@link #isForeign()}, and returns what it was.
+   */
+  public boolean setForeign(boolean foreign) {
+    boolean was = this.foreign;
+    this.foreign = foreign;
+    return was;
   }
 
   public Set<String> getExternalTypes() {
@@ -239,6 +319,9 @@ public final class ToLogicalContext<T> extends CycleContext<T> {
     final Set<String> externals = new LinkedHashSet<>(externalTypes);
     final Map<String, String> imports = new LinkedHashMap<>(externalImports);
     final Map<String, String> assigned = new LinkedHashMap<>(assignedRefNameByUri);
+    // And where each name was read from: a name the attempt made may be made again.
+    final Map<String, Set<String>> places = new LinkedHashMap<>();
+    placesReferredTo.forEach((name, at) -> places.put(name, new LinkedHashSet<>(at)));
     final int next = nextRefIndex;
     return () -> {
       cycle.run();
@@ -250,6 +333,8 @@ public final class ToLogicalContext<T> extends CycleContext<T> {
       externalImports.putAll(imports);
       assignedRefNameByUri.clear();
       assignedRefNameByUri.putAll(assigned);
+      placesReferredTo.clear();
+      placesReferredTo.putAll(places);
       nextRefIndex = next;
     };
   }

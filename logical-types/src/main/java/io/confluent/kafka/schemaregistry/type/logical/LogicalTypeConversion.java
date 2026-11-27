@@ -194,14 +194,15 @@ public final class LogicalTypeConversion {
   /**
    * Carries the requested metadata and rule set onto the converted schema, the way a native parse
    * carries them onto what it reads. The conversion sets metadata of its own, describing how the
-   * type was emitted, so the two are merged rather than replaced, with the request winning on a
-   * conflicting property.
+   * type was emitted, so the two are merged rather than replaced. What the conversion sets wins:
+   * it is read back with the schema, and the registry gives a request with no metadata the
+   * previous version's, which described that version.
    */
   private static ParsedSchema withRequested(ParsedSchema converted, Schema schema) {
     if (schema.getMetadata() == null && schema.getRuleSet() == null) {
       return converted;
     }
-    Metadata metadata = Metadata.mergeMetadata(converted.metadata(), schema.getMetadata());
+    Metadata metadata = Metadata.mergeMetadata(schema.getMetadata(), converted.metadata());
     RuleSet ruleSet = schema.getRuleSet() != null ? schema.getRuleSet() : converted.ruleSet();
     return converted.copy(metadata, ruleSet);
   }
