@@ -21,7 +21,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.protobuf.Descriptors.Descriptor;
+import com.google.protobuf.Descriptors.FieldDescriptor;
+import com.google.protobuf.DynamicMessage;
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
+import io.confluent.kafka.schemaregistry.client.rest.entities.Config;
 import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
@@ -299,6 +302,113 @@ class TypeAlterMoreEdgeCasesTest {
     registry.drop("ag");
     create("ag", SchemaType.PROTOBUF, "(id INT, z INT, n STRING)");
     assertThat(message("ag").findFieldByName("n").getNumber()).isEqualTo(6);
+  }
+
+  // A message's fields with their numbers, and those of the messages of its file that
+  // they are of.
+  private static String shape(Descriptor message) {
+    return message.getFields().stream().map(f -> f.getName() + "=" + f.getNumber()
+        + (f.getJavaType() == FieldDescriptor.JavaType.MESSAGE
+          && f.getMessageType().getFile() == message.getFile()
+          ? "{" + shape(f.getMessageType()) + "}" : "")).collect(Collectors.joining(" "));
+  }
+
+  // A row another type declares, given in the type itself, is numbered as that type has
+  // it: an attribute it keeps has its number, and a new one a number above them, so that
+  // none reads what is stored of another.
+  @Test
+  void aRowOfAnotherTypeGivenInTheTypeKeepsItsNumbers() throws Exception {
+    create("lib", SchemaType.PROTOBUF, "(k INT NOT NULL, x INT)");
+    registry.alter("lib", new DropAttribute("k", false));
+    create("o1", SchemaType.PROTOBUF, "(id INT NOT NULL, r lib)");
+    Descriptor first = message("o1");
+    Descriptor row = first.findFieldByName("r").getMessageType();
+    byte[] stored = DynamicMessage.newBuilder(first).setField(first.findFieldByName("r"),
+        DynamicMessage.newBuilder(row).setField(row.findFieldByName("x"), 99).build()).build()
+        .toByteArray();
+    registry.alter("o1", new AlterAttributeType("r", "STRUCT<x INT, n INT>"));
+    assertThat(shape(message("o1"))).isEqualTo("id=1 r=2{x=2 n=3}");
+    Descriptor now = message("o1");
+    DynamicMessage read = (DynamicMessage) DynamicMessage.parseFrom(now, stored)
+        .getField(now.findFieldByName("r"));
+    assertThat(read.getField(read.getDescriptorForType().findFieldByName("x"))).isEqualTo(99);
+    assertThat(read.hasField(read.getDescriptorForType().findFieldByName("n"))).isFalse();
+    // As the element of an array, the value of a map, and a row within a row.
+    create("o2", SchemaType.PROTOBUF, "(id INT NOT NULL, a ARRAY<lib NOT NULL> NOT NULL, "
+        + "m MAP<STRING, lib NOT NULL> NOT NULL, o STRUCT<i lib> NOT NULL)");
+    String given = "STRUCT<x INT, n INT>";
+    registry.alter("o2",
+        new AlterAttributeType("a", "ARRAY<" + given + " NOT NULL> NOT NULL"),
+        new AlterAttributeType("m", "MAP<STRING, " + given + " NOT NULL> NOT NULL"),
+        new AlterAttributeType("o", "STRUCT<i " + given + "> NOT NULL"));
+    assertThat(shape(message("o2"))).isEqualTo("id=1 a=2{x=2 n=3} "
+        + "m=3{key=1 value=2{x=2 n=3}} o=4{i=1{x=2 n=3}}");
+    assertThat(references("o2")).isEmpty();
+  }
+
+  // The numbers are those of every version of the other type that a version of the type
+  // referred to, and of the files that one imports: by the names a file of a package and
+  // of several messages has for them.
+  @Test
+  void aRowOfAnotherTypeIsNumberedAboveEveryVersionReferredTo() throws Exception {
+    create("libv", SchemaType.PROTOBUF, "(k INT NOT NULL, x INT, y INT)");
+    create("o3", SchemaType.PROTOBUF, "(id INT NOT NULL, r libv)");
+    registry.alter("libv", new DropAttribute("y", false));
+    registry.alter("o3", new AlterAttributeType("r", "libv"));
+    assertThat(registry.latest("o3").getReferences())
+        .containsExactly(new SchemaReference("libv", "libv", 2));
+    registry.alter("o3", new AlterAttributeType("r", "STRUCT<k INT NOT NULL, n INT>"));
+    assertThat(shape(message("o3"))).isEqualTo("id=1 r=2{k=1 n=4}");
+    // A file of a package with two messages, and one with a single message.
+    proto("two.proto", "syntax = \"proto3\";\npackage p.q;\n\nmessage R {\n  int32 k = 1;\n"
+        + "  int32 x = 2;\n}\nmessage S {\n  int32 z = 1;\n}\n");
+    proto("one.proto", "syntax = \"proto3\";\npackage p;\n\nmessage R {\n  int32 k = 1;\n"
+        + "  int32 x = 2;\n}\n");
+    for (String file : List.of("two.proto", "one.proto")) {
+      String type = file.startsWith("two") ? "p.q.R" : "p.R";
+      registry.client.register("o4" + file, new ProtobufSchema("syntax = \"proto3\";\n\n"
+          + "import \"" + file + "\";\n\nmessage T {\n  int32 id = 1;\n  " + type + " r = 2;\n}\n",
+          List.of(new SchemaReference(file, file, 1)),
+          Map.of(file, registry.latest(file).getSchema()), null, null));
+      registry.alter("o4" + file, new AlterAttributeType("r", "STRUCT<k INT NOT NULL, n INT>"));
+      assertThat(shape(message("o4" + file))).as(file).isEqualTo("id=1 r=2{k=1 n=3}");
+    }
+  }
+
+  // A type created again over dropped versions that referred to a row gives it in the
+  // type with the numbers it had.
+  @Test
+  void aTypeCreatedAgainGivesARowOfAnotherTypeItsNumbers() throws Exception {
+    create("libc", SchemaType.PROTOBUF, "(k INT NOT NULL, x INT)");
+    registry.alter("libc", new DropAttribute("k", false));
+    create("o5", SchemaType.PROTOBUF, "(id INT NOT NULL, r libc)");
+    Config none = new Config((String) null);
+    none.setCompatibilityLevel("NONE");
+    registry.client.updateConfig("o5", none);
+    registry.drop("o5");
+    create("o5", SchemaType.PROTOBUF, "(id INT NOT NULL, r STRUCT<x INT, n INT>)");
+    assertThat(shape(message("o5"))).isEqualTo("id=1 r=2{x=2 n=3}");
+  }
+
+  // In Avro and JSON an attribute is read by its name. A JSON row of another type given
+  // in the type itself has the attributes said, the reference gone; an Avro one is
+  // refused, as what is stored of it would not be read.
+  @Test
+  void aRowOfAnotherTypeGivenInAJsonTypeIsReadByNameAndInAnAvroTypeRefused() {
+    for (SchemaType format : List.of(SchemaType.AVRO, SchemaType.JSON)) {
+      create("lib" + format, format, "(k INT NOT NULL, x INT)");
+      registry.alter("lib" + format, new DropAttribute("k", false));
+      create("o6" + format, format, "(id INT NOT NULL, r lib" + format + ")");
+    }
+    AlterAction given = new AlterAttributeType("r", "STRUCT<x INT, n INT>");
+    refused("Attribute r.x would not read its own values, those of r.x of version 1 of type "
+        + "o6AVRO", "o6AVRO", given);
+    assertThat(references("o6AVRO")).containsExactly("libAVRO");
+    registry.alter("o6JSON", given);
+    assertThat(references("o6JSON")).isEmpty();
+    assertThat(registry.schema("o6JSON").canonicalString())
+        .contains("\"n\":{\"connect.index\":1,", "\"x\":{\"connect.index\":0,",
+            "\"title\":\"o6JSON_r\"");
   }
 
   // bv at version 1 below abv, and at version 2 below cbv.

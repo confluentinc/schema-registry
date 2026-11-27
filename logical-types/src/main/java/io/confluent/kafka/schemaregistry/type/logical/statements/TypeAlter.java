@@ -69,6 +69,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.IntFunction;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 /**
@@ -211,6 +212,8 @@ public final class TypeAlter {
   private Map<String, String> parsedImports = Map.of();
   private final Map<String, KnownTypes> referredTypes = new HashMap<>();
   private final Map<String, TypeReferences.Referred> referredRead = new HashMap<>();
+  // The versions of other Protobuf files read for the rows they declare, each read once.
+  private final Map<String, LogicalType> declaredRead = new HashMap<>();
   private final Set<String> externalTypes = new LinkedHashSet<>();
   private final Map<String, String> externalImports = new LinkedHashMap<>();
   private final List<SchemaReference> references = new ArrayList<>();
@@ -353,7 +356,8 @@ public final class TypeAlter {
       return lt;
     }
     recordUsedNumbers();
-    Messages at = new Messages(Message.of(old, last.getNamedTypes()), versions);
+    Messages at = new Messages(Message.of(old, last.getNamedTypes(),
+        declaredBy(last.getReferences())), versions);
     setStruct(renumbered(target(), old, at, null, null).getFields());
     // And the name and package its last version's root message had, which a record written
     // by it is read by: under another it is no record of the type.
@@ -465,7 +469,7 @@ public final class TypeAlter {
     if (format == SchemaType.PROTOBUF) {
       pinProtobufNames(md);
       recordProtobufNumbers();
-      current = Message.of(target(), namedTypes);
+      current = Message.of(target(), namedTypes, declaredBy(original.getReferences()));
       // A move takes no number: every version's numbers are read only for a statement
       // that may take one.
       if (!actions.stream().allMatch(a -> a instanceof AlterAction.MoveAttribute)) {
@@ -3001,6 +3005,20 @@ public final class TypeAlter {
     setStruct(fields);
   }
 
+  // The rows the files a version imports declare, by name: read where a statement first
+  // follows an attribute into one, which is numbered as its file has it.
+  private Supplier<Map<String, Schema>> declaredBy(List<SchemaReference> imported) {
+    Map<String, Schema> rows = new HashMap<>();
+    boolean[] read = new boolean[1];
+    return () -> {
+      if (!read[0]) {
+        read[0] = true;
+        rows.putAll(TypeReferences.declared(lookup, subject, imported, declaredRead));
+      }
+      return rows;
+    };
+  }
+
   private void recordUsedNumbers() {
     for (int version : lookup.versions(subject, true)) {
       SchemaMetadata md = lookup.version(subject, version);
@@ -3009,7 +3027,8 @@ public final class TypeAlter {
         continue;
       }
       LogicalType lt = lookup.logicalType(subject, md);
-      Message message = Message.of(targetOf(lt), lt.getNamedTypes());
+      Message message = Message.of(targetOf(lt), lt.getNamedTypes(),
+          declaredBy(lt.getReferences()));
       versions.add(message);
       if (message != null) {
         message.numbers().stream().filter(n -> n > 0).forEach(usedNumbers::add);
@@ -3089,15 +3108,15 @@ public final class TypeAlter {
     // The numbers of the fields that hold a oneof wrapped in a message, which the union
     // read of each has: no member's, and no new attribute's once the field is dropped.
     private final Set<Integer> wrappers;
+    // The rows the files the version imports declare, by name.
+    private final Supplier<Map<String, Schema>> declared;
 
-    Message(List<Member> members, Map<String, Schema> namedTypes) {
-      this(members, namedTypes, Set.of());
-    }
-
-    Message(List<Member> members, Map<String, Schema> namedTypes, Set<Integer> wrappers) {
+    Message(List<Member> members, Map<String, Schema> namedTypes, Set<Integer> wrappers,
+        Supplier<Map<String, Schema>> declared) {
       this.members = members;
       this.namedTypes = namedTypes;
       this.wrappers = wrappers;
+      this.declared = declared;
     }
 
     List<Member> members() {
@@ -3133,7 +3152,8 @@ public final class TypeAlter {
 
 
     // A struct's message; null for any other type.
-    static Message of(Schema type, Map<String, Schema> namedTypes) {
+    static Message of(Schema type, Map<String, Schema> namedTypes,
+        Supplier<Map<String, Schema>> declared) {
       if (type == null || type.getType() != Schema.Type.STRUCT) {
         return null;
       }
@@ -3154,7 +3174,7 @@ public final class TypeAlter {
               f.getSchema()));
         }
       }
-      return new Message(members, namedTypes, wrappers);
+      return new Message(members, namedTypes, wrappers, declared);
     }
 
     Member find(String name) {
@@ -3178,15 +3198,15 @@ public final class TypeAlter {
       }
       switch (type.getType()) {
         case STRUCT:
-          return of(type, namedTypes);
+          return of(type, namedTypes, declared);
         case UNION:
-          return of(entry(new Field(VALUE, type, 0)), namedTypes);
+          return of(entry(new Field(VALUE, type, 0)), namedTypes, declared);
         case MAP: {
           // No logical type records the number of a key or value that is no union, once the
           // other's branches record theirs: the writer gives it the lowest one they leave
           // free.
           Message entry = of(entry(new Field("key", type.getKeyType(), 0),
-              new Field(VALUE, type.getValueType(), 1)), namedTypes);
+              new Field(VALUE, type.getValueType(), 1)), namedTypes, declared);
           Set<Integer> taken = entry.members().stream().map(Member::number)
               .collect(Collectors.toSet());
           List<Member> members = new ArrayList<>();
@@ -3202,12 +3222,13 @@ public final class TypeAlter {
             taken.add(free);
             members.add(new Member(m.name(), free, m.type()));
           }
-          return new Message(members, namedTypes);
+          return new Message(members, namedTypes, Set.of(), declared);
         }
         case MULTISET: {
           // No logical type records the count's number: the writer gives it the lowest
           // one the key's members leave free.
-          Message key = of(entry(new Field("key", type.getElementType(), 0)), namedTypes);
+          Message key = of(entry(new Field("key", type.getElementType(), 0)), namedTypes,
+              declared);
           Set<Integer> taken = key.members().stream().map(Member::number)
               .collect(Collectors.toSet());
           int count = 1;
@@ -3216,7 +3237,7 @@ public final class TypeAlter {
           }
           List<Member> members = new ArrayList<>(key.members());
           members.add(new Member(VALUE, count, Schema.create(Schema.Type.INT)));
-          return new Message(members, namedTypes);
+          return new Message(members, namedTypes, Set.of(), declared);
         }
         default:
           return null;
@@ -3233,10 +3254,15 @@ public final class TypeAlter {
     private Schema elementOf(Schema type) {
       while (type != null && (type.getType() == Schema.Type.ARRAY
           || type.getType() == Schema.Type.NAMED_TYPE_REF)) {
-        type = type.getType() == Schema.Type.ARRAY ? type.getElementType()
-            : namedTypes.get(type.getQualifiedName());
+        type = type.getType() == Schema.Type.ARRAY ? type.getElementType() : named(type);
       }
       return type;
+    }
+
+    // What a name is of: the version's own type, or a row a file it imports declares.
+    private Schema named(Schema ref) {
+      Schema own = namedTypes.get(ref.getQualifiedName());
+      return own != null ? own : declared.get().get(ref.getQualifiedName());
     }
 
     private static Schema entry(Field... fields) {
@@ -3542,7 +3568,7 @@ public final class TypeAlter {
 
   // The entry message of a map or multiset, numbered as the writer will number it.
   private Message entryOf(Schema mapOrMultiset) {
-    return new Message(List.of(), namedTypes).message(mapOrMultiset);
+    return new Message(List.of(), namedTypes, Set.of(), Map::of).message(mapOrMultiset);
   }
 
   private static boolean isUnion(Schema type) {

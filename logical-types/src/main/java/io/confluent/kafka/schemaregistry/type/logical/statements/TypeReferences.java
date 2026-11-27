@@ -23,6 +23,7 @@ import io.confluent.kafka.schemaregistry.client.rest.entities.SchemaReference;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.protobuf.type.Variant;
 import io.confluent.kafka.schemaregistry.type.logical.LogicalType;
+import io.confluent.kafka.schemaregistry.type.logical.Schema;
 import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
 import io.confluent.kafka.schemaregistry.type.logical.protobuf.ProtoToLogicalTypeConverter;
 import io.confluent.kafka.schemaregistry.utils.QualifiedSubject;
@@ -312,6 +313,53 @@ public final class TypeReferences {
       }
     }
     return types;
+  }
+
+  /**
+   * The rows the Protobuf files a type imports declare, by the names it refers to them by,
+   * and those the files they import in turn declare. A version that cannot be read is left
+   * out; each is read once.
+   */
+  static Map<String, Schema> declared(TypeLookup lookup, String referrer,
+      List<SchemaReference> references, Map<String, LogicalType> read) {
+    Map<String, Schema> rows = new HashMap<>();
+    declared(lookup, referrer, references, read, rows, new HashSet<>());
+    return rows;
+  }
+
+  private static void declared(TypeLookup lookup, String referrer,
+      List<SchemaReference> references, Map<String, LogicalType> read,
+      Map<String, Schema> rows, Set<String> seen) {
+    if (references == null) {
+      return;
+    }
+    for (SchemaReference ref : references) {
+      String subject = referenced(referrer, ref.getSubject());
+      String key = subject + " " + ref.getVersion();
+      if (!seen.add(key)) {
+        continue;
+      }
+      if (!read.containsKey(key)) {
+        SchemaMetadata md = lookup.version(subject, ref.getVersion());
+        LogicalType type;
+        try {
+          type = md == null ? null : lookup.logicalType(subject, md);
+        } catch (RuntimeException e) {
+          type = null;
+        }
+        read.put(key, type);
+      }
+      LogicalType type = read.get(key);
+      if (type == null) {
+        continue;
+      }
+      type.getNamedTypes().forEach(rows::putIfAbsent);
+      if (type.getName() != null && type.getRootSchema().getType() == Schema.Type.STRUCT) {
+        rows.putIfAbsent(type.getNamespace() != null
+            ? type.getNamespace() + "." + type.getName() : type.getName(), type.getRootSchema());
+      }
+      declared(lookup, subject, type.getReferences(), read, rows, seen);
+    }
   }
 
   public static Set<String> definedNames(TypeLookup lookup, String referrer,
