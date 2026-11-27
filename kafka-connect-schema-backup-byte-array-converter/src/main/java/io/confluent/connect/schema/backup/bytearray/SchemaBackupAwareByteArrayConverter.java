@@ -23,6 +23,7 @@ import io.confluent.connect.schema.backup.core.BackupExceptionMapper;
 import io.confluent.connect.schema.backup.core.BackupReferenceResolver;
 import io.confluent.connect.schema.backup.core.BackupSchemaFetcher;
 import io.confluent.connect.schema.backup.core.BackupSchemaFetcher.BackupSchemaInfo;
+import io.confluent.connect.schema.backup.core.NamedSchemaCache;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.SchemaProvider;
 import io.confluent.kafka.schemaregistry.avro.AvroSchema;
@@ -32,6 +33,7 @@ import io.confluent.kafka.schemaregistry.client.SchemaRegistryClientFactory;
 import io.confluent.kafka.schemaregistry.client.rest.entities.requests.RegisterSchemaResponse;
 import io.confluent.kafka.schemaregistry.json.JsonSchema;
 import io.confluent.kafka.schemaregistry.json.JsonSchemaProvider;
+import io.confluent.kafka.schemaregistry.protobuf.MessageIndexes;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchema;
 import io.confluent.kafka.schemaregistry.protobuf.ProtobufSchemaProvider;
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
@@ -99,6 +101,12 @@ public class SchemaBackupAwareByteArrayConverter implements Converter {
     FACTORIES = Collections.unmodifiableMap(m);
   }
 
+  // SchemaId reads Protobuf message indexes only for the PROTOBUF type; any other type
+  // reads the schema ID or GUID alone. Used before the schema type is known.
+  private static final String ID_ONLY_SCHEMA_TYPE = SchemaBackupConfig.TYPE_AVRO;
+
+  private final NamedSchemaCache<ProtobufSchema> namedProtobufSchemas = new NamedSchemaCache<>(
+      (a, b) -> a.equals(b) && a.dependencies().equals(b.dependencies()), ProtobufSchema::copy);
   private SchemaRegistryClient schemaRegistry;
   private BackupSchemaFetcher schemaFetcher;
   private BackupReferenceResolver referenceResolver;
@@ -220,8 +228,7 @@ public class SchemaBackupAwareByteArrayConverter implements Converter {
 
   private SchemaAndValue wrapForBackup(String topic, Headers headers, byte[] bytes) {
     try {
-      // Any non-Protobuf type: only the schema ID is read here, not message indexes.
-      SchemaId probe = new SchemaId(SchemaBackupConfig.TYPE_AVRO);
+      SchemaId probe = new SchemaId(ID_ONLY_SCHEMA_TYPE);
       schemaIdDeserializer.deserialize(topic, isKey, headers, bytes, probe);
       if (probe.getId() == null && probe.getGuid() == null) {
         throw new DataException(
@@ -241,7 +248,7 @@ public class SchemaBackupAwareByteArrayConverter implements Converter {
             + " (topic=" + topic + ")");
       }
 
-      ParsedSchema parsed = info.parse(factory);
+      ParsedSchema parsed = withRecordName(info.parse(factory), topic, headers, bytes);
       String subject = subjectName(topic, parsed);
       Integer version = info.getVersionForSubject(subject);
 
@@ -321,6 +328,16 @@ public class SchemaBackupAwareByteArrayConverter implements Converter {
 
       ParsedSchema parsedSchema =
           referenceResolver.resolveRestoreSchema(wschema, wrapper, rawSchema, factory);
+      List<Integer> targetIndexes = src.getMessageIndexes();
+      if (parsedSchema instanceof ProtobufSchema) {
+        // Name the schema after the record's message, and compute its indexes as the
+        // Protobuf serializer does (normalize.schemas skips map-entry messages).
+        ProtobufSchema named =
+            namedForMessage((ProtobufSchema) parsedSchema, src.getMessageIndexes());
+        parsedSchema = named;
+        List<Integer> indexes = named.toMessageIndexes(named.name(), normalizeSchema).indexes();
+        targetIndexes = indexes.isEmpty() ? MessageIndexes.DEFAULT_INDEX : indexes;
+      }
 
       // Subject from the restore topic and the configured strategy, as the serializers
       // do. Register when auto.register.schemas=true, otherwise look up.
@@ -331,8 +348,8 @@ public class SchemaBackupAwareByteArrayConverter implements Converter {
           : schemaRegistry.getIdWithResponse(subject, parsedSchema, normalizeSchema);
 
       SchemaId tgt = new SchemaId(schemaType, response.getId(), response.getGuid());
-      if (!src.getMessageIndexes().isEmpty()) {
-        tgt.setMessageIndexes(src.getMessageIndexes());
+      if (!targetIndexes.isEmpty()) {
+        tgt.setMessageIndexes(targetIndexes);
       }
       // Remove the source schema ID header; deserializers read it before the prefix.
       if (headers != null) {
@@ -395,6 +412,29 @@ public class SchemaBackupAwareByteArrayConverter implements Converter {
           + " may have been altered by a non-ByteArray header.converter.", e);
     }
     src.setMessageIndexes(fromHeader.getMessageIndexes());
+  }
+
+  /**
+   * For Protobuf, returns the schema named after the record's message, read from its message
+   * indexes. Other schema types are returned unchanged.
+   */
+  private ParsedSchema withRecordName(
+      ParsedSchema parsed, String topic, Headers headers, byte[] bytes) {
+    if (!(parsed instanceof ProtobufSchema)) {
+      return parsed;
+    }
+    SchemaId withIndexes = new SchemaId(SchemaBackupConfig.TYPE_PROTOBUF);
+    schemaIdDeserializer.deserialize(topic, isKey, headers, bytes, withIndexes);
+    return namedForMessage((ProtobufSchema) parsed, withIndexes.getMessageIndexes());
+  }
+
+  /**
+   * Names a Protobuf schema after the message selected by {@code indexes}, as the Protobuf
+   * deserializer does. An unnamed schema otherwise reports its first message as its name.
+   */
+  private ProtobufSchema namedForMessage(ProtobufSchema schema, List<Integer> indexes) {
+    return namedProtobufSchemas.named(
+        schema, schema.toMessageName(new MessageIndexes(indexes)));
   }
 
   /**
