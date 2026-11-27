@@ -41,8 +41,13 @@ class AvroDefaultsTest {
   void aDefaultAvroCouldNotReadUnderTheNewTypeIsRefused() {
     assertThatThrownBy(() -> AvroDefaults.converted("n", type("BIGINT"), type("INT"), 5L))
         .isInstanceOf(TypeRefusedException.class)
-        .hasMessage("Attribute n's default 5 cannot be read as INT, as Avro reads a BIGINT "
-            + "written before the change");
+        .hasMessage("The default 5 of attribute n cannot be read as INT, as Avro reads a "
+            + "BIGINT written before the change");
+    // One that is a string is told as a literal, a quote in it doubled.
+    assertThatThrownBy(() -> AvroDefaults.converted("e.n", type("STRING"), type("INT"),
+        "it's"))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageStartingWith("The default 'it''s' of attribute e.n cannot be read as INT");
     assertThatThrownBy(() -> AvroDefaults.converted("n", type("INT"), type("BOOLEAN"), 5))
         .isInstanceOf(TypeRefusedException.class);
     // A whole number Avro holds as an int, beyond the new type's range.
