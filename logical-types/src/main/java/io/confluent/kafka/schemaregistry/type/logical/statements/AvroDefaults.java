@@ -60,9 +60,10 @@ public final class AvroDefaults {
       // Out of the new type's range, as a time of day past midnight.
       cause = e;
     }
-    throw new TypeRefusedException("Attribute " + name + "'s default " + value + " cannot be read "
-        + "as " + to.getType() + ", as Avro reads a " + from.getType() + " written before "
-        + "the change", cause);
+    throw new TypeRefusedException("The default "
+        + (value instanceof CharSequence ? Formats.quoted(value) : String.valueOf(value))
+        + " of attribute " + name + " cannot be read as " + to.getType() + ", as Avro reads a "
+        + from.getType() + " written before the change", cause);
   }
 
   // A whole number in the range of the new type, which Avro holds as an int whatever its range.
