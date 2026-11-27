@@ -810,18 +810,19 @@ class TypeAlterTest {
         List.of(new SchemaReference("gi", "gi", 1)), Map.of("gi", in), null, null));
     registry.alter("gr", new AddAttribute("c", "INT"));
     assertThat(numbers(message("gr"))).isEqualTo("id=1 a=2 c=3");
-    // Nor is one that another file's message takes the place of: neither is written.
+    // Another file's message is not given in its place: the two are different messages.
     registry.client.register("go", new ProtobufSchema("syntax = \"proto3\";\n\npackage o;\n\n"
         + "message Other {\n  string name = 1;\n}\n"));
-    registry.alter("gr", new AlterAttributeType("a", "go"));
-    assertThat(registry.latest("gr").getReferences()).extracting(SchemaReference::getSubject)
-        .containsExactly("go");
+    assertThatThrownBy(() -> registry.alter("gr", new AlterAttributeType("a", "go")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageStartingWith("Attribute a cannot be given the type o.Other: it is of type "
+            + "o.In, which another type declares");
     // A message two fields have is still written for the one that keeps it.
     registry.client.register("g2", new ProtobufSchema("syntax = \"proto3\";\n\n"
         + "import \"google/protobuf/wrappers.proto\";\n\nmessage R {\n  int32 id = 1;\n"
         + "  S a = 2;\n  S b = 3;\n\n  message S {\n    int32 x = 1;\n"
         + "    google.protobuf.StringValue w = 2;\n  }\n}\n"));
-    assertThatThrownBy(() -> registry.alter("g2", new AlterAttributeType("a", "go")))
+    assertThatThrownBy(() -> registry.alter("g2", new AlterAttributeType("a", "INT")))
         .isInstanceOf(TypeRefusedException.class)
         .hasMessageContaining("field w of message S is a google.protobuf.StringValue");
     // A message that has a field of its own type is walked once.

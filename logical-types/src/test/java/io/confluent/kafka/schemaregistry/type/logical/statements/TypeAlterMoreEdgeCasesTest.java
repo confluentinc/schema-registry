@@ -415,79 +415,74 @@ class TypeAlterMoreEdgeCasesTest {
           ? "{" + shape(f.getMessageType()) + "}" : "")).collect(Collectors.joining(" "));
   }
 
-  // A row another type declares, given in the type itself, is numbered as that type has
-  // it: an attribute it keeps has its number, and a new one a number above them, so that
-  // none reads what is stored of another.
-  @Test
-  void aRowOfAnotherTypeGivenInTheTypeKeepsItsNumbers() throws Exception {
-    create("lib", SchemaType.PROTOBUF, "(k INT NOT NULL, x INT)");
-    registry.alter("lib", new DropAttribute("k", false));
-    create("o1", SchemaType.PROTOBUF, "(id INT NOT NULL, r lib)");
-    Descriptor first = message("o1");
-    Descriptor row = first.findFieldByName("r").getMessageType();
-    byte[] stored = DynamicMessage.newBuilder(first).setField(first.findFieldByName("r"),
-        DynamicMessage.newBuilder(row).setField(row.findFieldByName("x"), 99).build()).build()
-        .toByteArray();
-    registry.alter("o1", new AlterAttributeType("r", "STRUCT<x INT, n INT>"));
-    assertThat(shape(message("o1"))).isEqualTo("id=1 r=2{x=2 n=3}");
-    Descriptor now = message("o1");
-    DynamicMessage read = (DynamicMessage) DynamicMessage.parseFrom(now, stored)
-        .getField(now.findFieldByName("r"));
-    assertThat(read.getField(read.getDescriptorForType().findFieldByName("x"))).isEqualTo(99);
-    assertThat(read.hasField(read.getDescriptorForType().findFieldByName("n"))).isFalse();
-    // As the element of an array, the value of a map, and a row within a row.
-    create("o2", SchemaType.PROTOBUF, "(id INT NOT NULL, a ARRAY<lib NOT NULL> NOT NULL, "
-        + "m MAP<STRING, lib NOT NULL> NOT NULL, o STRUCT<i lib> NOT NULL)");
-    String given = "STRUCT<x INT, n INT>";
-    registry.alter("o2",
-        new AlterAttributeType("a", "ARRAY<" + given + " NOT NULL> NOT NULL"),
-        new AlterAttributeType("m", "MAP<STRING, " + given + " NOT NULL> NOT NULL"),
-        new AlterAttributeType("o", "STRUCT<i " + given + "> NOT NULL"));
-    assertThat(shape(message("o2"))).isEqualTo("id=1 a=2{x=2 n=3} "
-        + "m=3{key=1 value=2{x=2 n=3}} o=4{i=1{x=2 n=3}}");
-    assertThat(references("o2")).isEmpty();
-  }
+  private static final String TWO_MESSAGES = ". In Protobuf the two are different messages, "
+      + "each numbered as the type that declares it has it, so what is stored of the attribute "
+      + "would not be read. ";
 
-  // The numbers are those of every version of the other type that a version of the type
-  // referred to, and of the files that one imports: by the names a file of a package and
-  // of several messages has for them.
+  // In Protobuf a row another type declares and a row of the type's own are two messages,
+  // each numbered by its file: an attribute of the one is not given the other, nor another
+  // type's, at any depth. The type it has, said again, is its type still.
   @Test
-  void aRowOfAnotherTypeIsNumberedAboveEveryVersionReferredTo() throws Exception {
-    create("libv", SchemaType.PROTOBUF, "(k INT NOT NULL, x INT, y INT)");
-    create("o3", SchemaType.PROTOBUF, "(id INT NOT NULL, r libv)");
-    registry.alter("libv", new DropAttribute("y", false));
-    registry.alter("o3", new AlterAttributeType("r", "libv"));
-    assertThat(registry.latest("o3").getReferences())
-        .containsExactly(new SchemaReference("libv", "libv", 2));
-    registry.alter("o3", new AlterAttributeType("r", "STRUCT<k INT NOT NULL, n INT>"));
-    assertThat(shape(message("o3"))).isEqualTo("id=1 r=2{k=1 n=4}");
-    // A file of a package with two messages, and one with a single message.
+  void aProtobufAttributeOfAnotherTypesRowIsGivenNoOther() throws Exception {
+    create("lib", SchemaType.PROTOBUF, "(k INT NOT NULL, x INT)");
+    create("lib2", SchemaType.PROTOBUF, "(x INT, k INT NOT NULL)");
+    String own = "STRUCT<k INT NOT NULL, x INT>";
+    create("o1", SchemaType.PROTOBUF, "(id INT NOT NULL, r lib, s " + own + ", "
+        + "a ARRAY<lib NOT NULL> NOT NULL, m MAP<STRING, lib NOT NULL> NOT NULL, "
+        + "o STRUCT<i lib> NOT NULL)");
+    assertThatThrownBy(() -> registry.alter("o1", new AlterAttributeType("r", own)))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessage("Attribute r cannot be given a type of its own: it is of type lib, which "
+            + "another type declares" + TWO_MESSAGES + "Drop the attribute and add it again, "
+            + "or register the type's new version as a Protobuf schema");
+    refused("Attribute s cannot be given the type lib, which another type declares: it is of "
+        + "a type of its own" + TWO_MESSAGES, "o1", new AlterAttributeType("s", "lib"));
+    refused("Attribute r cannot be given the type lib2: it is of type lib, which another type "
+        + "declares" + TWO_MESSAGES, "o1", new AlterAttributeType("r", "lib2"));
+    // As the element of an array, the value of a map, and a row within a row.
+    refused("Attribute a cannot be given a type of its own: it is of type lib", "o1",
+        new AlterAttributeType("a", "ARRAY<" + own + " NOT NULL> NOT NULL"));
+    refused("Attribute m cannot be given a type of its own: it is of type lib", "o1",
+        new AlterAttributeType("m", "MAP<STRING, " + own + " NOT NULL> NOT NULL"));
+    refused("Attribute o.i cannot be given a type of its own: it is of type lib", "o1",
+        new AlterAttributeType("o", "STRUCT<i " + own + "> NOT NULL"));
+    assertThat(version("o1")).isEqualTo(1);
+    // A message of a file with a package is told by its full name.
     proto("two.proto", "syntax = \"proto3\";\npackage p.q;\n\nmessage R {\n  int32 k = 1;\n"
         + "  int32 x = 2;\n}\nmessage S {\n  int32 z = 1;\n}\n");
-    proto("one.proto", "syntax = \"proto3\";\npackage p;\n\nmessage R {\n  int32 k = 1;\n"
-        + "  int32 x = 2;\n}\n");
-    for (String file : List.of("two.proto", "one.proto")) {
-      String type = file.startsWith("two") ? "p.q.R" : "p.R";
-      registry.client.register("o4" + file, new ProtobufSchema("syntax = \"proto3\";\n\n"
-          + "import \"" + file + "\";\n\nmessage T {\n  int32 id = 1;\n  " + type + " r = 2;\n}\n",
-          List.of(new SchemaReference(file, file, 1)),
-          Map.of(file, registry.latest(file).getSchema()), null, null));
-      registry.alter("o4" + file, new AlterAttributeType("r", "STRUCT<k INT NOT NULL, n INT>"));
-      assertThat(shape(message("o4" + file))).as(file).isEqualTo("id=1 r=2{k=1 n=3}");
-    }
+    registry.client.register("o2", new ProtobufSchema("syntax = \"proto3\";\n\nimport "
+        + "\"two.proto\";\n\nmessage T {\n  int32 id = 1;\n  p.q.R r = 2;\n}\n",
+        List.of(new SchemaReference("two.proto", "two.proto", 1)),
+        Map.of("two.proto", registry.latest("two.proto").getSchema()), null, null));
+    refused("Attribute r cannot be given a type of its own: it is of type p.q.R, which another "
+        + "type declares", "o2", new AlterAttributeType("r", own));
+    // Said again, the type an attribute has moves to its latest version.
+    registry.alter("lib", new AddAttribute("y", "INT"));
+    registry.alter("o1", new AlterAttributeType("r", "lib"));
+    assertThat(registry.latest("o1").getReferences())
+        .containsExactly(new SchemaReference("lib", "lib", 2));
+    // And what is no row is given one, as one is given what is none.
+    registry.alter("o1", new AlterAttributeType("r", "INT"));
+    registry.alter("o1", new AlterAttributeType("r", "lib2"));
+    assertThat(version("o1")).isEqualTo(4);
   }
 
-  // A type created again over dropped versions that referred to a row gives it in the
-  // type with the numbers it had.
+  // Nor is it by a type created again over dropped versions that referred to the row:
+  // it is created with the type the attribute had.
   @Test
-  void aTypeCreatedAgainGivesARowOfAnotherTypeItsNumbers() throws Exception {
+  void aTypeCreatedAgainGivesAnAttributeOfAnotherTypesRowNoOther() throws Exception {
     create("libc", SchemaType.PROTOBUF, "(k INT NOT NULL, x INT)");
-    registry.alter("libc", new DropAttribute("k", false));
     create("o5", SchemaType.PROTOBUF, "(id INT NOT NULL, r libc)");
     level("o5", "NONE");
     registry.drop("o5");
-    create("o5", SchemaType.PROTOBUF, "(id INT NOT NULL, r STRUCT<x INT, n INT>)");
-    assertThat(shape(message("o5"))).isEqualTo("id=1 r=2{x=2 n=3}");
+    assertThatThrownBy(() -> create("o5", SchemaType.PROTOBUF,
+        "(id INT NOT NULL, r STRUCT<k INT NOT NULL, x INT>)"))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessage("Attribute r cannot be given a type of its own: it is of type libc, which "
+            + "another type declares" + TWO_MESSAGES + "Give it the type it had, or another "
+            + "name, or register the type's new version as a Protobuf schema");
+    create("o5", SchemaType.PROTOBUF, "(id INT NOT NULL, r libc, n INT)");
+    assertThat(fields("o5")).isEqualTo("id=1 n=3 r=2");
   }
 
   // In Avro and JSON an attribute is read by its name. A JSON row of another type given
