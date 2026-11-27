@@ -378,7 +378,7 @@ public final class Formats {
     // the writer cannot take out of that type: a null would match the branch and the
     // union's own null, or be taken by a union that takes none.
     for (UnionBranch b : union.getBranches()) {
-      if (nullWithin(b.getSchema(), named, 0)) {
+      if (nullWithin(b.getSchema(), named)) {
         throw new TypeRefusedException("A UNION "
             + (within != null ? "of attribute " + within + " " : "")
             + "in a JSON type cannot have branch " + b.getName() + ", which is of a type that "
@@ -477,7 +477,7 @@ public final class Formats {
         // A branch of a type that takes a null of its own now, and did not: a null would
         // match it and the union's own, or be taken by a union that takes none.
         for (UnionBranch b : type.getBranches()) {
-          if (nullWithin(b.getSchema(), after, 0) && !nullWithin(b.getSchema(), before, 0)) {
+          if (nullWithin(b.getSchema(), after) && !nullWithin(b.getSchema(), before)) {
             return new String[] {within, b.getName()};
           }
         }
@@ -804,24 +804,28 @@ public final class Formats {
   // Whether a null is a value of an attribute's type: one that may be null, or a name of a
   // type referred to whose own root may be, whatever the attribute says of itself.
   private static boolean takesNull(Schema type, KnownTypes named) {
-    return type.isNullable() || nullWithin(type, named, 0);
+    return type.isNullable() || nullWithin(type, named);
   }
 
   // Whether a null is a value of a type that does not say so of itself: a name of a type
   // referred to whose root may be null, or a union a member of which is such a name. A
   // union's members, and a type of the document's own, are written with no null of theirs.
-  private static boolean nullWithin(Schema type, KnownTypes named, int depth) {
-    if (depth > 16) {
-      return true;
-    }
+  private static boolean nullWithin(Schema type, KnownTypes named) {
+    return nullWithin(type, named, Collections.newSetFromMap(new IdentityHashMap<>()));
+  }
+
+  // met: the types named so far, each followed once; one that names itself adds no null.
+  private static boolean nullWithin(Schema type, KnownTypes named, Set<Schema> met) {
     if (type.getType() == Schema.Type.UNION) {
-      return type.getBranches().stream()
-          .anyMatch(b -> nullWithin(b.getSchema(), named, depth + 1));
+      return type.getBranches().stream().anyMatch(b -> nullWithin(b.getSchema(), named, met));
     }
     Schema of = type.getType() == Schema.Type.NAMED_TYPE_REF
         ? named.get(type.getQualifiedName()) : null;
-    return of != null && (named.isReferred(of) && of.isNullable()
-        || nullWithin(of, named.within(of), depth + 1));
+    if (of == null) {
+      return false;
+    }
+    return named.isReferred(of) && of.isNullable()
+        || met.add(of) && nullWithin(of, named.within(of), met);
   }
 
   // Whether no value of one type is a value of the other; false where either is not known.

@@ -670,6 +670,12 @@ class TypeAlterMoreEdgeCasesTest {
     JsonSchema written = (JsonSchema) registry.schema("nn");
     written.validate(new ObjectMapper().readTree("{\"id\":1,\"u\":null}"));
     written.validate(new ObjectMapper().readTree("{\"id\":1,\"u\":5}"));
+    // However deep in unions a member is, it takes no null where none is said of it.
+    String deep = "INT NOT NULL";
+    for (int i = 0; i < 20; i++) {
+      deep = "UNION(m" + i + " " + deep + ")";
+    }
+    create("nd", SchemaType.JSON, "(id INT, u UNION(a " + deep + ", b BOOLEAN))");
     json("ns", head("ns") + "\"u\":{\"oneOf\":[{\"type\":\"null\"},{\"$ref\":\"hu\"},"
         + "{\"type\":\"boolean\"}]}" + CLOSED, "hu");
     registry.alter("ns", new AddAttribute("z", "INT"));

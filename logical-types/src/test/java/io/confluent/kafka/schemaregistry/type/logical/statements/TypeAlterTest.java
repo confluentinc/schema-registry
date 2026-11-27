@@ -3466,8 +3466,16 @@ class TypeAlterTest {
     }
     create("n11", SchemaType.JSON,
         "(u UNION(r1 STRUCT<a c6 NOT NULL>, r2 STRUCT<a BOOLEAN>) NOT NULL)");
-    // Past a limit of names a null is taken to be one, which refuses.
-    jsonRefused("n12", "(u UNION(r1 STRUCT<a c18 NOT NULL>, r2 STRUCT<a BOOLEAN>) NOT NULL)");
+    // Through however many names: one that takes no null takes none, and one that takes
+    // one takes it.
+    create("n12", SchemaType.JSON,
+        "(u UNION(r1 STRUCT<a c18 NOT NULL>, r2 STRUCT<a BOOLEAN>) NOT NULL)");
+    last = "hu";
+    for (int i = 1; i <= 18; i++) {
+      registry.create("d" + i, SchemaType.JSON, BodyKind.OTHER, last + " NOT NULL");
+      last = "d" + i;
+    }
+    jsonRefused("n17", "(u UNION(r1 STRUCT<a d18 NOT NULL>, r2 STRUCT<a BOOLEAN>) NOT NULL)");
     // A null is a value of the map only where its values take one: as the type they are
     // of does, whatever the map says of them. A multiset's is a count, which takes none.
     create("n5", SchemaType.JSON,
@@ -3479,10 +3487,6 @@ class TypeAlterTest {
         "(u UNION(r1 STRUCT<a rown NOT NULL>, r2 MAP<STRING, hu NOT NULL>) NOT NULL)");
     // An attribute the row does not require tells it from no map: {} is of both.
     jsonRefused("n15", "(u UNION(r1 STRUCT<a INT>, r2 MAP<STRING, STRING NOT NULL>) NOT NULL)");
-    // The limit of names is where it is.
-    create("n16", SchemaType.JSON,
-        "(u UNION(r1 STRUCT<a c15 NOT NULL>, r2 STRUCT<a BOOLEAN>) NOT NULL)");
-    jsonRefused("n17", "(u UNION(r1 STRUCT<a c16 NOT NULL>, r2 STRUCT<a BOOLEAN>) NOT NULL)");
     // Rows that say the same of types of one name that are not one type are not one row,
     // in whichever order they are judged.
     create("wc", SchemaType.JSON, "(tag e1 NOT NULL)");
