@@ -371,6 +371,19 @@ public class JsonToLogicalTypeConverter {
     return said.toString();
   }
 
+  // Whether a definition is only a $ref to a place in another document, and its name none
+  // the schema has for a document: a name for what the $ref is to. One that is to a
+  // definition of the same document stands for that definition, as a type of its own.
+  private static boolean namesAnother(org.everit.json.schema.Schema definition, String name,
+      ToLogicalContext<String> ctx) {
+    if (!(definition instanceof ReferenceSchema) || ctx.isExternalType(name)) {
+      return false;
+    }
+    org.everit.json.schema.Schema to = resolveReference(definition);
+    return !(to instanceof ReferenceSchema) && !(to instanceof NullSchema)
+        && !placeOf(definition, "#", ctx).startsWith("#");
+  }
+
   // The key of a definition a place is, or null for a place that is none.
   private static String keyAt(String place) {
     int at = place.indexOf("#/$defs/");
@@ -486,6 +499,10 @@ public class JsonToLogicalTypeConverter {
       if (rawEntry != null && rawEntry.isObject() && rawEntry.path("logical.ref").asBoolean()
           && rawEntry.has("$ref")) {
         ctx.registerSyntheticExternal(entry.getKey(), rawEntry.get("$ref").asText());
+      } else if (namesAnother((org.everit.json.schema.Schema) entry.getValue(),
+          entry.getKey(), ctx)) {
+        ctx.registerSyntheticExternal(entry.getKey(), asRef(placeOf(
+            (org.everit.json.schema.Schema) entry.getValue(), "", ctx)));
       }
     }
     for (Map.Entry<String, Object> entry : defs.entrySet()) {
@@ -494,39 +511,28 @@ public class JsonToLogicalTypeConverter {
       }
       org.everit.json.schema.Schema defSchema =
           (org.everit.json.schema.Schema) entry.getValue();
-      // Synthetic-wrapper detection: the raw JSON entry carries
-      // `"logical.ref": true` alongside `$ref`. Register as a synthetic
-      // external and lazy-promote the body via the referred schema, so
-      // downstream consumers see actual content under namedTypes.
-      if (rawDefs != null && rawDefs.has(entry.getKey())) {
-        JsonNode rawEntry = rawDefs.get(entry.getKey());
-        if (rawEntry.isObject()
-            && rawEntry.has("logical.ref")
-            && rawEntry.get("logical.ref").asBoolean()
-            && rawEntry.has("$ref")) {
-          if (defSchema instanceof ReferenceSchema) {
-            org.everit.json.schema.Schema referredSchema =
-                ((ReferenceSchema) defSchema).getReferredSchema();
-            if (referredSchema != null) {
-              ctx.putNamedType(entry.getKey(),
-                  Schema.createStruct(new ArrayList<>()));
-              // What the name is for is another document's, unless it is a part of this one.
-              boolean outer = ctx.setForeign(
-                  !rawEntry.get("$ref").asText().startsWith("#"));
-              try {
-                // A named type's body, its defaults kept relative to it: each $ref to it
-                // places them under its own path.
-                Schema body = ctx.convertNamedType(entry.getKey(), Collections.emptyList(),
-                    () -> convertWithCycleDetection(
-                        referredSchema, false, ctx, Collections.emptyList()));
-                ctx.putNamedType(entry.getKey(), body);
-              } finally {
-                ctx.setForeign(outer);
-              }
-            }
+      // A name for what the schema refers to, as the writer writes one with logical.ref or
+      // a schema written by hand has a definition that is only a $ref: it is what is at
+      // the place, another document's unless the place is a part of this one.
+      String named = defSchema instanceof ReferenceSchema
+          ? ctx.getExternalImports().get(entry.getKey()) : null;
+      if (named != null) {
+        org.everit.json.schema.Schema referredSchema = resolveReference(defSchema);
+        if (!(referredSchema instanceof ReferenceSchema)) {
+          ctx.putNamedType(entry.getKey(), Schema.createStruct(new ArrayList<>()));
+          boolean outer = ctx.setForeign(!named.startsWith("#"));
+          try {
+            // A named type's body, its defaults kept relative to it: each $ref to it
+            // places them under its own path.
+            Schema body = ctx.convertNamedType(entry.getKey(), Collections.emptyList(),
+                () -> convertWithCycleDetection(
+                    referredSchema, false, ctx, Collections.emptyList()));
+            ctx.putNamedType(entry.getKey(), body);
+          } finally {
+            ctx.setForeign(outer);
           }
-          continue;
         }
+        continue;
       }
       if (resolveReference(defSchema) instanceof NullSchema) {
         // A null definition has no type of its own: a union reads it as its null member.
@@ -633,6 +639,14 @@ public class JsonToLogicalTypeConverter {
           // $ref is to the definition itself, and not to a name for it.
           typeName = keyAt(place);
         }
+        // A definition that is only a $ref to another document's is a name for that, as
+        // one the writer writes with logical.ref is: a type of its own it would be none.
+        boolean names = !synthetic && !ctx.hasNamedType(typeName)
+            && namesAnother(refSchema.getReferredSchema(), typeName, ctx);
+        if (names) {
+          ctx.registerSyntheticExternal(typeName, asRef(place));
+          synthetic = true;
+        }
         // Populate the named-types map on demand: schemas loaded via
         // SchemaLoader (rather than constructed by our V1 writer) typically
         // don't carry $defs in unprocessedProperties, so recoverNamedTypesFromDefs
@@ -668,10 +682,10 @@ public class JsonToLogicalTypeConverter {
         // Told by its place, which is the schema's own under a root id too; a definition
         // that is only a $ref to another place is told as it is said.
         boolean foreign = ctx.isForeign() || apart
-            || !(refSchema.getReferredSchema() instanceof ReferenceSchema
+            || !(!names && refSchema.getReferredSchema() instanceof ReferenceSchema
             ? refValue : place).startsWith("#");
         // What a name of a place is of is what is at the place, through any $ref there.
-        final org.everit.json.schema.Schema of = apart ? resolveReference(refSchema)
+        final org.everit.json.schema.Schema of = apart || names ? resolveReference(refSchema)
             : refSchema.getReferredSchema();
         if (!wasKnown && of != null) {
           ctx.putNamedType(typeName, Schema.createStruct(new ArrayList<>()));

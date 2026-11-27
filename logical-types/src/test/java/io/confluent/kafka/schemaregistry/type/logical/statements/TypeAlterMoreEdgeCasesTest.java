@@ -872,6 +872,25 @@ class TypeAlterMoreEdgeCasesTest {
     assertThat(version("z18")).isEqualTo(3);
   }
 
+  // A definition written by hand that is only a $ref to another document's is a name for
+  // that, as one the writer writes is: read through whichever draft's loader.
+  @Test
+  void aDefinitionThatIsOnlyARefToAnotherDocumentsIsANameForIt() throws Exception {
+    json("lib", String.format(LIBS, "lib", P));
+    String named = "\"x\":{\"$ref\":\"#/$defs/A\"}},\"additionalProperties\":false,\"$defs\":"
+        + "{\"A\":{\"$ref\":\"lib#/$defs/Loc\"}}}";
+    json("n1", later("n1") + named, "lib");
+    registry.alteredTo("n1", TestRegistry.alias("A", "lib#/$defs/Loc"));
+    json("n2", head("n2") + named, "lib");
+    registry.alteredTo("n2", TestRegistry.alias("A", "lib#/$defs/Loc"));
+    // A name for the document whole is written as the document; one of no use goes.
+    json("n3", head("n3") + "\"x\":{\"$ref\":\"#/$defs/A\"}},\"additionalProperties\":false,"
+        + "\"$defs\":{\"A\":{\"$ref\":\"lib\"},\"B\":{\"$ref\":\"lib#/$defs/Loc\"}}}", "lib");
+    registry.alteredTo("n3", "\"x\":{\"connect.index\":1,\"oneOf\":[{\"type\":\"null\"},"
+        + "{\"$ref\":\"lib\"}]}");
+    assertThat(registry.schema("n3").canonicalString()).doesNotContain("$defs");
+  }
+
   // A $ref under not, if, then or else, where no type is read (what
   // else a row may have), is not one the schema is read through.
   @Test
