@@ -319,6 +319,9 @@ public final class ToLogicalContext<T> extends CycleContext<T> {
     final Set<String> externals = new LinkedHashSet<>(externalTypes);
     final Map<String, String> imports = new LinkedHashMap<>(externalImports);
     final Map<String, String> assigned = new LinkedHashMap<>(assignedRefNameByUri);
+    // And where each name was read from: a name the attempt made may be made again.
+    final Map<String, Set<String>> places = new LinkedHashMap<>();
+    placesReferredTo.forEach((name, at) -> places.put(name, new LinkedHashSet<>(at)));
     final int next = nextRefIndex;
     return () -> {
       cycle.run();
@@ -330,6 +333,8 @@ public final class ToLogicalContext<T> extends CycleContext<T> {
       externalImports.putAll(imports);
       assignedRefNameByUri.clear();
       assignedRefNameByUri.putAll(assigned);
+      placesReferredTo.clear();
+      placesReferredTo.putAll(places);
       nextRefIndex = next;
     };
   }

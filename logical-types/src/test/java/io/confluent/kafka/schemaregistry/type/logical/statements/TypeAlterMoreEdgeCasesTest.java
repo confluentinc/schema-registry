@@ -1077,6 +1077,18 @@ class TypeAlterMoreEdgeCasesTest {
     assertThat(version("z18")).isEqualTo(3);
   }
 
+  // A definition no attribute is of that cannot be read leaves nothing of the attempt: a
+  // document it had a name made for is not taken for the one that name is made for next.
+  @Test
+  void aDefinitionThatCannotBeReadLeavesNoPlaceOfWhatItNamed() throws Exception {
+    json("lib", String.format(LIBS, "lib", P));
+    json("lib2", String.format(LIBS, "lib2", Q));
+    json("c1", later("c1") + "\"y\":{\"$ref\":\"lib2\"}},\"additionalProperties\":false,"
+        + "\"$defs\":{\"Bad\":{\"type\":\"object\",\"properties\":{\"a\":{\"$ref\":\"lib\"},"
+        + "\"b\":{\"not\":{\"type\":\"string\"}}}}}}", "lib", "lib2");
+    registry.alteredTo("c1", "{\"$ref\":\"lib2\"}");
+  }
+
   // A definition written by hand that is only a $ref to another document's is a name for
   // that, as one the writer writes is: read through whichever draft's loader.
   @Test
