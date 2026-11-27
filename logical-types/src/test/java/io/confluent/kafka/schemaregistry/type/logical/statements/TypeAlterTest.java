@@ -3034,26 +3034,21 @@ class TypeAlterTest {
     registry.alter("hs2", new DropAttribute("m", false));
     assertThat(registry.latest("hs2").getReferences()).extracting(SchemaReference::getName)
         .containsExactly("plain");
-    // A definition of the name the type as read makes for a document it refers to whole,
-    // where the document is come to first, is read as that document: such a type is not
-    // altered, nor made by a statement.
+    // A document's definition of the name the type as read makes for a document it refers
+    // to whole is read by a name of its own, and written as it is.
     registry.client.register("hs3", new JsonSchema("{\"type\":\"object\",\"title\":\"hs3\","
         + "\"properties\":{\"id\":{\"type\":\"integer\"},\"a\":{\"$ref\":\"plain\"},"
         + "\"r\":{\"$ref\":\"lib4#/$defs/Ref1\"}},\"additionalProperties\":false}",
         List.of(new SchemaReference("plain", "plain", 1),
         new SchemaReference("lib4", "lib4", 1)), parts, null));
-    assertThatThrownBy(() -> registry.alter("hs3", new AddAttribute("z", "INT")))
-        .isInstanceOf(TypeRefusedException.class).hasMessageMatching(
-            TestRegistry.readAsOne("altered", "Ref1", "plain", "lib4#/$defs/Ref1"));
+    registry.alteredTo("hs3",
+        TestRegistry.alias("Ref2", "lib4#/$defs/Ref1"),
+        "{\"$ref\":\"plain\"}");
     registry.client.register("hs4", new JsonSchema("{\"type\":\"object\",\"title\":\"hs4\","
         + "\"properties\":{\"id\":{\"type\":\"integer\"},\"r\":{\"$ref\":"
         + "\"lib4#/$defs/Ref1\"}},\"additionalProperties\":false}",
         List.of(new SchemaReference("lib4", "lib4", 1)), parts, null));
-    assertThatThrownBy(() -> registry.alter("hs4",
-        new AddAttribute("a", "plain", Position.first())))
-        .isInstanceOf(TypeRefusedException.class).hasMessageMatching(
-            TestRegistry.readAsOne("changed so", "Ref1", "plain", "lib4#/$defs/Ref1"));
-    // Where the definition is come to first the document is called otherwise.
+    registry.alter("hs4", new AddAttribute("a", "plain", Position.first()));
     registry.alter("hs4", new AddAttribute("w", "plain"));
     assertThat(registry.schema("hs4").canonicalString())
         .contains("\"$ref\":\"lib4#/$defs/Ref1\"").contains("\"$ref\":\"plain\"");
@@ -4727,13 +4722,12 @@ class TypeAlterTest {
     json("c05b", String.format(JSON_HEAD, "c05b") + "\"a\":{\"$ref\":\"plain\"},\"r\":"
         + "{\"$ref\":\"#/$defs/Ref1\"}},\"additionalProperties\":false,\"$defs\":{\"Ref1\":"
         + "{\"$ref\":\"other\",\"logical.ref\":true}}}", "plain", "other");
-    for (String type : List.of("c05", "c05b")) {
-      assertThatThrownBy(() -> registry.alter(type, new AddAttribute("z", "INT"))).as(type)
-          .isInstanceOf(TypeRefusedException.class)
-          .hasMessageMatching(TestRegistry.readAsOne("altered",
-              "Ref1", "plain", type.equals("c05") ? "#/$defs/Ref1" : "other"));
-      assertThat(version(type)).as(type).isEqualTo(1);
-    }
+    assertThatThrownBy(() -> registry.alter("c05", new AddAttribute("z", "INT")))
+        .isInstanceOf(TypeRefusedException.class)
+        .hasMessageMatching(TestRegistry.readAsOne("altered", "Ref1", "plain", "#/$defs/Ref1"));
+    assertThat(version("c05")).isEqualTo(1);
+    // One that names another document is that document, read by a name of its own.
+    registry.alteredTo("c05b", "{\"$ref\":\"plain\"}", "{\"$ref\":\"other\"}");
     json("lib7", "{\"type\":\"object\",\"title\":\"lib7\",\"properties\":{\"Ref1\":{\"type\":"
         + "\"object\",\"properties\":{\"k\":{\"type\":\"integer\"}},\"additionalProperties\":"
         + "false}},\"additionalProperties\":false}");
@@ -4875,10 +4869,10 @@ class TypeAlterTest {
     assertThat(numbers(message("ww"))).startsWith(before);
   }
 
-  // A definition is read by its name alone: a type with one of its own and one of a
-  // document it refers to of the same name has the two read as one, and is refused.
+  // A type with a definition of its own and one of a document it refers to of the same
+  // name reads the document's by a name of its own, and writes each as it is.
   @Test
-  void aJsonTypeWithTwoDefinitionsOfOneNameIsRefused() throws Exception {
+  void aJsonTypeWithTwoDefinitionsOfOneNameReadsEachByItsOwn() throws Exception {
     json("lib", "{\"type\":\"object\",\"title\":\"lib\",\"properties\":{\"q\":{\"type\":"
         + "\"integer\"}},\"additionalProperties\":false,\"$defs\":{\"Loc\":{\"type\":"
         + "\"object\",\"properties\":{\"p\":{\"type\":\"integer\"}},\"required\":[\"p\"],"
@@ -4891,12 +4885,10 @@ class TypeAlterTest {
     json("t2u", String.format(JSON_HEAD, "t2u") + "\"y\":{\"$ref\":\"lib#/$defs/Loc\"},\"u\":"
         + "{\"oneOf\":[{\"type\":\"integer\"},{\"$ref\":\"#/$defs/Loc\"}]}},"
         + "\"additionalProperties\":false," + own, "lib");
+    // The document's is read by a name of its own, in an attribute and beside a branch.
     for (String type : List.of("t2", "t2u")) {
-      assertThatThrownBy(() -> registry.alter(type, new AddAttribute("z", "INT"))).as(type)
-          .isInstanceOf(TypeRefusedException.class)
-          .hasMessageMatching(TestRegistry.readAsOne("altered", "Loc",
-              "#/$defs/Loc", "lib#/$defs/Loc"));
-      assertThat(version(type)).as(type).isEqualTo(1);
+      registry.alteredTo(type, TestRegistry.alias("Ref1", "lib#/$defs/Loc"),
+          "{\"$ref\":\"#/$defs/Loc\"}", "{\"$ref\":\"#/$defs/Ref1\"}");
     }
     // One of them alone, said more than once, is one.
     json("t1", String.format(JSON_HEAD, "t1") + "\"x\":{\"$ref\":\"lib#/$defs/Loc\"},\"y\":"
@@ -5019,9 +5011,7 @@ class TypeAlterTest {
     registry.alter("c27", new AddAttribute("z", "INT"));
     assertThat(version("c27")).isEqualTo(2);
     json("c220", "{" + later + String.format(JSON_HEAD, "c220").substring(1) + unused, "libw");
-    assertThatThrownBy(() -> registry.alter("c220", new AddAttribute("z", "INT")))
-        .isInstanceOf(TypeRefusedException.class)
-        .hasMessageContaining("which are both read by the name Loc");
+    registry.alteredTo("c220", TestRegistry.alias("Ref1", "libw#/$defs/Loc"));
     // What two documents have between them, and the type names by neither, is theirs.
     json("libv", "{\"type\":\"object\",\"title\":\"libv\",\"properties\":{\"m\":{\"$ref\":"
         + "\"#/$defs/Loc\"}},\"additionalProperties\":false,\"$defs\":{\"Loc\":" + q + "}}");
@@ -5148,10 +5138,9 @@ class TypeAlterTest {
         + "{\"type\":\"array\",\"items\":" + other + "}},\"additionalProperties\":false,"
         + "\"$defs\":{\"Loc\":{\"type\":\"object\",\"properties\":{\"q\":{\"type\":\"string\"}}}}}",
         "lib");
-    assertThatThrownBy(() -> registry.alter("na", new AddAttribute("z", "INT")))
-        .isInstanceOf(TypeRefusedException.class)
-        .hasMessageMatching(TestRegistry.readAsOne("altered", "Loc",
-            "#/$defs/Loc", "lib#/$defs/Loc"));
+    registry.alteredTo("na",
+        TestRegistry.alias("Ref1", "lib#/$defs/Loc"),
+        "{\"$ref\":\"#/$defs/Loc\"}");
     // A schema of an older draft names itself by id.
     json("n4", "{\"$schema\":\"http://json-schema.org/draft-04/schema#\",\"id\":"
         + "\"x-test://n4/n4.json\"," + String.format(JSON_HEAD, "n4").substring(1)
@@ -5259,10 +5248,7 @@ class TypeAlterTest {
     String unnamed = "\"y\":{\"$ref\":\"lib#/$defs/Loc\"}},\"additionalProperties\":false,"
         + "\"$defs\":{\"Loc\":" + q + "}}";
     json("u20", "{" + later + String.format(JSON_HEAD, "u20").substring(1) + unnamed, "lib");
-    assertThatThrownBy(() -> registry.alter("u20", new AddAttribute("z", "INT")))
-        .isInstanceOf(TypeRefusedException.class)
-        .hasMessageMatching(TestRegistry.readAsOne("altered", "Loc",
-            "lib#/$defs/Loc", "#/$defs/Loc"));
+    registry.alteredTo("u20", TestRegistry.alias("Ref1", "lib#/$defs/Loc"));
     // In an older draft it is not read, and is no second one.
     json("u7", String.format(JSON_HEAD, "u7") + unnamed, "lib");
     registry.alter("u7", new AddAttribute("z", "INT"));
@@ -5273,7 +5259,6 @@ class TypeAlterTest {
     assertThatThrownBy(() -> registry.alter("ui", new AddAttribute("z", "INT")))
         .isInstanceOf(TypeRefusedException.class)
         .hasMessageContaining("its $id, lib, is the name it has for a schema it refers to");
-    assertThat(version("u20")).isEqualTo(1);
     assertThat(version("ui")).isEqualTo(1);
   }
 
@@ -5323,10 +5308,7 @@ class TypeAlterTest {
         + String.format(JSON_HEAD, "sib20").substring(1) + "\"x\":{\"$ref\":\"#/$defs/Loc\","
         + "\"properties\":{\"k\":{\"$ref\":\"slib#/$defs/Loc\"}}}},\"additionalProperties\":"
         + "false,\"$defs\":{\"Loc\":" + q + "}}", "slib");
-    assertThatThrownBy(() -> registry.alter("sib20", new AddAttribute("z", "INT")))
-        .isInstanceOf(TypeRefusedException.class)
-        .hasMessageMatching(TestRegistry.readAsOne("altered", "Loc",
-            "#/$defs/Loc", "slib#/$defs/Loc"));
+    registry.alteredTo("sib20", TestRegistry.alias("Ref1", "slib#/$defs/Loc"));
     json("xlib", "{\"type\":\"object\",\"title\":\"xlib\",\"properties\":{\"l\":{\"$ref\":"
         + "\"#/$defs/Loc\"}},\"additionalProperties\":false,\"$defs\":{\"Loc\":{\"type\":"
         + "\"object\",\"properties\":{\"in\":{\"$ref\":\"#/$defs/Inner\"}},"
@@ -5577,10 +5559,7 @@ class TypeAlterTest {
         + "\"additionalProperties\":false,\"$defs\":{\"Foo\":{\"$ref\":\"lone\","
         + "\"logical.ref\":true}}}";
     json("e7", String.format(JSON_HEAD, "e7") + body, "lone", "lfoo");
-    assertThatThrownBy(() -> registry.alter("e7", new AddAttribute("z", "INT")))
-        .isInstanceOf(TypeRefusedException.class)
-        .hasMessageMatching(TestRegistry.readAsOne("altered", "Foo", "lone", "lfoo#/$defs/Foo"));
-    assertThat(version("e7")).isEqualTo(1);
+    registry.alteredTo("e7", "{\"$ref\":\"lone\"}", "{\"$ref\":\"lfoo\"}");
     json("e20", "{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\","
         + String.format(JSON_HEAD, "e20").substring(1) + body, "lone", "lfoo");
     registry.alter("e20", new AddAttribute("z", "INT"));

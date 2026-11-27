@@ -16,6 +16,8 @@
 
 package io.confluent.kafka.schemaregistry.type.logical.statements;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.avro.AvroSchemaProvider;
 import io.confluent.kafka.schemaregistry.client.SchemaMetadata;
@@ -42,6 +44,19 @@ import java.util.regex.Pattern;
  * answers this package's lookups as a client of one would.
  */
 final class TestRegistry implements TypeLookup {
+
+  // Adds an attribute to a type and tells that the schema written has each of these.
+  void alteredTo(String subject, String... has) {
+    int was = latest(subject).getVersion();
+    alter(subject, new AlterAction.AddAttribute("z", "INT"));
+    assertThat(latest(subject).getVersion()).as(subject).isEqualTo(was + 1);
+    assertThat(schema(subject).canonicalString()).as(subject).contains(has);
+  }
+
+  // A name a JSON type has for what it refers to, as the writer writes it.
+  static String alias(String name, String to) {
+    return "\"" + name + "\":{\"$ref\":\"" + to + "\",\"logical.ref\":true}";
+  }
 
   // The refusal of a schema two places of which are read by one name, as a pattern: the
   // two are told in the order the reader comes to them.

@@ -43,6 +43,8 @@ import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -373,9 +375,21 @@ public class JsonToLogicalTypeConverter {
       if (tail.indexOf('/') >= 0) {
         return null;
       }
-      return tail;
+      return unescaped(tail);
     }
     return null;
+  }
+
+  // A definition's key as a $ref says it: percent-encoded as in a URI, and escaped as in a
+  // JSON pointer. The name read is the key itself.
+  private static String unescaped(String key) {
+    String decoded = key;
+    try {
+      decoded = URLDecoder.decode(key.replace("+", "%2B"), StandardCharsets.UTF_8);
+    } catch (IllegalArgumentException e) {
+      // No percent-encoding: as it is.
+    }
+    return decoded.replace("~1", "/").replace("~0", "~");
   }
 
   @SuppressWarnings("unchecked")
@@ -540,10 +554,24 @@ public class JsonToLogicalTypeConverter {
         // wouldn't have seen this body. Walk the referred body now, with a
         // placeholder first to short-circuit recursion if the body refers back
         // to its own name.
-        boolean wasKnown = ctx.hasNamedType(typeName);
         // Where the name is first read from, and where each $ref of the schema itself
         // that is read by it is to.
         String place = placeOf(refSchema, refValue);
+        // A definition of a document referred to, of a name already read from another
+        // place, is another type: it is read by a name of its own, for the place it is at.
+        String first = ctx.firstPlaceOf(typeName);
+        boolean apart = !synthetic && first != null && !first.equals(place)
+            && !place.startsWith("#");
+        if (apart) {
+          // The first, where it is a document's too, is told by its place as well: by
+          // the name alone the writer could not say which of the two documents it is of.
+          if (!first.startsWith("#") && !ctx.getExternalImports().containsKey(typeName)) {
+            ctx.registerSyntheticExternal(typeName, first);
+          }
+          typeName = ctx.synthesizeRefName(place);
+          synthetic = true;
+        }
+        boolean wasKnown = ctx.hasNamedType(typeName);
         if (!wasKnown || !ctx.isForeign()) {
           ctx.addPlaceReferredTo(typeName, place);
         }
@@ -555,16 +583,18 @@ public class JsonToLogicalTypeConverter {
         }
         // What a $ref to another document is to is that document's, and so is what a $ref
         // in it is to, a part of that document itself ("#/...") as much as another's.
-        boolean foreign = ctx.isForeign() || !refValue.startsWith("#");
-        if (!wasKnown && refSchema.getReferredSchema() != null) {
+        boolean foreign = ctx.isForeign() || apart || !refValue.startsWith("#");
+        // What a name of a place is of is what is at the place, through any $ref there.
+        final org.everit.json.schema.Schema of = apart ? resolveReference(refSchema)
+            : refSchema.getReferredSchema();
+        if (!wasKnown && of != null) {
           ctx.putNamedType(typeName, Schema.createStruct(new ArrayList<>()));
           boolean outer = ctx.setForeign(foreign);
           try {
             // A named type's body, its defaults kept relative to it: each $ref to it places
             // them under its own path, below.
             Schema body = ctx.convertNamedType(typeName, Collections.emptyList(),
-                () -> convertWithCycleDetection(
-                    refSchema.getReferredSchema(), false, ctx, Collections.emptyList()));
+                () -> convertWithCycleDetection(of, false, ctx, Collections.emptyList()));
             ctx.putNamedType(typeName, body);
           } finally {
             ctx.setForeign(outer);

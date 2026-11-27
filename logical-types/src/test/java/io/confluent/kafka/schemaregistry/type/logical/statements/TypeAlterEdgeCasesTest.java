@@ -289,8 +289,8 @@ class TypeAlterEdgeCasesTest {
       + "\"integer\"}},";
 
   // A $ref under a word a name is read through is one of the schema's: the document's Loc
-  // beside the type's own is refused. Under allOf the document's is read into the
-  // attribute and no name is, and under a word that is not read nothing is.
+  // beside the type's own is read by a name of its own. Under allOf the document's is
+  // read into the attribute and no name is, and under a word that is not read nothing is.
   @Test
   void aDefinitionIsReferredToUnderEveryWordATypeIsReadThrough() throws Exception {
     json("lib", LIB);
@@ -324,9 +324,8 @@ class TypeAlterEdgeCasesTest {
           assertThat(version(type)).as(word.getKey()).isEqualTo(2);
           continue;
         }
-        assertThatThrownBy(() -> registry.alter(type, new AddAttribute("z", "INT")))
-            .as(word.getKey()).isInstanceOf(TypeRefusedException.class).hasMessageMatching(
-                TestRegistry.readAsOne("altered", "Loc", "#/$defs/Loc", "lib#/$defs/Loc"));
+        registry.alteredTo(type, TestRegistry.alias("Ref1", "lib#/$defs/Loc"),
+            "{\"$ref\":\"#/$defs/Loc\"}", "{\"$ref\":\"#/$defs/Ref1\"}");
       }
     }
     // And in a definition of the type's own an attribute is of, under either word.
@@ -374,10 +373,9 @@ class TypeAlterEdgeCasesTest {
     json("i4", "{\"$id\":\"li\"," + String.format(JSON_HEAD, "i4").substring(1)
         + "\"x\":{\"$ref\":\"lib#/$defs/Loc\"},\"y\":{\"$ref\":\"b#/$defs/Loc\"}},"
         + "\"additionalProperties\":false}", "lib", "b");
-    assertThatThrownBy(() -> registry.alter("i4", new AddAttribute("z", "INT")))
-        .isInstanceOf(TypeRefusedException.class)
-        .hasMessageMatching(TestRegistry.readAsOne("altered", "Loc",
-            "lib#/$defs/Loc", "b#/$defs/Loc"));
+    registry.alteredTo("i4",
+        TestRegistry.alias("Loc", "lib#/$defs/Loc"),
+        TestRegistry.alias("Ref1", "b#/$defs/Loc"));
   }
 
   // A lookup that gives a version with no list of references, as a client may.

@@ -353,7 +353,11 @@ public final class TypeAlter {
     recordUsedNumbers();
     Messages at = new Messages(Message.of(old, last.getNamedTypes()), versions);
     setStruct(renumbered(target(), old, at, null, null).getFields());
-    return new LogicalType(lt.getName(), lt.getNamespace(), root, namedTypes,
+    // And the name and package its last version's root message had, which a record written
+    // by it is read by: under another it is no record of the type.
+    boolean named = last.getName() != null && lt.getName() != null;
+    return new LogicalType(named ? last.getName() : lt.getName(),
+        named ? last.getNamespace() : lt.getNamespace(), root, namedTypes,
         lt.getExternalTypes(), lt.getExternalImports(), lt.getReferences(),
         lt.getResolvedReferences(), lt.getDefaultValues());
   }
@@ -2325,15 +2329,15 @@ public final class TypeAlter {
   // a $ref by that name go to either, by the order it comes to them.
   private void refuseIdOfADocument(JsonSchema schema) {
     JsonNode root = schema.toJsonNode();
-    for (String word : List.of("$id", "id")) {
-      String id = root.path(word).isTextual() ? root.path(word).asText() : "";
-      if (schema.resolvedReferences().containsKey(
-          id.endsWith("#") ? id.substring(0, id.length() - 1) : id)) {
-        throw new TypeRefusedException("Type " + subject + " cannot be altered: its " + word
-            + ", " + id + ", is the name it has for a schema it refers to as well, and what a "
-            + "$ref by that name is to cannot be told. Register its new version as a JSON "
-            + "schema");
-      }
+    // By the word the schema's draft has for its name: id in draft-04, $id since.
+    String word = root.path("$schema").asText("").contains("draft-04") ? "id" : "$id";
+    String id = root.path(word).isTextual() ? root.path(word).asText() : "";
+    if (schema.resolvedReferences().containsKey(
+        id.endsWith("#") ? id.substring(0, id.length() - 1) : id)) {
+      throw new TypeRefusedException("Type " + subject + " cannot be altered: its " + word
+          + ", " + id + ", is the name it has for a schema it refers to as well, and what a "
+          + "$ref by that name is to cannot be told. Register its new version as a JSON "
+          + "schema");
     }
   }
 

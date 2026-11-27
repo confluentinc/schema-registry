@@ -200,6 +200,14 @@ public final class ToLogicalContext<T> extends CycleContext<T> {
   }
 
   /**
+   * Where a name was first read from, or null for one not read yet.
+   */
+  public String firstPlaceOf(String name) {
+    Set<String> places = placesReferredTo.get(name);
+    return places == null || places.isEmpty() ? null : places.iterator().next();
+  }
+
+  /**
    * Whether {@code name} is one the schema has for a schema it refers to.
    */
   public boolean isReferenceName(String name) {

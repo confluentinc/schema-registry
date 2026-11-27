@@ -269,6 +269,13 @@ public class LogicalTypeToJsonConverter {
   }
 
   // The document that defines a name the type is of: one, or the type cannot say which.
+  // A definition's name as a $ref says it: escaped as in a JSON pointer, and what a URI's
+  // fragment cannot hold percent-encoded.
+  private static String escaped(String name) {
+    return name.replace("~", "~0").replace("/", "~1").replace("%", "%25")
+        .replace(" ", "%20").replace("#", "%23");
+  }
+
   private static String documentOf(String name, FromLogicalContext<String> ctx) {
     String docUri = ctx.getConverted(name);
     if (TWO_DOCUMENTS.equals(docUri)) {
@@ -501,7 +508,7 @@ public class LogicalTypeToJsonConverter {
         // at the synthetic $defs entry materialized at the active-schema
         // level. The original URI is preserved in that entry's body.
         if (ctx.getLogicalType().getExternalImports().containsKey(name)) {
-          return ReferenceSchema.builder().refValue("#/$defs/" + name);
+          return ReferenceSchema.builder().refValue("#/$defs/" + escaped(name));
         }
         // Externals are lazy-promoted into namedTypes too (so the LT stays
         // self-contained), so checking hasNamedType alone would route them
@@ -511,7 +518,7 @@ public class LogicalTypeToJsonConverter {
             // Canonical external: typeName is a $defs key registered by
             // collectExternalNames, with its source docUri as the value.
             String docUri = documentOf(name, ctx);
-            return ReferenceSchema.builder().refValue(docUri + "#/$defs/" + name);
+            return ReferenceSchema.builder().refValue(docUri + "#/$defs/" + escaped(name));
           }
           // Defensive fallback: external typeName not discovered via
           // collectExternalNames and not bound via externalImports. Emit
@@ -521,13 +528,13 @@ public class LogicalTypeToJsonConverter {
         }
         if (ctx.hasNamedType(name)) {
           // Local type — JSON Pointer into the outer doc's $defs.
-          return ReferenceSchema.builder().refValue("#/$defs/" + name);
+          return ReferenceSchema.builder().refValue("#/$defs/" + escaped(name));
         }
         // External type — JSON Pointer into the external doc's $defs (or
         // definitions, which JsonSchema bridges to $defs at load time).
         if (ctx.isAlreadyConverted(name)) {
           String docUri = documentOf(name, ctx);
-          return ReferenceSchema.builder().refValue(docUri + "#/$defs/" + name);
+          return ReferenceSchema.builder().refValue(docUri + "#/$defs/" + escaped(name));
         }
         throw new ValidationException(
             "Unknown named type reference: '" + name + "'. Either define it "
