@@ -410,6 +410,12 @@ public final class Formats {
     return comparing.met.size();
   }
 
+  // How many types a value of a type may be written as: what listing them costs, for a
+  // test to hold it to.
+  static int writtenAs(Schema type, Map<String, Schema> namedTypes) {
+    return written(type, KnownTypes.of(namedTypes)).size();
+  }
+
   // The first two branches of a union a value of one of which would match the other.
   private static String[] overlappingBranches(Schema union, KnownTypes named) {
     List<String[]> pairs = overlappingPairs(union, named, true);
@@ -570,16 +576,17 @@ public final class Formats {
     return types;
   }
 
-  private static void collectWritten(Schema type, KnownTypes named, Set<Schema> within,
+  // met: the types named so far, each followed once: one come to by many ways is of the
+  // same types by each, and by every way they would double with each name.
+  private static void collectWritten(Schema type, KnownTypes named, Set<Schema> met,
       List<Written> types) {
     if (type.getType() == Schema.Type.NAMED_TYPE_REF) {
       Schema of = named.get(type.getQualifiedName());
-      if (of != null && within.add(of)) {
-        collectWritten(of, named.within(of), within, types);
-        within.remove(of);
+      if (of != null && met.add(of)) {
+        collectWritten(of, named.within(of), met, types);
       }
     } else if (type.getType() == Schema.Type.UNION) {
-      type.getBranches().forEach(b -> collectWritten(b.getSchema(), named, within, types));
+      type.getBranches().forEach(b -> collectWritten(b.getSchema(), named, met, types));
     } else {
       types.add(new Written(type, named));
     }

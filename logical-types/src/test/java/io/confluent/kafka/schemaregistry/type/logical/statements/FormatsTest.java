@@ -29,6 +29,7 @@ import io.confluent.kafka.schemaregistry.type.logical.SchemaType;
 import io.confluent.kafka.schemaregistry.type.logical.statements.TypeScripts.BodyKind;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -654,5 +655,26 @@ class FormatsTest {
     Schema union = lt.getRootSchema().getField("x").getSchema();
     // 190 pairs of holders, and one pair held for each: all held would be 171,000 more.
     assertThat(Formats.rowsMet(union, lt.getNamedTypes())).isEqualTo(380);
+  }
+
+  // A union that a branch comes to by two ways at each of twenty names is listed as the
+  // types it is written as once, where by every way it would be a million times; and two
+  // branches that come to one type are told as before.
+  @Test
+  void aUnionComeToByManyWaysIsListedOnce() {
+    Map<String, Schema> named = new LinkedHashMap<>();
+    named.put("U0", Schema.create(Schema.Type.INT).setNullable(false));
+    for (int i = 1; i <= 20; i++) {
+      Schema below = Schema.createNamedTypeRef("U" + (i - 1));
+      named.put("U" + i, Schema.createUnion(List.of(new UnionBranch("a", below),
+          new UnionBranch("b", below))));
+    }
+    Schema top = Schema.createNamedTypeRef("U20");
+    assertThat(Formats.writtenAs(top, named)).isEqualTo(1);
+    Field both = new Field("u", Schema.createUnion(List.of(new UnionBranch("p", top),
+        new UnionBranch("q", top))), 0);
+    assertThatThrownBy(() -> Formats.refuseUnwritable(SchemaType.JSON, both,
+        KnownTypes.of(named))).isInstanceOf(TypeRefusedException.class)
+        .hasMessageContaining("cannot have branches p and q");
   }
 }
