@@ -18,9 +18,11 @@ package io.confluent.connect.protobuf;
 import com.google.protobuf.Message;
 import io.confluent.connect.schema.backup.api.BackupWrapper;
 import io.confluent.connect.schema.backup.api.SchemaBackupConfig;
+import io.confluent.connect.schema.backup.core.BackupCaches;
 import io.confluent.connect.schema.backup.core.BackupConverterHelper;
 import io.confluent.connect.schema.backup.core.BackupExceptionMapper;
 import io.confluent.connect.schema.backup.core.BackupReferenceResolver;
+import io.confluent.connect.schema.backup.core.NamedSchemaCache;
 import io.confluent.kafka.schemaregistry.ParsedSchema;
 import io.confluent.kafka.schemaregistry.ParsedSchemaAndValue;
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
@@ -52,7 +54,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Implementation of Converter that uses Protobuf schemas and objects.
@@ -75,7 +76,9 @@ public class ProtobufConverter implements Converter {
   private boolean backupEnvelopeMode;
   private BackupConverterHelper backupHelper;
   private final Map<Schema, Schema> wrapperSchemaCache =
-      new ConcurrentHashMap<>();
+      BackupCaches.newBoundedMap();
+  private final NamedSchemaCache<ProtobufSchema> namedProtobufSchemas = new NamedSchemaCache<>(
+      (a, b) -> a.equals(b) && a.dependencies().equals(b.dependencies()), ProtobufSchema::copy);
 
   public ProtobufConverter() {
   }
@@ -174,6 +177,8 @@ public class ProtobufConverter implements Converter {
           BackupWrapper.FIELD_DATA,
           BackupWrapper.FIELD_SCHEMA_TYPE,
           BackupWrapper.FIELD_RAW_SCHEMA);
+      BackupWrapper.requireDataEncoding(wrapperSchema, wrapper,
+          BackupWrapper.DATA_ENCODING_CONNECT, getClass().getSimpleName());
       String schemaType = wrapper.getString(BackupWrapper.FIELD_SCHEMA_TYPE);
       if (!SchemaBackupConfig.TYPE_PROTOBUF.equals(schemaType)) {
         throw new DataException(
@@ -189,22 +194,19 @@ public class ProtobufConverter implements Converter {
             + "' for topic " + topic + ". Cannot guarantee pristine restore.");
       }
 
-      BackupReferenceResolver.ResolutionResult resolved =
-          backupHelper.getReferenceResolver().resolveFromWrapper(
-              wrapperSchema, wrapper, PROTOBUF_SCHEMA_FACTORY);
+      ProtobufSchema serializeSchema = (ProtobufSchema)
+          backupHelper.getReferenceResolver().resolveRestoreSchema(
+              wrapperSchema, wrapper, rawSchema, PROTOBUF_SCHEMA_FACTORY);
 
       ProtobufSchemaAndValue schemaAndValue =
           protobufData.fromConnectData(actualConnectSchema, actualData);
       Object v = schemaAndValue.getValue();
 
-      ProtobufSchema serializeSchema = resolved.hasReferences()
-          ? new ProtobufSchema(rawSchema, resolved.getTargetRefs(),
-              resolved.getResolvedSchemas(), null, null)
-          : new ProtobufSchema(rawSchema);
-
       if (v instanceof Message) {
-        return serializer.serialize(topic, isKey, headers,
-            (Message) v, serializeSchema);
+        // Name the schema after the restored message, so the subject strategy sees it.
+        Message message = (Message) v;
+        return serializer.serialize(topic, isKey, headers, message,
+            namedForMessage(serializeSchema, message));
       }
       throw new DataException("Unsupported type during restore: "
           + (v != null ? v.getClass().getName() : "null"));
@@ -243,7 +245,7 @@ public class ProtobufConverter implements Converter {
       if (backupEnvelopeMode && deserialized.getWriterSchemaInfo() != null
           && result.schema() != null) {
         return wrapWithBackupMetadata(
-            result, topic, deserialized.getWriterSchemaInfo());
+            result, topic, deserialized.getWriterSchemaInfo(), message);
       }
       return result;
     } catch (TimeoutException e) {
@@ -279,16 +281,27 @@ public class ProtobufConverter implements Converter {
 
   private SchemaAndValue wrapWithBackupMetadata(
       SchemaAndValue original, String topic,
-      ParsedSchemaAndValue.SchemaInfo schemaInfo) {
+      ParsedSchemaAndValue.SchemaInfo schemaInfo, Message message) {
     try {
+      // The subject follows the record's message, as in the Protobuf deserializer.
       return backupHelper.wrapWithBackupMetadata(
           original, topic, schemaInfo,
           SchemaBackupConfig.TYPE_PROTOBUF, isKey,
-          PROTOBUF_SCHEMA_FACTORY, serializer::computeSubjectName);
+          PROTOBUF_SCHEMA_FACTORY,
+          (t, k, parsed) -> serializer.computeSubjectName(
+              t, k, namedForMessage((ProtobufSchema) parsed, message)));
     } catch (Exception e) {
       throw BackupExceptionMapper.classify(
           "wrap Protobuf backup for topic " + topic, e);
     }
+  }
+
+  /**
+   * Names {@code schema} after the message type of {@code message}. An unnamed schema
+   * otherwise reports its first message as its name.
+   */
+  private ProtobufSchema namedForMessage(ProtobufSchema schema, Message message) {
+    return namedProtobufSchemas.named(schema, message.getDescriptorForType().getFullName());
   }
 
   static class Serializer extends AbstractKafkaProtobufSerializer {
