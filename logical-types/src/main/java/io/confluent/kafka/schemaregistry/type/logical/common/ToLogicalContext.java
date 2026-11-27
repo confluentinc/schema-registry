@@ -93,6 +93,8 @@ public final class ToLogicalContext<T> extends CycleContext<T> {
   // Where each name is first read from and where the $refs of the schema itself are to, by
   // the names they are read by.
   private final Map<String, Set<String>> placesReferredTo = new LinkedHashMap<>();
+  // The names the schema has for the documents it refers to, by what its loader calls them.
+  private final Map<String, String> documentNames = new LinkedHashMap<>();
 
   public ToLogicalContext(ParsedSchema parsedSchema) {
     this(parsedSchema, Map.of(), LogicalTypeVersion.V2);
@@ -197,6 +199,21 @@ public final class ToLogicalContext<T> extends CycleContext<T> {
 
   public Map<String, Set<String>> getPlacesReferredTo() {
     return placesReferredTo;
+  }
+
+  /**
+   * Records the name the schema has for a document it refers to, by what its loader calls
+   * the document: under a root id that is the name resolved against the id.
+   */
+  public void putDocumentName(String document, String name) {
+    documentNames.putIfAbsent(document, name);
+  }
+
+  /**
+   * The name the schema has for a document, or the document as the loader calls it.
+   */
+  public String documentName(String document) {
+    return documentNames.getOrDefault(document, document);
   }
 
   /**

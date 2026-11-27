@@ -37,12 +37,14 @@ import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.Mov
 import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.Position;
 import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.RenameAttribute;
 import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.SetAttributeWith;
+import io.confluent.kafka.schemaregistry.type.logical.statements.AlterAction.SetDataType;
 import io.confluent.kafka.schemaregistry.type.logical.statements.TypeScripts.BodyKind;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import org.everit.json.schema.ValidationException;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -545,7 +547,7 @@ class TypeAlterMoreEdgeCasesTest {
     json("db", head("db") + "\"x\":{\"$ref\":\"#/$defs/Loc\"},\"y\":{\"allOf\":[{\"$ref\":"
         + "\"libd#/$defs/B\"}]}},\"additionalProperties\":false,\"$defs\":{\"Loc\":" + Q + "}}",
         "libd");
-    registry.alteredTo("db", TestRegistry.alias("Ref1", "libd#/definitions/Loc"),
+    registry.alteredTo("db", TestRegistry.alias("Ref1", "libd#/$defs/Loc"),
         "{\"$ref\":\"#/$defs/Loc\"}");
     json("dt", head("dt") + "\"a\":{\"$ref\":\"libd#/definitions/Loc\"},\"b\":{\"$ref\":"
         + "\"#/$defs/Y\"}},\"additionalProperties\":false,\"$defs\":{\"Y\":{\"type\":\"object\","
@@ -553,6 +555,12 @@ class TypeAlterMoreEdgeCasesTest {
     registry.alter("dt", new AddAttribute("z", "INT"));
     registry.alter("dt", new AddAttribute("z2", "INT"));
     assertThat(version("dt")).isEqualTo(3);
+    // One definition, said by either word, is read by one name.
+    for (int version = 1; version <= 3; version++) {
+      assertThat(JsonToLogicalTypeConverter.toLogicalType((JsonSchema) registry.parse(
+          registry.version("dt", version))).getExternalImports()).as("version " + version)
+          .isEmpty();
+    }
   }
 
   private static Schema of(LogicalType lt, Schema type) {
@@ -569,37 +577,181 @@ class TypeAlterMoreEdgeCasesTest {
     json("t1", String.format(doc, "t1", P));
     json("t2", String.format(doc, "t2", Q));
     create("tw", SchemaType.JSON, "(id INT, a t1, b t2)");
-    registry.alter("tw", new AddAttribute("z", "INT"));
-    JsonSchema written = (JsonSchema) registry.schema("tw");
-    LogicalType read = JsonToLogicalTypeConverter.toLogicalType(written);
-    Schema row = of(read, read.getRootSchema());
-    Schema a = of(read, of(read, row.getField("a").getSchema()).getField("i").getSchema());
-    Schema b = of(read, of(read, row.getField("b").getSchema()).getField("i").getSchema());
-    assertThat(a.getField("p")).isNotNull();
-    assertThat(b.getField("q")).isNotNull();
-    ObjectMapper mapper = new ObjectMapper();
-    written.validate(
-        mapper.readTree("{\"id\":1,\"a\":{\"i\":{\"p\":4}},\"b\":{\"i\":{\"q\":\"s\"}}}"));
-    assertThatThrownBy(() -> written.validate(
-        mapper.readTree("{\"id\":1,\"a\":{\"i\":{\"q\":\"s\"}},\"b\":{\"i\":{\"p\":4}}}")))
-        .isNotNull();
+    for (int version = 1; version <= 2; version++) {
+      JsonSchema schema = (JsonSchema) registry.schema("tw");
+      LogicalType read = JsonToLogicalTypeConverter.toLogicalType(schema);
+      Schema row = of(read, read.getRootSchema());
+      assertThat(of(read, of(read, row.getField("a").getSchema()).getField("i").getSchema())
+          .getField("p")).as("a.i at version " + version).isNotNull();
+      assertThat(of(read, of(read, row.getField("b").getSchema()).getField("i").getSchema())
+          .getField("q")).as("b.i at version " + version).isNotNull();
+      assertThat(takes(schema, "{\"id\":1,\"a\":{\"i\":{\"p\":4}},\"b\":{\"i\":{\"q\":\"s\"}}}"))
+          .isTrue();
+      assertThat(takes(schema, "{\"id\":1,\"a\":{\"i\":{\"q\":\"s\"}},\"b\":{\"i\":{\"p\":4}}}"))
+          .isFalse();
+      if (version == 1) {
+        registry.alter("tw", new AddAttribute("z", "INT"));
+      }
+    }
+  }
+
+  private static boolean takes(JsonSchema schema, String value) throws Exception {
+    try {
+      schema.validate(new ObjectMapper().readTree(value));
+      return true;
+    } catch (ValidationException e) {
+      return false;
+    }
   }
 
   // A definition's name is its key, however the $ref to it is escaped: the type has one
-  // definition of it, and is altered.
+  // definition of it, of its own or a document's, and is altered. A $ref says a plus as
+  // %2B: a plus in it is a space to the loader.
   @Test
   void aDefinitionsNameIsItsKeyHoweverTheRefEscapesIt() throws Exception {
     String[][] keys = {{"Stra\u00dfe", "Stra%C3%9Fe"}, {"a/b", "a~1b"}, {"a~b", "a~0b"},
-        {"a%b", "a%25b"}, {"a b", "a%20b"}};
+        {"a%b", "a%25b"}, {"a b", "a%20b"}, {"a b", "a+b"}, {"a+b", "a%2Bb"},
+        {"a#b", "a%23b"}, {"a^b", "a%5Eb"}, {"a{b}", "a%7Bb%7D"}};
     for (int i = 0; i < keys.length; i++) {
-      String type = "es" + i;
-      json(type, later(type) + "\"x\":{\"$ref\":\"#/$defs/" + keys[i][1] + "\"}},"
-          + "\"additionalProperties\":false,\"$defs\":{\"" + keys[i][0] + "\":" + Q + "}}");
-      registry.alter(type, new AddAttribute("z", "INT"));
-      JsonSchema written = (JsonSchema) registry.schema(type);
-      assertThat(written.toJsonNode().path("$defs").size()).as(keys[i][0]).isEqualTo(1);
-      assertThat(written.toJsonNode().path("$defs").has(keys[i][0])).as(keys[i][0]).isTrue();
-      written.validate(new ObjectMapper().readTree("{\"x\":{\"q\":\"s\"}}"));
+      String key = keys[i][0];
+      json("el" + i, "{\"type\":\"object\",\"title\":\"el" + i + "\",\"additionalProperties\":"
+          + "false,\"$defs\":{\"" + key + "\":" + P + "}}");
+      for (String document : List.of("", "el" + i)) {
+        String type = (document.isEmpty() ? "es" : "ed") + i;
+        String[] refs = document.isEmpty() ? new String[0] : new String[] {document};
+        json(type, later(type) + "\"x\":{\"$ref\":\"" + document + "#/$defs/" + keys[i][1]
+            + "\"}},\"additionalProperties\":false,\"$defs\":{\"" + key + "\":" + Q + "}}", refs);
+        registry.alter(type, new AddAttribute("z", "INT"));
+        JsonSchema written = (JsonSchema) registry.schema(type);
+        assertThat(written.toJsonNode().path("$defs").has(key)).as(type + " " + key).isTrue();
+        assertThat(takes(written, "{\"x\":{\"q\":\"s\"}}")).as(type + " " + key)
+            .isEqualTo(document.isEmpty());
+        assertThat(takes(written, "{\"x\":{\"p\":1}}")).as(type + " " + key)
+            .isEqualTo(!document.isEmpty());
+        // And again, by what the first statement wrote.
+        registry.alter(type, new AddAttribute("z2", "INT"));
+        assertThat(version(type)).as(type + " " + key).isEqualTo(3);
+      }
+    }
+  }
+
+  private LogicalType read(String subject) {
+    return JsonToLogicalTypeConverter.toLogicalType((JsonSchema) registry.schema(subject));
+  }
+
+  // Under a root $id the loader calls a document by its name resolved against the id: the
+  // type has it by the name the schema has for it, and its own definitions by no document.
+  @Test
+  void aDocumentIsToldByItsNameUnderARootId() throws Exception {
+    json("lib", LIB);
+    String id = "{\"$id\":\"x-test://ids/ti.json\",";
+    json("ri", id + later("ri").substring(1) + "\"x\":{\"$ref\":\"#/$defs/Loc\"},\"y\":{\"$ref\":"
+        + "\"lib#/$defs/Loc\"}},\"additionalProperties\":false,\"$defs\":{\"Loc\":" + Q + "}}",
+        "lib");
+    assertThat(read("ri").getExternalImports()).containsEntry("Ref1", "lib#/$defs/Loc");
+    registry.alteredTo("ri", TestRegistry.alias("Ref1", "lib#/$defs/Loc"));
+    // A definition of the document's own name is the document's.
+    json("self", "{\"type\":\"object\",\"title\":\"self\",\"additionalProperties\":false,"
+        + "\"$defs\":{\"self\":" + P + "}}");
+    json("rs", id + head("rs").substring(1) + "\"y\":{\"$ref\":\"self#/$defs/self\"}" + CLOSED,
+        "self");
+    registry.alteredTo("rs", "{\"$ref\":\"self#/$defs/self\"}");
+    // And a definition of the schema's own that another names is its own.
+    json("rn", id + later("rn").substring(1) + "\"x\":{\"$ref\":\"#/$defs/A\"}},"
+        + "\"additionalProperties\":false,\"$defs\":{\"A\":{\"type\":\"object\",\"properties\":"
+        + "{\"b\":{\"$ref\":\"#/$defs/B\"}}},\"B\":" + Q + "}}");
+    assertThat(read("rn").getExternalTypes()).isEmpty();
+    registry.alteredTo("rn", "{\"$ref\":\"#/$defs/B\"}");
+  }
+
+  // A document with one key under $defs and under definitions has two definitions of it:
+  // a type of either cannot say which, and is refused.
+  @Test
+  void aDocumentsKeyUnderBothWordsIsTwoDefinitions() throws Exception {
+    json("bw", "{\"type\":\"object\",\"title\":\"bw\",\"additionalProperties\":false,"
+        + "\"$defs\":{\"Loc\":" + Q + "},\"definitions\":{\"Loc\":" + P + "}}");
+    json("tb", head("tb") + "\"x\":{\"$ref\":\"bw#/definitions/Loc\"}" + CLOSED, "bw");
+    refused("Type tb cannot be changed so: no JSON schema can be made of it: Duplicate named "
+        + "type: Loc", "tb", new AddAttribute("z", "INT"));
+  }
+
+  // In an older draft a part of a document that is no definition is said by the same $ref
+  // in every document: each is read as its own document's.
+  @Test
+  void partsOfTwoDocumentsSaidAlikeAreEachTheirOwn() throws Exception {
+    String part = "{\"type\":\"object\",\"title\":\"%s\",\"properties\":{\"a\":%s,\"b\":"
+        + "{\"$ref\":\"#/properties/a\"}},\"additionalProperties\":false}";
+    json("pa1", String.format(part, "pa1", P));
+    json("pa2", String.format(part, "pa2", Q));
+    json("pp", head("pp") + "\"x\":{\"$ref\":\"pa1\"},\"y\":{\"$ref\":\"pa2\"}" + CLOSED,
+        "pa1", "pa2");
+    LogicalType read = read("pp");
+    Schema row = of(read, read.getRootSchema());
+    assertThat(of(read, of(read, row.getField("x").getSchema()).getField("b").getSchema())
+        .getField("p")).isNotNull();
+    assertThat(of(read, of(read, row.getField("y").getSchema()).getField("b").getSchema())
+        .getField("q")).isNotNull();
+  }
+
+  // A reference that moves to a version whose root takes a null gives a stored union's
+  // branch a null of its own: refused, as adding such a branch is.
+  @Test
+  void aReferenceMovedToAVersionThatTakesANullIsRefusedForAUnionsBranch() throws Exception {
+    registry.create("g", SchemaType.JSON, BodyKind.OTHER, "INT NOT NULL");
+    create("tg", SchemaType.JSON, "(id INT, u UNION(a g, b BOOLEAN))");
+    registry.alter("g", new SetDataType("INT"));
+    refused("Type tg cannot be changed so: its reference would move, type g from version 1 "
+        + "to version 2, and at that version branch a of the UNION of attribute u is of a "
+        + "type that takes a null of its own", "tg", new AddAttribute("w", "g"));
+    assertThat(version("tg")).isEqualTo(1);
+  }
+
+  // A definition of a document an attribute is of moves with the document's version: one
+  // read through a reference that goes with the statement is refused, and altered once the
+  // statement names the document's type itself, as the refusal says.
+  @Test
+  void aDefinitionInUseIsNotLeftToAnotherVersionByAReferenceThatGoes() throws Exception {
+    String lq = "{\"type\":\"object\",\"title\":\"lq\",\"additionalProperties\":false,"
+        + "\"$defs\":{\"Loc\":%s}}";
+    json("lq", String.format(lq, P));
+    json("alq", String.format(ROW, "alq", "in", "{\"$ref\":\"lq#/$defs/Loc\"}", ""), "lq");
+    json("lq", String.format(lq, Q));
+    jsonAt("dm", head("dm") + "\"a\":{\"$ref\":\"lq#/$defs/Loc\"},\"c\":{\"$ref\":\"alq\"}"
+        + CLOSED, "alq@1", "lq@2");
+    refused("Type dm cannot be changed so: it would no longer refer to version 1 of type lq",
+        "dm", new DropAttribute("c", false));
+    jsonAt("dw", head("dw") + "\"a\":{\"$ref\":\"lq\"},\"c\":{\"$ref\":\"alq\"}" + CLOSED,
+        "alq@1", "lq@2");
+    registry.alter("dw", new AlterAttributeType("a", "lq"), new DropAttribute("c", false));
+    assertThat(registry.latest("dw").getReferences())
+        .containsExactly(new SchemaReference("lq", "lq", 2));
+  }
+
+  // A definition of the type's own named as a type below a reference that goes is no type
+  // the type refers to: the statement is taken.
+  @Test
+  void anOwnDefinitionNamedAsATypeBelowAReferenceThatGoesIsItsOwn() throws Exception {
+    bvBelowTwo();
+    jsonRefs("ob", head("ob") + "\"a\":{\"$ref\":\"abv\"},\"b\":{\"$ref\":\"#/$defs/bv\"}},"
+        + "\"additionalProperties\":false,\"$defs\":{\"bv\":" + Q + "}}",
+        List.of(new SchemaReference("abv", "abv", 1)), "bv=bv@1", "abv=abv@1");
+    registry.alter("ob", new DropAttribute("a", false));
+    assertThat(references("ob")).isEmpty();
+  }
+
+  // In a later draft what is beside a $ref is read and written again: a place there is
+  // one the type may refer to.
+  @Test
+  void aPlaceBesideARefThatALaterDraftReadsIsAltered() throws Exception {
+    json("pb", later("pb") + "\"x\":{\"$ref\":\"#/$defs/A/properties/e\"}},"
+        + "\"additionalProperties\":false,\"$defs\":{\"A\":{\"$ref\":\"#/$defs/Loc\","
+        + "\"properties\":{\"e\":" + P + "}},\"Loc\":{\"type\":\"object\",\"properties\":"
+        + "{\"q\":{\"type\":\"string\"}}}}}");
+    JsonSchema stored = (JsonSchema) registry.schema("pb");
+    registry.alter("pb", new AddAttribute("z", "INT"));
+    for (String value : List.of("{\"x\":{\"p\":1}}", "{\"x\":{\"q\":\"s\"}}")) {
+      assertThat(takes((JsonSchema) registry.schema("pb"), value)).as(value)
+          .isEqualTo(takes(stored, value));
     }
   }
 
@@ -704,18 +856,20 @@ class TypeAlterMoreEdgeCasesTest {
     assertThat(version("z17")).isEqualTo(2);
   }
 
-  // The two definitions are told in the order they are come to, level by level.
+  // In a later draft the type's own definitions are read before what any of them names,
+  // in whatever order they are: a document's of the name of one is read apart from it.
   @Test
-  void twoDefinitionsAreToldInTheOrderTheyAreComeTo() throws Exception {
+  void aDocumentsDefinitionIsReadApartWhateverTheOrderOfTheTypesOwn() throws Exception {
     json("lib", String.format(LIBS, "lib", P));
     String row = "{\"type\":\"object\",\"properties\":{\"k\":{\"$ref\":\"%s\"}}}";
     json("z18", later("z18") + "\"x\":{\"$ref\":\"#/$defs/A\"},\"y\":{\"$ref\":\"#/$defs/B\"}},"
         + "\"additionalProperties\":false,\"$defs\":{\"A\":" + String.format(row, "lib#/$defs/Loc")
         + ",\"B\":" + String.format(row, "#/$defs/Loc") + ",\"Loc\":" + Q + "}}", "lib");
-    assertThatThrownBy(() -> registry.alter("z18", new AddAttribute("z", "INT")))
-        .isInstanceOf(TypeRefusedException.class)
-        .hasMessageMatching(TestRegistry.readAsOne("altered", "Loc",
-            "lib#/$defs/Loc", "#/$defs/Loc"));
+    registry.alteredTo("z18", TestRegistry.alias("Ref1", "lib#/$defs/Loc"),
+        "{\"$ref\":\"#/$defs/Loc\"}", "{\"$ref\":\"#/$defs/Ref1\"}");
+    // And again, with the names the first statement wrote.
+    registry.alter("z18", new AddAttribute("z2", "INT"));
+    assertThat(version("z18")).isEqualTo(3);
   }
 
   // A $ref under not, if, then or else, where no type is read (what

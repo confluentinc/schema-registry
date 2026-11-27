@@ -474,6 +474,13 @@ public final class Formats {
         }
         return null;
       case UNION: {
+        // A branch of a type that takes a null of its own now, and did not: a null would
+        // match it and the union's own, or be taken by a union that takes none.
+        for (UnionBranch b : type.getBranches()) {
+          if (nullWithin(b.getSchema(), after, 0) && !nullWithin(b.getSchema(), before, 0)) {
+            return new String[] {within, b.getName()};
+          }
+        }
         // Two that did before are left: a type stored so is altered as it was.
         Set<List<String>> were = new HashSet<>();
         overlappingPairs(type, before, false)
@@ -508,6 +515,12 @@ public final class Formats {
 
   // moved: the references that would be to another version, as told to a reader.
   static TypeRefusedException newlyOverlapping(String refused, String moved, String[] found) {
+    if (found.length == 2) {
+      return new TypeRefusedException(refused + ": " + moved + ", and at that version branch "
+          + found[1] + " of the UNION" + (found[0] != null ? " of attribute " + found[0] : "")
+          + " is of a type that takes a null of its own: a null would match the branch as "
+          + "well as the union's own null, or be taken where the union takes none");
+    }
     return new TypeRefusedException(refused + ": " + moved + ", and with that version's "
         + "attributes branches " + found[1] + " and " + found[2] + " of the UNION"
         + (found[0] != null ? " of attribute " + found[0] : "")

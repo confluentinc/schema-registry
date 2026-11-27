@@ -258,11 +258,12 @@ public class LogicalTypeToJsonConverter {
           || !name.equals(docUri) && documents.contains(name)) {
         continue;
       }
-      // Two documents may each have a definition of one name for their own use: it is
-      // neither's for this type, and a fault only where the type itself is of it.
+      // Two documents may each have a definition of one name for their own use, and one
+      // document one under $defs and one under definitions: it is neither's for this type,
+      // and a fault only where the type itself is of it.
       if (!ctx.isAlreadyConverted(name)) {
         ctx.putConverted(name, docUri);
-      } else if (!docUri.equals(ctx.getConverted(name))) {
+      } else {
         ctx.getConvertedNamedTypes().put(name, TWO_DOCUMENTS);
       }
     }
@@ -272,8 +273,8 @@ public class LogicalTypeToJsonConverter {
   // A definition's name as a $ref says it: escaped as in a JSON pointer, and what a URI's
   // fragment cannot hold percent-encoded.
   private static String escaped(String name) {
-    return name.replace("~", "~0").replace("/", "~1").replace("%", "%25")
-        .replace(" ", "%20").replace("#", "%23");
+    return JsonToLogicalTypeConverter.asRef("#" + name.replace("~", "~0").replace("/", "~1"))
+        .substring(1);
   }
 
   private static String documentOf(String name, FromLogicalContext<String> ctx) {

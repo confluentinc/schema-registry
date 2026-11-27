@@ -5234,10 +5234,10 @@ class TypeAlterTest {
   }
 
   // A definition of the type's own that no $ref is to is read all the same by a schema of
-  // a later draft: with a document's definition of its name it is one, and refused. And a
-  // reference's name is that reference, though the schema's $id is the same name.
+  // a later draft: a document's definition of its name is read apart from it. And a schema
+  // whose $id is a reference's name is refused.
   @Test
-  void aJsonDefinitionReadThoughNoRefIsToItIsOneOfItsName() throws Exception {
+  void aJsonDefinitionReadThoughNoRefIsToItIsReadApartFromADocuments() throws Exception {
     String p = "{\"type\":\"object\",\"properties\":{\"p\":{\"type\":\"integer\"}},"
         + "\"required\":[\"p\"],\"additionalProperties\":false}";
     String q = "{\"type\":\"object\",\"properties\":{\"q\":{\"type\":\"string\"}},"
@@ -5292,9 +5292,10 @@ class TypeAlterTest {
     assertThat(message("wn").findFieldByNumber(2)).isNull();
   }
 
-  // From draft 2019-09 on, what is beside a $ref is read with it: a second definition of
-  // a name there is told. And a copy of a document's definition that a statement left in
-  // the type, which no $ref of the type is to, is no second one: the type is altered again.
+  // From draft 2019-09 on, what is beside a $ref is read with it: a document's definition
+  // of the type's own name there is read apart, and the values taken stay. And a copy of a
+  // document's definition that a statement left in the type, which no $ref of the type is
+  // to, is no second one: the type is altered again.
   @Test
   void aJsonRefsSiblingsAreReadInALaterDraftAndACopyLeftIsNoSecondDefinition()
       throws Exception {
@@ -5304,11 +5305,23 @@ class TypeAlterTest {
         + "\"required\":[\"q\"],\"additionalProperties\":false}";
     json("slib", "{\"type\":\"object\",\"title\":\"slib\",\"properties\":{\"k\":{\"type\":"
         + "\"integer\"}},\"additionalProperties\":false,\"$defs\":{\"Loc\":" + p + "}}");
+    // The type's own is open, as it must be to have more beside it.
     json("sib20", "{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\","
         + String.format(JSON_HEAD, "sib20").substring(1) + "\"x\":{\"$ref\":\"#/$defs/Loc\","
         + "\"properties\":{\"k\":{\"$ref\":\"slib#/$defs/Loc\"}}}},\"additionalProperties\":"
-        + "false,\"$defs\":{\"Loc\":" + q + "}}", "slib");
+        + "false,\"$defs\":{\"Loc\":{\"type\":\"object\",\"properties\":{\"q\":{\"type\":"
+        + "\"string\"}},\"required\":[\"q\"]}}}", "slib");
+    JsonSchema stored = (JsonSchema) registry.schema("sib20");
     registry.alteredTo("sib20", TestRegistry.alias("Ref1", "slib#/$defs/Loc"));
+    ObjectMapper mapper = new ObjectMapper();
+    stored.validate(mapper.readTree("{\"x\":{\"q\":\"s\",\"k\":{\"p\":1}}}"));
+    ((JsonSchema) registry.schema("sib20")).validate(
+        mapper.readTree("{\"x\":{\"q\":\"s\",\"k\":{\"p\":1}}}"));
+    for (JsonSchema schema : List.of(stored, (JsonSchema) registry.schema("sib20"))) {
+      assertThatThrownBy(() -> schema.validate(
+          mapper.readTree("{\"x\":{\"q\":\"s\",\"k\":{\"q\":\"t\"}}}")))
+          .isInstanceOf(org.everit.json.schema.ValidationException.class);
+    }
     json("xlib", "{\"type\":\"object\",\"title\":\"xlib\",\"properties\":{\"l\":{\"$ref\":"
         + "\"#/$defs/Loc\"}},\"additionalProperties\":false,\"$defs\":{\"Loc\":{\"type\":"
         + "\"object\",\"properties\":{\"in\":{\"$ref\":\"#/$defs/Inner\"}},"
@@ -5544,11 +5557,11 @@ class TypeAlterTest {
     assertThat(version("s3")).isEqualTo(3);
   }
 
-  // A name the type has for a document is read before all else in a later draft, and is
-  // written as that. In an older draft it is read as any definition, by its name: with a
-  // document's definition of that name it is one, and the type is refused.
+  // A name the type has for a document is that document, in an older draft as in a later
+  // one: another document's definition of that name is read apart from it, and each is
+  // written as it is.
   @Test
-  void aJsonNameForADocumentIsADefinitionOfItsNameInAnOlderDraft() throws Exception {
+  void aJsonNameForADocumentIsReadApartFromADocumentsDefinitionOfItsName() throws Exception {
     json("lone", "{\"type\":\"object\",\"title\":\"lone\",\"properties\":{\"q\":{\"type\":"
         + "\"string\"}},\"required\":[\"q\"],\"additionalProperties\":false}");
     json("lfoo", "{\"type\":\"object\",\"title\":\"lfoo\",\"properties\":{\"l\":{\"$ref\":"

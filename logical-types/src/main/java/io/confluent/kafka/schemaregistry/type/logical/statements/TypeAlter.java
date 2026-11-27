@@ -215,6 +215,8 @@ public final class TypeAlter {
   private final Map<String, String> externalImports = new LinkedHashMap<>();
   private final List<SchemaReference> references = new ArrayList<>();
   private final Map<String, String> resolved = new LinkedHashMap<>();
+  // The types the statement names: theirs to move to another version.
+  private final Set<String> stated = new HashSet<>();
   // Where the $refs of the JSON schema edited go, by the names the type is read by.
   private Map<String, Set<String>> placesStored = Map.of();
   // The Protobuf field numbers of every version.
@@ -1955,7 +1957,7 @@ public final class TypeAlter {
     unused.forEach(name -> {
       // The document of what the name was for: of a definition, the one its $ref was to.
       String uri = externalImports.get(name);
-      Set<String> places = uri != null ? Set.of(uri) : placesStored.getOrDefault(name, Set.of());
+      Set<String> places = uri != null ? Set.of(uri) : placesOf(name);
       places.stream().filter(place -> place.indexOf('#') != 0)
           .forEach(place -> freed.add(place.contains("#")
               ? place.substring(0, place.indexOf('#')) : place));
@@ -1997,10 +1999,22 @@ public final class TypeAlter {
     Map<String, SchemaMetadata> versions = new HashMap<>();
     Map<String, String> was = TypeReferences.firstMet(lookup, subject, before, versions);
     Map<String, String> now = TypeReferences.firstMet(lookup, subject, references, versions);
-    Set<String> own = new HashSet<>();
+    Set<String> own = new HashSet<>(stated);
     references.stream().filter(ref -> !original.getReferences().contains(ref))
         .forEach(ref -> own.add(ref.getName()));
+    // With the documents of the definitions in use, which no name of the type's says. A
+    // definition of the type's own is no type it refers to, whatever its name, and a name
+    // the statement gives a type is that type's and no longer the definition's.
+    Set<String> read = new LinkedHashSet<>();
     for (String name : used) {
+      if (own.contains(name) || namedTypes.containsKey(name) && !externalTypes.contains(name)) {
+        continue;
+      }
+      read.add(name);
+      placesOf(name).stream().filter(p -> p.indexOf('#') > 0)
+          .forEach(p -> read.add(p.substring(0, p.indexOf('#'))));
+    }
+    for (String name : read) {
       String old = was.get(name);
       if (old != null && !own.contains(name) && !old.equals(now.get(name))) {
         throw new TypeRefusedException(refused() + ": it would no longer refer to version "
@@ -2009,6 +2023,17 @@ public final class TypeAlter {
             + "its latest version");
       }
     }
+  }
+
+  // Where the schema edited has a definition read by this name. A name the type as read
+  // makes for what it refers to, and a reference's own, are made anew at each reading
+  // and are no definition's.
+  private Set<String> placesOf(String name) {
+    boolean made = externalImports.containsKey(name)
+        || original.getExternalImports().containsKey(name)
+        || original.getReferences().stream().anyMatch(ref -> ref.getName().equals(name))
+        || references.stream().anyMatch(ref -> ref.getName().equals(name));
+    return made ? Set.of() : placesStored.getOrDefault(name, Set.of());
   }
 
   // Of the references no attribute was of, those that taken away would leave a name
@@ -2027,7 +2052,7 @@ public final class TypeAlter {
     Set<String> stored = new HashSet<>();
     original.getReferences().forEach(ref -> stored.add(ref.getName()));
     Set<String> names = new HashSet<>(used);
-    Set<String> own = new HashSet<>();
+    Set<String> own = new HashSet<>(stated);
     for (SchemaReference ref : kept) {
       if (idle.contains(ref)) {
         continue;
@@ -2293,11 +2318,13 @@ public final class TypeAlter {
     return places;
   }
 
-  // A place of the schema's own under a schema that is a $ref: what is beside a $ref is
-  // not written again, and a $ref to it would be to nothing.
+  // A place of the schema's own under a schema that is a $ref and read as that alone, in
+  // an older draft or as a name for what it refers to: what is beside such a $ref is not
+  // written again, and a $ref to it would be to nothing.
   private static void refuseBesideARef(JsonNode document, String part) {
     for (int at = part.indexOf('/', 1); at > 0; at = part.indexOf('/', at + 1)) {
-      if (definition(document, "#" + part.substring(0, at)).path("$ref").isTextual()) {
+      JsonNode above = definition(document, "#" + part.substring(0, at));
+      if (above.path("$ref").isTextual() && (!later(document) || entry(above))) {
         throw new BesideARef("#" + part, "#" + part.substring(0, at));
       }
     }
@@ -2434,6 +2461,7 @@ public final class TypeAlter {
       dropUnusedReferences();
     }
     LogicalType lt = parseWithReferences(builder, names);
+    lt.getReferences().forEach(r -> stated.add(r.getName()));
     parsedTypes = lt.getNamedTypes();
     parsedImports = lt.getExternalImports();
     // The names the type has a use for other than as its references': a definition of its
