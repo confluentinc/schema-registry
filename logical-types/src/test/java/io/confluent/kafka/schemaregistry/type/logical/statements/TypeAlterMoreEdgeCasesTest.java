@@ -304,6 +304,108 @@ class TypeAlterMoreEdgeCasesTest {
     assertThat(message("ag").findFieldByName("n").getNumber()).isEqualTo(6);
   }
 
+  // A oneof wrapped in a message, its members numbered in the wrapper as the fields of
+  // the message that holds it are in theirs: a field w of the number given.
+  private static String wrapped(int number, String members) {
+    return "WOneofWrapper w = " + number + " " + WRAPPED + ";\nmessage WOneofWrapper {\n"
+        + "oneof value {\n" + members + "}\n}\n";
+  }
+
+  private static final String A_B = "int32 a = 1;\nstring b = 2;\n";
+
+  private void level(String subject, String level) throws Exception {
+    Config config = new Config((String) null);
+    config.setCompatibilityLevel(level);
+    registry.client.updateConfig(subject, config);
+  }
+
+  // The members of a wrapped oneof are the wrapper's, and none of the row that holds it:
+  // once it is dropped, an attribute of a member's name is new to the row, and one the
+  // row keeps of a member's name keeps its number.
+  @Test
+  void aMemberOfAWrappedOneofIsNoAttributeOfTheRowThatHoldsIt() throws Exception {
+    String row = P3 + "\nmessage T {\nint32 id = 1;\nR r = 2;\nmessage R {\n%s}\n}\n";
+    proto("m1", String.format(row, "int32 k = 1;\n" + wrapped(2, A_B)));
+    level("m1", "FULL_TRANSITIVE");
+    Descriptor first = message("m1");
+    Descriptor r = first.findFieldByName("r").getMessageType();
+    Descriptor wrapper = r.findFieldByName("w").getMessageType();
+    byte[] stored = DynamicMessage.newBuilder(first).setField(first.findFieldByName("r"),
+        DynamicMessage.newBuilder(r).setField(r.findFieldByName("w"),
+            DynamicMessage.newBuilder(wrapper).setField(wrapper.findFieldByName("b"), "hello")
+                .build()).build()).build().toByteArray();
+    registry.alter("m1", new AlterAttributeType("r", "STRUCT<k INT NOT NULL, b STRING>"));
+    assertThat(shape(message("m1"))).isEqualTo("id=1 r=2{k=1 b=3}");
+    Descriptor now = message("m1");
+    DynamicMessage read = (DynamicMessage) DynamicMessage.parseFrom(now, stored)
+        .getField(now.findFieldByName("r"));
+    assertThat(read.hasField(read.getDescriptorForType().findFieldByName("b"))).isFalse();
+    // Both members' names, which no statement gave a number.
+    proto("m2", String.format(row, "int32 k = 1;\n" + wrapped(2, A_B)));
+    registry.alter("m2",
+        new AlterAttributeType("r", "STRUCT<k INT NOT NULL, a INT, b STRING>"));
+    assertThat(shape(message("m2"))).isEqualTo("id=1 r=2{k=1 a=3 b=4}");
+    // An attribute the row keeps, of the name of a member declared before it.
+    proto("m3", String.format(row, wrapped(1, "int32 k = 1;\nstring b = 9;\n")
+        + "int32 k = 2;\n"));
+    registry.alter("m3", new AlterAttributeType("r", "STRUCT<k INT NOT NULL>"));
+    assertThat(shape(message("m3"))).isEqualTo("id=1 r=2{k=2}");
+    // In a row that is an element.
+    proto("m4", String.format(row, "int32 k = 1;\n" + wrapped(2, A_B))
+        .replace("R r = 2;", "repeated R r = 2;"));
+    registry.alter("m4", new AlterAttributeType("r",
+        "ARRAY<STRUCT<k INT NOT NULL, b STRING> NOT NULL> NOT NULL"));
+    assertThat(shape(message("m4"))).isEqualTo("id=1 r=2{k=1 b=3}");
+  }
+
+  // Nor is a member taken for the field of its number: a row declared after the wrapped
+  // oneof, of a member's number, is followed through its versions, as a field and as a
+  // member of a oneof.
+  @Test
+  void aMemberOfAWrappedOneofIsNotTakenForTheRowOfItsNumber() throws Exception {
+    String row = "message R {\nint32 k = 1;\nint32 x = 2;\n}\n";
+    proto("m5", P3 + "\nmessage m5 {\n" + wrapped(1, A_B) + "R r = 2;\n" + row + "}\n");
+    level("m5", "FULL_TRANSITIVE");
+    registry.alter("m5", new DropAttribute("w", false),
+        new AlterAttributeType("r", "STRUCT<k INT NOT NULL>"));
+    registry.alter("m5", new AlterAttributeType("r", "STRUCT<k INT NOT NULL, n INT>"));
+    assertThat(shape(message("m5"))).isEqualTo("r=2{k=1 n=3}");
+    proto("m6", P3 + "\nmessage m6 {\n" + wrapped(1, A_B) + "R r = 2;\n" + row + "}\n");
+    registry.alter("m6", new DropAttribute("w", false),
+        new AlterAttributeType("r", "STRUCT<k INT NOT NULL, x INT NOT NULL, n STRING>"));
+    assertThat(shape(message("m6"))).isEqualTo("r=2{k=1 x=2 n=3}");
+    proto("m7", P3 + "\nmessage m7 {\n" + wrapped(1, A_B)
+        + "oneof u {\nR r = 2;\nint32 c = 3;\n}\n" + row + "}\n");
+    level("m7", "FULL_TRANSITIVE");
+    registry.alter("m7", new AlterAttributeType("u",
+        "UNION(r STRUCT<x INT NOT NULL, n INT>, c INT)"), new DropAttribute("w", false));
+    assertThat(shape(message("m7"))).isEqualTo("r=2{x=2 n=3} c=3");
+  }
+
+  // A type created again takes no member of a wrapped oneof of a dropped version for an
+  // attribute of its name; and no member of a new union takes a number one had.
+  @Test
+  void aTypeCreatedAgainTakesNoMemberOfAWrappedOneofForAnAttribute() throws Exception {
+    proto("m8", P3 + "\nmessage m8 {\nint32 k = 1;\n" + wrapped(2, A_B) + "}\n");
+    level("m8", "NONE");
+    registry.drop("m8");
+    create("m8", SchemaType.PROTOBUF, "(k INT NOT NULL, b STRING)");
+    assertThat(shape(message("m8"))).isEqualTo("k=1 b=3");
+    proto("m9", P3 + "\nmessage m9 {\n" + wrapped(1, "int32 k = 1;\nstring b = 2;\n")
+        + "int32 k = 2;\n}\n");
+    level("m9", "NONE");
+    registry.drop("m9");
+    create("m9", SchemaType.PROTOBUF, "(k INT NOT NULL)");
+    assertThat(shape(message("m9"))).isEqualTo("k=2");
+    proto("m10", P3 + "\nmessage m10 {\nint32 id = 1;\n"
+        + wrapped(2, "int32 a = 4;\nstring b = 5;\n") + "int32 z = 3;\n}\n");
+    level("m10", "NONE");
+    registry.drop("m10");
+    create("m10", SchemaType.PROTOBUF, "(id INT NOT NULL, x UNION(a INT, b STRING), "
+        + "z INT NOT NULL)");
+    assertThat(fields("m10")).isEqualTo("a=6 b=7 id=1 z=3");
+  }
+
   // A message's fields with their numbers, and those of the messages of its file that
   // they are of.
   private static String shape(Descriptor message) {
@@ -382,9 +484,7 @@ class TypeAlterMoreEdgeCasesTest {
     create("libc", SchemaType.PROTOBUF, "(k INT NOT NULL, x INT)");
     registry.alter("libc", new DropAttribute("k", false));
     create("o5", SchemaType.PROTOBUF, "(id INT NOT NULL, r libc)");
-    Config none = new Config((String) null);
-    none.setCompatibilityLevel("NONE");
-    registry.client.updateConfig("o5", none);
+    level("o5", "NONE");
     registry.drop("o5");
     create("o5", SchemaType.PROTOBUF, "(id INT NOT NULL, r STRUCT<x INT, n INT>)");
     assertThat(shape(message("o5"))).isEqualTo("id=1 r=2{x=2 n=3}");

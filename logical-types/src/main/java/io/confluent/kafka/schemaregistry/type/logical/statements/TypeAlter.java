@@ -3106,7 +3106,8 @@ public final class TypeAlter {
     private final List<Member> members;
     private final Map<String, Schema> namedTypes;
     // The numbers of the fields that hold a oneof wrapped in a message, which the union
-    // read of each has: no member's, and no new attribute's once the field is dropped.
+    // read of each has, and of that oneof's members: no member's of this message, and no
+    // new attribute's once the field is dropped.
     private final Set<Integer> wrappers;
     // The rows the files the version imports declare, by name.
     private final Supplier<Map<String, Schema>> declared;
@@ -3161,13 +3162,18 @@ public final class TypeAlter {
       List<Member> members = new ArrayList<>();
       Set<Integer> wrappers = new HashSet<>();
       for (Field f : type.getFields()) {
-        if (f.getSchema().getType() == Schema.Type.UNION) {
+        if (f.getSchema().getType() == Schema.Type.UNION && numberIn(f.getParams()) > 0) {
+          // A oneof wrapped in a message: its members are the wrapper's, numbered there,
+          // and none of this message's to be found by a name or a number. Their numbers
+          // are withheld with the field's, so that no new member is taken for one of them.
+          wrappers.add(numberIn(f.getParams()));
+          for (UnionBranch b : f.getSchema().getBranches()) {
+            wrappers.add(number(b.getFieldNumber(), b, implied));
+          }
+        } else if (f.getSchema().getType() == Schema.Type.UNION) {
           for (UnionBranch b : f.getSchema().getBranches()) {
             members.add(new Member(memberName(b),
                 number(b.getFieldNumber(), b, implied), b.getSchema()));
-          }
-          if (numberIn(f.getParams()) > 0) {
-            wrappers.add(numberIn(f.getParams()));
           }
         } else {
           members.add(new Member(f.getName(), number(f.getFieldNumber(), f, implied),
